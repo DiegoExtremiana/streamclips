@@ -2,6 +2,14 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.7
+
+- **Pestaña «Programación» (sustituye al Panel)**: una **línea de tiempo** con una franja por día y un **calendario** mensual con tus próximas subidas. Se arrastran con el ratón: horizontal = cambiar la hora (de 15 en 15 min), a otra franja o día = cambiar el día; Escape cancela. Los vídeos listos sin subida esperan en la bandeja «Sin programar»: arrástralos a un día y una hora. Clic en un bloque para editar la hora o quitarlo. Las subidas pasadas o en publicación no se pueden mover.
+- **Más intuitivo**: guía de «Primeros pasos» (se marca sola y lleva a cada ajuste), avisos breves tras cada acción, indicador en el menú, atajos Ctrl+1…5 y flechas en el menú, y la pestaña Clips ordenada.
+- **Varias subidas al día, añadidas por ti**: «Añadir subida» (o arrastrando): eliges vídeo, redes y hora, tantas como quieras, también el mismo día. Avisa, sin impedirlo, si dos subidas a la misma red van a menos de 30 minutos o si pasas de ~6 subidas a YouTube en un día (cuota gratuita según la documentación). Cada vídeo se publica una sola vez por red.
+- **Eliminar clips y vídeos** desde la Biblioteca: botón de papelera en la ficha, clic derecho, tecla Supr, desde la ventana del vídeo y selección múltiple. Siempre pide confirmación y explica qué pasa (borra todas las versiones y la miniatura, cancela lo programado, deja lo ya publicado en las redes y no toca el VOD de origen).
+- **Back-end más robusto**: copia de seguridad automática de los datos (`data.json.bak`) con recuperación si se dañan; control de espacio en disco antes de descargar un VOD o montar un vídeo (con mensaje claro); borrado resistente a archivos abiertos en Windows; no se borra lo que la nube está publicando; errores no controlados al registro en vez de cuadros de error; el registro no se llena con el mismo fallo cada minuto sin internet.
+
 ## Novedades de la v0.6
 
 - **Panel automático**: vigila tu canal de Twitch cada minuto. Al terminar un directo recoge su VOD, lo transcribe con Whisper, busca los mejores momentos (volumen, chat, palabras clave) y prepara un **resumen** (10–15 min, publicación 07:00) , un **vídeo principal** (publicación 16:00) y clips. Por defecto todo espera tu visto bueno.
@@ -33,6 +41,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Nada de esto se ha probado contra los servicios reales** (Twitch, Google, TikTok, Meta, GitHub, Hugging Face): solo contra servidores simulados que reproducen su protocolo. Tampoco el instalador ni la actualización automática en Windows, ni la ejecución real del flujo de Actions, ni Whisper con voz real (solo con un `whisper-cli` simulado).
 - YouTube: mientras tu app de Google no esté verificada, los vídeos subidos quedan **privados** y la cuota es baja; en modo «Testing» el acceso caduca a los 7 días. TikTok: sin auditoría, los vídeos se publican privados. Instagram: necesita cuenta profesional y la app en modo desarrollo. TikTok puede rechazar la redirección `http://127.0.0.1`.
 - Directos de 3–4 h: el análisis es por flujo (memoria constante) y se probó con vídeos sintéticos de 4 h, pero un VOD ocupa 6–15 GB en disco y Whisper en CPU puede tardar 1–3 h por directo.
+- La cuota de YouTube (≈6 subidas/día) es la de la API gratuita estándar según su documentación; no se ha podido comprobar contra tu cuenta.
 - Los vídeos largos solo se reeditan para cambiar subtítulos; los subtítulos quedan grabados en el vídeo.
 - El instalador no está firmado (SmartScreen avisará).
 
@@ -44,7 +53,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Instalar en Windows (sin terminal)
 
-El instalador `StreamClips-Setup-x.y.z.exe` incluye ffmpeg, ffprobe y yt-dlp: no hay que instalar nada más. Se genera gratis con GitHub Actions: sube el proyecto a un repositorio de GitHub y ejecuta el flujo **Instalador de Windows** (pestaña Actions → Run workflow; o sube una etiqueta `v0.6.0`). Con una etiqueta `v*` el flujo publica además la versión en GitHub Releases, de donde los programas instalados se actualizan solos. También se puede generar en un Windows con `npm install` y `npm run dist` (el resultado queda en `release/`).
+El instalador `StreamClips-Setup-x.y.z.exe` incluye ffmpeg, ffprobe y yt-dlp: no hay que instalar nada más. Se genera gratis con GitHub Actions: sube el proyecto a un repositorio de GitHub y ejecuta el flujo **Instalador de Windows** (pestaña Actions → Run workflow; o sube una etiqueta `v0.7.0`). Con una etiqueta `v*` el flujo publica además la versión en GitHub Releases, de donde los programas instalados se actualizan solos. También se puede generar en un Windows con `npm install` y `npm run dist` (el resultado queda en `release/`).
 
 Aviso: el instalador no está firmado digitalmente, así que Windows SmartScreen mostrará «Windows protegió tu PC»; pulsa «Más información» y «Ejecutar de todas formas». Firmarlo requiere un certificado de pago, así que no se hace. ffmpeg (paquete ffmpeg-static) se distribuye con licencia GPL; es de uso libre y gratuito.
 

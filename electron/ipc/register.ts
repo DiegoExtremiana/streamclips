@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { ALL_PLATFORMS, CHANNELS } from '../../shared/types';
-import type { ClipEdit, OutputMeta, RenderKind, GroupKind, GroupPatch, Platform, Result, ScheduleEntry, Section, SettingsPatch } from '../../shared/types';
+import type { ClipEdit, DeleteResult, OutputMeta, RenderKind, GroupKind, GroupPatch, Platform, Result, ScheduleEntry, Section, SettingsPatch } from '../../shared/types';
 import type { AppContext } from '../app/context';
 import { checkTools } from '../services/tools';
 import { allFiles } from '../../shared/outputs';
@@ -91,7 +91,20 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   });
   handle(CHANNELS.cloudDisable, () => ctx.cloud.disable());
   handle(CHANNELS.outputsApprove, (id) => ctx.autopilot.approve(str(id, 'id')));
-  handle(CHANNELS.outputsDelete, (id) => ctx.library.remove(str(id, 'id')));
+  const afterDelete = (r: DeleteResult): DeleteResult => {
+    // si había algo subido a la nube de lo borrado, se retira en la siguiente sincronización
+    if (r.removed && ctx.cloud.status().enabled) void ctx.cloud.sync().catch((e) => ctx.log.warn(`Nube: ${(e as Error).message}`));
+    return r;
+  };
+  handle(CHANNELS.outputsDelete, (id) => {
+    const r = ctx.library.removeMany([str(id, 'id')]);
+    if (r.errors.length) throw new Error(r.errors[0].reason);
+    return afterDelete(r);
+  });
+  handle(CHANNELS.outputsDeleteMany, (ids) => {
+    if (!Array.isArray(ids) || ids.length > 500 || ids.some((i) => typeof i !== 'string')) throw new Error('Selección no válida.');
+    return afterDelete(ctx.library.removeMany(ids as string[]));
+  });
   handle(CHANNELS.autopilotRun, async (id) => {
     const vodId = str(id, 'id');
     const vod = ctx.store.data.vods.find((v) => v.id === vodId);

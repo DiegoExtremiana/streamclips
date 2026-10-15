@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 
 /** Texto -> nombre de archivo seguro (sin tildes, minúsculas, solo [a-z0-9-]). */
@@ -41,3 +42,36 @@ export function stripQuotes(p: string): string {
 export function thumbnailPath(outputDir: string, outputId: string): string {
   return path.join(outputDir, 'miniaturas', `${outputId}-${crypto.randomBytes(3).toString('hex')}.jpg`);
 }
+
+const GB = 1024 ** 3;
+
+/** Bytes libres en el disco donde está (o estará) `dir`; null si no se puede saber. */
+export function freeBytes(dir: string): number | null {
+  let d = path.resolve(dir);
+  for (let i = 0; i < 64; i++) {
+    try {
+      const st = fs.statfsSync(d);
+      return Number(st.bavail) * Number(st.bsize);
+    } catch {
+      const up = path.dirname(d);
+      if (up === d) return null;
+      d = up;
+    }
+  }
+  return null;
+}
+
+/** Lanza un error claro si no queda espacio para `neededBytes`. Si no se puede medir, no bloquea. */
+export function ensureFreeSpace(dir: string, neededBytes: number, what: string, free: (d: string) => number | null = freeBytes): void {
+  const have = free(dir);
+  if (have === null || have >= neededBytes) return;
+  const f = (b: number) => (b / GB).toFixed(1).replace('.', ',');
+  throw new Error(`No hay espacio suficiente en el disco para ${what}: quedan ${f(have)} GB y hacen falta unos ${f(neededBytes)} GB. Libera espacio o cambia la carpeta de salida en Ajustes.`);
+}
+
+/** Estimación del espacio de un VOD de Twitch a calidad de origen (≈3 GB por hora, con margen). */
+export function vodBytesEstimate(durationSec?: number): number {
+  if (!durationSec || durationSec <= 0) return 6 * GB;
+  return Math.ceil((durationSec / 3600) * 3.2 * GB + 1 * GB);
+}
+export const RENDER_MIN_BYTES = 2 * GB;

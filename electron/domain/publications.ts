@@ -5,6 +5,17 @@ import type { Notifier } from './notifier';
 
 /** Margen para aceptar "ahora mismo" sin que cuente como fecha pasada. */
 const PAST_GRACE_MS = 60_000;
+/** Dos subidas a la misma red más cerca que esto se avisan (no se impiden). */
+const NEAR_MS = 30 * 60_000;
+/** Subidas a YouTube por día con la cuota gratuita estándar de la API (10.000 puntos; cada subida cuesta 1.600). */
+const YOUTUBE_DAILY = 6;
+const LABEL: Record<Platform, string> = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' };
+
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+const dayKey = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
 
 export class PublicationService {
   constructor(
@@ -15,6 +26,29 @@ export class PublicationService {
 
   list(): Publication[] {
     return this.store.data.publications;
+  }
+
+  /**
+   * Avisos sobre lo recién programado: dos subidas casi a la vez en la misma red, o más subidas a YouTube
+   * en un día de las que permite la cuota gratuita. No impiden programar; el usuario decide.
+   */
+  private warningsFor(scheduled: Publication[]): string[] {
+    const out: string[] = [];
+    const all = this.store.data.publications.filter((p) => p.status === 'scheduled' || p.status === 'publishing');
+    const title = (id: string) => this.store.data.outputs.find((o) => o.id === id)?.title ?? 'otro vídeo';
+    for (const p of scheduled) {
+      const at = Date.parse(p.scheduledAt);
+      for (const q of all) {
+        if (q.key === p.key || q.platform !== p.platform) continue;
+        const qa = Date.parse(q.scheduledAt);
+        if (Math.abs(qa - at) < NEAR_MS) out.push(`Ya hay otra subida a ${LABEL[p.platform]} a las ${hhmm(qa)} («${title(q.outputId)}»), muy cerca de esta.`);
+      }
+      if (p.platform === 'youtube') {
+        const n = all.filter((q) => q.platform === 'youtube' && dayKey(Date.parse(q.scheduledAt)) === dayKey(at)).length;
+        if (n > YOUTUBE_DAILY) out.push(`Ese día tienes ${n} subidas a YouTube. Con la cuota gratuita estándar de la API caben unas ${YOUTUBE_DAILY} al día; las demás podrían fallar.`);
+      }
+    }
+    return [...new Set(out)];
   }
 
   schedule(outputId: string, platforms: Platform[], atIso: string): ScheduleResult {
@@ -50,6 +84,8 @@ export class PublicationService {
     if (result.scheduled.length) {
       this.store.save();
       this.notifier.changed();
+      const w = this.warningsFor(result.scheduled);
+      if (w.length) result.warnings = w;
     }
     return result;
   }
@@ -111,6 +147,8 @@ export class PublicationService {
       this.store.save();
       this.notifier.changed();
     }
+    const w = this.warningsFor(result.scheduled);
+    if (w.length) result.warnings = w;
     return result;
   }
 

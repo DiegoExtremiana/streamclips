@@ -4,6 +4,8 @@ import { fmtDate, fmtTime } from '../../shared/time';
 import { mediaUrl } from '../../shared/media';
 import { primaryFile } from '../../shared/outputs';
 import { errMsg } from '../lib';
+import type { TabId } from '../App';
+import GuideCard from './GuideCard';
 
 const VOD_STATUS: Record<VodJob['status'], { label: string; cls: string }> = {
   queued: { label: 'En cola', cls: 'warn' },
@@ -21,10 +23,9 @@ const AUTO_STATUS: Record<NonNullable<VodJob['autopilot']>['status'], { label: s
   error: { label: 'Piloto: error', cls: 'bad' },
 };
 const ROLE_LABEL = { summary: 'Resumen', main: 'Vídeo principal', clip: 'Clip' } as const;
-const PLATFORM_LABEL = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' } as const;
 
-export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void> }) {
-  const { vods, outputs, pubs, onChanged } = props;
+export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void; part: 'top' | 'bottom' }) {
+  const { vods, outputs, onChanged } = props;
   const [channel, setChannel] = useState<ChannelStatus | null>(null);
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [error, setError] = useState('');
@@ -63,58 +64,49 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
   );
 
   const pending = outputs.filter((o) => o.auto?.review === 'pending');
-  const upcoming = pubs.filter((p) => p.status === 'scheduled' || p.status === 'publishing').sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)).slice(0, 8);
-  const title = (id: string) => outputs.find((o) => o.id === id)?.title ?? 'Vídeo borrado';
   const visibleVods = vods.filter((v) => v.origin !== 'clip');
   const running = tasks.filter((t) => t.status === 'running');
   const recent = tasks.filter((t) => t.status !== 'running').slice(0, 5);
 
   return (
     <div className="grid">
-      <section className="card" aria-label="Tu canal">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
+      {props.part === 'top' && <GuideCard onNavigate={props.onNavigate} refreshKey={outputs.length + props.pubs.length} />}
+      {props.part === 'top' && (
+      <section className="card statusbar" aria-label="Tu canal">
+        <div className="row" style={{ gap: 12 }}>
           <h2>Tu canal</h2>
+          {!channel && <span className="muted">Cargando…</span>}
+          {channel?.configured && (channel.stream?.live ? <span className="badge ok">En directo</span> : <span className="badge">Sin directo</span>)}
+          {channel?.stream?.live && <span className="muted small title-ellipsis" style={{ maxWidth: 380 }}>{channel.stream.title} · {channel.stream.game} · {channel.stream.viewers} espectadores</span>}
+          <span className="grow" />
+          {channel?.configured && (
+            <label className="row" style={{ gap: 7 }}>
+              <input type="checkbox" checked={channel.autoImport} onChange={(e) => void act('auto', () => window.api.setAutoImport(e.target.checked).then(setChannel))} />
+              <span>Recoger mis directos y preparar vídeos solo</span>
+            </label>
+          )}
           <button className="btn ghost small" onClick={() => void act('refresh', () => window.api.channelRefresh().then(setChannel))} disabled={busy === 'refresh'}>
             Comprobar ahora
           </button>
         </div>
-        {!channel && <div className="muted">Cargando…</div>}
         {channel && !channel.configured && (
           <div className="msg warn">Falta conectar tu canal de Twitch (pestaña Conexiones). Sin eso el programa no puede enterarse de tus directos.</div>
         )}
         {channel?.configured && (
-          <>
-            <div className="row" style={{ gap: 10 }}>
-              {channel.stream?.live ? <span className="badge ok">En directo</span> : <span className="badge">Sin directo</span>}
-              {channel.stream?.live && (
-                <span className="muted">
-                  {channel.stream.title} · {channel.stream.game} · {channel.stream.viewers} espectadores
-                </span>
-              )}
-            </div>
-            <div className="muted small" style={{ marginTop: 6 }}>
-              {channel.lastCheck ? `Última comprobación: ${fmtDate(channel.lastCheck)}.` : 'Aún no se ha comprobado.'} Se vigila cada minuto.
-            </div>
-            {channel.error && <div className="msg bad" role="alert">{channel.error}</div>}
-            <label className="row" style={{ gap: 8, marginTop: 10 }}>
-              <input
-                type="checkbox"
-                checked={channel.autoImport}
-                onChange={(e) => void act('auto', () => window.api.setAutoImport(e.target.checked).then(setChannel))}
-              />
-              Cuando termine un directo, recoger su VOD y preparar vídeos automáticamente
-            </label>
-            {channel.lastImported && (
-              <div className="muted small" style={{ marginTop: 6 }}>Último directo recogido: {channel.lastImported.title}.</div>
-            )}
-          </>
+          <div className="muted small">
+            {channel.lastCheck ? `Última comprobación: ${fmtDate(channel.lastCheck)}.` : 'Aún no se ha comprobado.'} Se vigila cada minuto.
+            {channel.lastImported ? ` Último directo recogido: ${channel.lastImported.title}.` : ''}
+          </div>
         )}
-        {error && <div className="msg bad" role="alert">{error}</div>}
+        {channel?.error && <div className="msg bad" role="alert">{channel.error}</div>}
+        {props.part === 'top' && error && <div className="msg bad" role="alert">{error}</div>}
       </section>
+      )}
 
+      {props.part === 'top' && pending.length > 0 && (
       <section className="card" aria-label="Pendientes de tu visto bueno">
         <h2>Pendientes de tu visto bueno</h2>
-        {pending.length === 0 && <div className="muted">No hay nada esperando. Cuando termine tu próximo directo, aquí aparecerán el resumen, el vídeo principal y los clips propuestos.</div>}
+        <div className="muted small">El programa ha preparado esto a partir de tu último directo. Apruébalo para que se programe, o recházalo.</div>
         <div className="list">
           {pending.map((o) => {
             const file = primaryFile(o);
@@ -141,7 +133,9 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
           })}
         </div>
       </section>
+      )}
 
+      {props.part === 'bottom' && (
       <section className="card" aria-label="Actividad">
         <h2>Actividad</h2>
         {running.length === 0 && recent.length === 0 && <div className="muted">Sin actividad por ahora.</div>}
@@ -166,23 +160,9 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
           ))}
         </div>
       </section>
+      )}
 
-      <section className="card" aria-label="Próximas publicaciones">
-        <h2>Próximas publicaciones</h2>
-        {upcoming.length === 0 && <div className="muted">No hay publicaciones programadas.</div>}
-        <div className="list">
-          {upcoming.map((p) => (
-            <div key={p.key} className="row" style={{ justifyContent: 'space-between' }}>
-              <div>
-                <div className="title-ellipsis">{title(p.outputId)}</div>
-                <div className="muted small">{PLATFORM_LABEL[p.platform]} · {fmtDate(p.scheduledAt)}{p.note ? ` · ${p.note}` : ''}</div>
-              </div>
-              <span className={`badge ${p.status === 'publishing' ? 'warn' : ''}`}>{p.status === 'publishing' ? 'Publicando' : 'Programado'}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
+      {props.part === 'bottom' && (
       <section className="card" aria-label="Directos recogidos">
         <h2>Directos recogidos</h2>
         {visibleVods.length === 0 && <div className="muted">Todavía no hay ninguno. El programa recogerá el próximo directo en cuanto termine.</div>}
@@ -232,7 +212,9 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
             <button className="btn" disabled={!url.trim()} onClick={() => void act('add', async () => { await window.api.addVod(url.trim()); setUrl(''); })}>Descargar</button>
           </div>
         </details>
+        {props.part === 'bottom' && error && <div className="msg bad" role="alert">{error}</div>}
       </section>
+      )}
     </div>
   );
 }

@@ -1,12 +1,13 @@
-import { useState, type DragEvent } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import type { Group, GroupKind, OutputItem, Publication, RenderKind, Section } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
 import { childGroups, countInside, groupLabel, itemsIn, pathOf } from '../../shared/groupTree';
 import { fmtTime } from '../../shared/time';
-import { errMsg } from '../lib';
+import { errMsg, notify } from '../lib';
 import ItemModal, { PLATFORMS, PUB_STATUS } from '../library/ItemModal';
 import { ConfirmDialog, GroupDialog, MoveDialog } from '../library/dialogs';
-import { IconFilm, IconFolder, IconLibrary, IconMore, IconPlus } from '../icons';
+import { IconCalendar, IconCheck, IconFilm, IconFolder, IconLibrary, IconMore, IconPlus, IconTrash } from '../icons';
+import ScheduleDialog from '../library/ScheduleDialog';
 import { ContextMenu, type MenuItem } from '../library/ui';
 
 const SECTIONS: { id: Section; label: string }[] = [
@@ -23,7 +24,9 @@ type Dialog =
   | { type: 'edit-group'; group: Group }
   | { type: 'move-item'; item: OutputItem }
   | { type: 'move-group'; group: Group }
-  | { type: 'delete-group'; group: Group };
+  | { type: 'delete-group'; group: Group }
+  | { type: 'delete-items'; items: OutputItem[] }
+  | { type: 'schedule'; outputId: string };
 type Menu = { x: number; y: number; items: MenuItem[] };
 
 export default function LibraryTab(props: {
@@ -31,6 +34,9 @@ export default function LibraryTab(props: {
   groups: Group[];
   pubs: Publication[];
   onChanged: () => Promise<void>;
+  /** Abrir este vídeo al entrar (viene de la línea de tiempo). */
+  openId?: string | null;
+  onOpened?: () => void;
 }) {
   const { outputs, groups, pubs } = props;
   const [section, setSection] = useState<Section>('clips');
@@ -41,6 +47,15 @@ export default function LibraryTab(props: {
   const [msg, setMsg] = useState('');
   const [notice, setNotice] = useState('');
   const [dropOver, setDropOver] = useState<string | null>(null);
+  const { openId: requestedId, onOpened } = props;
+  useEffect(() => {
+    if (requestedId) {
+      setOpenId(requestedId);
+      onOpened?.();
+    }
+  }, [requestedId, onOpened]);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Si la carpeta actual se borró o se movió a otra sección, se vuelve a la raíz.
   const here = groups.some((g) => g.id === current[section] && g.section === section) ? current[section] : undefined;
@@ -50,6 +65,42 @@ export default function LibraryTab(props: {
   const openItem = outputs.find((o) => o.id === openId) ?? null;
 
   const goTo = (id: string | undefined) => setCurrent((c) => ({ ...c, [section]: id }));
+
+  // ---------- selección y borrado
+  const selectedItems = items.filter((o) => selected.has(o.id));
+  const toggle = (id: string) =>
+    setSelected((cur) => {
+      const n = new Set(cur);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const askDelete = (list: OutputItem[]) => list.length && setDialog({ type: 'delete-items', items: list });
+  async function deleteItems(list: OutputItem[]) {
+    const r = await window.api.deleteOutputs(list.map((o) => o.id));
+    await props.onChanged();
+    if (r.removed) notify(r.removed === 1 ? 'Vídeo eliminado.' : `${r.removed} vídeos eliminados.`, 'ok');
+    for (const e of r.errors) notify(`No se pudo eliminar «${e.title}»: ${e.reason}`, 'bad');
+    if (r.filesLeft.length) notify(`Windows no dejó borrar ${r.filesLeft.length} archivo(s) (¿están abiertos en otro programa?). Se pueden borrar a mano: ${r.filesLeft.join(', ')}`, 'warn');
+    setSelected(new Set());
+    if (!r.errors.length) setSelecting(false);
+  }
+  function deleteText(list: OutputItem[]): string {
+    const ids = new Set(list.map((o) => o.id));
+    const mine = pubs.filter((p) => ids.has(p.outputId));
+    const pending = mine.filter((p) => p.status === 'scheduled' || p.status === 'failed').length;
+    const published = mine.filter((p) => p.status === 'published').length;
+    const names = list.slice(0, 4).map((o) => `«${o.title}»`).join(', ') + (list.length > 4 ? ` y ${list.length - 4} más` : '');
+    const lines = [`Se va a eliminar ${list.length === 1 ? 'el vídeo' : `${list.length} vídeos`}: ${names}.`, 'Se borran sus archivos del disco (todas sus versiones y la miniatura). El VOD de origen no se toca.'];
+    if (pending) lines.push(`${pending} subida(s) programada(s) se cancelarán.`);
+    if (published) lines.push(`Lo que ya está publicado en las redes se queda donde está.`);
+    lines.push('Esta acción no se puede deshacer.');
+    return lines.join('\n');
+  }
 
   /** Ejecuta una acción, refresca y enseña el error si lo hay. */
   async function act(fn: () => Promise<unknown>) {
@@ -77,6 +128,7 @@ export default function LibraryTab(props: {
     });
   const itemMenu = (o: OutputItem): MenuItem[] => [
     { label: 'Abrir', onClick: () => setOpenId(o.id) },
+    { label: 'Programar subida…', onClick: () => setDialog({ type: 'schedule', outputId: o.id }) },
     ...(o.kind === 'long'
       ? [{ label: 'Descargar vídeo', onClick: () => download(o, 'long') }]
       : [
@@ -86,6 +138,7 @@ export default function LibraryTab(props: {
     { label: 'Mover a carpeta…', onClick: () => setDialog({ type: 'move-item', item: o }) },
     ...(o.groupId ? [{ label: 'Sacar de la carpeta', onClick: () => void act(() => window.api.moveOutput(o.id, null)) }] : []),
     { label: 'Nueva carpeta con este vídeo…', onClick: () => setDialog({ type: 'new-group', parentId: here, withItems: [o.id] }) },
+    { label: 'Eliminar…', danger: true, onClick: () => askDelete([o]) },
   ];
   const groupMenu = (g: Group): MenuItem[] => [
     { label: 'Abrir carpeta', onClick: () => goTo(g.id) },
@@ -150,8 +203,22 @@ export default function LibraryTab(props: {
             </button>
           ))}
         </div>
-        <button className="btn ghost small" onClick={() => setDialog({ type: 'new-group', parentId: here, withItems: [] })}><IconPlus /> Nueva carpeta</button>
+        <div className="row">
+          {!selecting && items.length > 0 && <button className="btn ghost small" onClick={() => setSelecting(true)}><IconCheck /> Seleccionar</button>}
+          <button className="btn ghost small" onClick={() => setDialog({ type: 'new-group', parentId: here, withItems: [] })}><IconPlus /> Nueva carpeta</button>
+        </div>
       </div>
+
+      {selecting && (
+        <div className="selbar" role="region" aria-label="Selección">
+          <span aria-live="polite"><strong>{selectedItems.length}</strong> seleccionado(s)</span>
+          <button className="btn ghost small" onClick={() => setSelected(new Set(items.map((o) => o.id)))}>Seleccionar todo</button>
+          <button className="btn ghost small" disabled={!selectedItems.length} onClick={() => setSelected(new Set())}>Ninguno</button>
+          <span className="grow" />
+          <button className="btn danger small" disabled={!selectedItems.length} onClick={() => askDelete(selectedItems)}><IconTrash /> Eliminar</button>
+          <button className="btn ghost small" onClick={stopSelecting}>Listo</button>
+        </div>
+      )}
 
       <nav className="crumbs" aria-label="Ruta de carpetas">
         <button className={`crumb ${dropOver === 'root' ? 'over' : ''}`} onClick={() => goTo(undefined)} {...dropProps('root', (d) => moveInto(d, null))}>
@@ -215,16 +282,21 @@ export default function LibraryTab(props: {
           return (
             <div
               key={o.id}
-              className={`tile item ${dropOver === `o-${o.id}` ? 'over' : ''}`}
+              className={`tile item ${dropOver === `o-${o.id}` ? 'over' : ''} ${selected.has(o.id) ? 'selected' : ''}`}
               data-testid={`item-${o.title}`}
-              draggable
+              draggable={!selecting}
               tabIndex={0}
               role="button"
               aria-label={`${KIND_LABEL[o.kind]}: ${o.title}`}
+              aria-pressed={selecting ? selected.has(o.id) : undefined}
               onDragStart={(e) => startDrag(e, { type: 'item', id: o.id })}
-              onClick={() => setOpenId(o.id)}
+              onClick={() => (selecting ? toggle(o.id) : setOpenId(o.id))}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') setOpenId(o.id);
+                if (e.key === 'Enter' || (selecting && e.key === ' ')) {
+                  e.preventDefault();
+                  if (selecting) toggle(o.id);
+                  else setOpenId(o.id);
+                } else if (e.key === 'Delete' && e.target === e.currentTarget) askDelete(selecting && selected.size ? selectedItems : [o]);
               }}
               onContextMenu={(e) => showMenu(e, itemMenu(o))}
               // soltar un vídeo sobre otro propone crear una carpeta con los dos
@@ -249,14 +321,22 @@ export default function LibraryTab(props: {
                   </span>
                 ))}
               </div>
-              <button className="btn ghost small more" aria-label={`Opciones de ${o.title}`} onClick={(e) => showMenu(e, itemMenu(o))}><IconMore /></button>
+              {selecting ? (
+                <span className="selbox" aria-hidden="true">{selected.has(o.id) && <IconCheck size={14} />}</span>
+              ) : (
+                <div className="tile-actions">
+                  <button className="btn ghost small" aria-label={`Programar subida de ${o.title}`} title="Programar subida" onClick={(e) => { e.stopPropagation(); setDialog({ type: 'schedule', outputId: o.id }); }}><IconCalendar /></button>
+                  <button className="btn ghost small" aria-label={`Eliminar ${o.title}`} title="Eliminar" onClick={(e) => { e.stopPropagation(); askDelete([o]); }}><IconTrash /></button>
+                  <button className="btn ghost small" aria-label={`Opciones de ${o.title}`} title="Más opciones" onClick={(e) => showMenu(e, itemMenu(o))}><IconMore /></button>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
-      {openItem && <ItemModal key={openItem.id} output={openItem} pubs={pubs.filter((p) => p.outputId === openItem.id)} playlists={[...new Set(outputs.map((o) => o.playlist).filter((p): p is string => Boolean(p)))].sort()} onChanged={props.onChanged} onClose={() => setOpenId(null)} />}
+      {openItem && <ItemModal key={openItem.id} output={openItem} pubs={pubs.filter((p) => p.outputId === openItem.id)} playlists={[...new Set(outputs.map((o) => o.playlist).filter((p): p is string => Boolean(p)))].sort()} onChanged={props.onChanged} onClose={() => setOpenId(null)} onDelete={() => { const o = openItem; setOpenId(null); askDelete([o]); }} />}
 
       {dialog?.type === 'new-group' && (
         <GroupDialog
@@ -305,6 +385,17 @@ export default function LibraryTab(props: {
           onClose={() => setDialog(null)}
         />
       )}
+      {dialog?.type === 'delete-items' && (
+        <ConfirmDialog
+          title={dialog.items.length === 1 ? 'Eliminar vídeo' : `Eliminar ${dialog.items.length} vídeos`}
+          text={deleteText(dialog.items)}
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={() => deleteItems(dialog.items)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === 'schedule' && <ScheduleDialog outputs={outputs} pubs={pubs} outputId={dialog.outputId} onChanged={props.onChanged} onClose={() => setDialog(null)} />}
       {dialog?.type === 'delete-group' && (
         <ConfirmDialog
           title="Eliminar carpeta"

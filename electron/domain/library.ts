@@ -43,16 +43,45 @@ export class LibraryService {
     this.d.notifier.changed();
   }
 
-  /** Borra el vídeo: archivos, miniatura y publicaciones que aún no se han enviado. Lo ya publicado queda como registro. */
-  remove(id: string): void {
+  /**
+   * Borra el vídeo: archivos, miniatura y publicaciones que aún no se han enviado. Lo ya publicado queda como registro.
+   * El VOD de origen no se toca. Primero se quita del programa y después se borran los archivos: si Windows tiene
+   * alguno abierto (p. ej. el reproductor) se reintenta y, si no hay manera, se avisa en el registro sin dejar datos a medias.
+   */
+  remove(id: string): { filesLeft: string[] } {
     const o = this.find(id);
-    const live = this.d.store.data.publications.find((p) => p.outputId === id && p.status === 'publishing');
+    const live = this.d.store.data.publications.find((p) => p.outputId === id && (p.status === 'publishing' || p.cloud?.state === 'publishing'));
     if (live) throw new Error('Se está publicando ahora mismo; espera a que termine.');
-    for (const f of [...Object.values(o.files), o.thumbnail]) if (f) fs.rmSync(f, { force: true });
     this.d.store.data.outputs = this.d.store.data.outputs.filter((x) => x.id !== id);
     this.d.store.data.publications = this.d.store.data.publications.filter((p) => !(p.outputId === id && p.status !== 'published'));
     this.changed();
-    this.d.log.info(`Vídeo borrado: "${o.title}"`);
+    const filesLeft: string[] = [];
+    for (const f of [...Object.values(o.files), o.thumbnail]) {
+      if (!f) continue;
+      try {
+        fs.rmSync(f, { force: true, maxRetries: 4, retryDelay: 150 });
+      } catch (e) {
+        filesLeft.push(f);
+        this.d.log.warn(`No se pudo borrar ${f}: ${(e as Error).message}`);
+      }
+    }
+    this.d.log.info(`Vídeo borrado: "${o.title}"${filesLeft.length ? ` (quedan ${filesLeft.length} archivo(s) sin borrar)` : ''}`);
+    return { filesLeft };
+  }
+
+  /** Borra varios. Cada uno es independiente: si uno falla, los demás se borran igualmente. */
+  removeMany(ids: string[]): { removed: number; errors: { id: string; title: string; reason: string }[]; filesLeft: string[] } {
+    const out = { removed: 0, errors: [] as { id: string; title: string; reason: string }[], filesLeft: [] as string[] };
+    for (const id of [...new Set(ids)]) {
+      const title = this.d.store.data.outputs.find((x) => x.id === id)?.title ?? id;
+      try {
+        out.filesLeft.push(...this.remove(id).filesLeft);
+        out.removed++;
+      } catch (e) {
+        out.errors.push({ id, title, reason: (e as Error).message });
+      }
+    }
+    return out;
   }
 
   rename(id: string, title: string): OutputItem {

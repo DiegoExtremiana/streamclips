@@ -105,6 +105,10 @@ function defaults(defaultOutputDir: string): DataShape {
   };
 }
 
+/** Cuántos identificadores antiguos se recuerdan (evita que el archivo crezca sin límite). */
+const MAX_SEEN = 2000;
+const BACKUP_EVERY_MS = 10 * 60_000;
+
 const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
 /**
@@ -115,55 +119,83 @@ const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 export class Store {
   readonly file: string;
   data: DataShape;
-  /** Si el archivo estaba corrupto, ruta de la copia de seguridad que se hizo. */
+  /** Si el archivo estaba corrupto, ruta de la copia del archivo dañado. */
   recoveredFrom?: string;
+  /** Verdadero si, estando dañado, se recuperó la última copia buena (.bak). */
+  restoredFromBackup = false;
+  private readonly backupFile: string;
+  private lastBackup = 0;
 
   constructor(dir: string, defaultOutputDir: string) {
     fs.mkdirSync(dir, { recursive: true });
     this.file = path.join(dir, 'data.json');
     const base = defaults(defaultOutputDir);
     this.data = base;
+    this.backupFile = `${this.file}.bak`;
     if (!fs.existsSync(this.file)) return;
     try {
-      const saved = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Partial<DataShape>;
-      if (typeof saved !== 'object' || saved === null || Array.isArray(saved)) throw new Error('formato inesperado');
-      this.data = {
-        schemaVersion: STORE_VERSION,
-        settings: {
-          ...base.settings,
-          ...saved.settings,
-          twitch: { ...base.settings.twitch, ...saved.settings?.twitch },
-          autopilot: {
-            ...base.settings.autopilot,
-            ...saved.settings?.autopilot,
-            slots: { ...base.settings.autopilot.slots, ...saved.settings?.autopilot?.slots },
-            llm: { ...base.settings.autopilot.llm, ...saved.settings?.autopilot?.llm },
-          },
-        },
-        vods: arr<VodJob>(saved.vods),
-        outputs: arr<unknown>(saved.outputs).map(normalizeOutput).filter((x): x is OutputItem => x !== null),
-        groups: arr<Group>(saved.groups),
-        publications: arr<Publication>(saved.publications),
-        cloud: { ...base.cloud, ...(typeof saved.cloud === 'object' && saved.cloud !== null ? saved.cloud : {}) },
-        connections: typeof saved.connections === 'object' && saved.connections !== null && !Array.isArray(saved.connections) ? saved.connections : {},
-        channel: {
-          ...base.channel,
-          ...(typeof saved.channel === 'object' && saved.channel !== null ? saved.channel : {}),
-          seenVodIds: arr<string>(saved.channel?.seenVodIds),
-          importedClipIds: arr<string>(saved.channel?.importedClipIds),
-        },
-      };
+      this.data = Store.parse(this.file, base);
     } catch {
-      // No se pierde nada: se conserva el archivo dañado y se empieza limpio.
+      // No se pierde nada: se conserva el archivo dañado y se intenta la última copia buena.
       this.recoveredFrom = `${this.file}.corrupto-${Date.now()}`;
       fs.copyFileSync(this.file, this.recoveredFrom);
-      this.data = base;
+      try {
+        this.data = Store.parse(this.backupFile, base);
+        this.restoredFromBackup = true;
+        this.lastBackup = Date.now(); // la copia buena no se pisa con el archivo dañado
+      } catch {
+        this.data = base;
+      }
     }
   }
 
-  save(): void {
+  /** Lee y normaliza un archivo de datos. Lanza si no se puede interpretar. */
+  private static parse(file: string, base: DataShape): DataShape {
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<DataShape>;
+    if (typeof saved !== 'object' || saved === null || Array.isArray(saved)) throw new Error('formato inesperado');
+    return {
+      schemaVersion: STORE_VERSION,
+      settings: {
+        ...base.settings,
+        ...saved.settings,
+        twitch: { ...base.settings.twitch, ...saved.settings?.twitch },
+        autopilot: {
+          ...base.settings.autopilot,
+          ...saved.settings?.autopilot,
+          slots: { ...base.settings.autopilot.slots, ...saved.settings?.autopilot?.slots },
+          llm: { ...base.settings.autopilot.llm, ...saved.settings?.autopilot?.llm },
+        },
+      },
+      vods: arr<VodJob>(saved.vods),
+      outputs: arr<unknown>(saved.outputs).map(normalizeOutput).filter((x): x is OutputItem => x !== null),
+      groups: arr<Group>(saved.groups),
+      publications: arr<Publication>(saved.publications),
+      cloud: { ...base.cloud, ...(typeof saved.cloud === 'object' && saved.cloud !== null ? saved.cloud : {}) },
+      connections: typeof saved.connections === 'object' && saved.connections !== null && !Array.isArray(saved.connections) ? saved.connections : {},
+      channel: {
+        ...base.channel,
+        ...(typeof saved.channel === 'object' && saved.channel !== null ? saved.channel : {}),
+        seenVodIds: arr<string>(saved.channel?.seenVodIds).slice(-MAX_SEEN),
+        importedClipIds: arr<string>(saved.channel?.importedClipIds).slice(-MAX_SEEN),
+      },
+    };
+  }
+
+  /**
+   * Escritura atómica (temporal + renombrado). Como mucho cada 10 minutos, antes de sustituir el archivo
+   * se guarda la versión anterior como .bak: si algún día se daña, se recupera casi todo.
+   */
+  save(now: number = Date.now()): void {
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
+    if (now - this.lastBackup > BACKUP_EVERY_MS && fs.existsSync(this.file)) {
+      try {
+        fs.copyFileSync(this.file, this.backupFile);
+        this.lastBackup = now;
+      } catch {
+        // la copia es un extra: nunca debe impedir guardar
+      }
+    }
     fs.renameSync(tmp, this.file);
   }
 }

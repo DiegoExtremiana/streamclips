@@ -35,6 +35,8 @@ export interface ContextOptions {
   publishers?: Publishers;
   schedulerIntervalMs?: number;
   download?: typeof downloadVod;
+  /** Solo para pruebas: espacio libre del disco. */
+  freeBytes?: (dir: string) => number | null;
   twitch?: TwitchClient;
   /** Cada cuánto se vigila el canal (ms). */
   channelIntervalMs?: number;
@@ -101,7 +103,7 @@ export class AppContext {
     this.log = new Logger(path.join(o.userDataDir, 'logs'), 1_000_000, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
-      this.log.warn(`data.json estaba dañado; copia conservada en ${this.store.recoveredFrom}`);
+      this.log.warn(`data.json estaba dañado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? ' (se recuperó la última copia buena)' : ' (se empezó con datos vacíos)'}`);
     }
     const secrets = new Secrets(o.cipher);
     this.settings = new SettingsService(this.store, secrets);
@@ -115,6 +117,7 @@ export class AppContext {
       queue: this.downloadQueue,
       tools,
       download: o.download,
+      freeBytes: o.freeBytes,
     });
     this.tasks = new TaskTracker(o.notifier);
     this.transcripts = new TranscriptService({
@@ -128,7 +131,7 @@ export class AppContext {
       modelBaseUrl: o.modelBaseUrl,
     });
     const subtitles = { words: (vodId: string) => this.transcripts.words(vodId), fontsDir: o.fontsDir };
-    this.clips = new ClipService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });
+    this.clips = new ClipService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
     this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });
     this.groups = new GroupService(this.store, o.notifier);
     this.pubs = new PublicationService(this.store, o.notifier);

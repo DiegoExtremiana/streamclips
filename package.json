@@ -1,6 +1,6 @@
 {
   "name": "streamclips",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Convierte tus VODs de Twitch en clips verticales, horizontales y vídeos largos, y los programa para publicar.",
   "private": true,
   "main": "dist-electron/electron/main.js",
@@ -108,8 +108,6 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "DiegoExtremiana",
-        "repo": "streamclips",
         "releaseType": "release"
       }
     ]

@@ -7,7 +7,7 @@ export function Modal(props: { title: string; onClose: () => void; wide?: boolea
   const { onClose } = props;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();

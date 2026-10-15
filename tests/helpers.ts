@@ -150,6 +150,7 @@ export function makeEnv(extra: Partial<ContextOptions> = {}, root = tmpDir()): T
     notifier,
     schedulerIntervalMs: 3_600_000,
     fontsDir: path.resolve(process.cwd(), 'resources/fonts'),
+    freeBytes: () => null, // las pruebas no dependen del disco de la máquina
     ...extra,
   });
   return { root, userData, outputDir, notifier, ctx, cleanup: () => rmDir(root) };

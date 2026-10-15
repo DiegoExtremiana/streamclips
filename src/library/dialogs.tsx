@@ -56,21 +56,28 @@ export function GroupDialog(props: {
   );
 }
 
-export function ConfirmDialog(props: { title: string; text: string; confirmLabel: string; onConfirm: () => Promise<void>; onClose: () => void }) {
+export function ConfirmDialog(props: { title: string; text: string; confirmLabel: string; danger?: boolean; onConfirm: () => Promise<void>; onClose: () => void }) {
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
   return (
     <Modal title={props.title} onClose={props.onClose}>
-      <p>{props.text}</p>
+      <p style={{ whiteSpace: 'pre-line' }}>{props.text}</p>
       {err && <div className="msg bad" role="alert">{err}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn ghost" onClick={props.onClose}>Cancelar</button>
+        {/* en acciones destructivas el foco empieza en «Cancelar»: Intro no borra nada por accidente */}
+        <button className="btn ghost" autoFocus={props.danger} onClick={props.onClose}>Cancelar</button>
         <button
-          className="btn"
+          className={`btn ${props.danger ? 'danger' : ''}`}
+          disabled={busy}
           onClick={() => {
-            props.onConfirm().then(props.onClose, (e: unknown) => setErr(e instanceof Error ? e.message : String(e)));
+            setBusy(true);
+            props.onConfirm().then(props.onClose, (e: unknown) => {
+              setErr(e instanceof Error ? e.message : String(e));
+              setBusy(false);
+            });
           }}
         >
-          {props.confirmLabel}
+          {busy ? 'Un momento…' : props.confirmLabel}
         </button>
       </div>
     </Modal>

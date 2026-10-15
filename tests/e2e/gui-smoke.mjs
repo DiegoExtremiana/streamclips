@@ -71,7 +71,7 @@ try {
   ({ app, page, problems } = await launch());
 
   // ── ventana y aislamiento ──
-  await page.getByRole('tab', { name: 'Panel' }).waitFor({ timeout: 20000 });
+  await page.getByRole('tab', { name: 'Programación' }).waitFor({ timeout: 20000 });
   assert.equal(await page.title(), 'StreamClips');
   log('la ventana abre y carga la interfaz (con la política de seguridad de producción)');
   assert.equal(await page.evaluate(() => typeof window.api), 'object');
@@ -80,13 +80,25 @@ try {
   log('el puente seguro (window.api) funciona y la página no tiene acceso a Node');
 
   // ── las cuatro pestañas ──
-  for (const [name, heading] of [['Panel', 'Tu canal'], ['Clips y publicación', 'Crear clips'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
+  for (const [name, heading] of [['Programación', 'Tu canal'], ['Clips y publicación', 'Crear clips'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
     await tab(page, name);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
   }
   await tab(page, 'Biblioteca');
   await page.getByRole('tab', { name: 'Vídeos', exact: true }).waitFor();
   log('las cinco pestañas se muestran');
+
+  // ── Programación: guía de inicio y teclado ──
+  await tab(page, 'Programación');
+  const guide = page.getByRole('region', { name: 'Primeros pasos' });
+  await guide.waitFor();
+  await guide.getByText('Descarga el modelo de Whisper').waitFor();
+  await guide.getByRole('button', { name: 'Ir a Ajustes' }).click();
+  await page.getByRole('heading', { name: 'Carpeta de salida', exact: true }).waitFor();
+  await page.keyboard.press('Control+1');
+  await page.getByRole('heading', { name: 'Próximas subidas', exact: true }).waitFor();
+  assert.equal(await page.getByRole('tab', { name: 'Programación' }).getAttribute('aria-selected'), 'true');
+  log('Programación: la guía de primeros pasos muestra lo que falta y lleva a Ajustes; Ctrl+1 vuelve a la primera pestaña');
 
   // ── Ajustes ──
   await tab(page, 'Ajustes');
@@ -140,12 +152,13 @@ try {
   await shot(page, '2-conexiones');
   log('Twitch: el canal se normaliza, el secreto se enmascara y no queda en claro en disco');
 
-  // ── Panel: URL inválida y descarga ──
-  await tab(page, 'Panel');
+  // ── Programación: URL inválida y descarga (en «Directos recogidos y actividad») ──
+  await tab(page, 'Programación');
+  await page.getByText('Directos recogidos y actividad').click();
   await page.getByText('Añadir un VOD a mano').click();
   await page.getByLabel('URL del VOD').fill('--exec rm -rf /');
   await page.getByRole('button', { name: 'Descargar', exact: true }).click();
-  assert.match(await alertText(page), /URL no es válida/);
+  await page.getByRole('alert').filter({ hasText: /URL no es válida/ }).waitFor();
   log('una URL peligrosa se rechaza con un mensaje claro');
 
   await page.getByLabel('URL del VOD').fill('https://www.twitch.tv/videos/123456789');
@@ -171,7 +184,7 @@ try {
   await page.getByLabel('Fin', { exact: true }).fill('4');
   await page.locator('#clip-title').fill('Mi clip vertical');
   await page.getByRole('button', { name: 'Crear clip' }).click();
-  await page.getByText('Clip creado y validado.').waitFor({ timeout: 60000 });
+  await page.getByText('Clip creado y validado.').first().waitFor({ timeout: 60000 });
   await page.getByText('Mi clip vertical', { exact: true }).waitFor();
   const verticalDir = path.join(outDir, 'vertical');
   const made = fs.readdirSync(verticalDir);
@@ -184,13 +197,14 @@ try {
   assert.equal(hdims, '1920,1080');
   log('un clip creado desde la interfaz genera sus dos versiones: 1080×1920 y 1920×1080 verificadas con ffprobe');
 
+  await page.getByText('Avanzado: transcripción y plan de edición de Claude').click();
   const plan = JSON.stringify({
     clips: [{ kind: 'horizontal', start: 2, end: 6, title: 'Clip horizontal', cuts: [{ start: 3, end: 3.5 }], effects: [{ type: 'punch', at: 2.5 }, { type: 'fadeOut' }] }, { kind: 'vertical', start: 50, end: 60, title: 'Fuera' }],
     long: { title: 'Resumen largo', segments: [{ start: 0, end: 3 }, { start: 6, end: 9 }] },
   });
   await page.getByLabel('Plan de edición').fill(plan);
   await page.getByRole('button', { name: 'Aplicar plan' }).click();
-  await page.getByText(/2 vídeo\(s\) creados y validados/).waitFor({ timeout: 90000 });
+  await page.getByText(/2 vídeo\(s\) creados y validados/).first().waitFor({ timeout: 90000 });
   await page.getByText(/clip 2: acaba después del final del VOD/).waitFor();
   await page.getByText('Resumen largo', { exact: true }).waitFor();
   const dimsOf = (f) => execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f]).toString().trim();
@@ -233,28 +247,52 @@ try {
   await page.getByLabel('Plan de edición').fill('');
   log('un plan con un estilo de subtítulos inventado se rechaza con un aviso');
 
-  // ── Programación ──
-  const row = page.locator('.list > div', { hasText: 'Mi clip vertical' });
-  await row.getByLabel('YouTube').check();
-  await row.getByLabel('TikTok').check();
-  await row.getByRole('button', { name: 'Programar' }).click();
-  await row.getByText('Programado').first().waitFor();
-  assert.equal(await row.getByText('Programado').count(), 2);
-  log('programar en dos redes crea dos publicaciones pendientes');
+  // ── Programación (ventana «Añadir subida») ──
+  const localDayKeyOf = (iso) => toLocal(new Date(iso)).slice(0, 10);
+  const dataNow = () => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8'));
+  const toLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const inDays = (n, h, m = 0) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(h, m, 0, 0); return toLocal(d); };
+  const sched = page.getByRole('dialog', { name: 'Añadir subida' });
 
-  await row.getByLabel('YouTube').check();
-  await row.getByRole('button', { name: 'Programar' }).click();
-  assert.equal(await row.getByText('Programado').count(), 2); // reprogramar no duplica
-  await row.getByRole('button', { name: 'Quitar' }).first().click();
-  await page.waitForFunction(() => document.querySelectorAll('.badge.warn').length === 1);
-  assert.equal(await row.getByText('Programado').count(), 1);
-  log('reprogramar no duplica y "Quitar" elimina una publicación');
+  await page.getByRole('button', { name: 'Programar subida de Mi clip vertical' }).click();
+  await sched.waitFor();
+  await sched.getByLabel('YouTube').check();
+  await sched.getByLabel('TikTok').check();
+  await sched.getByLabel('Fecha y hora').fill(inDays(2, 16));
+  await sched.getByRole('button', { name: 'Programar', exact: true }).click();
+  await page.getByText(/Subida programada: «Mi clip vertical» \(2 redes\)/).waitFor();
+  await poll(() => dataNow().publications.filter((p) => p.status === 'scheduled').length === 2);
+  log('«Añadir subida»: programar un clip en dos redes crea dos publicaciones pendientes y avisa con un mensaje');
 
-  await row.getByLabel('Instagram').check();
-  await row.getByLabel('Fecha y hora de publicación').fill('2020-01-01T10:00');
-  await row.getByRole('button', { name: 'Programar' }).click();
-  await row.getByText(/ya ha pasado/).waitFor();
-  log('una hora pasada se rechaza');
+  await page.getByRole('button', { name: 'Programar subida de Mi clip vertical' }).click();
+  await sched.waitFor();
+  await sched.getByLabel('YouTube').check();
+  await sched.getByLabel('Fecha y hora').fill(inDays(2, 18));
+  await sched.getByRole('button', { name: 'Programar', exact: true }).click();
+  await poll(() => dataNow().publications.find((p) => p.platform === 'youtube' && p.outputId === dataNow().outputs.find((o) => o.title === 'Mi clip vertical').id).scheduledAt.includes(new Date(inDays(2, 18)).toISOString().slice(11, 16)));
+  assert.equal(dataNow().publications.length, 2, 'reprogramar no duplica');
+  log('reprogramar una subida no la duplica');
+
+  await page.getByRole('button', { name: 'Programar subida de Mi clip vertical' }).click();
+  await sched.waitFor();
+  await sched.getByLabel('Instagram').check();
+  await sched.getByLabel('Fecha y hora').fill('2020-01-01T10:00');
+  await sched.getByRole('button', { name: 'Programar', exact: true }).click();
+  await sched.getByText(/ya ha pasado/).waitFor();
+  await sched.getByRole('button', { name: 'Cancelar' }).click();
+  log('una hora pasada se rechaza dentro de la ventana, sin cerrarla');
+
+  // varias subidas el mismo día: otro clip, mismo día y casi a la misma hora que TikTok (16:00) → se permite y avisa
+  await page.getByRole('button', { name: 'Programar subida de Clip horizontal' }).click();
+  await sched.waitFor();
+  await sched.getByLabel('TikTok').check();
+  await sched.getByLabel('Fecha y hora').fill(inDays(2, 16, 10));
+  await sched.getByText(/Ese día|ya hay 2 subida/).first().waitFor();
+  await shot(page, '13-anadir-subida');
+  await sched.getByRole('button', { name: 'Programar', exact: true }).click();
+  await page.getByText(/Ya hay otra subida a TikTok a las 16:00/).waitFor();
+  await poll(() => dataNow().publications.length === 3);
+  log('varias subidas el mismo día: se permiten todas las que quieras y se avisa si dos van muy juntas en la misma red');
   await shot(page, '5-programado');
 
 
@@ -535,9 +573,94 @@ try {
   assert.deepEqual(groupsOnDisk, ['Pokémon', 'Road to Master']);
   log('en disco siguen todos los vídeos y las carpetas restantes están guardadas');
 
+  // ── Eliminar clips y vídeos desde la Biblioteca ──
+  await tab(page, 'Clips y publicación');
+  for (const t of ['Borrar A', 'Borrar B', 'Borrar C', 'Borrar D', 'Borrar E']) {
+    await page.getByLabel('Inicio', { exact: true }).fill('1');
+    await page.getByLabel('Fin', { exact: true }).fill('3');
+    await page.locator('#clip-title').fill(t);
+    await page.getByRole('button', { name: 'Crear clip' }).click();
+    await page.getByLabel(`Programar subida de ${t}`).waitFor({ timeout: 60000 });
+  }
+  assert.equal(fs.readdirSync(path.join(outDir, 'vertical')).length, 7);
+  const vodFile = path.join(outDir, 'vods', 'e2e1.mp4');
+
+  await tab(page, 'Biblioteca');
+  const grid = page.getByTestId('library-grid');
+  const titlesOnDisk = () => dataNow().outputs.map((o) => o.title);
+  // A: botón de la papelera de la ficha (con una subida programada que debe cancelarse)
+  await page.getByTestId('item-Borrar A').hover();
+  await page.getByRole('button', { name: 'Programar subida de Borrar A' }).click();
+  await sched.waitFor();
+  await sched.getByLabel('YouTube').check();
+  await sched.getByLabel('Fecha y hora').fill(inDays(3, 9));
+  await sched.getByRole('button', { name: 'Programar', exact: true }).click();
+  await poll(() => dataNow().publications.some((p) => p.outputId === dataNow().outputs.find((o) => o.title === 'Borrar A').id));
+  const idA = dataNow().outputs.find((o) => o.title === 'Borrar A').id;
+  await page.getByTestId('item-Borrar A').hover();
+  await page.getByRole('button', { name: 'Eliminar Borrar A' }).click();
+  await shot(page, '12-confirmar-borrado');
+  const del = page.getByRole('dialog', { name: 'Eliminar vídeo' });
+  await del.getByText(/1 subida\(s\) programada\(s\) se cancelarán/).waitFor();
+  await del.getByText(/El VOD de origen no se toca/).waitFor();
+  await del.getByRole('button', { name: 'Cancelar' }).click();
+  assert.ok(titlesOnDisk().includes('Borrar A'), 'cancelar no borra nada');
+  await page.getByTestId('item-Borrar A').hover();
+  await page.getByRole('button', { name: 'Eliminar Borrar A' }).click();
+  await del.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="item-Borrar A"]'));
+  await page.getByText('Vídeo eliminado.').first().waitFor();
+  assert.ok(!titlesOnDisk().includes('Borrar A'));
+  assert.ok(!dataNow().publications.some((p) => p.outputId === idA), 'la subida programada se cancela');
+  assert.equal(fs.readdirSync(path.join(outDir, 'vertical')).length, 6);
+  log('eliminar desde la ficha: pide confirmación, explica lo que pasa, «Cancelar» no borra y «Eliminar» borra archivos y cancela su subida programada');
+
+  // B: clic derecho → Eliminar…
+  await page.getByTestId('item-Borrar B').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Eliminar…' }).click();
+  await del.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="item-Borrar B"]'));
+  log('clic derecho → «Eliminar…» borra el clip');
+
+  // C: desde la ventana del vídeo
+  await page.getByTestId('item-Borrar C').click();
+  const dlgDel = page.getByRole('dialog', { name: 'Borrar C' });
+  await dlgDel.getByRole('button', { name: /Eliminar este vídeo/ }).click();
+  await del.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="item-Borrar C"]'));
+  log('desde la ventana del vídeo: «Eliminar este vídeo…» lo borra tras confirmar');
+
+  // D y E: selección múltiple
+  await page.getByRole('button', { name: 'Seleccionar', exact: true }).click();
+  await page.getByTestId('item-Borrar D').click();
+  await page.getByTestId('item-Borrar E').click();
+  await page.getByText(/2.*seleccionado/).first().waitFor();
+  assert.equal(await page.getByTestId('item-Borrar D').getAttribute('aria-pressed'), 'true');
+  await shot(page, '11-biblioteca-seleccion');
+  assert.equal(await page.getByRole('dialog').count(), 0, 'en modo selección un clic no abre el vídeo');
+  await page.getByRole('region', { name: 'Selección' }).getByRole('button', { name: 'Eliminar' }).click();
+  await page.getByRole('dialog', { name: 'Eliminar 2 vídeos' }).getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await page.getByText('2 vídeos eliminados.').first().waitFor();
+  assert.equal(await page.getByRole('region', { name: 'Selección' }).count(), 0, 'sale del modo selección');
+  assert.equal(await grid.locator('.tile.item').count(), 2);
+  log('selección múltiple: dos clips seleccionados se eliminan a la vez y la barra de selección se cierra');
+
+  // tecla Supr sobre una ficha pide confirmación
+  await page.getByTestId('item-Clip horizontal').focus();
+  await page.keyboard.press('Delete');
+  await page.getByRole('dialog', { name: 'Eliminar vídeo' }).getByRole('button', { name: 'Cancelar' }).click();
+  assert.ok(titlesOnDisk().includes('Clip horizontal'));
+  assert.deepEqual(titlesOnDisk().filter((t) => t.startsWith('Borrar')), []);
+  assert.ok(fs.existsSync(vodFile), 'el VOD de origen se conserva');
+  assert.equal(fs.readdirSync(path.join(outDir, 'vertical')).length, 2, 'solo quedan los dos clips anteriores');
+  assert.equal(fs.readdirSync(path.join(outDir, 'horizontal')).length, 2);
+  assert.equal(fs.readdirSync(path.join(outDir, 'miniaturas')).length, 3, 'las miniaturas de lo borrado también se van');
+  log('la tecla Supr pide confirmación; en disco no queda rastro de lo borrado y el VOD de origen sigue intacto');
+
   // ── persistencia tras recargar y tras reiniciar ──
   await page.reload();
-  await page.getByRole('tab', { name: 'Panel' }).waitFor();
+  await page.getByRole('tab', { name: 'Programación' }).waitFor();
+  await page.getByText('Directos recogidos y actividad').click();
   await page.getByText('Título del VOD').waitFor();
   log('al recargar la ventana los datos siguen ahí');
 
@@ -551,6 +674,7 @@ try {
 
   await app.close();
   ({ app, page, problems } = await launch());
+  await page.getByText('Directos recogidos y actividad').click();
   await page.getByText('Título del VOD').waitFor();
   await tab(page, 'Biblioteca');
   await page.getByTestId('group-Pokémon').waitFor();
@@ -558,7 +682,135 @@ try {
   await tab(page, 'Clips y publicación');
   await page.getByText('Mi clip vertical', { exact: true }).waitFor();
   await page.getByText('Resumen renombrado', { exact: true }).waitFor();
-  assert.ok((await page.getByText('Programado').count()) >= 1);
+  await tab(page, 'Programación');
+  const progr = page.getByRole('region', { name: 'Próximas subidas' });
+  const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return toLocal(d).slice(0, 10); };
+  await progr.getByTestId(`tl-row-${day(2)}`).waitFor();
+  assert.ok((await progr.locator('.tl-chip').count()) >= 3, 'la línea de tiempo muestra las subidas programadas');
+  await shot(page, '10-linea-de-tiempo');
+  log('Programación: la línea de tiempo muestra una franja por día con las subidas en su hora');
+
+  // ── arrastrar en la línea de tiempo ──
+  const trackBox = async (n) => { const l = progr.locator(`[data-track-day="${day(n)}"]`); await l.scrollIntoViewIfNeeded(); return await l.boundingBox(); };
+  const chip = (re) => progr.getByRole('button', { name: re });
+  const dragChip = async (loc, toX, toY) => {
+    await loc.scrollIntoViewIfNeeded();
+    const b = await loc.boundingBox();
+    const grab = 12;
+    await page.mouse.move(b.x + grab, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + grab + 30, b.y + b.height / 2 + 4, { steps: 3 });
+    await page.mouse.move(toX + grab, toY, { steps: 8 });
+    return { release: () => page.mouse.up() };
+  };
+  const ytPub = () => dataNow().publications.find((p) => p.platform === 'youtube' && p.outputId === dataNow().outputs.find((o) => o.title === 'Mi clip vertical').id);
+  const hhmmOf = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+  // 1) cambiar la hora: del 18:00 al 20:00 del mismo día (arrastre horizontal)
+  let tb = await trackBox(2);
+  await page.locator(`[data-track-day="${day(2)}"]`).scrollIntoViewIfNeeded();
+  tb = await trackBox(2);
+  let h = await dragChip(chip(/Mi clip vertical, 18:00/), tb.x + tb.width * (20 / 24), tb.y + tb.height / 2);
+  await page.locator('.tl-marker').getByText('20:00').waitFor();
+  await h.release();
+  await page.getByText(/«Mi clip vertical» movida a .* a las 20:00/).first().waitFor();
+  await poll(() => hhmmOf(ytPub().scheduledAt) === '20:00');
+  assert.equal(localDayKeyOf(ytPub().scheduledAt), day(2));
+  log('línea de tiempo: arrastrar un bloque a la derecha cambia su hora (18:00 → 20:00) y se guarda; mientras arrastras se ve la hora destino');
+
+  // 2) cambiar el día: arrastre vertical a otra franja, misma hora
+  tb = await trackBox(3);
+  h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + tb.width * (20 / 24), tb.y + tb.height / 2);
+  await h.release();
+  await poll(() => localDayKeyOf(ytPub().scheduledAt) === day(3));
+  assert.equal(hhmmOf(ytPub().scheduledAt), '20:00');
+  log('línea de tiempo: arrastrar un bloque a otra franja lo cambia de día y mantiene la hora');
+
+  // 3) no se puede llevar al pasado: se avisa y no cambia nada
+  const pubBefore = ytPub().scheduledAt;
+  tb = await trackBox(0);
+  h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + 4, tb.y + tb.height / 2);
+  await h.release();
+  await page.getByText(/Esa hora ya ha pasado/).first().waitFor();
+  assert.equal(ytPub().scheduledAt, pubBefore);
+  log('línea de tiempo: soltar en una hora ya pasada se rechaza con un aviso y no cambia nada');
+
+  // 4) Escape cancela un arrastre
+  tb = await trackBox(5);
+  h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + tb.width * 0.5, tb.y + tb.height / 2);
+  await page.keyboard.press('Escape');
+  await h.release();
+  assert.equal(ytPub().scheduledAt, pubBefore);
+  log('Escape cancela un arrastre sin cambiar nada');
+
+  // 5) bandeja «Sin programar» → línea de tiempo
+  const tray = page.getByRole('complementary', { name: 'Sin programar' });
+  await tray.getByTestId('tray-Resumen renombrado').waitFor();
+  const tb1 = await trackBox(1);
+  const trayBox = await tray.getByTestId('tray-Resumen renombrado').boundingBox();
+  await page.mouse.move(trayBox.x + 20, trayBox.y + trayBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(trayBox.x - 60, trayBox.y + 10, { steps: 4 });
+  await page.mouse.move(tb1.x + tb1.width * (12 / 24), tb1.y + tb1.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const dlgAdd = page.getByRole('dialog', { name: 'Añadir subida' });
+  await dlgAdd.waitFor();
+  assert.equal(await dlgAdd.getByLabel('Fecha y hora').inputValue(), `${day(1)}T12:00`);
+  await dlgAdd.getByLabel('YouTube').check();
+  await dlgAdd.getByRole('button', { name: 'Programar', exact: true }).click();
+  await poll(() => dataNow().publications.some((p) => p.outputId === dataNow().outputs.find((o) => o.title === 'Resumen renombrado').id && hhmmOf(p.scheduledAt) === '12:00'));
+  await tray.getByTestId('tray-Resumen renombrado').waitFor({ state: 'detached' });
+  log('bandeja «Sin programar»: arrastrar un vídeo a un día y una hora abre «Añadir subida» con esa hora; al programarlo sale de la bandeja');
+
+  // 6) clic en un bloque: cambiar la hora con el teclado y quitar
+  await chip(/Resumen renombrado, 12:00/).click();
+  const bd = page.getByRole('dialog', { name: 'Resumen renombrado' });
+  await bd.getByLabel('Fecha y hora').fill(`${day(1)}T13:30`);
+  await bd.getByRole('button', { name: 'Guardar hora' }).click();
+  await chip(/Resumen renombrado, 13:30/).waitFor();
+  await chip(/Resumen renombrado, 13:30/).click();
+  await bd.getByRole('button', { name: /Quitar subida/ }).click();
+  await chip(/Resumen renombrado, 13:30/).waitFor({ state: 'detached' });
+  await tray.getByTestId('tray-Resumen renombrado').waitFor();
+  log('clic en un bloque: se cambia la hora escribiéndola y «Quitar subida» la elimina (el vídeo vuelve a la bandeja)');
+
+  // ── calendario ──
+  await progr.getByRole('tab', { name: 'Calendario' }).click();
+  const cal = progr.getByRole('group', { name: 'Calendario' });
+  await cal.getByTestId(`cal-${day(3)}`).waitFor();
+  await cal.getByTestId(`cal-${day(3)}`).getByText(/Mi clip vertical/).first().waitFor();
+  await shot(page, '10b-calendario');
+  const src = await cal.getByTestId(`calblock-Mi clip vertical`).first().boundingBox();
+  const dst = await cal.getByTestId(`cal-${day(6)}`).boundingBox();
+  await page.mouse.move(src.x + 10, src.y + src.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(src.x + 40, src.y + 20, { steps: 3 });
+  await page.mouse.move(dst.x + dst.width / 2, dst.y + dst.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await poll(() => dataNow().publications.some((p) => localDayKeyOf(p.scheduledAt) === day(6)));
+  const moved = dataNow().publications.filter((p) => localDayKeyOf(p.scheduledAt) === day(6));
+  assert.ok(moved.length >= 1);
+  assert.ok(moved.every((p) => ['20:00', '16:00', '16:10', '18:00'].includes(hhmmOf(p.scheduledAt))), 'conserva la hora');
+  log('calendario: arrastrar una subida a otro día la cambia de día y conserva su hora');
+  await progr.getByRole('tab', { name: 'Línea de tiempo' }).click();
+
+  // «Añadir subida» desde la programación: varias seguidas el mismo día, eligiendo el vídeo en la lista
+  await progr.getByRole('button', { name: 'Añadir subida' }).click();
+  const sd = page.getByRole('dialog', { name: 'Añadir subida' });
+  await sd.getByLabel('Vídeo').selectOption({ label: 'Clip · Clip horizontal' });
+  await sd.getByLabel('Instagram').check();
+  await sd.getByLabel('Fecha y hora').fill(inDays(4, 12));
+  await sd.getByRole('button', { name: 'Guardar y añadir otra' }).click();
+  await sd.getByText(/1 subida\(s\) añadida\(s\) en esta sesión/).waitFor();
+  await sd.getByLabel('Vídeo').selectOption({ label: 'Clip · Mi clip vertical' });
+  await sd.getByLabel('Instagram').check();
+  await sd.getByLabel('Fecha y hora').fill(inDays(4, 12, 20));
+  await sd.getByRole('button', { name: 'Guardar y añadir otra' }).click();
+  await sd.getByText(/2 subida\(s\) añadida\(s\) en esta sesión/).waitFor();
+  await sd.getByText(/Ya hay otra subida a Instagram a las 12:00/).waitFor();
+  await sd.getByRole('button', { name: 'Hecho' }).click();
+  await poll(() => dataNow().publications.filter((p) => p.platform === 'instagram').length === 2);
+  log('«Añadir subida»: se eligen vídeos de la lista y se añaden varias el mismo día seguidas; la ventana avisa de las que van muy juntas');
   assert.deepEqual(problems, []);
   log('tras cerrar y reabrir la aplicación se conservan VODs, vídeos y publicaciones programadas');
 

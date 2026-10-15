@@ -40,6 +40,7 @@ const api: Api = {
   cloudDisable: () => call(CHANNELS.cloudDisable),
   approveOutput: (id) => call(CHANNELS.outputsApprove, id),
   deleteOutput: (id) => call(CHANNELS.outputsDelete, id),
+  deleteOutputs: (ids) => call(CHANNELS.outputsDeleteMany, ids),
   runAutopilot: (id) => call(CHANNELS.autopilotRun, id),
   setAutoImport: (on) => call(CHANNELS.channelAuto, on),
   onChannelUpdate: (cb) => {

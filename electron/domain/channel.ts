@@ -35,6 +35,7 @@ const MIN_IMPORT_SEC = 60;
  */
 export class ChannelMonitor {
   private timer: NodeJS.Timeout | null = null;
+  private lastWarn: { msg: string; at: number } = { msg: '', at: 0 };
   private busy = false;
   private stream: TwitchStream | null = null;
   private lastCheck: string | null = null;
@@ -117,7 +118,11 @@ export class ChannelMonitor {
       this.error = null;
     } catch (e) {
       this.error = (e as Error).message;
-      this.d.log.warn(`Vigilancia del canal: ${this.error}`);
+      // sin conexión el mismo fallo se repetiría cada minuto: se anota la primera vez y luego cada media hora
+      if (this.error !== this.lastWarn.msg || this.now - this.lastWarn.at > 30 * 60_000) {
+        this.d.log.warn(`Vigilancia del canal: ${this.error}`);
+        this.lastWarn = { msg: this.error, at: this.now };
+      }
     } finally {
       this.lastCheck = new Date(this.now).toISOString();
       this.busy = false;
@@ -199,7 +204,7 @@ export class ChannelMonitor {
       if (v.durationSec < MIN_IMPORT_SEC) continue; // Twitch aún lo está cerrando
       st.seenVodIds.push(v.id);
       this.d.store.save();
-      const job = this.d.vods.add(v.url, v.title, { origin: 'live', twitchId: v.id, streamStartedAt: v.createdAt });
+      const job = this.d.vods.add(v.url, v.title, { origin: 'live', twitchId: v.id, streamStartedAt: v.createdAt, durationSec: v.durationSec });
       this.lastImported = { vodId: job.id, title: v.title, at: new Date(this.now).toISOString() };
       this.d.log.info(`Directo terminado: recogiendo el VOD "${v.title}" (${v.url}).`);
     }

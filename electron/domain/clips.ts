@@ -9,7 +9,7 @@ import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
 import type { ToolPaths } from '../services/tools';
 import type { SerialQueue } from '../services/queue';
-import { uniqueOutputPath } from '../services/files';
+import { ensureFreeSpace, freeBytes, RENDER_MIN_BYTES, uniqueOutputPath } from '../services/files';
 import { autoThumbnail } from '../services/thumbnails';
 import { probe, renderClip, renderLong, validateRender } from '../services/ffmpeg';
 import type { Notifier } from './notifier';
@@ -21,6 +21,8 @@ export interface ClipDeps {
   queue: SerialQueue;
   tools: () => ToolPaths;
   subtitles: SubtitleEnv;
+  /** Para las pruebas: espacio libre del disco. */
+  freeBytes?: (dir: string) => number | null;
 }
 
 export class ClipService {
@@ -51,6 +53,7 @@ export class ClipService {
     const outDir = this.d.store.data.settings.outputDir;
     const written: string[] = [];
     try {
+      ensureFreeSpace(outDir, RENDER_MIN_BYTES, 'montar el vídeo', this.d.freeBytes ?? freeBytes);
       const files: OutputItem['files'] = {};
       let durationSec = expectedSec;
       for (const [i, r] of renders.entries()) {

@@ -28,3 +28,7 @@ export const IconLink = (p: P) => <Svg {...p}><path d="M10 13a5 5 0 0 0 7.1 0l3-
 export const IconSettings = (p: P) => <Svg {...p}><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /><circle cx="9" cy="6" r="2.2" fill="var(--sidebar)" /><circle cx="15" cy="12" r="2.2" fill="var(--sidebar)" /><circle cx="8" cy="18" r="2.2" fill="var(--sidebar)" /></Svg>;
 export const IconDownload = (p: P) => <Svg {...p}><path d="M12 3v12" /><polyline points="7 11 12 16 17 11" /><path d="M4 20h16" /></Svg>;
 export const IconLogo = (p: P) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="4" /><polygon points="10 9 16 12 10 15 10 9" fill="currentColor" /></Svg>;
+export const IconTrash = (p: P) => <Svg {...p}><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></Svg>;
+export const IconCalendar = (p: P) => <Svg {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="16" y1="3" x2="16" y2="7" /></Svg>;
+export const IconCheck = (p: P) => <Svg {...p}><polyline points="5 12.5 10 17.5 19 7" /></Svg>;
+export const IconAlert = (p: P) => <Svg {...p}><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></Svg>;

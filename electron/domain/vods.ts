@@ -6,6 +6,7 @@ import type { Logger } from '../services/logger';
 import type { ToolPaths } from '../services/tools';
 import type { SerialQueue } from '../services/queue';
 import { downloadVod, parseVodUrl } from '../services/downloader';
+import { ensureFreeSpace, freeBytes, vodBytesEstimate } from '../services/files';
 import type { Notifier } from './notifier';
 
 export interface VodDeps {
@@ -15,6 +16,8 @@ export interface VodDeps {
   queue: SerialQueue;
   tools: () => ToolPaths;
   download?: typeof downloadVod;
+  /** Para las pruebas: espacio libre del disco. */
+  freeBytes?: (dir: string) => number | null;
 }
 
 export class VodService {
@@ -35,7 +38,7 @@ export class VodService {
   }
 
   /** Añade un VOD a la cola de descarga. El mismo VOD (misma URL) no se descarga dos veces. */
-  add(rawUrl: string, title?: string, meta: { origin?: VodOrigin; twitchId?: string; streamStartedAt?: string } = {}): VodJob {
+  add(rawUrl: string, title?: string, meta: { origin?: VodOrigin; twitchId?: string; streamStartedAt?: string; durationSec?: number } = {}): VodJob {
     const url = parseVodUrl(rawUrl);
     if (!url) throw new Error('La URL no es válida. Debe empezar por https:// (por ejemplo https://www.twitch.tv/videos/123456789).');
     const existing = this.d.store.data.vods.find((v) => v.url === url && v.status !== 'error');
@@ -47,6 +50,7 @@ export class VodService {
       origin: meta.origin ?? 'manual',
       ...(meta.twitchId ? { twitchId: meta.twitchId } : {}),
       ...(meta.streamStartedAt ? { streamStartedAt: meta.streamStartedAt } : {}),
+      ...(meta.durationSec ? { durationSec: meta.durationSec } : {}),
       title: title?.trim() ?? '',
       status: 'queued',
       progress: 0,
@@ -75,6 +79,7 @@ export class VodService {
 
   private async runDownload(job: VodJob): Promise<void> {
     try {
+      ensureFreeSpace(this.d.store.data.settings.outputDir, vodBytesEstimate(job.durationSec), 'descargar el VOD', this.d.freeBytes ?? freeBytes);
       job.status = 'downloading';
       job.error = undefined;
       this.d.notifier.vod(job);

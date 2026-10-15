@@ -5,3 +5,4 @@ release
 *.log
 tests/e2e/out
 dist-test
+resources/bin/

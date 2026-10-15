@@ -138,6 +138,8 @@ export interface VodJob {
   twitchId?: string;
   /** Cuándo empezó el directo del que sale (para casar con la actividad del chat). */
   streamStartedAt?: string;
+  /** Duración del VOD según Twitch (para calcular el espacio que hace falta). */
+  durationSec?: number;
   /** Qué ha hecho el piloto automático con este VOD. */
   autopilot?: AutopilotState;
   transcript?: TranscriptInfo;
@@ -231,6 +233,15 @@ export interface Publication {
 export interface ScheduleResult {
   scheduled: Publication[];
   skipped: { platform: Platform; reason: string }[];
+  /** Avisos que no impiden programar (p. ej. dos subidas muy juntas o demasiadas en un día). */
+  warnings?: string[];
+}
+
+export interface DeleteResult {
+  removed: number;
+  errors: { id: string; title: string; reason: string }[];
+  /** Archivos que Windows no dejó borrar (se pueden borrar a mano). */
+  filesLeft: string[];
 }
 
 /**
@@ -378,7 +389,9 @@ export interface Api {
   cloudDisable(): Promise<CloudStatus>;
   approveOutput(outputId: string): Promise<OutputItem>;
   /** Borra el vídeo (archivos, miniatura y publicaciones pendientes). */
-  deleteOutput(outputId: string): Promise<void>;
+  /** Borra un vídeo (sus archivos y lo pendiente de publicar). El VOD de origen se conserva. */
+  deleteOutput(outputId: string): Promise<DeleteResult>;
+  deleteOutputs(outputIds: string[]): Promise<DeleteResult>;
   /** Vuelve a lanzar el piloto automático sobre un VOD ya descargado. */
   runAutopilot(vodId: string): Promise<VodJob>;
   onChannelUpdate(cb: (s: ChannelStatus) => void): () => void;
@@ -456,6 +469,7 @@ export const CHANNELS = {
   cloudDisable: 'cloud:disable',
   outputsApprove: 'outputs:approve',
   outputsDelete: 'outputs:delete',
+  outputsDeleteMany: 'outputs:delete-many',
   autopilotRun: 'autopilot:run',
   eventChannel: 'event:channel',
   vodsList: 'vods:list',

@@ -1,25 +1,14 @@
 import { useState } from 'react';
-import type { ClipFormat, OutputItem, Platform, Publication, VodJob } from '../../shared/types';
+import type { ClipFormat, OutputItem, Publication, VodJob } from '../../shared/types';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS, isSubtitleStyleId, type SubtitleStyleId } from '../../shared/subtitles';
-import { defaultLocalDateTime, fmtDate, fmtTime, localInputToIso, parseTime } from '../../shared/time';
-import { primaryFile } from '../../shared/outputs';
-import { errMsg } from '../lib';
+import { fmtDate, fmtTime, parseTime } from '../../shared/time';
+import { errMsg, notify } from '../lib';
+import type { TabId } from '../App';
+import ScheduleDialog from '../library/ScheduleDialog';
+import { IconCalendar } from '../icons';
 import TwitchClips from './TwitchClips';
 
-const PLATFORMS: { id: Platform; label: string }[] = [
-  { id: 'youtube', label: 'YouTube' },
-  { id: 'tiktok', label: 'TikTok' },
-  { id: 'instagram', label: 'Instagram' },
-];
-const PLATFORM_LABEL = Object.fromEntries(PLATFORMS.map((p) => [p.id, p.label])) as Record<Platform, string>;
 const KIND_LABEL = { clip: 'Clip', long: 'Vídeo largo' } as const;
-const PUB_STATUS = {
-  scheduled: { label: 'Programado', cls: 'warn' },
-  publishing: { label: 'Publicando', cls: 'warn' },
-  published: { label: 'Publicado', cls: 'ok' },
-  failed: { label: 'Fallido', cls: 'bad' },
-} as const;
-
 const PLAN_EXAMPLE = `{
   "clips": [
     { "start": 125, "end": 168, "title": "Momento épico",
@@ -38,7 +27,9 @@ export default function ClipsTab(props: {
   outputs: OutputItem[];
   pubs: Publication[];
   onChanged: () => Promise<void>;
+  onNavigate: (tab: TabId) => void;
 }) {
+  const [scheduling, setScheduling] = useState<string | null>(null);
   const ready = props.vods.filter((v) => v.status === 'downloaded' && v.origin !== 'clip');
   const [vodId, setVodId] = useState('');
   const selected = ready.some((v) => v.id === vodId) ? vodId : (ready[0]?.id ?? '');
@@ -57,7 +48,10 @@ export default function ClipsTab(props: {
     setBusy(true);
     setMsg(null);
     try {
-      setMsg({ ok: true, text: await fn() });
+      const text = await fn();
+      const created = /^0 vídeo/.test(text) ? false : true; // «0 vídeo(s) creados» no es un éxito
+      setMsg({ ok: created, text });
+      notify(text.split('\n')[0], created ? 'ok' : 'warn');
     } catch (e) {
       setMsg({ ok: false, text: errMsg(e) });
     } finally {
@@ -101,6 +95,7 @@ export default function ClipsTab(props: {
             </div>
 
             <h3 style={{ marginTop: 16 }}>Clip manual</h3>
+            <div className="muted small">Escribe el minuto donde empieza y donde acaba el momento (por ejemplo 1:30 y 2:10). Se crean a la vez la versión vertical y la horizontal.</div>
             <div className="row">
               <select aria-label="Formato" value={kind} onChange={(e) => setKind(e.target.value as ClipFormat)} style={{ width: 260 }}>
                 <option value="both">Vertical y horizontal</option>
@@ -130,16 +125,21 @@ export default function ClipsTab(props: {
             </div>
             <button className="btn" disabled={busy} onClick={() => void createClip()}>Crear clip</button>
 
-            <h3 style={{ marginTop: 20 }}>Transcripción del VOD</h3>
+            <details className="adv" style={{ marginTop: 20 }}>
+              <summary>Avanzado: transcripción y plan de edición de Claude</summary>
+              <div className="adv-body">
+            <h3 style={{ marginTop: 14 }}>Transcripción del VOD</h3>
             <TranscriptBlock vod={ready.find((v) => v.id === selected)} onChanged={props.onChanged} />
 
-            <h3 style={{ marginTop: 20 }}>Aplicar plan de edición (JSON)</h3>
+            <h3 style={{ marginTop: 14 }}>Aplicar plan de edición (JSON)</h3>
             <div className="muted small">
               Pega aquí las decisiones de Claude: clips (con cortes y animaciones) y vídeo largo de una sola vez. Para que Claude entienda el directo,
               copia antes la petición con la transcripción y pégasela.
             </div>
             <textarea aria-label="Plan de edición" placeholder={PLAN_EXAMPLE} value={planJson} onChange={(e) => setPlanJson(e.target.value)} />
             <button className="btn" disabled={busy || !planJson.trim()} onClick={() => void applyPlan()}>Aplicar plan</button>
+              </div>
+            </details>
           </>
         )}
         {busy && <div className="msg" role="status">Renderizando… puede tardar unos minutos.</div>}
@@ -147,81 +147,32 @@ export default function ClipsTab(props: {
       </section>
 
       <section className="card">
-        <h2>Vídeos listos</h2>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <h2>Últimos vídeos creados</h2>
+          <button className="btn ghost small" onClick={() => props.onNavigate('biblioteca')}>Abrir la Biblioteca</button>
+        </div>
         {props.outputs.length === 0 && <div className="muted">Aún no hay vídeos. Los clips aparecen aquí cuando el render se valida.</div>}
         <div className="list">
-          {props.outputs.map((o) => (
-            <OutputRow key={o.id} output={o} pubs={props.pubs.filter((p) => p.outputId === o.id)} onChanged={props.onChanged} />
-          ))}
+          {props.outputs.slice(0, 6).map((o) => {
+            const mine = props.pubs.filter((p) => p.outputId === o.id && p.status === 'scheduled').length;
+            return (
+              <div key={o.id} className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="title-ellipsis">{o.title}</div>
+                  <div className="muted small">
+                    <span className="badge">{KIND_LABEL[o.kind]}</span> {fmtTime(o.durationSec)} · {fmtDate(o.createdAt)}{mine ? ` · ${mine} subida(s) programada(s)` : ''}
+                  </div>
+                </div>
+                <button className="btn ghost small" aria-label={`Programar subida de ${o.title}`} onClick={() => setScheduling(o.id)}><IconCalendar /> Programar</button>
+              </div>
+            );
+          })}
         </div>
       </section>
+      {scheduling && <ScheduleDialog outputs={props.outputs} pubs={props.pubs} outputId={scheduling} onChanged={props.onChanged} onClose={() => setScheduling(null)} />}
     </div>
   );
 }
-
-function OutputRow({ output, pubs, onChanged }: { output: OutputItem; pubs: Publication[]; onChanged: () => Promise<void> }) {
-  const [platforms, setPlatforms] = useState<Platform[]>([]);
-  const [when, setWhen] = useState(defaultLocalDateTime());
-  const [info, setInfo] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const toggle = (p: Platform) => setPlatforms((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
-
-  async function schedule() {
-    setInfo(null);
-    const iso = localInputToIso(when);
-    if (!iso) {
-      setInfo({ ok: false, text: 'Fecha y hora no válidas.' });
-      return;
-    }
-    try {
-      const r = await window.api.schedule(output.id, platforms, iso);
-      setPlatforms([]);
-      if (r.skipped.length) {
-        setInfo({ ok: false, text: r.skipped.map((s) => `${PLATFORM_LABEL[s.platform]}: ${s.reason}`).join('. ') });
-      }
-      await onChanged();
-    } catch (e) {
-      setInfo({ ok: false, text: errMsg(e) });
-    }
-  }
-
-  return (
-    <div>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <div className="title-ellipsis">{output.title}</div>
-          <div className="muted small">
-            <span className="badge">{KIND_LABEL[output.kind]}</span> {fmtTime(output.durationSec)} · {fmtDate(output.createdAt)}
-          </div>
-        </div>
-        <button className="btn ghost small" onClick={() => void window.api.openPath(primaryFile(output) ?? '').catch(() => undefined)}>Mostrar</button>
-      </div>
-
-      {pubs.map((p) => (
-        <div key={p.key} className="row small" style={{ marginTop: 6 }}>
-          <span className={`badge ${PUB_STATUS[p.status].cls}`}>{PUB_STATUS[p.status].label}</span>
-          <span>{PLATFORM_LABEL[p.platform]} · {fmtDate(p.scheduledAt)}</span>
-          {(p.status === 'scheduled' || p.status === 'failed') && (
-            <button className="btn ghost small" onClick={() => void window.api.cancelPublication(p.key).then(onChanged)}>Quitar</button>
-          )}
-          {p.note && <span className="muted">{p.note}</span>}
-        </div>
-      ))}
-
-      <div className="row" style={{ marginTop: 8 }}>
-        {PLATFORMS.map((p) => (
-          <label key={p.id} className="check small">
-            <input type="checkbox" checked={platforms.includes(p.id)} onChange={() => toggle(p.id)} /> {p.label}
-          </label>
-        ))}
-        <input type="datetime-local" aria-label="Fecha y hora de publicación" value={when} onChange={(e) => setWhen(e.target.value)} style={{ width: 200 }} />
-        <button className="btn small" disabled={!platforms.length} onClick={() => void schedule()}>Programar</button>
-      </div>
-      {info && <div className={`msg small ${info.ok ? 'ok' : 'bad'}`} role="alert">{info.text}</div>}
-    </div>
-  );
-}
-
 
 function TranscriptBlock({ vod, onChanged }: { vod?: VodJob; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);

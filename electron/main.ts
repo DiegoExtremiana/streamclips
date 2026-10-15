@@ -1,3 +1,4 @@
+import { installCrashHandlers } from './app/crash';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, safeStorage, shell } from 'electron';
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
@@ -42,6 +43,8 @@ function openWindow(): void {
     win = null;
   });
 }
+
+installCrashHandlers(process, () => ctx?.log);
 
 // Una sola instancia: dos programadores a la vez sobre los mismos datos podrían publicar dos veces.
 if (!app.requestSingleInstanceLock()) {

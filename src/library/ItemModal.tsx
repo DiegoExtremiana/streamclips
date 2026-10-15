@@ -4,7 +4,7 @@ import { mediaUrl } from '../../shared/media';
 import { defaultLocalDateTime, fmtDate, fmtTime, localInputToIso, parseTime, toLocalInputValue } from '../../shared/time';
 import { errMsg } from '../lib';
 import { YT_DESC_MAX, YT_PLAYLIST_MAX, YT_TITLE_MAX, youtubeProblems } from '../../shared/youtube';
-import { IconDownload } from '../icons';
+import { IconDownload, IconTrash } from '../icons';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS, wordsForOutput, type SubtitleStyleId, type Word } from '../../shared/subtitles';
 import { keptRanges } from '../../shared/timeline';
 import Captions, { SampleCaptions } from './Captions';
@@ -43,6 +43,8 @@ export default function ItemModal(props: {
   playlists: string[];
   onChanged: () => Promise<void>;
   onClose: () => void;
+  /** Pide confirmación y elimina el vídeo (lo gestiona la Biblioteca). */
+  onDelete: () => void;
 }) {
   const { output: o } = props;
   const videoRef = useRef<HTMLVideoElement>(null); // vídeo largo, o versión horizontal de un clip
@@ -293,7 +295,7 @@ export default function ItemModal(props: {
       setSchedMsg(
         r.skipped.length
           ? { ok: false, text: r.skipped.map((s) => `${s.platform}: ${s.reason}`).join('. ') }
-          : { ok: true, text: entries.length ? 'Programación guardada.' : 'No hay nada programado.' },
+          : { ok: true, text: `${entries.length ? 'Programación guardada.' : 'No hay nada programado.'}${r.warnings?.length ? `\nAviso: ${r.warnings.join(' ')}` : ''}` },
       );
     } catch (e) {
       setSchedMsg({ ok: false, text: errMsg(e) });
@@ -555,6 +557,12 @@ export default function ItemModal(props: {
             </div>
             <div className="muted small">Desmarcar una red quita su programación pendiente. Lo ya publicado no se puede cambiar.</div>
             <Notice msg={schedMsg} />
+          </section>
+
+          <section aria-label="Eliminar">
+            <h3>Eliminar</h3>
+            <div className="muted small">Borra este vídeo del disco con todas sus versiones. El VOD de origen no se toca. Te pediremos confirmación.</div>
+            <div className="row"><button className="btn danger small" onClick={props.onDelete}><IconTrash /> Eliminar este vídeo…</button></div>
           </section>
         </div>
       </div>

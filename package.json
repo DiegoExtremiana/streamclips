@@ -1,0 +1,124 @@
+{
+  "name": "streamclips",
+  "version": "0.6.0",
+  "description": "Convierte tus VODs de Twitch en clips verticales, horizontales y vídeos largos, y los programa para publicar.",
+  "private": true,
+  "main": "dist-electron/electron/main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"npm run electron:dev\"",
+    "electron:build": "tsc -p electron/tsconfig.json && esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/electron/preload.js --log-level=warning",
+    "electron:dev": "npm run electron:build && wait-on tcp:5173 && cross-env VITE_DEV=1 electron .",
+    "build": "vite build && npm run electron:build && npm run cloud:build",
+    "start": "npm run build && electron .",
+    "dist": "npm run tools:fetch && npm run build && electron-builder --win --x64",
+    "typecheck": "tsc -p electron/tsconfig.json --noEmit && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint .",
+    "test": "tsc -p tsconfig.test.json && node --test --test-reporter=spec --test-concurrency=1 \"dist-test/tests/**/*.test.js\"",
+    "test:e2e": "npm run build && node tests/e2e/gui-smoke.mjs",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "tools:fetch": "node scripts/fetch-ytdlp.mjs",
+    "cloud:build": "node scripts/build-runner.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@types/libsodium-wrappers": "^0.7.14",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.21.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.13.0",
+    "playwright-core": "^1.64.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^5.4.0",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "es.diegons.streamclips",
+    "productName": "StreamClips",
+    "copyright": "StreamClips",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json",
+      "!**/node_modules/ffprobe-static/bin/darwin/**",
+      "!**/node_modules/ffprobe-static/bin/linux/**",
+      "!**/node_modules/ffprobe-static/bin/win32/ia32/**"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/ffprobe-static/**"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/bin",
+        "to": "bin",
+        "filter": [
+          "yt-dlp*",
+          "whisper-cli*",
+          "!.gitignore"
+        ]
+      },
+      {
+        "from": "resources/fonts",
+        "to": "fonts"
+      },
+      {
+        "from": "resources/cloud",
+        "to": "cloud"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "StreamClips",
+      "artifactName": "StreamClips-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "DiegoExtremiana",
+        "repo": "streamclips",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "author": "StreamClips",
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "libsodium-wrappers": "^0.7.15"
+  }
+}

@@ -1,0 +1,228 @@
+import { describe, it, afterEach, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import { execFileSync } from 'node:child_process';
+import { nextSlot } from '../shared/slots';
+import { addDownloadedVod, makeEnv, rmDir, tmpDir, type TestEnv } from './helpers';
+
+const envs: TestEnv[] = [];
+afterEach(() => {
+  while (envs.length) envs.pop()!.cleanup();
+});
+
+describe('horas de publicación', () => {
+  const at = (s: string) => new Date(s);
+  it('la siguiente hora local, estrictamente posterior; si ya pasó hoy, mañana', () => {
+    const a = nextSlot(at('2026-10-15T05:00:00'), '07:00');
+    assert.equal(a.getHours(), 7);
+    assert.equal(a.getDate(), 15);
+    assert.equal(nextSlot(at('2026-10-15T07:00:00'), '07:00').getDate(), 16);
+    assert.equal(nextSlot(at('2026-10-15T23:59:00'), '16:00').getDate(), 16);
+  });
+  it('salta las horas ocupadas', () => {
+    const taken = new Set([nextSlot(at('2026-10-15T05:00:00'), '07:00').getTime()]);
+    const b = nextSlot(at('2026-10-15T05:00:00'), '07:00', taken);
+    assert.equal(b.getDate(), 16);
+    assert.equal(b.getHours(), 7);
+  });
+  it('aguanta el cambio de hora de octubre/marzo', () => {
+    for (const d of ['2026-10-24T20:00:00', '2027-03-27T20:00:00']) {
+      const a = nextSlot(at(d), '07:00');
+      assert.equal(a.getHours(), 7);
+      assert.equal(a.getMinutes(), 0);
+    }
+  });
+});
+
+/** Directo de 4 min con dos "momentos" (ruido fuerte) hacia el segundo 60 y el 170. */
+let root: string;
+let video: string;
+before(() => {
+  root = tmpDir();
+  video = path.join(root, 'live.mp4');
+  execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10:duration=240',
+    '-f', 'lavfi', '-i', "aevalsrc='(0.02+0.9*(between(t,55,70)+between(t,165,180)))*sin(2*PI*300*t)':d=240:s=16000",
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', video]);
+});
+after(() => rmDir(root));
+
+function setup(extra: Parameters<typeof makeEnv>[0] = {}) {
+  const e = makeEnv(extra);
+  envs.push(e);
+  const vod = addDownloadedVod(e, video);
+  e.ctx.settings.set({ autopilot: { summaryMinutes: 3, mainMinutes: 3, maxClips: 2, platforms: ['youtube'] } });
+  return { e, vod };
+}
+
+function llmServer(reply: () => { status: number; body: unknown }) {
+  const calls: Record<string, unknown>[] = [];
+  const srv = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      calls.push(JSON.parse(raw));
+      const r = reply();
+      res.writeHead(r.status, { 'content-type': 'application/json' }).end(JSON.stringify(r.body));
+    });
+  });
+  return new Promise<{ url: string; calls: Record<string, unknown>[]; close: () => void }>((ok) =>
+    srv.listen(0, '127.0.0.1', () => ok({ url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, calls, close: () => srv.close() })),
+  );
+}
+
+describe('piloto automático', () => {
+  it('analiza, monta resumen + principal + clips y los deja pendientes de tu visto bueno', async () => {
+    const { e, vod } = setup();
+    const t0 = Date.now();
+    await e.ctx.autopilot.run(vod.id);
+    const outs = e.ctx.store.data.outputs;
+    const roles = outs.map((o) => o.auto?.role).sort();
+    assert.deepEqual(roles, ['clip', 'clip', 'main', 'summary'], JSON.stringify(outs.map((o) => [o.title, o.auto])));
+    assert.ok(outs.every((o) => o.auto!.review === 'pending'));
+    assert.equal(e.ctx.store.data.publications.length, 0, 'nada se programa sin visto bueno');
+    for (const o of outs) assert.ok(Object.values(o.files).every((f) => fs.existsSync(f!)));
+    const clips = outs.filter((o) => o.kind === 'clip');
+    assert.ok(clips.every((c) => c.files.vertical && c.files.horizontal));
+    // los clips caen sobre los momentos fuertes
+    const starts = clips.map((c) => c.start!).sort((a, b) => a - b);
+    assert.ok(starts[0] < 70 && clips.some((c) => c.start! < 70 && c.end! > 55), JSON.stringify(starts));
+    assert.ok(clips.some((c) => c.start! < 180 && c.end! > 165));
+    assert.equal(e.ctx.store.data.vods[0].autopilot?.status, 'done');
+    assert.ok(e.notifier.tasks.some((t) => t.kind === 'analyze' && t.status === 'done'));
+    console.log(`      (piloto completo en ${Math.round((Date.now() - t0) / 1000)} s)`);
+  });
+
+  it('al dar el visto bueno programa resumen a las 07:00, principal a las 16:00 del mismo día y un clip por día', async () => {
+    const { e, vod } = setup();
+    await e.ctx.autopilot.run(vod.id);
+    for (const o of [...e.ctx.store.data.outputs]) e.ctx.autopilot.approve(o.id);
+    const pubs = e.ctx.store.data.publications;
+    const by = (role: string) => e.ctx.store.data.outputs.filter((o) => o.auto?.role === role).map((o) => new Date(pubs.find((p) => p.outputId === o.id)!.scheduledAt));
+    const [sum] = by('summary');
+    const [main] = by('main');
+    const clipDays = by('clip');
+    assert.equal(sum.getHours(), 7);
+    assert.equal(main.getHours(), 16);
+    assert.equal(main.getDate(), sum.getDate());
+    assert.equal(new Set(clipDays.map((d) => d.toDateString())).size, 2, 'un clip por día');
+    assert.ok(clipDays.every((d) => d.getHours() === 20));
+    assert.ok(e.ctx.store.data.outputs.every((o) => o.auto!.review === 'approved'));
+    // aprobar dos veces no duplica
+    e.ctx.autopilot.approve(e.ctx.store.data.outputs[0].id);
+    assert.equal(e.ctx.store.data.publications.length, 4);
+  });
+
+  it('sin aprobación previa lo programa todo directamente', async () => {
+    const { e, vod } = setup();
+    e.ctx.settings.set({ autopilot: { requireApproval: false } });
+    await e.ctx.autopilot.run(vod.id);
+    assert.equal(e.ctx.store.data.publications.length, e.ctx.store.data.outputs.length);
+    assert.ok(e.ctx.store.data.outputs.every((o) => o.auto!.review === 'approved'));
+  });
+
+  it('rechazar borra archivos, miniatura y publicaciones pendientes', async () => {
+    const { e, vod } = setup();
+    e.ctx.settings.set({ autopilot: { maxClips: 1 } });
+    await e.ctx.autopilot.run(vod.id);
+    const clip = e.ctx.store.data.outputs.find((o) => o.kind === 'clip')!;
+    e.ctx.autopilot.approve(clip.id);
+    const files = [...Object.values(clip.files), clip.thumbnail].filter(Boolean) as string[];
+    assert.ok(files.length >= 2);
+    e.ctx.library.remove(clip.id);
+    assert.ok(files.every((f) => !fs.existsSync(f)));
+    assert.ok(!e.ctx.store.data.outputs.some((o) => o.id === clip.id));
+    assert.ok(!e.ctx.store.data.publications.some((p) => p.outputId === clip.id));
+  });
+
+  it('con modelo de lenguaje usa sus títulos (limpiados) y envía solo texto de la transcripción', async () => {
+    const srv = await llmServer(() => ({
+      status: 200,
+      body: { choices: [{ message: { content: JSON.stringify({ resumen: { titulo: 'Gran <b>resumen</b>', descripcion: 'Lo mejor.' }, principal: { titulo: 'La historia', descripcion: 'Desc principal' }, clips: [{ id: 'clip1', titulo: 'Clip uno', descripcion: 'd' }, { id: 'clip2', titulo: 'Clip dos', descripcion: 'd' }] }) } }] },
+    }));
+    try {
+      const { e, vod } = setup({ llmBaseUrl: srv.url });
+      const tr = path.join(root, 'tr.json');
+      fs.writeFileSync(tr, JSON.stringify({ words: [{ text: 'Hola', start: 56, end: 56.4 }, { text: 'qué', start: 57, end: 57.3 }, { text: 'locura.', start: 58, end: 58.6 }, { text: 'Increíble', start: 166, end: 166.5 }, { text: 'jugada.', start: 167, end: 167.5 }] }));
+      e.ctx.transcripts.importFile(vod.id, tr);
+      e.ctx.settings.set({ autopilot: { llm: { provider: 'groq', model: 'x', apiKey: 'CLAVE' } } });
+      await e.ctx.autopilot.run(vod.id);
+      const titles = e.ctx.store.data.outputs.map((o) => o.title).sort();
+      assert.deepEqual(titles, ['Clip dos', 'Clip uno', 'Gran resumen', 'La historia']);
+      assert.equal(e.ctx.store.data.outputs.find((o) => o.title === 'La historia')!.description, 'Desc principal');
+      assert.equal(srv.calls.length, 1);
+      assert.match(JSON.stringify(srv.calls[0]), /locura/);
+      assert.ok(!JSON.stringify(srv.calls[0]).includes('CLAVE'));
+    } finally {
+      srv.close();
+    }
+  });
+
+  it('si el modelo falla, se usan títulos propios y se avisa en la nota', async () => {
+    const srv = await llmServer(() => ({ status: 500, body: {} }));
+    try {
+      const { e, vod } = setup({ llmBaseUrl: srv.url });
+      const tr = path.join(root, 'tr2.json');
+      fs.writeFileSync(tr, JSON.stringify({ words: [{ text: '¡Increíble', start: 166, end: 166.5 }, { text: 'jugada!', start: 167, end: 167.5 }] }));
+      e.ctx.transcripts.importFile(vod.id, tr);
+      e.ctx.settings.set({ autopilot: { llm: { provider: 'gemini', model: '', apiKey: 'k' } } });
+      await e.ctx.autopilot.run(vod.id);
+      assert.equal(e.ctx.store.data.outputs.length, 4);
+      assert.match(e.ctx.store.data.vods[0].autopilot!.note!, /Títulos sin modelo de lenguaje/);
+    } finally {
+      srv.close();
+    }
+  });
+
+  it('un directo plano no inventa vídeos y lo dice', async () => {
+    const e = makeEnv({ energy: async () => new Array(240).fill(-30) });
+    envs.push(e);
+    const vod = addDownloadedVod(e, video);
+    e.ctx.settings.set({ autopilot: { summaryMinutes: 3, mainMinutes: 3 } });
+    await e.ctx.autopilot.run(vod.id);
+    assert.equal(e.ctx.store.data.outputs.length, 0);
+    assert.equal(vod.autopilot?.status, 'skipped');
+  });
+
+  it('un fallo total deja el VOD en error con el motivo, y se puede relanzar', async () => {
+    const e = makeEnv({ energy: async () => { throw new Error('boom'); } });
+    envs.push(e);
+    const vod = addDownloadedVod(e, video);
+    e.ctx.settings.set({ autopilot: { chatCapture: false } });
+    await assert.rejects(() => e.ctx.autopilot.run(vod.id), /ninguna señal/);
+    assert.equal(vod.autopilot?.status, 'error');
+    assert.equal(e.notifier.tasks.filter((t) => t.kind === 'analyze').pop()?.status, 'error');
+  });
+
+  it('el chat guardado de ese directo se usa como señal', async () => {
+    const { e, vod } = setup({ energy: async () => new Array(240).fill(-30) });
+    vod.streamStartedAt = new Date().toISOString();
+    const dir = path.join(e.userData, 'chat');
+    fs.mkdirSync(dir, { recursive: true });
+    const bins: number[] = new Array<number>(240).fill(0).map((_, i) => (i % 4 === 0 ? 1 : 0));
+    for (let i = 100; i < 115; i++) bins[i] = 15;
+    fs.writeFileSync(path.join(dir, 'x.json'), JSON.stringify({ startedAt: vod.streamStartedAt, bins }));
+    e.ctx.settings.set({ autopilot: { maxClips: 1 } });
+    await e.ctx.autopilot.run(vod.id);
+    const clip = e.ctx.store.data.outputs.find((o) => o.kind === 'clip')!;
+    assert.ok(clip.start! < 115 && clip.end! > 100, `${clip.start}-${clip.end}`);
+  });
+
+  it('desactivado, no hace nada al terminar un directo; los ajustes se validan', () => {
+    const e = makeEnv();
+    envs.push(e);
+    e.ctx.settings.set({ autopilot: { enabled: false } });
+    e.ctx.autopilot.onLiveVod(addDownloadedVod(e, video));
+    assert.equal(e.ctx.store.data.vods[0].autopilot, undefined);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { slots: { main: '25:00' } } }), /HH:MM/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { maxClips: 99 } }), /entre 0 y 20/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { platforms: ['myspace' as never] } }), /no reconocida/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { subtitles: 'feo' as never } }), /subtítulos/);
+    const s = e.ctx.settings.set({ autopilot: { llm: { provider: 'groq', apiKey: 'secreta' } } });
+    assert.equal(s.autopilot.llm.apiKey, '********');
+    assert.equal(e.ctx.settings.llmKey(), 'secreta');
+    assert.ok(!fs.readFileSync(e.ctx.store.file, 'utf8').includes('secreta') || fs.readFileSync(e.ctx.store.file, 'utf8').includes('plain:') === false);
+  });
+});

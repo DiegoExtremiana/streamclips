@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+tests/e2e/out
+dist-test

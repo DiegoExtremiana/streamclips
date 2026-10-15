@@ -1,0 +1,43 @@
+# Genera el instalador de Windows (StreamClips-Setup-x.y.z.exe). Es gratuito: GitHub Actions
+# incluye minutos mensuales sin coste. Se lanza a mano desde la pestaña Actions o al subir una etiqueta v*.
+name: Instalador de Windows
+# Para publicar la versión (y que los programas instalados se actualicen solos) hace falta permiso de escritura.
+permissions:
+  contents: write
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      # Motor de transcripción: se compila whisper.cpp (licencia MIT, gratis) y se incluye en el instalador.
+      - name: Compilar whisper-cli
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v1.7.5 https://github.com/ggerganov/whisper.cpp "$env:RUNNER_TEMP/whisper.cpp"
+          cmake -S "$env:RUNNER_TEMP/whisper.cpp" -B "$env:RUNNER_TEMP/wbuild" -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          cmake --build "$env:RUNNER_TEMP/wbuild" --config Release --target whisper-cli -j 4
+          New-Item -ItemType Directory -Force resources/bin | Out-Null
+          Copy-Item "$env:RUNNER_TEMP/wbuild/bin/Release/whisper-cli.exe" resources/bin/whisper-cli.exe
+          & resources/bin/whisper-cli.exe --help 2>&1 | Select-Object -First 5
+          if (-not (Test-Path resources/bin/whisper-cli.exe)) { throw 'whisper-cli.exe no se generó' }
+      - run: npm run typecheck
+      - run: npm run lint
+      # Con una etiqueta v* (p. ej. v0.6.0) se publica la versión en GitHub Releases: de ahí se actualizan los programas instalados.
+      # Con el lanzamiento manual solo se genera el instalador como archivo descargable.
+      - name: Construir y publicar
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { npm run dist -- --publish always } else { npm run dist -- --publish never }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StreamClips-Setup
+          path: release/StreamClips-Setup-*.exe

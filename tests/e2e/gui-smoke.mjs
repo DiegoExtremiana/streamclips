@@ -728,12 +728,17 @@ try {
 
   // 3) no se puede llevar al pasado: se avisa y no cambia nada
   const pubBefore = ytPub().scheduledAt;
-  tb = await trackBox(0);
-  h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + 4, tb.y + tb.height / 2);
-  await h.release();
-  await page.getByText(/Esa hora ya ha pasado/).first().waitFor();
-  assert.equal(ytPub().scheduledAt, pubBefore);
-  log('línea de tiempo: soltar en una hora ya pasada se rechaza con un aviso y no cambia nada');
+  if (new Date().getHours() >= 1) {
+    // (de 00:00 a 01:00 «las 00:15 de hoy» aún es futuro, así que esta comprobación solo tiene sentido después)
+    tb = await trackBox(0);
+    h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + 4, tb.y + tb.height / 2);
+    await h.release();
+    await page.getByText(/Esa hora ya ha pasado/).first().waitFor();
+    assert.equal(ytPub().scheduledAt, pubBefore);
+    log('línea de tiempo: soltar en una hora ya pasada se rechaza con un aviso y no cambia nada');
+  } else {
+    log('línea de tiempo: soltar en una hora pasada (omitida: son las 00:xx y todo el día de hoy aún está por delante; la regla está cubierta en tests unitarios)');
+  }
 
   // 4) Escape cancela un arrastre
   tb = await trackBox(5);
@@ -811,6 +816,35 @@ try {
   await sd.getByRole('button', { name: 'Hecho' }).click();
   await poll(() => dataNow().publications.filter((p) => p.platform === 'instagram').length === 2);
   log('«Añadir subida»: se eligen vídeos de la lista y se añaden varias el mismo día seguidas; la ventana avisa de las que van muy juntas');
+
+  // vídeos solo a YouTube; clips a todas las redes; el programa los gestiona por separado
+  await progr.getByRole('button', { name: 'Añadir subida' }).click();
+  const sd2 = page.getByRole('dialog', { name: 'Añadir subida' });
+  await sd2.getByLabel('Vídeo').selectOption({ label: 'Vídeo · Resumen renombrado' });
+  await sd2.getByLabel('YouTube').waitFor();
+  assert.equal(await sd2.getByLabel('Instagram').count(), 0, 'un vídeo no ofrece Instagram');
+  assert.equal(await sd2.getByLabel('TikTok').count(), 0, 'un vídeo no ofrece TikTok');
+  await sd2.getByText(/Los vídeos solo se publican en YouTube/).waitFor();
+  await sd2.getByLabel('Fecha y hora').fill(inDays(5, 16));
+  await sd2.getByLabel('YouTube').check();
+  await sd2.getByRole('button', { name: 'Programar', exact: true }).click();
+  const vidId = dataNow().outputs.find((o) => o.title === 'Resumen renombrado').id;
+  await poll(() => dataNow().publications.some((p) => p.outputId === vidId));
+  assert.deepEqual(dataNow().publications.filter((p) => p.outputId === vidId).map((p) => p.platform), ['youtube']);
+  await shot(page, '10c-video-y-clips');
+  const vchip = chip(/Resumen renombrado, 16:00/);
+  await vchip.scrollIntoViewIfNeeded();
+  await vchip.getByText('Vídeo', { exact: true }).waitFor();
+  await progr.getByRole('button', { name: /^Clips · todas las redes/ }).click();
+  await vchip.waitFor({ state: 'detached' });
+  await progr.getByRole('button', { name: /^Vídeos · YouTube/ }).click();
+  await vchip.waitFor();
+  assert.equal(await chip(/Mi clip vertical/).count(), 0, 'el filtro de vídeos oculta los clips');
+  await progr.getByRole('button', { name: /^Todo/ }).click();
+  await vchip.click();
+  await page.getByRole('dialog', { name: 'Resumen renombrado' }).getByRole('button', { name: /Quitar subida/ }).click();
+  await vchip.waitFor({ state: 'detached' });
+  log('vídeos solo a YouTube y clips a todas las redes: la ventana no ofrece TikTok/Instagram para un vídeo, y la programación se puede filtrar por Vídeos o Clips');
   assert.deepEqual(problems, []);
   log('tras cerrar y reabrir la aplicación se conservan VODs, vídeos y publicaciones programadas');
 

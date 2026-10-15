@@ -1,4 +1,4 @@
-import { ALL_PLATFORMS } from '../../shared/types';
+import { ALL_PLATFORMS, platformsFor, VIDEO_ONLY_YOUTUBE } from '../../shared/types';
 import type { Platform, Publication, ScheduleEntry, ScheduleResult } from '../../shared/types';
 import type { Store } from '../services/store';
 import type { Notifier } from './notifier';
@@ -52,7 +52,8 @@ export class PublicationService {
   }
 
   schedule(outputId: string, platforms: Platform[], atIso: string): ScheduleResult {
-    if (!this.store.data.outputs.some((o) => o.id === outputId)) throw new Error('El vídeo no existe.');
+    const out = this.store.data.outputs.find((o) => o.id === outputId);
+    if (!out) throw new Error('El vídeo no existe.');
     const at = Date.parse(atIso);
     if (Number.isNaN(at)) throw new Error('Fecha y hora no válidas.');
     if (at < this.now() - PAST_GRACE_MS) throw new Error('La hora elegida ya ha pasado. Elige una hora futura.');
@@ -61,8 +62,15 @@ export class PublicationService {
     const unknown = wanted.find((p) => !ALL_PLATFORMS.includes(p));
     if (unknown) throw new Error(`Red social no reconocida: ${String(unknown)}.`);
 
+    const allowed = platformsFor(out.kind);
+    if (wanted.every((pl) => !allowed.includes(pl))) throw new Error(VIDEO_ONLY_YOUTUBE);
+
     const result: ScheduleResult = { scheduled: [], skipped: [] };
     for (const platform of wanted) {
+      if (!allowed.includes(platform)) {
+        result.skipped.push({ platform, reason: 'los vídeos solo se publican en YouTube' });
+        continue;
+      }
       const key = `${outputId}:${platform}`;
       const existing = this.store.data.publications.find((p) => p.key === key);
       if (existing?.status === 'published') {
@@ -96,12 +104,14 @@ export class PublicationService {
    * indican se quitan. Lo publicado o en curso no se toca. Todo se valida antes de cambiar nada.
    */
   setSchedule(outputId: string, entries: ScheduleEntry[]): ScheduleResult {
-    if (!this.store.data.outputs.some((o) => o.id === outputId)) throw new Error('El vídeo no existe.');
+    const out = this.store.data.outputs.find((o) => o.id === outputId);
+    if (!out) throw new Error('El vídeo no existe.');
     const seen = new Set<Platform>();
     const parsed: { platform: Platform; at: number }[] = [];
     for (const e of entries) {
       if (!ALL_PLATFORMS.includes(e.platform)) throw new Error(`Red social no reconocida: ${String(e.platform)}.`);
       if (seen.has(e.platform)) throw new Error('Una red social aparece repetida.');
+      if (!platformsFor(out.kind).includes(e.platform)) throw new Error(VIDEO_ONLY_YOUTUBE);
       seen.add(e.platform);
       const at = Date.parse(e.atIso);
       if (Number.isNaN(at)) throw new Error('Fecha y hora no válidas.');

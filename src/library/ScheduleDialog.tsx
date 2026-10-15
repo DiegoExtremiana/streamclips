@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { OutputItem, Platform, Publication, Settings } from '../../shared/types';
-import { ALL_PLATFORMS } from '../../shared/types';
+import { platformsFor, VIDEO_ONLY_YOUTUBE } from '../../shared/types';
 import { buildAgenda, dayLabel, freePlatforms, localDayKey } from '../../shared/agenda';
 import { defaultLocalDateTime, localInputToIso, toLocalInputValue } from '../../shared/time';
 import { errMsg, notify } from '../lib';
@@ -22,7 +22,7 @@ export default function ScheduleDialog(props: {
   onClose: () => void;
 }) {
   const { outputs, pubs } = props;
-  const candidates = useMemo(() => outputs.filter((o) => freePlatforms(o.id, pubs, ALL_PLATFORMS).length > 0), [outputs, pubs]);
+  const candidates = useMemo(() => outputs.filter((o) => freePlatforms(o.id, pubs, platformsFor(o.kind)).length > 0), [outputs, pubs]);
   const [outputId, setOutputId] = useState(props.outputId ?? candidates[0]?.id ?? '');
   const [when, setWhen] = useState(props.defaultWhen ?? defaultLocalDateTime());
   const [chosen, setChosen] = useState<Set<Platform>>(new Set());
@@ -52,10 +52,12 @@ export default function ScheduleDialog(props: {
     };
   }, []);
 
-  const free = outputId ? freePlatforms(outputId, pubs, ALL_PLATFORMS) : [];
+  const kind = outputs.find((o) => o.id === outputId)?.kind ?? 'clip';
+  const allowed = platformsFor(kind);
+  const free = outputId ? freePlatforms(outputId, pubs, allowed) : [];
   // al elegir vídeo se marcan las redes que tienes conectadas y donde aún no está programado; tú decides el resto
   useEffect(() => {
-    setChosen(new Set(outputId ? freePlatforms(outputId, pubs, ALL_PLATFORMS).filter((p) => connected.includes(p) && !pubs.some((x) => x.outputId === outputId && x.platform === p)) : []));
+    setChosen(new Set(outputId ? freePlatforms(outputId, pubs, allowed).filter((p) => connected.includes(p) && !pubs.some((x) => x.outputId === outputId && x.platform === p)) : []));
     // solo cuando cambia el vídeo o llegan las conexiones: no pisar la elección del usuario cuando llegan otros datos
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outputId, connected]);
@@ -90,7 +92,7 @@ export default function ScheduleDialog(props: {
         // la ventana sigue abierta: todo se explica dentro de ella, sin avisos encima del botón
         setNote(problems.join(' '));
         if (r.scheduled.length) setAdded((n) => n + 1);
-        const next = candidates.find((o) => o.id !== outputId && freePlatforms(o.id, pubs, ALL_PLATFORMS).length > 0);
+        const next = candidates.find((o) => o.id !== outputId && freePlatforms(o.id, pubs, platformsFor(o.kind)).length > 0);
         setOutputId(next?.id ?? '');
       } else {
         if (r.scheduled.length) notify(`Subida programada: «${title}» (${r.scheduled.length === 1 ? '1 red' : `${r.scheduled.length} redes`}).`, 'ok');
@@ -137,7 +139,7 @@ export default function ScheduleDialog(props: {
             <fieldset className="kinds">
               <legend className="muted small">Dónde</legend>
               <div className="row">
-                {PLATFORMS.map(({ id, label }) => (
+                {PLATFORMS.filter((x) => allowed.includes(x.id)).map(({ id, label }) => (
                   <label key={id} className="check">
                     <input
                       type="checkbox"
@@ -156,7 +158,8 @@ export default function ScheduleDialog(props: {
                   </label>
                 ))}
               </div>
-              {outputId && free.length < ALL_PLATFORMS.length && <div className="muted small">Las redes en gris ya tienen este vídeo publicado o publicándose.</div>}
+              {kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}
+              {outputId && free.length < allowed.length && <div className="muted small">Las redes en gris ya tienen este vídeo publicado o publicándose.</div>}
             </fieldset>
             <div className="field">
               <label htmlFor="sd-when">Fecha y hora</label>

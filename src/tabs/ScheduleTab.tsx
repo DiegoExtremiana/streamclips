@@ -15,6 +15,7 @@ import { GhostChip, useDragDrop, type DragPayload, type DropTarget } from '../sc
 import PanelTab from './PanelTab';
 
 type View = 'timeline' | 'calendar';
+type Filter = 'all' | 'videos' | 'clips';
 const VIEW_KEY = 'streamclips.schedule.view';
 const readView = (): View => {
   try {
@@ -48,6 +49,7 @@ export default function ScheduleTab(props: {
   const [month, setMonth] = useState(() => ({ year: new Date().getFullYear(), month0: new Date().getMonth() }));
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [slots, setSlots] = useState<string[]>([]);
+  const [filter, setFilter] = useState<Filter>('all');
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -73,8 +75,13 @@ export default function ScheduleTab(props: {
     }
   };
 
-  const blocks = useMemo(() => groupBlocks(pubs, outputs), [pubs, outputs]);
+  const allBlocks = useMemo(() => groupBlocks(pubs, outputs), [pubs, outputs]);
+  const blocks = useMemo(() => allBlocks.filter((b) => filter === 'all' || (filter === 'videos') === (b.kind === 'long')), [allBlocks, filter]);
   const tray = useMemo(() => unscheduledOutputs(outputs, pubs), [outputs, pubs]);
+  const trayVideos = tray.filter((o) => o.kind === 'long');
+  const trayClips = tray.filter((o) => o.kind !== 'long');
+  const nVideos = allBlocks.filter((b) => b.kind === 'long').length;
+  const nClips = allBlocks.length - nVideos;
   const failed = pubs.filter((p) => p.status === 'failed');
 
   async function moveBlock(b: Block, t: DropTarget) {
@@ -142,6 +149,15 @@ export default function ScheduleTab(props: {
             <span className="muted small">Arrastra una subida para cambiar su {view === 'timeline' ? 'día y su hora' : 'día'}.</span>
           </div>
 
+          <div className="row" style={{ gap: 10 }}>
+            <div className="seg" role="group" aria-label="Qué mostrar">
+              <button type="button" aria-pressed={filter === 'all'} className={`segbtn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todo ({allBlocks.length})</button>
+              <button type="button" aria-pressed={filter === 'videos'} className={`segbtn ${filter === 'videos' ? 'active' : ''}`} onClick={() => setFilter('videos')}>Vídeos · YouTube ({nVideos})</button>
+              <button type="button" aria-pressed={filter === 'clips'} className={`segbtn ${filter === 'clips' ? 'active' : ''}`} onClick={() => setFilter('clips')}>Clips · todas las redes ({nClips})</button>
+            </div>
+            <span className="legend"><i className="dot video" /> Vídeo <i className="dot clip" /> Clip</span>
+          </div>
+
           {failed.length > 0 && (
             <div className="msg bad" role="alert">
               {failed.map((p) => (
@@ -174,10 +190,42 @@ export default function ScheduleTab(props: {
 
         <aside className="card tray" aria-label="Sin programar">
           <h2>Sin programar</h2>
-          <div className="muted small">Vídeos listos que aún no tienen subida. Arrástralos al día y la hora que quieras, o púlsalos.</div>
-          {tray.length === 0 && <div className="muted small">Todos tus vídeos ya tienen subida.</div>}
+          <div className="muted small">Lo que aún no tiene subida. Arrástralo al día y la hora que quieras, o púlsalo.</div>
+          <h3 className="tray-h">Vídeos</h3>
+          <div className="muted small">Solo se publican en YouTube. Los gestionas desde aquí.</div>
+          {trayVideos.length === 0 && <div className="muted small">Nada pendiente.</div>}
           <div className="traylist">
-            {tray.map((o) => (
+            {trayVideos.map((o) => (
+              <div
+                key={o.id}
+                className={`trayitem ${drag.dragging?.kind === 'video' && drag.dragging.output.id === o.id ? 'ghosted' : ''}`}
+                role="button"
+                tabIndex={0}
+                data-testid={`tray-${o.title}`}
+                aria-label={`${o.title}: programar subida`}
+                onPointerDown={(e) => drag.start(e, { kind: 'video', output: o }, o.title)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    drag.onActivate({ kind: 'video', output: o });
+                  }
+                }}
+              >
+                <div className="traythumb">
+                  {o.thumbnail ? <img src={mediaUrl(o.id, 'thumb', o.thumbnail)} alt="" draggable={false} /> : <IconFilm size={20} />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="title-ellipsis" style={{ maxWidth: 150, fontWeight: 600 }}>{o.title}</div>
+                  <div className="muted small">{o.kind === 'long' ? 'Vídeo' : 'Clip'} · {fmtTime(o.durationSec)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <h3 className="tray-h">Clips</h3>
+          <div className="muted small">Pueden ir a YouTube, TikTok e Instagram.</div>
+          {trayClips.length === 0 && <div className="muted small">Nada pendiente.</div>}
+          <div className="traylist">
+            {trayClips.map((o) => (
               <div
                 key={o.id}
                 className={`trayitem ${drag.dragging?.kind === 'video' && drag.dragging.output.id === o.id ? 'ghosted' : ''}`}

@@ -1,4 +1,4 @@
-import type { OutputItem, Platform, Publication } from './types';
+import type { OutputItem, OutputKind, Platform, Publication } from './types';
 import { localDayKey } from './agenda';
 
 /** Una «subida» en la línea de tiempo: un vídeo a una hora, con todas las redes que van a esa hora juntas. */
@@ -6,6 +6,8 @@ export interface Block {
   id: string;
   outputId: string;
   title: string;
+  /** Vídeo largo (solo YouTube) o clip (todas las redes). */
+  kind: OutputKind;
   /** Instante en ms. */
   at: number;
   platforms: Platform[];
@@ -28,7 +30,7 @@ export function groupBlocks(pubs: readonly Publication[], outputs: readonly Outp
     const at = Date.parse(p.scheduledAt);
     if (Number.isNaN(at)) continue;
     const id = `${p.outputId}@${at}`;
-    const b = map.get(id) ?? { id, outputId: p.outputId, title: outputs.find((o) => o.id === p.outputId)?.title ?? 'Vídeo borrado', at, platforms: [], keys: [], locked: false };
+    const b = map.get(id) ?? { id, outputId: p.outputId, title: outputs.find((o) => o.id === p.outputId)?.title ?? 'Vídeo borrado', kind: outputs.find((o) => o.id === p.outputId)?.kind ?? 'clip', at, platforms: [], keys: [], locked: false };
     b.platforms.push(p.platform);
     b.keys.push(p.key);
     if (p.status === 'publishing') b.locked = true;

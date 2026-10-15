@@ -70,7 +70,7 @@ export default function Timeline(props: { days: string[]; blocks: Block[]; now: 
                 return (
                   <div
                     key={b.id}
-                    className={`tl-chip ${b.locked ? 'locked' : ''} ${dragged ? 'ghosted' : ''}`}
+                    className={`tl-chip ${b.kind === 'long' ? 'video' : ''} ${b.locked ? 'locked' : ''} ${dragged ? 'ghosted' : ''}`}
                     data-testid={`block-${b.title}`}
                     role="button"
                     tabIndex={0}
@@ -90,6 +90,7 @@ export default function Timeline(props: { days: string[]; blocks: Block[]; now: 
                     }}
                   >
                     <span className="mono tl-time">{hhmm(b.at)}</span>
+                    {b.kind === 'long' && <span className="tl-kind">Vídeo</span>}
                     <span className="tl-name">{b.title}</span>
                     <span className="tl-nets">{b.platforms.map((p) => SHORT[p]).join(' ')}</span>
                   </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { platformsFor, VIDEO_ONLY_YOUTUBE } from '../../shared/types';
 import type { FramingPreview, OutputItem, Platform, Publication, RenderKind, Visibility } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
 import { defaultLocalDateTime, fmtDate, fmtTime, localInputToIso, parseTime, toLocalInputValue } from '../../shared/time';
@@ -51,6 +52,7 @@ export default function ItemModal(props: {
   const verticalRef = useRef<HTMLVideoElement>(null);
   const activeRef = useRef<HTMLVideoElement | null>(null); // el reproductor que se ha usado en último lugar
   const isClip = o.kind === 'clip';
+  const ownPlatforms = PLATFORMS.filter((p) => platformsFor(o.kind).includes(p.id));
   const canReedit = isClip && o.vodId !== undefined && o.start !== undefined && o.end !== undefined;
 
   // ---- nombre
@@ -278,7 +280,7 @@ export default function ItemModal(props: {
   async function saveSchedule() {
     setSchedMsg(null);
     const entries: { platform: Platform; atIso: string }[] = [];
-    for (const { id } of PLATFORMS) {
+    for (const { id } of ownPlatforms) {
       const r = rowState(id);
       if (r.locked || !r.on) continue;
       const iso = localInputToIso(r.when);
@@ -539,7 +541,8 @@ export default function ItemModal(props: {
 
           <section aria-label="Publicación">
             <h3>Cuándo se sube y dónde</h3>
-            {PLATFORMS.map(({ id, label }) => {
+            {o.kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}
+            {ownPlatforms.map(({ id, label }) => {
               const r = rowState(id);
               return (
                 <div key={id} className="row pubrow" data-testid={`pub-${id}`}>

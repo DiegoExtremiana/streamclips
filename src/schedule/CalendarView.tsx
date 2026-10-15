@@ -49,7 +49,7 @@ export default function CalendarView(props: {
                 {mine.slice(0, MAX_CHIPS).map((b) => (
                   <div
                     key={b.id}
-                    className={`cal-chip ${b.locked ? 'locked' : ''} ${drag.dragging?.kind === 'block' && drag.dragging.block.id === b.id ? 'ghosted' : ''}`}
+                    className={`cal-chip ${b.kind === 'long' ? 'video' : ''} ${b.locked ? 'locked' : ''} ${drag.dragging?.kind === 'block' && drag.dragging.block.id === b.id ? 'ghosted' : ''}`}
                     data-testid={`calblock-${b.title}`}
                     role="button"
                     tabIndex={0}

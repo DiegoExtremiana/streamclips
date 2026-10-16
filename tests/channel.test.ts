@@ -42,7 +42,8 @@ function setup() {
     },
   });
   envs.push(e);
-  e.ctx.settings.set({ twitch: { clientId: 'cid', clientSecret: 'sec', login: 'canal' } });
+  // estas pruebas son del vigilante: el piloto automático no debe ponerse a editar en segundo plano
+  e.ctx.settings.set({ twitch: { clientId: 'cid', clientSecret: 'sec', login: 'canal' }, autopilot: { enabled: false } });
   return { e, twitch, downloads };
 }
 

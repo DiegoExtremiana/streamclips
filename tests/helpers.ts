@@ -153,7 +153,7 @@ export function makeEnv(extra: Partial<ContextOptions> = {}, root = tmpDir()): T
     freeBytes: () => null, // las pruebas no dependen del disco de la máquina
     ...extra,
   });
-  return { root, userData, outputDir, notifier, ctx, cleanup: () => rmDir(root) };
+  return { root, userData, outputDir, notifier, ctx, cleanup: () => { ctx.stop(); rmDir(root); } };
 }
 
 /** Registra un vídeo ya "descargado" en el almacén, sin pasar por yt-dlp. */

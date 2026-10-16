@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.10
+
+- **Editor de clips al estilo de Twitch**: la versión horizontal y la vertical se ven **a la vez**, con **sonido** y una sola barra de reproducción; debajo, la **línea de tiempo** con el recorte en morado y dos agarres que se arrastran (o se mueven con las flechas; Mayús = saltos grandes) y un margen del directo a cada lado para alargar el clip. «Aplicar recorte» vuelve a renderizar. «Editar diseño» abre la composición de 1–3 ventanas, que ya **se oye** al editar. *La vista previa de arriba solo contiene lo ya renderizado: lo que añadas fuera del clip se ve tras aplicar el recorte.*
+- **Subtítulos en un paso**: si el directo no está transcrito, «Transcribir y poner subtítulos» lo transcribe aquí (descargando el modelo la primera vez) y graba los subtítulos. Dice con claridad qué falta (motor, modelo o transcripción).
+- **Redes con su logotipo**: se iluminan con el color de la red si el vídeo se sube ahí y se apagan si no (ventana del vídeo, plan del día, «Añadir subida», calendario, línea de tiempo y Biblioteca).
+- **Títulos automáticos**: los clips y vídeos creados a mano sin título reciben uno provisional según lo que se dice en el tramo (con IA si la configuras); botón «Sugerir título» en la ventana de cada clip. **Series**: en Ajustes > Piloto automático indicas «Minecraft extremo» y los vídeos de cada directo salen como «Minecraft extremo Día 1», «Día 2»… («- Resumen», «- Parte 2»…), y el tema va a la descripción. Si el título del directo ya dice «día 3», se usa ese número. El motor nocturno lleva la cuenta de los días.
+
 ## Novedades de la v0.9
 
 - **Edición nocturna sin tu PC** (`docs/MOTOR.md`): al acabar tu directo, un flujo de GitHub Actions descarga el VOD, lo transcribe en **castellano de España**, lo edita durante la noche y deja vídeos y clips **programados**, aunque tu ordenador y el programa estén apagados. Por la mañana abres el programa y lo ves en Programación. *No se ha probado contra GitHub/Twitch reales; límites en el documento.*
@@ -59,7 +66,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Qué se ha probado y cómo
 
-`npm run check` ejecuta tipos, ESLint y 445 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (71 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
+`npm run check` ejecuta tipos, ESLint y 455 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (72 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
 
 **No se ha probado**: en Windows, ni contra Twitch real (yt-dlp real sí se ha probado con una URL local: acepta los parámetros que usa la app y devuelve el MP4), ni el instalador final `.exe` (aquí solo se pudo generar la carpeta de la aplicación para Windows; el instalador se genera en GitHub Actions).
 

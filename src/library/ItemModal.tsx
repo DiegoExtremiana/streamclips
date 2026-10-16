@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { platformsFor, VIDEO_ONLY_YOUTUBE } from '../../shared/types';
-import type { FramingPreview, OutputItem, Platform, Publication, RenderKind, Visibility } from '../../shared/types';
+import type { FramingPreview, OutputItem, Platform, Publication, RenderKind, Visibility, WhisperStatus } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
-import { defaultLocalDateTime, fmtDate, fmtTime, localInputToIso, parseTime, toLocalInputValue } from '../../shared/time';
+import { defaultLocalDateTime, fmtDate, fmtTime, localInputToIso, toLocalInputValue } from '../../shared/time';
 import { errMsg } from '../lib';
 import { YT_DESC_MAX, YT_PLAYLIST_MAX, YT_TITLE_MAX, youtubeProblems } from '../../shared/youtube';
 import { IconDownload, IconTrash } from '../icons';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS, wordsForOutput, type SubtitleStyleId, type Word } from '../../shared/subtitles';
 import { keptRanges } from '../../shared/timeline';
+import { round1, type TrimRange } from '../../shared/trim';
 import Captions, { SampleCaptions } from './Captions';
 import Player from './Player';
+import ClipStudio from './ClipStudio';
+import { PlatformSwitch } from './PlatformSwitch';
 import VerticalEditor from './VerticalEditor';
 import { layoutFromCropX, normalizeLayout, type VerticalLayout } from '../../shared/layout';
 import { Modal } from './ui';
@@ -52,7 +55,6 @@ export default function ItemModal(props: {
   const { output: o } = props;
   const videoRef = useRef<HTMLVideoElement>(null); // vídeo largo, o versión horizontal de un clip
   const verticalRef = useRef<HTMLVideoElement>(null);
-  const activeRef = useRef<HTMLVideoElement | null>(null); // el reproductor que se ha usado en último lugar
   const isClip = o.kind === 'clip';
   const ownPlatforms = PLATFORMS.filter((p) => platformsFor(o.kind).includes(p.id));
   const canReedit = isClip && o.vodId !== undefined && o.start !== undefined && o.end !== undefined;
@@ -72,6 +74,21 @@ export default function ItemModal(props: {
       setYtMsg({ ok: true, text: 'Datos guardados.' });
     } catch (e) {
       setYtMsg({ ok: false, text: errMsg(e) });
+    }
+  }
+  const [titleBusy, setTitleBusy] = useState(false);
+  async function suggestTitle() {
+    if (!o.vodId || o.start === undefined || o.end === undefined) return;
+    setTitleBusy(true);
+    setYtMsg(null);
+    try {
+      const r = await window.api.suggestTitle(o.vodId, o.start, o.end);
+      if (r) setTitle(r.title.slice(0, YT_TITLE_MAX));
+      else setYtMsg({ ok: false, text: 'No hay transcripción de este tramo, así que no se sabe de qué se habla. Transcribe el directo (en Subtítulos) y vuelve a probar.' });
+    } catch (e) {
+      setYtMsg({ ok: false, text: errMsg(e) });
+    } finally {
+      setTitleBusy(false);
     }
   }
   const ytProblems = youtubeProblems({ title, description, playlist });
@@ -102,9 +119,21 @@ export default function ItemModal(props: {
   }
 
   // ---- recorte y encuadre (clips)
-  const [start, setStart] = useState(o.start === undefined ? '' : fmtTime(o.start));
-  const [end, setEnd] = useState(o.end === undefined ? '' : fmtTime(o.end));
-  const [view, setView] = useState<'horizontal' | 'vertical'>('horizontal');
+  const [range, setRange] = useState<TrimRange>({ start: o.start ?? 0, end: o.end ?? 0 });
+  const [vodDuration, setVodDuration] = useState<number | null>(null);
+  const [designOpen, setDesignOpen] = useState(false);
+  useEffect(() => {
+    if (!canReedit) return;
+    let alive = true;
+    window.api.clipContext(o.id).then((c) => alive && setVodDuration(c.vodDurationSec)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [o.id, canReedit]);
+  // si el clip se vuelve a renderizar con otro recorte, la línea sigue lo guardado
+  useEffect(() => {
+    if (o.start !== undefined && o.end !== undefined) setRange({ start: o.start, end: o.end });
+  }, [o.start, o.end]);
   const [framing, setFraming] = useState<FramingPreview | null>(null);
   const [layoutDraft, setLayoutDraft] = useState<VerticalLayout | null>(null);
   const [editMsg, setEditMsg] = useState<Msg>(null);
@@ -112,7 +141,7 @@ export default function ItemModal(props: {
 
   // el fotograma se carga al abrir la pestaña Vertical (hace falta para colocar las ventanas)
   useEffect(() => {
-    if (view !== 'vertical' || !canReedit || framing) return;
+    if (!designOpen || !canReedit || framing) return;
     let alive = true;
     window.api
       .framingPreview(o.id)
@@ -122,7 +151,7 @@ export default function ItemModal(props: {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, o.id]);
+  }, [designOpen, o.id]);
   // lo guardado (la composición, o el encuadre simple de antes como una sola ventana) y el borrador que se edita
   const savedLayout = useMemo(() => (framing ? (o.layout ?? layoutFromCropX(o.cropX ?? 0.5, framing.width / framing.height)) : null), [framing, o.layout, o.cropX]);
   useEffect(() => {
@@ -131,16 +160,14 @@ export default function ItemModal(props: {
   const layoutDirty = Boolean(layoutDraft && savedLayout && JSON.stringify(normalizeLayout(layoutDraft)) !== JSON.stringify(normalizeLayout(savedLayout)));
 
   async function applyEdit() {
-    const s = parseTime(start);
-    const e = parseTime(end);
-    if (Number.isNaN(s) || Number.isNaN(e)) {
-      setEditMsg({ ok: false, text: 'Escribe inicio y fin como 90, 1:30 o 1:02:03.' });
-      return;
-    }
+    const dirtyRange = o.start === undefined || o.end === undefined || Math.abs(range.start - o.start) > 0.04 || Math.abs(range.end - o.end) > 0.04;
     setRendering(true);
     setEditMsg(null);
     try {
-      await window.api.reeditClip(o.id, { start: s, end: e, ...(layoutDirty && layoutDraft ? { layout: normalizeLayout(layoutDraft) } : {}) });
+      await window.api.reeditClip(o.id, {
+        ...(dirtyRange ? { start: round1(range.start), end: round1(range.end) } : {}),
+        ...(layoutDirty && layoutDraft ? { layout: normalizeLayout(layoutDraft) } : {}),
+      });
       await props.onChanged();
       setEditMsg({ ok: true, text: 'Clip renderizado de nuevo y validado.' });
     } catch (err) {
@@ -149,11 +176,6 @@ export default function ItemModal(props: {
       setRendering(false);
     }
   }
-  const pointToTime = (which: 'start' | 'end') => {
-    if (o.start === undefined) return;
-    const t = o.start + ((activeRef.current ?? videoRef.current)?.currentTime ?? 0);
-    (which === 'start' ? setStart : setEnd)(fmtTime(Math.round(t * 10) / 10));
-  };
 
   // ---- descargar una versión
   const [dlMsg, setDlMsg] = useState<Msg>(null);
@@ -188,6 +210,10 @@ export default function ItemModal(props: {
   const [wordsLoaded, setWordsLoaded] = useState(false);
   const [subsMsg, setSubsMsg] = useState<Msg>(null);
   const [subsBusy, setSubsBusy] = useState(false);
+  const [whisper, setWhisper] = useState<WhisperStatus | null>(null);
+  useEffect(() => {
+    if (canSubtitle) void window.api.whisperStatus().then(setWhisper).catch(() => undefined);
+  }, [canSubtitle]);
   async function loadWords() {
     if (!o.vodId) return;
     try {
@@ -238,6 +264,26 @@ export default function ItemModal(props: {
       setSubsMsg({ ok: false, text: errMsg(e) });
     } finally {
       setSubsBusy(false);
+    }
+  }
+  /** Un solo paso: transcribe el directo (si hace falta, descargando antes el modelo) y graba los subtítulos. */
+  async function subsGenerate() {
+    if (!o.vodId) return;
+    setSubsMsg(null);
+    setSubsBusy(true);
+    try {
+      if (!hasWords) {
+        await window.api.transcribeVod(o.vodId);
+        await loadWords();
+      }
+      await window.api.reeditClip(o.id, { subtitles: subsStyle });
+      await props.onChanged();
+      setSubsMsg({ ok: true, text: 'Subtítulos grabados en el vídeo.' });
+    } catch (e) {
+      setSubsMsg({ ok: false, text: errMsg(e) });
+    } finally {
+      setSubsBusy(false);
+      void window.api.whisperStatus().then(setWhisper).catch(() => undefined);
     }
   }
   async function subsApply() {
@@ -301,17 +347,31 @@ export default function ItemModal(props: {
   return (
     <Modal title={o.title} onClose={props.onClose} wide>
       {isClip && !o.remote && (
-      <div className="viewtabs" role="tablist" aria-label="Versión del clip">
-        {(['horizontal', 'vertical'] as const).map((v) => (
-          <button key={v} type="button" role="tab" id={`tab-${v}`} aria-selected={view === v} className="viewtab" onClick={() => setView(v)}>
-            {v === 'horizontal' ? 'Horizontal' : 'Vertical'}
-          </button>
-        ))}
-      </div>
+        <ClipStudio
+          output={o}
+          hRef={videoRef}
+          vRef={verticalRef}
+          hSrc={o.files.horizontal ? mediaUrl(o.id, 'horizontal', o.files.horizontal) : undefined}
+          vSrc={o.files.vertical ? mediaUrl(o.id, 'vertical', o.files.vertical) : undefined}
+          poster={o.thumbnail ? mediaUrl(o.id, 'thumb', o.thumbnail) : undefined}
+          hOverlay={captionsFor(videoRef, { w: 1920, h: 1080 })}
+          vOverlay={captionsFor(verticalRef, { w: 1080, h: 1920 })}
+          range={range}
+          onRange={setRange}
+          vodDuration={vodDuration}
+          canReedit={canReedit}
+          rendering={rendering}
+          designOpen={designOpen}
+          onToggleDesign={() => setDesignOpen((x) => !x)}
+          onApply={() => void applyEdit()}
+          onDownload={(v) => void download(v)}
+          onRegenerate={() => void regenerate()}
+          notice={!designOpen ? <Notice msg={editMsg} /> : undefined}
+        />
       )}
-      {isClip && !o.remote && view === 'vertical' && (
+      {isClip && !o.remote && designOpen && (
         <section className="vsection" aria-label="Composición vertical">
-          <h3>Composición vertical</h3>
+          <h3>Diseño de la versión vertical</h3>
           {!canReedit ? (
             <div className="muted small">Este clip es anterior a la Biblioteca y no guarda de qué parte del VOD sale, así que no se puede recomponer.</div>
           ) : !framing || !layoutDraft ? (
@@ -343,44 +403,7 @@ export default function ItemModal(props: {
             </div>
           ) : (
             <>
-          {isClip ? (
-            <>
-              {(() => {
-                const v = view;
-                const file = o.files[v];
-                const label = v === 'vertical' ? 'Vertical 1080×1920' : 'Horizontal 1920×1080';
-                return (
-                  <div className={`version ${v}`} data-testid={`version-${v}`} role="tabpanel" aria-labelledby={`tab-${v}`}>
-                    <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <span className="small muted">{label}{v === 'vertical' ? ' · resultado actual' : ''}</span>
-                      {file && (
-                        <button className="btn ghost small" aria-label={`Descargar versión ${v}`} onClick={() => void download(v)}>
-                          <IconDownload size={14} /> Descargar
-                        </button>
-                      )}
-                    </div>
-                    {file ? (
-                      <Player
-                        key={v}
-                        videoRef={v === 'vertical' ? verticalRef : videoRef}
-                        vertical={v === 'vertical'}
-                        label={`Reproductor ${v}`}
-                        onActivate={(el) => (activeRef.current = el)}
-                        src={mediaUrl(o.id, v, file)}
-                        poster={v === 'horizontal' && o.thumbnail ? mediaUrl(o.id, 'thumb', o.thumbnail) : undefined}
-                        overlay={captionsFor(v === 'vertical' ? verticalRef : videoRef, v === 'vertical' ? { w: 1080, h: 1920 } : { w: 1920, h: 1080 })}
-                      />
-                    ) : (
-                      <div className="missing">
-                        <span className="muted small">Esta versión no está disponible.</span>
-                        {canReedit && <button className="btn small" disabled={rendering} onClick={() => void regenerate()}>Generar versión {v}</button>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </>
-          ) : (
+          {isClip ? null : (
             <>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span className="small muted">Horizontal 1920×1080</span>
@@ -429,7 +452,14 @@ export default function ItemModal(props: {
               >
                 <div className="field">
                   <label htmlFor="yt-title">Nombre</label>
-                  <input id="yt-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
+                  <div className="row" style={{ gap: 8 }}>
+                    <input id="yt-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} />
+                    {o.vodId && o.start !== undefined && o.end !== undefined && !o.remote && (
+                      <button type="button" className="btn ghost small" disabled={titleBusy} onClick={() => void suggestTitle()} title="Pone un título según lo que se dice en este tramo">
+                        {titleBusy ? 'Pensando…' : 'Sugerir título'}
+                      </button>
+                    )}
+                  </div>
                   <span className="muted small">{title.length} / {YT_TITLE_MAX}</span>
                 </div>
                 <div className="field">
@@ -455,32 +485,6 @@ export default function ItemModal(props: {
                 </div>
               </form>
               <Notice msg={ytMsg} />
-            </section>
-          )}
-
-          {o.kind !== 'long' && !o.remote && (
-            <section aria-label="Recorte">
-              <h3>Recorte</h3>
-              {!canReedit ? (
-                <div className="muted small">Este clip es anterior a la Biblioteca y no guarda de qué parte del VOD sale, así que no se puede reeditar.</div>
-              ) : (
-                <>
-                  <div className="row">
-                    <label className="small muted" htmlFor="ed-start">Inicio</label>
-                    <input id="ed-start" type="text" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: 90 }} />
-                    <button className="btn ghost small" onClick={() => pointToTime('start')}>= punto actual</button>
-                    <label className="small muted" htmlFor="ed-end">Fin</label>
-                    <input id="ed-end" type="text" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: 90 }} />
-                    <button className="btn ghost small" onClick={() => pointToTime('end')}>= punto actual</button>
-                  </div>
-                  <div className="muted small">Tiempos del VOD original. «= punto actual» usa el instante que muestra el reproductor.</div>
-                  <div className="row">
-                    <button className="btn small" disabled={rendering} onClick={() => void applyEdit()}>Aplicar y renderizar de nuevo</button>
-                    {rendering && <span className="muted small" role="status">Renderizando…</span>}
-                  </div>
-                </>
-              )}
-              {view === 'horizontal' && <Notice msg={editMsg} />}
             </section>
           )}
 
@@ -514,21 +518,32 @@ export default function ItemModal(props: {
                     )}
                     {liveOverlay && <div className="muted small">La vista previa sobre el vídeo usa el mismo reparto de frases y medidas que el resultado final.</div>}
                     {wordsLoaded && !hasWords && (
-                      <div className="msg small warn" role="note">
-                        Este VOD no tiene transcripción, y sin ella no hay nada que subtitular. Impórtala (JSON, SRT o VTT) o transcríbela con Whisper si lo has configurado en Ajustes.
+                      <div className="msg small warn" role="note" data-testid="subs-needs-transcript">
+                        <strong>Este directo todavía no está transcrito.</strong> Para poner subtítulos hace falta saber qué se dice.{' '}
+                        {whisper?.engine === false
+                          ? 'En esta instalación no se encuentra Whisper (el motor de transcripción): importa una transcripción (JSON, SRT o VTT) o indica la ruta de whisper-cli en Ajustes.'
+                          : whisper && !whisper.modelInstalled
+                            ? `Se transcribirá aquí mismo, en tu ordenador y gratis. La primera vez descarga el modelo «${whisper.model}» (${whisper.modelApproxMb} MB) y puede tardar; después ya queda guardado.`
+                            : 'Se transcribirá aquí mismo, en tu ordenador y gratis. Puede tardar varios minutos en un directo largo.'}
                       </div>
                     )}
                     {hasWords && outWords.length === 0 && <div className="msg small warn" role="note">La transcripción no tiene ninguna palabra dentro de este tramo.</div>}
                     <div className="row">
                       <button type="button" className="btn ghost small" onClick={() => void subsImport()}>{hasWords ? 'Cambiar transcripción…' : 'Importar transcripción…'}</button>
-                      <button type="button" className="btn ghost small" disabled={subsBusy} onClick={() => void subsTranscribe()}>Transcribir con Whisper</button>
+                      <button type="button" className="btn ghost small" disabled={subsBusy || whisper?.engine === false} onClick={() => void subsTranscribe()}>Solo transcribir</button>
                     </div>
                   </>
                 )}
                 <div className="row">
-                  <button type="button" className="btn small" disabled={subsBusy || !subsChanged || (subsOn && outWords.length === 0)} onClick={() => void subsApply()}>
-                    {subsOn ? 'Aplicar subtítulos' : 'Quitar subtítulos'}
-                  </button>
+                  {subsOn && wordsLoaded && !hasWords ? (
+                    <button type="button" className="btn small" data-testid="subs-generate" disabled={subsBusy || whisper?.engine === false} onClick={() => void subsGenerate()}>
+                      Transcribir y poner subtítulos
+                    </button>
+                  ) : (
+                    <button type="button" className="btn small" disabled={subsBusy || !subsChanged || (subsOn && outWords.length === 0)} onClick={() => void subsApply()}>
+                      {subsOn ? 'Aplicar subtítulos' : 'Quitar subtítulos'}
+                    </button>
+                  )}
                   {subsBusy && <span className="muted small" role="status">Trabajando… puede tardar varios minutos.</span>}
                 </div>
               </>
@@ -544,9 +559,7 @@ export default function ItemModal(props: {
               const r = rowState(id);
               return (
                 <div key={id} className="row pubrow" data-testid={`pub-${id}`}>
-                  <label className="check" style={{ width: 110 }}>
-                    <input type="checkbox" checked={r.on} disabled={r.locked} onChange={(e) => patchRow(id, { on: e.target.checked })} /> {label}
-                  </label>
+                  <span style={{ width: 150 }}><PlatformSwitch id={id} label={label} checked={r.on} disabled={r.locked} onChange={(on) => patchRow(id, { on })} /></span>
                   <input type="datetime-local" aria-label={`Fecha y hora en ${label}`} value={r.when} disabled={r.locked || !r.on} onChange={(e) => patchRow(id, { when: e.target.value })} style={{ width: 200 }} />
                   {r.pub && <span className={`badge ${PUB_STATUS[r.pub.status].cls}`}>{PUB_STATUS[r.pub.status].label}</span>}
                   {r.pub?.note && <span className="muted small">{r.pub.note}</span>}

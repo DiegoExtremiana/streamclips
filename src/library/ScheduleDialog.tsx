@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { OutputItem, Platform, Publication, Settings } from '../../shared/types';
 import { platformsFor, VIDEO_ONLY_YOUTUBE } from '../../shared/types';
+import { PlatformSwitch } from './PlatformSwitch';
 import { buildAgenda, dayLabel, freePlatforms, localDayKey } from '../../shared/agenda';
 import { defaultLocalDateTime, localInputToIso, toLocalInputValue } from '../../shared/time';
 import { errMsg, notify } from '../lib';
@@ -140,22 +141,21 @@ export default function ScheduleDialog(props: {
               <legend className="muted small">Dónde</legend>
               <div className="row">
                 {PLATFORMS.filter((x) => allowed.includes(x.id)).map(({ id, label }) => (
-                  <label key={id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={chosen.has(id)}
-                      disabled={!free.includes(id)}
-                      onChange={(e) =>
-                        setChosen((cur) => {
-                          const n = new Set(cur);
-                          if (e.target.checked) n.add(id);
-                          else n.delete(id);
-                          return n;
-                        })
-                      }
-                    />{' '}
-                    {label}
-                  </label>
+                  <PlatformSwitch
+                    key={id}
+                    id={id}
+                    label={label}
+                    checked={chosen.has(id)}
+                    disabled={!free.includes(id)}
+                    onChange={(on) =>
+                      setChosen((cur) => {
+                        const n = new Set(cur);
+                        if (on) n.add(id);
+                        else n.delete(id);
+                        return n;
+                      })
+                    }
+                  />
                 ))}
               </div>
               {kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}

@@ -2,6 +2,7 @@ import type { Block } from '../../shared/schedulePlan';
 import { hhmm, monthGrid } from '../../shared/schedulePlan';
 import { IconPlus } from '../icons';
 import type { DragApi } from './drag';
+import { PlatformDots } from '../library/PlatformSwitch';
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const SHORT = { youtube: 'YT', tiktok: 'TT', instagram: 'IG' } as const;
@@ -70,7 +71,7 @@ export default function CalendarView(props: {
                       }
                     }}
                   >
-                    <span className="mono">{hhmm(b.at)}</span> <span className="cal-title">{b.title}</span>
+                    <span className="mono">{hhmm(b.at)}</span> <span className="cal-title">{b.title}</span> <PlatformDots platforms={b.platforms} all={b.platforms} size={12} />
                   </div>
                 ))}
                 {mine.length > MAX_CHIPS && (

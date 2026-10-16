@@ -4,6 +4,7 @@ import type { AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shar
 import type { Word } from '../../shared/subtitles';
 import { bestStretches, buildSummary, fallbackTitle, findMoments, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { nextFreeSlot } from '../../shared/slots';
+import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
 import { audioEnergy } from '../services/audioEnergy';
 import { LLM_PROVIDERS, askJson, type LlmConfig } from '../services/llm';
@@ -157,6 +158,14 @@ export class Autopilot {
       // 4) títulos
       task.update(55, 'Poniendo títulos…');
       const titles = await this.titles(vod, words, moments, mains, notes);
+      // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
+      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', this.cfg.series) : null;
+      if (ser) {
+        const st = seriesTitles(ser, mains.length);
+        titles.summary = { title: clean(st.summary, 100), description: titles.summary.description };
+        titles.mains = titles.mains.map((t, i) => ({ title: clean(st.mains[i], 100), description: t.description || `En este vídeo: ${t.title}` }));
+        notes.push(`Serie «${ser.name}», día ${ser.day}.`);
+      }
 
       // 5) montaje
       this.mark(vod, 'rendering');
@@ -199,6 +208,10 @@ export class Autopilot {
             errors.push(`${o.title}: ${(e as Error).message}`); // se queda para revisar a mano
           }
         }
+      }
+      if (ser && !ser.fromTitle && created.some((o) => o.kind === 'long')) {
+        this.cfg.series.nextDay = ser.day + 1; // el siguiente directo de la serie es el día siguiente
+        this.d.store.save();
       }
       const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ` (${scheduled} programados)`}.`;
       this.mark(vod, 'done', [msg, ...errors, ...notes].join(' '));
@@ -246,6 +259,35 @@ export class Autopilot {
       notes.push(`Títulos sin modelo de lenguaje: ${(e as Error).message}`);
     }
     return base;
+  }
+
+  /**
+   * Título provisional para un tramo (clip o vídeo) a partir de lo que se dice en él. Con un modelo de lenguaje configurado
+   * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
+   */
+  async suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
+    const words = this.d.transcripts.words(vodId);
+    const seg: Seg = { start, end };
+    if (!words.some((w) => w.start >= start && w.end <= end + 0.5)) return null;
+    const fb = clean(fallbackTitle(words, seg, 0), 100);
+    const llm = this.cfg.llm;
+    const key = this.d.llmKey();
+    if (llm.provider !== 'none' && key) {
+      try {
+        const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+        const raw = (await askJson(
+          conf,
+          'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes títulos cortos y atractivos (máximo 70 caracteres, sin clickbait falso, sin emojis). Responde SOLO con JSON.',
+          `Texto transcrito de un fragmento. Devuelve {"titulo":""}.\n${textOf(words, start, Math.min(end, start + 240), 900)}`,
+          { fetchFn: this.d.llmFetch },
+        )) as { titulo?: unknown };
+        const t = clean(raw.titulo, 100);
+        if (t) return { title: t, source: 'llm' };
+      } catch {
+        /* se usa el título local */
+      }
+    }
+    return fb ? { title: fb, source: 'transcript' } : null;
   }
 
   private dateLabel(vod: VodJob): string {

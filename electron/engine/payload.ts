@@ -7,7 +7,7 @@ export interface EnginePayload {
   llm: { provider: LlmChoice; model: string; apiKey: string };
   /** Repositorio PRIVADO donde se dejan los vídeos listos para publicar (la cola del modo nube). */
   cloud: { repo: string; token: string };
-  autopilot: Pick<AutopilotSettings, 'maxClips' | 'maxVideos' | 'subtitles' | 'platforms' | 'videoTimes' | 'clipTimes' | 'summaryMinutes' | 'mainMinutes' | 'visibility'>;
+  autopilot: Pick<AutopilotSettings, 'maxClips' | 'maxVideos' | 'subtitles' | 'platforms' | 'videoTimes' | 'clipTimes' | 'summaryMinutes' | 'mainMinutes' | 'visibility' | 'series'>;
   whisper: { model: string; language: string };
   /** Los directos anteriores a esta fecha no se tocan. */
   since: string;
@@ -20,6 +20,8 @@ export interface EngineRunState {
   done: string[];
   /** Intentos hechos por VOD (a los 3 se deja de insistir). */
   tries: Record<string, number>;
+  /** Serie en curso y el siguiente día a numerar (el PC no está para llevar la cuenta). */
+  series?: { name: string; nextDay: number; /** Día de la configuración de la que se partió: si cambia en el programa, se vuelve a partir de ahí. */ from: number };
   last?: { at: string; processed: number; pending: number; note?: string };
 }
 
@@ -35,6 +37,7 @@ export function parsePayload(text: string): EnginePayload {
   }
   if (j.v !== 1 || !j.twitch?.clientId || !j.twitch.clientSecret || !j.twitch.login) throw new Error('Falta la conexión con Twitch en el motor. Revisa Ajustes y vuelve a sincronizar.');
   if (!j.cloud?.repo || !j.cloud.token) throw new Error('Falta el repositorio privado de la nube en el motor.');
+  if (j.autopilot && !j.autopilot.series) j.autopilot.series = { name: '', nextDay: 1 };
   if (!j.autopilot || !j.whisper || !j.llm || typeof j.since !== 'string') throw new Error('La configuración del motor está incompleta. Vuelve a sincronizar desde el programa.');
   return j as EnginePayload;
 }
@@ -49,6 +52,7 @@ export function parseRunState(text: string | null): EngineRunState {
       done: Array.isArray(j.done) ? j.done.filter((x): x is string => typeof x === 'string').slice(-500) : [],
       tries: typeof j.tries === 'object' && j.tries !== null ? Object.fromEntries(Object.entries(j.tries).filter(([, n]) => typeof n === 'number')) : {},
       ...(j.last ? { last: j.last } : {}),
+      ...(j.series && typeof j.series.name === 'string' && Number.isInteger(j.series.nextDay) && Number.isInteger(j.series.from) ? { series: { name: j.series.name, nextDay: j.series.nextDay, from: j.series.from } } : {}),
     };
   } catch {
     return empty;

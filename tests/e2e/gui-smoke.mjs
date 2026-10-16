@@ -365,19 +365,53 @@ try {
   await page.getByRole('tab', { name: 'Clips', exact: true }).click();
   await page.getByTestId('item-Mi clip vertical').click();
   await dlg.waitFor();
-  await dlg.getByRole('tab', { name: 'Horizontal' }).waitFor();
-  assert.equal(await dlg.getByRole('tab', { name: 'Horizontal' }).getAttribute('aria-selected'), 'true', 'se abre en Horizontal');
-  assert.equal(await dlg.getByTestId('version-vertical').count(), 0, 'la versión vertical no se muestra mientras estás en Horizontal');
+  await dlg.getByTestId('clip-studio').waitFor();
+  assert.equal(await dlg.getByRole('tab').count(), 0, 'ya no hay pestañas: las dos versiones se ven a la vez');
   for (const v of ['horizontal', 'vertical']) {
-    await dlg.getByRole('tab', { name: v === 'vertical' ? 'Vertical' : 'Horizontal' }).click();
     await dlg.getByTestId(`version-${v}`).waitFor();
     await page.waitForFunction((n) => document.querySelector(`[data-testid="player-Reproductor ${n}"]`)?.readyState >= 1, v);
     const d = await dlg.getByTestId(`player-Reproductor ${v}`).evaluate((e) => [e.videoWidth, e.videoHeight, Math.round(e.duration)]);
     assert.deepEqual(d, v === 'vertical' ? [1080, 1920, 3] : [1920, 1080, 3]);
   }
-  assert.equal(await dlg.getByTestId('vertical-editor').count() > 0 || await dlg.getByText('Cargando el fotograma…').count() > 0, true, 'la pestaña Vertical muestra la composición');
+  // el sonido: la horizontal suena (la vertical va en silencio para no duplicarlo) y la barra única manda sobre las dos
+  assert.equal(await dlg.getByTestId('player-Reproductor horizontal').evaluate((e) => e.muted), false, 'el clip se oye');
+  assert.equal(await dlg.getByTestId('player-Reproductor vertical').evaluate((e) => e.muted), true);
+  await dlg.getByTestId('studio-play').click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="player-Reproductor horizontal"]').paused && !document.querySelector('[data-testid="player-Reproductor vertical"]').paused);
+  await page.waitForFunction(() => document.querySelector('[data-testid="player-Reproductor horizontal"]').currentTime > 0.3);
+  const vt = await dlg.getByTestId('player-Reproductor vertical').evaluate((e) => e.currentTime);
+  assert.ok(vt > 0, 'la vertical sigue a la horizontal');
+  await dlg.getByTestId('studio-play').click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="player-Reproductor horizontal"]').paused && document.querySelector('[data-testid="player-Reproductor vertical"]').paused);
+  await dlg.getByTestId('studio-mute').click();
+  assert.equal(await dlg.getByTestId('player-Reproductor horizontal').evaluate((e) => e.muted), true);
+  await dlg.getByTestId('studio-mute').click();
+  assert.equal(await dlg.getByTestId('player-Reproductor horizontal').evaluate((e) => e.muted), false);
+  await dlg.getByTestId('clip-timeline').waitFor();
+  assert.equal(await dlg.getByTestId('vertical-editor').count(), 0, 'el diseño solo aparece al pulsar «Editar diseño»');
+  // recorte con la línea de tiempo: el agarre del final se mueve con el teclado y «Aplicar recorte» vuelve a renderizar
+  const clipBefore = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).outputs.find((o) => o.title === 'Mi clip vertical');
+  const endBefore = Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow'));
+  assert.equal(endBefore, clipBefore.end);
+  assert.equal(await dlg.getByRole('button', { name: 'Aplicar recorte' }).isDisabled(), true, 'sin cambios no hay nada que aplicar');
+  await dlg.getByTestId('grip-end').focus();
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow')), Math.max(endBefore - 0.5, clipBefore.start + 1));
+  await dlg.getByRole('button', { name: 'Aplicar recorte' }).click();
+  await dlg.getByText('Clip renderizado de nuevo y validado.').waitFor({ timeout: 90000 });
+  const clipAfter = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).outputs.find((o) => o.title === 'Mi clip vertical');
+  assert.equal(clipAfter.end, endBefore - 0.5, `${clipBefore.end} -> ${clipAfter.end}`);
+  assert.equal(dimsOf(clipAfter.files.vertical), '1080,1920');
+  // se devuelve a como estaba para no alterar lo que comprueban las pruebas siguientes
+  await dlg.getByTestId('grip-end').focus();
+  await page.keyboard.press('ArrowRight');
+  await dlg.getByRole('button', { name: 'Aplicar recorte' }).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=grip-end]')?.getAttribute('aria-valuenow') === '4' && !document.body.innerText.includes('Renderizando'), null, { timeout: 90000 });
+  const restored = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).outputs.find((o) => o.title === 'Mi clip vertical');
+  assert.equal(restored.end, clipBefore.end);
+  log('recorte con la línea de tiempo: el agarre se mueve con el teclado y «Aplicar recorte» renderiza otra vez el clip más corto');
   await shot(page, '8a-modal-clip-pestanas');
-  log('la ventana de un clip separa Horizontal y Vertical en pestañas: cada una carga su vídeo (1920×1080 y 1080×1920) y solo Vertical ofrece la composición');
+  log('la ventana de un clip enseña Horizontal y Vertical a la vez (1920×1080 y 1080×1920), con sonido y una sola barra de reproducción; el diseño se abre con «Editar diseño»');
 
   // descargar con el botón de cada versión (el cuadro de guardado del sistema se sustituye por una ruta fija)
   const saveVertical = path.join(work, 'descarga-vertical.mp4');
@@ -388,6 +422,7 @@ try {
   log('«Descargar» en la versión vertical guarda una copia 1080×1920 donde elige el usuario');
 
   // composición vertical: ventanas arrastrables con vista previa en vivo
+  await dlg.getByRole('button', { name: 'Editar diseño' }).click();
   const ed = dlg.getByTestId('vertical-editor');
   await ed.waitFor();
   const vsrc = ed.getByTestId('vsource');
@@ -469,12 +504,12 @@ try {
   log('composición vertical: guardar vuelve a renderizar (1080×1920), sustituye el archivo y guarda las 2 ventanas con el clip');
   await dlg.getByRole('button', { name: 'Cerrar' }).click();
   await page.getByTestId('item-Mi clip vertical').click();
-  await dlg.getByRole('tab', { name: 'Vertical' }).click();
+  await dlg.getByRole('button', { name: 'Editar diseño' }).click();
   await dlg.getByTestId('vwin-1').waitFor();
   assert.equal(await dlg.getByTestId('vwin-2').count(), 0);
   assert.equal(await dlg.getByRole('button', { name: 'Mitad y mitad' }).getAttribute('aria-pressed'), 'true');
   log('composición vertical: al volver a abrir el clip se recuperan sus ventanas y su disposición');
-  await dlg.getByRole('tab', { name: 'Horizontal' }).click();
+  await dlg.getByRole('button', { name: 'Ocultar el diseño' }).click();
 
   await dlg.getByTestId('pub-instagram').getByRole('checkbox').check();
   await dlg.getByLabel('Fecha y hora en Instagram').fill('2031-01-01T10:00');
@@ -489,7 +524,6 @@ try {
 
   // clip creado solo en horizontal: falta la vertical y se puede generar
   await page.getByTestId('item-Clip horizontal').click();
-  await dlg.getByRole('tab', { name: 'Vertical' }).click();
   await dlg.getByTestId('version-vertical').getByText('Esta versión no está disponible.').waitFor();
   await dlg.getByRole('button', { name: 'Generar versión vertical' }).click();
   await dlg.getByRole('button', { name: 'Descargar versión vertical' }).waitFor({ timeout: 60000 });
@@ -509,12 +543,7 @@ try {
   assert.equal(await dlg.getByTestId('style-clasico').getAttribute('aria-checked'), 'true');
   await dlg.getByTestId('caption-sample').waitFor();
   await dlg.getByTestId('caption-layer').first().waitFor();
-  assert.equal(await dlg.getByTestId('caption-layer').count(), 1, 'la vista previa aparece sobre la versión que estás viendo');
-  await dlg.getByRole('tab', { name: 'Vertical' }).click();
-  await dlg.getByTestId('caption-layer').waitFor();
-  assert.equal(await dlg.getByTestId('caption-layer').count(), 1, 'y también sobre la vertical al cambiar de pestaña');
-  await dlg.getByRole('tab', { name: 'Horizontal' }).click();
-  await dlg.getByTestId('caption-layer').waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=caption-layer]').length === 2);
   const hp = dlg.getByTestId('player-Reproductor horizontal');
   const seekTo = (loc, t) => loc.evaluate((v, t2) => new Promise((res) => { v.addEventListener('seeked', () => res(), { once: true }); v.currentTime = t2; }), t);
   await seekTo(hp, 0.5);

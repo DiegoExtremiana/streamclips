@@ -3,7 +3,7 @@ import { fmtTime } from '../../shared/time';
 import { IconMute, IconPause, IconPlay, IconRestart, IconVolume } from '../icons';
 
 /** Reproductor con controles propios (iconos de reproducir/pausa, reinicio, posición y sonido). */
-export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; src: string; poster?: string; vertical?: boolean; label?: string; onActivate?: (el: HTMLVideoElement) => void; overlay?: ReactNode }) {
+export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; src: string; poster?: string; vertical?: boolean; label?: string; onActivate?: (el: HTMLVideoElement) => void; overlay?: ReactNode; /** Sin barra de controles (los maneja quien lo use). */ bare?: boolean; /** Sin sonido (p. ej. la versión que va en paralelo a otra). */ silent?: boolean }) {
   const { videoRef } = props;
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -47,10 +47,10 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
   return (
     <div className={`playerbox ${props.vertical ? 'vertical' : ''}`}>
       <div className="stage">
-        <video ref={videoRef} className="player" data-testid={props.label ? `player-${props.label}` : 'player'} aria-label={props.label} preload="metadata" src={props.src} poster={props.poster} onClick={toggle} />
+        <video ref={videoRef} className="player" data-testid={props.label ? `player-${props.label}` : 'player'} aria-label={props.label} preload="metadata" src={props.src} poster={props.poster} onClick={toggle} muted={props.silent} playsInline />
         {props.overlay}
       </div>
-      <div className="controls">
+      {!props.bare && <div className="controls">
         <button className="iconbtn" aria-label="Volver al inicio" title="Volver al inicio" onClick={restart}><IconRestart /></button>
         <button className="iconbtn" aria-label={playing ? 'Pausa' : 'Reproducir'} title={playing ? 'Pausa' : 'Reproducir'} onClick={toggle}>
           {playing ? <IconPause /> : <IconPlay />}
@@ -77,7 +77,7 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
         >
           {muted ? <IconMute /> : <IconVolume />}
         </button>
-      </div>
+      </div>}
     </div>
   );
 }

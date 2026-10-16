@@ -23,6 +23,11 @@ export interface IpcPlatform {
   pickSavePath(defaultName: string): Promise<string | null>;
 }
 
+function num(v: unknown, name: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error(`Parámetro no válido: ${name}.`);
+  return v;
+}
+
 function str(v: unknown, name: string): string {
   if (typeof v !== 'string') throw new Error(`Parámetro no válido: ${name}.`);
   return v;
@@ -181,6 +186,8 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
     const file = await platform.pickTranscript();
     return file ? ctx.transcripts.importFile(id, file) : null;
   });
+  handle(CHANNELS.clipContext, (id) => ctx.library.clipContext(str(id, 'id')));
+  handle(CHANNELS.suggestTitle, (vodId, start, end) => ctx.autopilot.suggestTitle(str(vodId, 'vodId'), num(start, 'start'), num(end, 'end')));
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
   handle(CHANNELS.transcriptPrompt, async (vodId) => {
     const id = str(vodId, 'vodId');

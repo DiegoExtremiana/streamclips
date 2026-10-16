@@ -3,10 +3,12 @@ import type { Block } from '../../shared/schedulePlan';
 import { hhmm, layoutLanes, minutesOfDay } from '../../shared/schedulePlan';
 import { dayLabel } from '../../shared/agenda';
 import type { DragApi } from './drag';
+const SHORT = { youtube: 'YT', tiktok: 'TT', instagram: 'IG' } as const;
+import { platformsFor } from '../../shared/types';
+import { PlatformDots } from '../library/PlatformSwitch';
 
 const CHIP_PX = 168;
 const LANE_PX = 34;
-const SHORT = { youtube: 'YT', tiktok: 'TT', instagram: 'IG' } as const;
 const HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
 
 function useWidth() {
@@ -92,7 +94,7 @@ export default function Timeline(props: { days: string[]; blocks: Block[]; now: 
                     <span className="mono tl-time">{hhmm(b.at)}</span>
                     {b.kind === 'long' && <span className="tl-kind">Vídeo</span>}
                     <span className="tl-name">{b.title}</span>
-                    <span className="tl-nets">{b.platforms.map((p) => SHORT[p]).join(' ')}</span>
+                    <span className="tl-nets"><PlatformDots platforms={b.platforms} all={platformsFor(b.kind)} size={14} /></span>
                   </div>
                 );
               })}

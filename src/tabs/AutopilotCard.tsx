@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -93,6 +93,20 @@ export default function AutopilotCard() {
           <label htmlFor="ap-ctimes">Horas de los clips (uno al día por cada hora, en todas las redes)</label>
           <input id="ap-ctimes" type="text" placeholder="10:00, 14:00, 19:00" value={timesText.clip} onChange={(e) => setTimesText({ ...timesText, clip: e.target.value })} />
         </div>
+      </div>
+      <div className="row">
+        <div className="field" style={{ flex: 2 }}>
+          <label htmlFor="ap-series">Serie en curso (opcional)</label>
+          <input id="ap-series" type="text" maxLength={60} placeholder="Minecraft extremo" value={a.series.name} onChange={(e) => up({ series: { ...a.series, name: e.target.value } })} />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ap-series-day">Próximo día</label>
+          <input id="ap-series-day" type="text" inputMode="numeric" value={a.series.nextDay} onChange={(e) => up({ series: { ...a.series, nextDay: num(e.target.value, a.series.nextDay) } })} />
+        </div>
+      </div>
+      <div className="muted small">
+        Con una serie, los vídeos de cada directo se llaman «{a.series.name.trim() || 'Minecraft extremo'} Día {a.series.nextDay}» (y «- Resumen» o «- Parte 2» si hay varios),
+        y el tema concreto va a la descripción. El día sube solo con cada directo. Si el título del directo ya dice «… día 3», se usa ese y no hace falta rellenar nada.
       </div>
       <div className="field">
         <label>Publicar en</label>

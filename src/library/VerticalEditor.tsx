@@ -5,7 +5,7 @@ import {
   OUT_H, OUT_W, type Rect, type VerticalLayout,
 } from '../../shared/layout';
 import { fmtTime } from '../../shared/time';
-import { IconPause, IconPlay } from '../icons';
+import { IconMute, IconPause, IconPlay, IconVolume } from '../icons';
 
 const COLORS = ['#ff4fa3', '#22d3ee', '#facc15'];
 const PREVIEW_W = 270;
@@ -62,6 +62,7 @@ export default function VerticalEditor(props: {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [videoOk, setVideoOk] = useState(false);
+  const [muted, setMuted] = useState(false); // el sonido va activado: se edita escuchando lo que se dice
 
   // vista previa en vivo: se redibuja siempre (es muy barato) con el fotograma o con el vídeo si está listo
   useEffect(() => {
@@ -195,7 +196,7 @@ export default function VerticalEditor(props: {
               <video
                 ref={videoRef}
                 src={props.videoUrl}
-                muted
+                muted={muted}
                 playsInline
                 preload="auto"
                 onLoadedMetadata={(e) => {
@@ -259,6 +260,9 @@ export default function VerticalEditor(props: {
                 style={{ flex: 1 }}
               />
               <span className="mono small muted">{fmtTime(Math.round(time))}</span>
+              <button type="button" className="btn ghost small" aria-label={muted ? 'Activar sonido' : 'Silenciar'} title={muted ? 'Activar sonido' : 'Silenciar'} onClick={() => setMuted(!muted)}>
+                {muted ? <IconMute size={14} /> : <IconVolume size={14} />}
+              </button>
             </div>
           )}
         </div>

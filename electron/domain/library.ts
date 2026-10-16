@@ -326,6 +326,19 @@ export class LibraryService {
   }
 
   /** Fotograma completo del VOD en medio del clip, para colocar el recuadro vertical sobre él. */
+  /** Datos del directo de origen para dibujar la línea de tiempo del recorte (null si ya no está el archivo). */
+  async clipContext(id: string): Promise<{ vodDurationSec: number | null }> {
+    const o = this.find(id);
+    const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
+    if (!vod?.filePath || !fs.existsSync(vod.filePath)) return { vodDurationSec: null };
+    if (vod.durationSec) return { vodDurationSec: vod.durationSec };
+    try {
+      return { vodDurationSec: (await probe(this.d.tools(), vod.filePath)).durationSec };
+    } catch {
+      return { vodDurationSec: null };
+    }
+  }
+
   framingPreview(id: string): Promise<FramingPreview> {
     return this.d.queue.run(async () => {
       const o = this.find(id);

@@ -43,7 +43,7 @@ function validateWhisperLanguage(raw: string): string {
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch['autopilot']>, enc: (s: string) => string): AutopilotSettings {
-  const n: AutopilotSettings = { ...cur, videoTimes: [...cur.videoTimes], clipTimes: [...cur.clipTimes], llm: { ...cur.llm }, platforms: [...cur.platforms] };
+  const n: AutopilotSettings = { ...cur, series: { ...cur.series }, videoTimes: [...cur.videoTimes], clipTimes: [...cur.clipTimes], llm: { ...cur.llm }, platforms: [...cur.platforms] };
   const bool = (v: unknown, label: string): boolean => {
     if (typeof v !== 'boolean') throw new Error(`${label} no es válido.`);
     return v;
@@ -58,6 +58,13 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.visibility !== undefined) {
     if (p.visibility !== 'public' && p.visibility !== 'private') throw new Error('La visibilidad debe ser pública o privada.');
     n.visibility = p.visibility;
+  }
+  if (p.series !== undefined) {
+    const name = typeof p.series.name === 'string' ? p.series.name.replace(/\s+/g, ' ').trim() : '';
+    if (typeof p.series.name !== 'string' || name.length > 60) throw new Error('El nombre de la serie no puede pasar de 60 caracteres.');
+    const day = p.series.nextDay;
+    if (!Number.isInteger(day) || day < 1 || day > 9999) throw new Error('El día de la serie debe ser un número entero entre 1 y 9999.');
+    n.series = { name, nextDay: day };
   }
   if (p.maxVideos !== undefined) {
     if (!Number.isInteger(p.maxVideos) || p.maxVideos < 0 || p.maxVideos > 12) throw new Error('Los vídeos por directo deben ser un número entre 0 y 12.');

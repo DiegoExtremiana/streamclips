@@ -32,3 +32,4 @@ export const IconTrash = (p: P) => <Svg {...p}><polyline points="3 6 5 6 21 6" /
 export const IconCalendar = (p: P) => <Svg {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="16" y1="3" x2="16" y2="7" /></Svg>;
 export const IconCheck = (p: P) => <Svg {...p}><polyline points="5 12.5 10 17.5 19 7" /></Svg>;
 export const IconAlert = (p: P) => <Svg {...p}><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></Svg>;
+export const IconCrop = (p: P) => <Svg {...p}><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M2 6h14a2 2 0 0 1 2 2v14" /></Svg>;

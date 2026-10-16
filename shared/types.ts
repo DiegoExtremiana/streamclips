@@ -46,6 +46,8 @@ export interface AutopilotSettings {
   videoTimes: string[];
   /** Horas locales HH:MM de publicación de los clips (cada una, un clip al día en todas las redes elegidas). */
   clipTimes: string[];
+  /** Serie en curso: los vídeos de cada directo se llaman «<nombre> Día <n>». Vacío = sin serie (salvo que el título del directo ya diga «… día 3»). */
+  series: { name: string; nextDay: number };
   /** Duración del resumen (min) y del vídeo principal (min). */
   summaryMinutes: number;
   mainMinutes: number;
@@ -463,6 +465,10 @@ export interface Api {
   importTranscript(vodId: string): Promise<VodJob | null>;
   /** Transcribe el audio del VOD con la orden de Whisper configurada en Ajustes. */
   transcribeVod(vodId: string): Promise<VodJob>;
+  /** Título provisional de un tramo a partir de lo que se dice en él (null si no hay transcripción de ese tramo). */
+  /** Duración del directo de origen de un clip (null si el archivo ya no está), para la línea de tiempo del recorte. */
+  clipContext(id: string): Promise<{ vodDurationSec: number | null }>;
+  suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null>;
   /** Transcripción con marcas de tiempo + instrucciones para pedirle un plan de edición a Claude. */
   claudePrompt(vodId: string): Promise<string>;
   framingPreview(outputId: string): Promise<FramingPreview>;
@@ -541,6 +547,8 @@ export const CHANNELS = {
   transcriptGet: 'transcript:get',
   transcriptImport: 'transcript:import',
   transcriptRun: 'transcript:run',
+  suggestTitle: 'title:suggest',
+  clipContext: 'outputs:clipContext',
   transcriptPrompt: 'transcript:prompt',
   shellOpen: 'shell:open',
   eventVod: 'event:vod',

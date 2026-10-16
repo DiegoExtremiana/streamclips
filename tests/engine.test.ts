@@ -173,7 +173,8 @@ describe('motor nocturno: edita un directo de principio a fin', () => {
     cleanups.push(gh.close);
     const e = await desktop(gh);
     await e.ctx.engine.setup('diego/motor', 'GHTOKEN');
-    const p = { ...payloadOf(gh), since: hoursAgo(10) }; // el directo es posterior a la activación
+    const base = payloadOf(gh);
+    const p = { ...base, autopilot: { ...base.autopilot, series: { name: 'Minecraft extremo', nextDay: 1 } }, since: hoursAgo(10) }; // el directo es posterior a la activación
 
     const tw = { live: false, vods: [VOD('111', 3)] };
     const downloads: string[] = [];
@@ -200,6 +201,7 @@ describe('motor nocturno: edita un directo de principio a fin', () => {
     const longs = jobs.filter((j) => j.kind === 'long');
     const clips = jobs.filter((j) => j.kind === 'clip');
     assert.deepEqual(longs.map((j) => j.platform), ['youtube', 'youtube']);
+    assert.deepEqual(longs.map((j) => j.title).sort(), ['Minecraft extremo Día 1', 'Minecraft extremo Día 1 - Resumen'], 'los vídeos de la serie llevan el día');
     assert.deepEqual([...new Set(clips.map((j) => j.platform))].sort(), ['instagram', 'tiktok', 'youtube']);
     assert.ok(jobs.every((j) => j.visibility === 'public'), 'lo automático sale con la visibilidad elegida');
     const hhmm = (iso: string) => new Date(iso).toTimeString().slice(0, 5);
@@ -217,6 +219,7 @@ describe('motor nocturno: edita un directo de principio a fin', () => {
     const st = parseRunState(gh.files.get(ENGINE_STATE_PATH)!);
     assert.deepEqual(st.done, ['111']);
     assert.deepEqual(st.tries, {});
+    assert.deepEqual(st.series, { name: 'Minecraft extremo', nextDay: 2, from: 1 }, 'el motor lleva la cuenta de los días');
     assert.equal(st.last?.processed, 1);
     assert.ok(!gh.repo('diego/motor').files.has(ENGINE_STATE_PATH));
     assert.ok(![...gh.repo('diego/motor').files.keys()].some((k) => k.startsWith('queue/')));

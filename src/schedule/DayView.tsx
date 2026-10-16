@@ -7,6 +7,7 @@ import { atFromDayMinutes, entriesForBlockEdit, hhmm, validateMove, type Block }
 import { errMsg, notify } from '../lib';
 import { IconChevron, IconFilm, IconPlus, IconTrash } from '../icons';
 import { PLATFORMS } from '../library/ItemModal';
+import { PlatformSwitch } from '../library/PlatformSwitch';
 
 const toMinutes = (t: string): number | null => {
   const m = /^(\d{2}):(\d{2})$/.exec(t);
@@ -69,15 +70,15 @@ function Row(props: { block: Block; output: OutputItem | undefined; pubs: Public
         <input id={`dt-${b.id}`} type="time" value={time} disabled={b.locked || busy} onChange={(e) => setTime(e.target.value)} />
         <div className="row" style={{ gap: 10 }} role="group" aria-label={`Redes de ${b.title}`}>
           {PLATFORMS.map((p) => (
-            <label key={p.id} className="row" style={{ gap: 4, opacity: allowed.includes(p.id) ? 1 : 0.4 }} title={allowed.includes(p.id) ? undefined : 'Los vídeos solo se publican en YouTube'}>
-              <input
-                type="checkbox"
-                disabled={!allowed.includes(p.id) || b.locked || busy}
-                checked={platforms.includes(p.id)}
-                onChange={(e) => setPlatforms(e.target.checked ? [...platforms, p.id] : platforms.filter((x) => x !== p.id))}
-              />
-              {p.label}
-            </label>
+            <PlatformSwitch
+              key={p.id}
+              id={p.id}
+              withLabel={false}
+              title={allowed.includes(p.id) ? undefined : 'Los vídeos solo se publican en YouTube'}
+              disabled={!allowed.includes(p.id) || b.locked || busy}
+              checked={platforms.includes(p.id)}
+              onChange={(on) => setPlatforms(on ? [...platforms, p.id] : platforms.filter((x) => x !== p.id))}
+            />
           ))}
         </div>
         <button className="btn small" disabled={!dirty || busy || b.locked} onClick={() => void save()}>Guardar</button>

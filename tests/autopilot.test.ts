@@ -243,6 +243,46 @@ describe('piloto automático', () => {
     assert.ok(clip.start! < 115 && clip.end! > 100, `${clip.start}-${clip.end}`);
   });
 
+  it('una serie configurada nombra los vídeos «Serie Día N» y el día sube solo con cada directo', async () => {
+    const { e, vod } = setup();
+    e.ctx.settings.set({ autopilot: { maxClips: 0, maxVideos: 1, series: { name: 'Minecraft extremo', nextDay: 3 } } });
+    await e.ctx.autopilot.run(vod.id);
+    const [o] = e.ctx.store.data.outputs;
+    assert.equal(e.ctx.store.data.outputs.length, 1);
+    assert.equal(o.title, 'Minecraft extremo Día 3 - Resumen');
+    assert.equal(e.ctx.store.data.settings.autopilot.series.nextDay, 4);
+    assert.match(e.ctx.store.data.vods[0].autopilot!.note!, /Serie «Minecraft extremo», día 3/);
+  });
+
+  it('si el título del directo ya dice el día, se usa ese y la cuenta configurada no se toca', async () => {
+    const { e, vod } = setup();
+    vod.title = 'Locke en chanclas - día 12 | directo';
+    e.ctx.settings.set({ autopilot: { maxClips: 0, maxVideos: 1, series: { name: 'Otra', nextDay: 5 } } });
+    await e.ctx.autopilot.run(vod.id);
+    assert.equal(e.ctx.store.data.outputs[0].title, 'Locke en chanclas Día 12 - Resumen');
+    assert.equal(e.ctx.store.data.settings.autopilot.series.nextDay, 5);
+  });
+
+  it('suggestTitle: título provisional según lo que se dice en el tramo; sin transcripción, nada', async () => {
+    const srv = await llmServer(() => ({ status: 200, body: { choices: [{ message: { content: '{"titulo":"El susto del creeper"}' } }], candidates: [{ content: { parts: [{ text: '{"titulo":"El susto del creeper"}' }] } }] } }));
+    try {
+      const { e, vod } = setup({ llmBaseUrl: srv.url });
+      assert.equal(await e.ctx.autopilot.suggestTitle(vod.id, 10, 40), null, 'sin transcripción no hay de qué sacarlo');
+      const tr = path.join(root, 'tr-sug.json');
+      fs.writeFileSync(tr, JSON.stringify({ words: ['¡No', 'me', 'lo', 'puedo', 'creer,', 'un', 'creeper', 'a', 'mis', 'espaldas!'].map((text, i) => ({ text, start: 20 + i * 0.5, end: 20.5 + i * 0.5 })) }));
+      e.ctx.transcripts.importFile(vod.id, tr);
+      const local = await e.ctx.autopilot.suggestTitle(vod.id, 10, 40);
+      assert.equal(local?.source, 'transcript');
+      assert.match(local!.title, /creeper/);
+      assert.equal(await e.ctx.autopilot.suggestTitle(vod.id, 100, 130), null, 'otro tramo sin palabras');
+      e.ctx.settings.set({ autopilot: { llm: { provider: 'gemini', model: '', apiKey: 'k' } } });
+      const llm = await e.ctx.autopilot.suggestTitle(vod.id, 10, 40);
+      assert.deepEqual(llm, { title: 'El susto del creeper', source: 'llm' });
+    } finally {
+      srv.close();
+    }
+  });
+
   it('desactivado, no hace nada al terminar un directo; los ajustes se validan', () => {
     const e = makeEnv();
     envs.push(e);
@@ -254,6 +294,9 @@ describe('piloto automático', () => {
     assert.throws(() => e.ctx.settings.set({ autopilot: { maxVideos: 50 } }), /entre 0 y 12/);
     assert.deepEqual(e.ctx.settings.set({ autopilot: { videoTimes: ['21:30', '08:00', '08:00'] } }).autopilot.videoTimes, ['08:00', '21:30']);
     assert.throws(() => e.ctx.settings.set({ autopilot: { maxClips: 99 } }), /entre 0 y 20/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { series: { name: 'x'.repeat(61), nextDay: 1 } } }), /60 caracteres/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { series: { name: 'a', nextDay: 0 } } }), /entre 1 y 9999/);
+    assert.deepEqual(e.ctx.settings.set({ autopilot: { series: { name: '  Mi   serie ', nextDay: 2 } } }).autopilot.series, { name: 'Mi serie', nextDay: 2 });
     assert.throws(() => e.ctx.settings.set({ autopilot: { platforms: ['myspace' as never] } }), /no reconocida/);
     assert.throws(() => e.ctx.settings.set({ autopilot: { subtitles: 'feo' as never } }), /subtítulos/);
     const s = e.ctx.settings.set({ autopilot: { llm: { provider: 'groq', apiKey: 'secreta' } } });

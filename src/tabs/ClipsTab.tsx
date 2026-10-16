@@ -65,7 +65,10 @@ export default function ClipsTab(props: {
       const s = parseTime(start);
       const e = parseTime(end);
       if (Number.isNaN(s) || Number.isNaN(e)) throw new Error('Escribe inicio y fin como 90, 1:30 o 1:02:03.');
-      await window.api.createClip(selected, { kind, start: s, end: e, title: title.trim() || 'Clip', cropX, ...(subs ? { subtitles: subs } : {}) });
+      // sin título, se pone uno provisional a partir de lo que se dice en el tramo
+      let name = title.trim();
+      if (!name) name = (await window.api.suggestTitle(selected, s, e).catch(() => null))?.title ?? 'Clip';
+      await window.api.createClip(selected, { kind, start: s, end: e, title: name, cropX, ...(subs ? { subtitles: subs } : {}) });
       return 'Clip creado y validado.';
     });
 
@@ -107,7 +110,7 @@ export default function ClipsTab(props: {
             </div>
             <div className="field">
               <label htmlFor="clip-title">Título</label>
-              <input id="clip-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+              <input id="clip-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Vacío = un título provisional según lo que se dice" />
             </div>
             {kind !== 'horizontal' && (
               <div className="field">

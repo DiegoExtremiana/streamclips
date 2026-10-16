@@ -30699,6 +30699,7 @@ function defaults(defaultOutputDir) {
         platforms: ["youtube", "tiktok", "instagram"],
         videoTimes: ["08:00", "12:00", "16:00", "21:30"],
         clipTimes: ["10:00", "14:00", "19:00"],
+        series: { name: "", nextDay: 1 },
         summaryMinutes: 12,
         mainMinutes: 10,
         chatCapture: true,
@@ -30769,6 +30770,7 @@ var Store = class _Store {
           ...base.settings.autopilot,
           ...saved.settings?.autopilot,
           llm: { ...base.settings.autopilot.llm, ...saved.settings?.autopilot?.llm },
+          series: { ...base.settings.autopilot.series, ...saved.settings?.autopilot?.series },
           videoTimes: times(saved.settings?.autopilot?.videoTimes, base.settings.autopilot.videoTimes),
           clipTimes: times(saved.settings?.autopilot?.clipTimes, base.settings.autopilot.clipTimes)
         }
@@ -31235,7 +31237,7 @@ function validateWhisperLanguage(raw) {
 }
 var HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 function validateAutopilot(cur, p, enc) {
-  const n = { ...cur, videoTimes: [...cur.videoTimes], clipTimes: [...cur.clipTimes], llm: { ...cur.llm }, platforms: [...cur.platforms] };
+  const n = { ...cur, series: { ...cur.series }, videoTimes: [...cur.videoTimes], clipTimes: [...cur.clipTimes], llm: { ...cur.llm }, platforms: [...cur.platforms] };
   const bool = (v, label) => {
     if (typeof v !== "boolean") throw new Error(`${label} no es v\xE1lido.`);
     return v;
@@ -31251,6 +31253,13 @@ function validateAutopilot(cur, p, enc) {
     if (p.visibility !== "public" && p.visibility !== "private") throw new Error("La visibilidad debe ser p\xFAblica o privada.");
     n.visibility = p.visibility;
   }
+  if (p.series !== void 0) {
+    const name = typeof p.series.name === "string" ? p.series.name.replace(/\s+/g, " ").trim() : "";
+    if (typeof p.series.name !== "string" || name.length > 60) throw new Error("El nombre de la serie no puede pasar de 60 caracteres.");
+    const day = p.series.nextDay;
+    if (!Number.isInteger(day) || day < 1 || day > 9999) throw new Error("El d\xEDa de la serie debe ser un n\xFAmero entero entre 1 y 9999.");
+    n.series = { name, nextDay: day };
+  }
   if (p.maxVideos !== void 0) {
     if (!Number.isInteger(p.maxVideos) || p.maxVideos < 0 || p.maxVideos > 12) throw new Error("Los v\xEDdeos por directo deben ser un n\xFAmero entre 0 y 12.");
     n.maxVideos = p.maxVideos;
@@ -31258,7 +31267,7 @@ function validateAutopilot(cur, p, enc) {
   for (const k of ["summaryMinutes", "mainMinutes"]) {
     const v = p[k];
     if (v !== void 0) {
-      if (!Number.isInteger(v) || v < 3 || v > 60) throw new Error("La duraci\xF3n debe estar entre 3 y 60 minutos.");
+      if (!Number.isInteger(v) || v < 1 || v > 60) throw new Error("La duraci\xF3n debe estar entre 1 y 60 minutos.");
       n[k] = v;
     }
   }
@@ -32516,6 +32525,18 @@ var LibraryService = class {
     return target;
   }
   /** Fotograma completo del VOD en medio del clip, para colocar el recuadro vertical sobre él. */
+  /** Datos del directo de origen para dibujar la línea de tiempo del recorte (null si ya no está el archivo). */
+  async clipContext(id) {
+    const o = this.find(id);
+    const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
+    if (!vod?.filePath || !import_node_fs9.default.existsSync(vod.filePath)) return { vodDurationSec: null };
+    if (vod.durationSec) return { vodDurationSec: vod.durationSec };
+    try {
+      return { vodDurationSec: (await probe(this.d.tools(), vod.filePath)).durationSec };
+    } catch {
+      return { vodDurationSec: null };
+    }
+  }
   framingPreview(id) {
     return this.d.queue.run(async () => {
       const o = this.find(id);
@@ -34398,6 +34419,31 @@ function nextFreeSlot(after, times2, taken = /* @__PURE__ */ new Set()) {
   return best;
 }
 
+// shared/series.ts
+var DAY_RE = /^(.*?)[\s\-–—:|,.·#]*\b(?:d[ií]a|day|cap[ií]tulo|episodio|ep\.?|parte)\s*#?\s*(\d{1,4})\b/i;
+function detectSeries(title) {
+  const m = DAY_RE.exec(title.trim());
+  if (!m) return null;
+  const name = m[1].replace(/[\s\-–—:|,.·#]+$/g, "").replace(/\s+/g, " ").trim();
+  const day = Number(m[2]);
+  if (name.length < 2 || !Number.isInteger(day) || day < 1) return null;
+  return { name: name.slice(0, 60), day };
+}
+function seriesFor(vodTitle, cfg) {
+  const found = detectSeries(vodTitle);
+  if (found) return { ...found, fromTitle: true };
+  const name = cfg.name.trim();
+  if (name) return { name: name.slice(0, 60), day: Math.max(1, Math.floor(cfg.nextDay) || 1), fromTitle: false };
+  return null;
+}
+function seriesTitles(s, mains) {
+  const base = `${s.name} D\xEDa ${s.day}`;
+  return {
+    summary: `${base} - Resumen`,
+    mains: Array.from({ length: mains }, (_, i) => mains === 1 ? base : `${base} - Parte ${i + 1}`)
+  };
+}
+
 // electron/services/chatlog.ts
 var import_node_net = __toESM(require("node:net"));
 var ChatLogger = class {
@@ -34682,6 +34728,13 @@ var Autopilot = class {
       }
       task.update(55, "Poniendo t\xEDtulos\u2026");
       const titles = await this.titles(vod, words, moments, mains, notes);
+      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", this.cfg.series) : null;
+      if (ser) {
+        const st = seriesTitles(ser, mains.length);
+        titles.summary = { title: clean(st.summary, 100), description: titles.summary.description };
+        titles.mains = titles.mains.map((t, i) => ({ title: clean(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
+        notes.push(`Serie \xAB${ser.name}\xBB, d\xEDa ${ser.day}.`);
+      }
       this.mark(vod, "rendering");
       const created = [];
       const errors = [];
@@ -34720,6 +34773,10 @@ var Autopilot = class {
             errors.push(`${o.title}: ${e.message}`);
           }
         }
+      }
+      if (ser && !ser.fromTitle && created.some((o) => o.kind === "long")) {
+        this.cfg.series.nextDay = ser.day + 1;
+        this.d.store.save();
       }
       const msg = `${created.length} v\xEDdeo(s) listos${this.cfg.requireApproval ? " para revisar" : ` (${scheduled} programados)`}.`;
       this.mark(vod, "done", [msg, ...errors, ...notes].join(" "));
@@ -34768,6 +34825,34 @@ ${JSON.stringify(items)}`,
       notes.push(`T\xEDtulos sin modelo de lenguaje: ${e.message}`);
     }
     return base;
+  }
+  /**
+   * Título provisional para un tramo (clip o vídeo) a partir de lo que se dice en él. Con un modelo de lenguaje configurado
+   * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
+   */
+  async suggestTitle(vodId, start, end) {
+    const words = this.d.transcripts.words(vodId);
+    const seg = { start, end };
+    if (!words.some((w) => w.start >= start && w.end <= end + 0.5)) return null;
+    const fb = clean(fallbackTitle(words, seg, 0), 100);
+    const llm = this.cfg.llm;
+    const key = this.d.llmKey();
+    if (llm.provider !== "none" && key) {
+      try {
+        const conf = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+        const raw = await askJson(
+          conf,
+          "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes t\xEDtulos cortos y atractivos (m\xE1ximo 70 caracteres, sin clickbait falso, sin emojis). Responde SOLO con JSON.",
+          `Texto transcrito de un fragmento. Devuelve {"titulo":""}.
+${textOf(words, start, Math.min(end, start + 240), 900)}`,
+          { fetchFn: this.d.llmFetch }
+        );
+        const t = clean(raw.titulo, 100);
+        if (t) return { title: t, source: "llm" };
+      } catch {
+      }
+    }
+    return fb ? { title: fb, source: "transcript" } : null;
   }
   dateLabel(vod) {
     const d = new Date(vod.streamStartedAt ?? vod.createdAt);
@@ -35398,6 +35483,7 @@ function parsePayload(text) {
   }
   if (j.v !== 1 || !j.twitch?.clientId || !j.twitch.clientSecret || !j.twitch.login) throw new Error("Falta la conexi\xF3n con Twitch en el motor. Revisa Ajustes y vuelve a sincronizar.");
   if (!j.cloud?.repo || !j.cloud.token) throw new Error("Falta el repositorio privado de la nube en el motor.");
+  if (j.autopilot && !j.autopilot.series) j.autopilot.series = { name: "", nextDay: 1 };
   if (!j.autopilot || !j.whisper || !j.llm || typeof j.since !== "string") throw new Error("La configuraci\xF3n del motor est\xE1 incompleta. Vuelve a sincronizar desde el programa.");
   return j;
 }
@@ -35410,7 +35496,8 @@ function parseRunState(text) {
       v: 1,
       done: Array.isArray(j.done) ? j.done.filter((x) => typeof x === "string").slice(-500) : [],
       tries: typeof j.tries === "object" && j.tries !== null ? Object.fromEntries(Object.entries(j.tries).filter(([, n]) => typeof n === "number")) : {},
-      ...j.last ? { last: j.last } : {}
+      ...j.last ? { last: j.last } : {},
+      ...j.series && typeof j.series.name === "string" && Number.isInteger(j.series.nextDay) && Number.isInteger(j.series.from) ? { series: { name: j.series.name, nextDay: j.series.nextDay, from: j.series.from } } : {}
     };
   } catch {
     return empty;
@@ -35478,7 +35565,7 @@ var EngineService = class {
       twitch: t,
       llm: { provider: a.llm.provider, model: a.llm.model, apiKey: a.llm.provider === "none" ? "" : this.d.llmKey() },
       cloud: { repo: c.repo, token: this.d.secrets.decode(c.token) },
-      autopilot: { maxClips: a.maxClips, maxVideos: a.maxVideos, subtitles: a.subtitles, platforms: a.platforms, videoTimes: a.videoTimes, clipTimes: a.clipTimes, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, visibility: a.visibility },
+      autopilot: { maxClips: a.maxClips, maxVideos: a.maxVideos, subtitles: a.subtitles, platforms: a.platforms, videoTimes: a.videoTimes, clipTimes: a.clipTimes, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, visibility: a.visibility, series: a.series },
       whisper: { model: s.whisperModel, language: s.whisperLanguage || "es" },
       since: this.st.since ?? new Date(this.now()).toISOString()
     };
@@ -36213,12 +36300,16 @@ async function runEngine(p, o = {}) {
         log("Se acaba el tiempo de esta ejecuci\xF3n: el resto queda para la siguiente.");
         break;
       }
+      const ps = p.autopilot.series;
+      const resume = st.series && st.series.name === ps.name && st.series.from === ps.nextDay ? st.series.nextDay : ps.nextDay;
+      ctx.settings.set({ autopilot: { series: { name: ps.name, nextDay: resume } } });
       st.tries[v.id] = (st.tries[v.id] ?? 0) + 1;
       sha = await writeState(gh, st, sha, "Motor: empezando un directo");
       log(`Editando el directo ${v.id} (${Math.round(v.durationSec / 60)} min), intento ${st.tries[v.id]}.`);
       try {
         await processVod(ctx, v, gh, deadline, nowFn, o.sleepMs ?? 5e3, log);
         st.done.push(v.id);
+        st.series = { name: ps.name, nextDay: ctx.store.data.settings.autopilot.series.nextDay, from: ps.nextDay };
         delete st.tries[v.id];
         result.processed.push(v.id);
         result.pending--;

@@ -166,12 +166,17 @@ export async function runEngine(p: EnginePayload, o: EngineOptions = {}): Promis
         log('Se acaba el tiempo de esta ejecución: el resto queda para la siguiente.');
         break;
       }
+      // numeración de la serie: se sigue la cuenta guardada mientras la configuración del programa no haya cambiado
+      const ps = p.autopilot.series;
+      const resume = st.series && st.series.name === ps.name && st.series.from === ps.nextDay ? st.series.nextDay : ps.nextDay;
+      ctx.settings.set({ autopilot: { series: { name: ps.name, nextDay: resume } } });
       st.tries[v.id] = (st.tries[v.id] ?? 0) + 1;
       sha = await writeState(gh, st, sha, 'Motor: empezando un directo');
       log(`Editando el directo ${v.id} (${Math.round(v.durationSec / 60)} min), intento ${st.tries[v.id]}.`);
       try {
         await processVod(ctx, v, gh, deadline, nowFn, o.sleepMs ?? 5000, log);
         st.done.push(v.id);
+        st.series = { name: ps.name, nextDay: ctx.store.data.settings.autopilot.series.nextDay, from: ps.nextDay };
         delete st.tries[v.id];
         result.processed.push(v.id);
         result.pending--;

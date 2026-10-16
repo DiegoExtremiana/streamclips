@@ -1,10 +1,12 @@
 import { useEffect, useState, type DragEvent } from 'react';
+import { platformsFor } from '../../shared/types';
 import type { Group, GroupKind, OutputItem, Publication, RenderKind, Section } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
 import { childGroups, countInside, groupLabel, itemsIn, pathOf } from '../../shared/groupTree';
 import { fmtTime } from '../../shared/time';
 import { errMsg, notify } from '../lib';
-import ItemModal, { PLATFORMS, PUB_STATUS } from '../library/ItemModal';
+import ItemModal from '../library/ItemModal';
+import { PlatformDots } from '../library/PlatformSwitch';
 import { ConfirmDialog, GroupDialog, MoveDialog } from '../library/dialogs';
 import { IconCalendar, IconCheck, IconFilm, IconFolder, IconLibrary, IconMore, IconPlus, IconTrash } from '../icons';
 import ScheduleDialog from '../library/ScheduleDialog';
@@ -15,7 +17,6 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'videos', label: 'Vídeos' },
 ];
 const KIND_LABEL = { clip: 'Clip', long: 'Vídeo largo' } as const;
-const SHORT = { youtube: 'YT', tiktok: 'TT', instagram: 'IG' } as const;
 const DRAG_TYPE = 'application/x-streamclips';
 
 type Drag = { type: 'item' | 'group'; id: string };
@@ -317,11 +318,7 @@ export default function LibraryTab(props: {
               <div className="tile-title title-ellipsis" title={o.title}>{o.title}</div>
               <div className="muted small row" style={{ gap: 4 }}>
                 <span className="badge">{KIND_LABEL[o.kind]}</span>
-                {itemPubs.map((p) => (
-                  <span key={p.key} className={`badge ${PUB_STATUS[p.status].cls}`} title={`${PLATFORMS.find((x) => x.id === p.platform)?.label}: ${PUB_STATUS[p.status].label}`}>
-                    {SHORT[p.platform]}
-                  </span>
-                ))}
+                <PlatformDots platforms={itemPubs.filter((p) => p.status !== 'failed').map((p) => p.platform)} all={platformsFor(o.kind)} />
               </div>
               {selecting ? (
                 <span className="selbox" aria-hidden="true">{selected.has(o.id) && <IconCheck size={14} />}</span>

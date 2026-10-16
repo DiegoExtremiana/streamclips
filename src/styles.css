@@ -185,7 +185,7 @@ button:focus-visible, [role=button]:focus-visible { outline: 2px solid var(--acc
 .version .playerbox.vertical { max-width: none; }
 .version .player { max-height: 52vh; }
 .missing { display: grid; place-items: center; gap: 8px; padding: 26px 12px; text-align: center; border: 1px dashed var(--line-strong); border-radius: 12px; }
-.itemgrid.clipgrid { grid-template-columns: minmax(440px, 600px) 1fr; }
+.itemgrid.clipgrid { grid-template-columns: minmax(170px, 230px) 1fr; }
 @media (max-width: 1000px) { .itemgrid.clipgrid { grid-template-columns: 1fr; } }
 .playerbox.vertical .time { display: none; }
 
@@ -300,7 +300,8 @@ body.dragging, body.dragging * { user-select: none !important; cursor: grabbing 
 .cal-chip { display: flex; gap: 5px; align-items: center; padding: 2px 6px; border-radius: 6px; background: #2c2561; border: 1px solid rgba(161, 139, 255, 0.45); font-size: 11.5px; cursor: grab; touch-action: none; user-select: none; min-width: 0; color: #fff; }
 .cal-chip:hover, .cal-chip:focus-visible { border-color: var(--accent-2); outline: none; }
 .cal-chip.locked { background: #4a3b16; border-color: rgba(245, 185, 66, 0.6); cursor: default; }
-.cal-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cal-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 28px; flex: 1 1 auto; }
+.cal-chip .pdots { flex: none; margin-left: auto; }
 .cal-more { background: none; border: 0; color: var(--accent-2); text-align: left; cursor: pointer; font-size: 11.5px; padding: 0 2px; }
 
 .tray h2 + .muted { margin-top: 4px; }
@@ -357,3 +358,50 @@ button.btn.danger-text { color: var(--bad); }
 .dayrow-main:hover .title-ellipsis, .dayrow-main:focus-visible .title-ellipsis { text-decoration: underline; }
 .dayrow-ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .dayrow-ctl input[type='time'] { width: auto; }
+
+/* Redes: el logotipo se ilumina si el vídeo se sube ahí y se apaga si no */
+.psw { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; --ps-cut: #12121a; }
+.psw.dis { cursor: not-allowed; }
+.psw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; z-index: 1; }
+.psw-face { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface-2); color: #6b6b7a; transition: color .15s, box-shadow .15s, background .15s, border-color .15s, filter .15s; filter: grayscale(1); opacity: .6; }
+.psw:hover .psw-face { opacity: .9; }
+.psw input:focus-visible + .psw-face { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.psw-name { font-size: 13px; color: var(--muted, #9a9aae); }
+.psw.on .psw-face, .pdot.on { filter: none; opacity: 1; }
+.psw.on .psw-name { color: var(--text); font-weight: 600; }
+.psw.youtube.on .psw-face, .pdot.youtube.on { color: #ff2b2b; }
+.psw.tiktok.on .psw-face, .pdot.tiktok.on { color: #25f4ee; }
+.psw.instagram.on .psw-face, .pdot.instagram.on { color: #e1306c; }
+.psw.on .psw-face { background: rgba(255, 255, 255, 0.07); border-color: currentColor; box-shadow: 0 0 14px -2px currentColor; }
+.psw.tiktok.on .psw-face { box-shadow: 0 0 14px -2px #25f4ee, 2px 2px 0 -1px #fe2c55; }
+.psw.dis .psw-face { opacity: .3; }
+.pdots { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; }
+.pdot { display: inline-grid; place-items: center; color: #6b6b7a; filter: grayscale(1); opacity: .4; --ps-cut: #12121a; }
+.pdot.on { --ps-cut: #12121a; filter: drop-shadow(0 0 4px currentColor); }
+
+/* Línea de tiempo del recorte (como el editor de clips de Twitch) */
+.ctl { display: flex; flex-direction: column; gap: 6px; }
+.ctl-track { position: relative; height: 54px; border-radius: 10px; background: repeating-linear-gradient(90deg, rgba(124, 92, 255, 0.16) 0 2px, transparent 2px 9px), #17122e; border: 1px solid var(--line); cursor: pointer; touch-action: none; user-select: none; }
+.ctl-dim { position: absolute; top: 0; bottom: 0; background: rgba(8, 6, 18, 0.55); border-radius: 10px; pointer-events: none; }
+.ctl-sel { position: absolute; top: -2px; bottom: -2px; border: 3px solid #9b6bff; background: rgba(124, 92, 255, 0.22); pointer-events: none; }
+.ctl-head { position: absolute; top: -6px; bottom: -6px; width: 4px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); pointer-events: none; z-index: 2; }
+.ctl-grip { position: absolute; top: -2px; bottom: -2px; width: 16px; margin-left: -8px; display: grid; place-items: center; background: #9b6bff; color: #fff; font-size: 12px; cursor: ew-resize; z-index: 3; touch-action: none; }
+.ctl-grip.start { border-radius: 8px 0 0 8px; margin-left: -16px; }
+.ctl-grip.end { border-radius: 0 8px 8px 0; margin-left: 0; }
+.ctl-grip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ctl-labels { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+.gripdots { width: 4px; height: 18px; background: radial-gradient(circle, #fff 1.2px, transparent 1.6px) 0 0 / 4px 6px; opacity: .9; }
+
+/* Editor de clips: horizontal y vertical lado a lado, una sola barra de reproducción y la línea de tiempo debajo */
+.studio { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.studio-views { display: flex; gap: 18px; align-items: flex-start; }
+.studio-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.studio-col.h { flex: 1 1 0; }
+.studio-col.v { flex: 0 0 min(30%, 270px); }
+.studio-col .player { max-height: 46vh; }
+.studio-col.v .playerbox.vertical { max-width: none; }
+.studio-design { width: 100%; justify-content: center; gap: 8px; }
+.studio-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.studio-bar .time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.studio-trim { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+@media (max-width: 760px) { .studio-views { flex-direction: column; } .studio-col.v { flex: none; width: min(100%, 270px); align-self: center; } }

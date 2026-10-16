@@ -84,6 +84,10 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.updateCheck, () => ctx.updates.check());
   handle(CHANNELS.updateInstall, () => ctx.updates.tryRestart(true));
   handle(CHANNELS.cloudStatus, () => ctx.cloud.status());
+  handle(CHANNELS.engineStatus, () => ctx.engine.status());
+  handle(CHANNELS.engineSetup, (repo, token) => ctx.engine.setup(str(repo, 'repositorio'), str(token, 'token')));
+  handle(CHANNELS.engineSync, () => ctx.engine.sync());
+  handle(CHANNELS.engineDisable, () => ctx.engine.disable());
   handle(CHANNELS.cloudSetup, (repo, token) => ctx.cloud.setup(str(repo, 'repositorio'), str(token, 'token')));
   handle(CHANNELS.cloudSync, async () => {
     await ctx.cloud.syncCreds().catch(() => undefined);

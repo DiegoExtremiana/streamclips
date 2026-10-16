@@ -1,4 +1,4 @@
-import type { OutputItem, OutputKind, Platform, Publication } from './types';
+import type { OutputItem, OutputKind, Platform, Publication, ScheduleEntry } from './types';
 import { localDayKey } from './agenda';
 
 /** Una «subida» en la línea de tiempo: un vídeo a una hora, con todas las redes que van a esa hora juntas. */
@@ -144,3 +144,16 @@ export function defaultWhenForDay(dayKey: string, now: number, slots: readonly s
 
 /** Texto de la hora de un bloque, «16:15». */
 export const hhmm = (ms: number): string => `${pad(new Date(ms).getHours())}:${pad(new Date(ms).getMinutes())}`;
+
+/**
+ * Lo que hay que pasar a `setSchedule` cuando se cambia la hora o las redes de UNA subida (bloque):
+ * el bloque queda con `edit` y el resto de subidas programadas del mismo vídeo se quedan como estaban.
+ */
+export function entriesForBlockEdit(block: Block, pubs: readonly Publication[], edit: { at: number; platforms: readonly Platform[] }): ScheduleEntry[] {
+  const mine = new Set(block.keys);
+  const entries: ScheduleEntry[] = pubs
+    .filter((p) => p.outputId === block.outputId && p.status === 'scheduled' && !mine.has(p.key) && !edit.platforms.includes(p.platform))
+    .map((p) => ({ platform: p.platform, atIso: new Date(p.scheduledAt).toISOString() }));
+  for (const platform of edit.platforms) entries.push({ platform, atIso: new Date(edit.at).toISOString() });
+  return entries;
+}

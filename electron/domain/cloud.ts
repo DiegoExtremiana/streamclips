@@ -31,6 +31,8 @@ export interface CloudDeps {
   github?: Partial<GithubOpts>;
   intervalMs?: number;
   now?: () => number;
+  /** Motor nocturno (sin tus redes conectadas): no toca el secreto con las claves de tus redes. */
+  headless?: boolean;
 }
 
 const WORKFLOW = '.github/workflows/publish.yml';
@@ -146,8 +148,8 @@ export class CloudService {
       .filter((p) => p.cloud?.state === 'queued')
       .map((p) => new Date(p.scheduledAt))
       .filter((d) => d.getTime() > this.now() - 60_000);
-    const a = this.d.store.data.settings.autopilot.slots;
-    for (const hhmm of [a.summary, a.main, a.clips]) {
+    const a = this.d.store.data.settings.autopilot;
+    for (const hhmm of [...a.videoTimes, ...a.clipTimes]) {
       const [h, m] = hhmm.split(':').map(Number);
       const d = new Date(this.now());
       d.setHours(h, m, 0, 0);
@@ -195,11 +197,12 @@ export class CloudService {
       this.error = null;
       try {
         const gh = this.gh();
-        if (this.now() - this.credsAt > 12 * 3600_000) {
+        if (!this.d.headless && this.now() - this.credsAt > 12 * 3600_000) {
           await this.syncCreds(gh); // las claves de tus redes se renuevan: la nube necesita las vigentes
           this.credsAt = this.now();
         }
         await this.pull(gh);
+        await this.adopt(gh);
         await this.push(gh);
         await this.cleanOrphans(gh);
         await this.syncWorkflow(gh);
@@ -237,14 +240,80 @@ export class CloudService {
         await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => undefined);
       } else if (job.status === 'publishing') {
         pub.cloud = { state: 'publishing' };
-      } else if (Date.parse(job.scheduledAt) !== Date.parse(pub.scheduledAt)) {
-        job.scheduledAt = new Date(pub.scheduledAt).toISOString();
-        job.updatedAt = new Date(this.now()).toISOString();
-        await gh.putContent(jobPath(pub.key), serializeJob(job), `Nueva hora: ${pub.key}`, c.sha);
+      } else {
+        // lo que cambias en el programa (hora, nombre, descripción…) se refleja en el trabajo que espera en la nube
+        const o = this.d.store.data.outputs.find((x) => x.id === pub.outputId);
+        let changed = false;
+        if (Date.parse(job.scheduledAt) !== Date.parse(pub.scheduledAt)) {
+          job.scheduledAt = new Date(pub.scheduledAt).toISOString();
+          changed = true;
+        }
+        if (o) {
+          const same = (a?: string, b?: string) => (a ?? '') === (b ?? '');
+          if (job.title !== o.title) { job.title = o.title; changed = true; }
+          if (!same(job.description, o.description)) { job.description = o.description || undefined; changed = true; }
+          if (!same(job.playlist, o.playlist)) { job.playlist = o.playlist || undefined; changed = true; }
+          if (o.visibility !== job.visibility) { job.visibility = o.visibility; changed = true; }
+        }
+        if (changed) {
+          job.updatedAt = new Date(this.now()).toISOString();
+          await gh.putContent(jobPath(pub.key), serializeJob(job), `Cambios: ${pub.key}`, c.sha);
+        }
       }
     }
     this.d.store.save();
     this.d.notifier.changed();
+  }
+
+  /**
+   * Trae al programa lo que el motor nocturno dejó en la cola mientras el PC estaba apagado: aparece en el calendario
+   * y se puede cambiar (nombre, descripción, hora, redes). Los vídeos viven en la nube; aquí solo están sus datos.
+   */
+  private async adopt(gh: Github): Promise<void> {
+    const st = this.d.store.data;
+    const known = new Set(st.publications.map((p) => jobPath(p.key).split('/')[1]));
+    for (const p of st.publications) if (p.cloud && !this.st.known.includes(p.key)) this.st.known.push(p.key); // lo que ya está en la nube y es tuyo
+    const seen = new Set(this.st.known);
+    let added = 0;
+    for (const f of await gh.listDir('queue')) {
+      if (!f.name.endsWith('.json') || known.has(f.name)) continue;
+      const c = await gh.getContent(`queue/${f.name}`);
+      const job = c && parseJob(c.text);
+      if (!job) continue;
+      const outputId = job.key.slice(0, job.key.lastIndexOf(':'));
+      if (!outputId || st.publications.some((p) => p.key === job.key) || seen.has(job.key)) continue;
+      this.st.known.push(job.key);
+      if (!st.outputs.some((o) => o.id === outputId)) {
+        st.outputs.push({
+          id: outputId,
+          kind: job.kind,
+          title: job.title,
+          ...(job.description ? { description: job.description } : {}),
+          ...(job.playlist ? { playlist: job.playlist } : {}),
+          ...(job.visibility ? { visibility: job.visibility } : {}),
+          files: {},
+          durationSec: 0,
+          createdAt: job.updatedAt,
+          remote: true,
+        });
+      }
+      const status = job.status === 'published' ? 'published' : job.status === 'failed' ? 'failed' : 'scheduled';
+      st.publications.push({
+        key: job.key,
+        outputId,
+        platform: job.platform,
+        scheduledAt: job.scheduledAt,
+        status,
+        ...(job.note ? { note: job.note } : {}),
+        cloud: { state: job.status },
+      });
+      added++;
+    }
+    if (added) {
+      this.d.log.info(`Nube: ${added} subida(s) preparadas en la nube se han añadido al programa.`);
+      this.d.store.save();
+      this.d.notifier.changed();
+    }
   }
 
   /** Sube lo programado que aún no está en la nube. */
@@ -253,6 +322,12 @@ export class CloudService {
     for (const pub of todo) {
       const o = this.d.store.data.outputs.find((x) => x.id === pub.outputId);
       if (!o) continue;
+      if (o.remote) {
+        // el vídeo solo existe en la nube: si su trabajo se quitó (o nunca existió para esta red) no hay archivo que subir
+        pub.status = 'failed';
+        pub.note = 'Este vídeo vive en la nube y esa red ya no está en su cola, así que no se puede volver a añadir desde aquí.';
+        continue;
+      }
       let files: { video: string; thumb?: string };
       try {
         files = this.filesFor(o, pub.platform);
@@ -306,6 +381,7 @@ export class CloudService {
         if (!sha) throw new Error('No se pudo registrar el trabajo en la cola de GitHub.');
         pub.cloud = { state: 'queued' };
         pub.note = undefined;
+        if (!this.st.known.includes(pub.key)) this.st.known.push(pub.key);
         this.d.store.save();
         task.done('En la cola de la nube');
         rel = null;

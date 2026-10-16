@@ -1,6 +1,6 @@
 {
   "name": "streamclips",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/DiegoExtremiana/streamclips.git"
@@ -24,7 +24,7 @@
     "test:e2e": "npm run build && node tests/e2e/gui-smoke.mjs",
     "check": "npm run typecheck && npm run lint && npm test",
     "tools:fetch": "node scripts/fetch-ytdlp.mjs",
-    "cloud:build": "node scripts/build-runner.mjs"
+    "cloud:build": "node scripts/build-runner.mjs && node scripts/build-engine.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

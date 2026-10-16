@@ -345,3 +345,15 @@ button.btn.danger-text { color: var(--bad); }
 .viewtab[aria-selected='true'] { background: rgba(124, 92, 255, 0.22); border-color: var(--accent-2); }
 .vsection { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
 .vsection h3 { margin: 0; }
+
+/* ---- plan de un día ---- */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.cal-cell { cursor: pointer; }
+.cal-cell:hover { background: rgba(255, 255, 255, 0.03); }
+.daylist { display: flex; flex-direction: column; gap: 8px; }
+.dayrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2, rgba(255,255,255,0.04)); border: 1px solid var(--line); border-left: 3px solid #a18bff; }
+.dayrow.video { border-left-color: #f5b942; }
+.dayrow-main { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: inherit; cursor: pointer; padding: 0; min-width: 0; flex: 1 1 260px; font: inherit; }
+.dayrow-main:hover .title-ellipsis, .dayrow-main:focus-visible .title-ellipsis { text-decoration: underline; }
+.dayrow-ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.dayrow-ctl input[type='time'] { width: auto; }

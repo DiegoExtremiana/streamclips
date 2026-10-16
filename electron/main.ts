@@ -70,6 +70,7 @@ if (!app.requestSingleInstanceLock()) {
       // solo en el programa instalado: en desarrollo no hay nada que actualizar
       updater: app.isPackaged && process.platform === 'win32' ? (autoUpdater as unknown as UpdaterLike) : null,
       appVersion: app.getVersion(),
+      engineSource: () => fs.readFileSync(path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'cloud', 'engine.js'), 'utf8'),
       runnerSource: () => fs.readFileSync(path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'cloud', 'runner.js'), 'utf8'),
       openUrl: (url) => {
         if (!/^https:\/\//.test(url)) throw new Error('Dirección no permitida.');

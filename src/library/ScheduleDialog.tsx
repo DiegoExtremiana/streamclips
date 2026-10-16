@@ -38,7 +38,7 @@ export default function ScheduleDialog(props: {
     window.api
       .getSettings()
       .then((s: Settings) => {
-        if (alive) setSlots([...new Set(Object.values(s.autopilot.slots))].sort());
+        if (alive) setSlots([...new Set([...s.autopilot.videoTimes, ...s.autopilot.clipTimes])].sort());
       })
       .catch(() => undefined);
     window.api

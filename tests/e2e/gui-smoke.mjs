@@ -761,6 +761,11 @@ try {
   await tab(page, 'Programación');
   const progr = page.getByRole('region', { name: 'Próximas subidas' });
   const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return toLocal(d).slice(0, 10); };
+  // por defecto se abre el calendario; la línea de tiempo está en la otra pestaña
+  await progr.getByRole('group', { name: 'Calendario' }).waitFor();
+  assert.equal(await progr.getByRole('tab', { name: 'Calendario' }).getAttribute('aria-selected'), 'true');
+  log('Programación: se abre en modo calendario por defecto');
+  await progr.getByRole('tab', { name: 'Línea de tiempo' }).click();
   await progr.getByTestId(`tl-row-${day(2)}`).waitFor();
   assert.ok((await progr.locator('.tl-chip').count()) >= 3, 'la línea de tiempo muestra las subidas programadas');
   await shot(page, '10-linea-de-tiempo');
@@ -921,6 +926,33 @@ try {
   await page.getByRole('dialog', { name: 'Resumen renombrado' }).getByRole('button', { name: /Quitar subida/ }).click();
   await vchip.waitFor({ state: 'detached' });
   log('vídeos solo a YouTube y clips a todas las redes: la ventana no ofrece TikTok/Instagram para un vídeo, y la programación se puede filtrar por Vídeos o Clips');
+
+  // ── el plan de un día: vídeos y clips con sus redes y horas; clic en uno para editarlo todo ──
+  await progr.getByRole('tab', { name: 'Calendario' }).click();
+  const clipId = dataNow().outputs.find((o) => o.title === 'Mi clip vertical').id;
+  await progr.getByTestId(`cal-${day(6)}`).locator('.cal-num span').click();
+  const dv = progr.getByTestId('dayview');
+  await dv.waitFor();
+  await dv.getByTestId('day-videos').waitFor();
+  const dayClips = dv.getByTestId('day-clips');
+  const row = dayClips.getByTestId('dayrow-Mi clip vertical').first();
+  await row.waitFor();
+  await shot(page, '10d-plan-del-dia');
+  await row.locator('input[type=time]').fill('21:00');
+  await row.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await poll(() => dataNow().publications.some((p) => p.outputId === clipId && localDayKeyOf(p.scheduledAt) === day(6) && hhmmOf(p.scheduledAt) === '21:00'));
+  log('plan del día: la hora de una subida se cambia ahí mismo y se guarda');
+  await dayClips.getByRole('button', { name: 'Abrir Mi clip vertical' }).first().click();
+  const full = page.getByRole('dialog', { name: 'Mi clip vertical' });
+  await full.locator('#yt-desc').fill('Descripción puesta desde el plan del día');
+  await full.getByRole('button', { name: 'Guardar datos' }).click();
+  await poll(() => dataNow().outputs.find((o) => o.id === clipId).description === 'Descripción puesta desde el plan del día');
+  await page.keyboard.press('Escape');
+  await full.waitFor({ state: 'detached' });
+  log('plan del día: al pulsar un vídeo o clip se abren todas sus características (nombre, descripción, redes, hora…) y se pueden cambiar');
+  await dv.getByRole('button', { name: /Calendario/ }).click();
+  await progr.getByRole('group', { name: 'Calendario' }).waitFor();
+
   assert.deepEqual(problems, []);
   log('tras cerrar y reabrir la aplicación se conservan VODs, vídeos y publicaciones programadas');
 

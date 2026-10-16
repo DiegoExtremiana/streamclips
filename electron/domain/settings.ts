@@ -43,7 +43,7 @@ function validateWhisperLanguage(raw: string): string {
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch['autopilot']>, enc: (s: string) => string): AutopilotSettings {
-  const n: AutopilotSettings = { ...cur, slots: { ...cur.slots }, llm: { ...cur.llm }, platforms: [...cur.platforms] };
+  const n: AutopilotSettings = { ...cur, videoTimes: [...cur.videoTimes], clipTimes: [...cur.clipTimes], llm: { ...cur.llm }, platforms: [...cur.platforms] };
   const bool = (v: unknown, label: string): boolean => {
     if (typeof v !== 'boolean') throw new Error(`${label} no es válido.`);
     return v;
@@ -54,6 +54,14 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.maxClips !== undefined) {
     if (!Number.isInteger(p.maxClips) || p.maxClips < 0 || p.maxClips > 20) throw new Error('Los clips por directo deben ser un número entre 0 y 20.');
     n.maxClips = p.maxClips;
+  }
+  if (p.visibility !== undefined) {
+    if (p.visibility !== 'public' && p.visibility !== 'private') throw new Error('La visibilidad debe ser pública o privada.');
+    n.visibility = p.visibility;
+  }
+  if (p.maxVideos !== undefined) {
+    if (!Number.isInteger(p.maxVideos) || p.maxVideos < 0 || p.maxVideos > 12) throw new Error('Los vídeos por directo deben ser un número entre 0 y 12.');
+    n.maxVideos = p.maxVideos;
   }
   for (const k of ['summaryMinutes', 'mainMinutes'] as const) {
     const v = p[k];
@@ -70,11 +78,11 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
     if (!Array.isArray(p.platforms) || p.platforms.some((x) => !ALL_PLATFORMS.includes(x))) throw new Error('Red social no reconocida.');
     n.platforms = [...new Set(p.platforms)];
   }
-  for (const k of ['summary', 'main', 'clips'] as const) {
-    const v = p.slots?.[k];
+  for (const k of ['videoTimes', 'clipTimes'] as const) {
+    const v = p[k];
     if (v !== undefined) {
-      if (!HHMM.test(v)) throw new Error('La hora debe tener el formato HH:MM (por ejemplo 07:00).');
-      n.slots[k] = v;
+      if (!Array.isArray(v) || v.length > 12 || v.some((h) => typeof h !== 'string' || !HHMM.test(h))) throw new Error('Las horas deben tener el formato HH:MM (por ejemplo 08:00), como mucho 12.');
+      n[k] = [...new Set(v)].sort();
     }
   }
   const l = p.llm;

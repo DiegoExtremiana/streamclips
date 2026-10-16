@@ -37,14 +37,20 @@ export interface AutopilotSettings {
   requireApproval: boolean;
   /** Clips (vertical + horizontal) por directo. */
   maxClips: number;
+  /** Vídeos largos por directo (el resumen + el resto de tramos destacados). Solo YouTube. */
+  maxVideos: number;
   /** Subtítulos grabados en lo automático; '' = sin subtítulos. */
   subtitles: SubtitleStyleId | '';
   platforms: Platform[];
-  /** Horas locales HH:MM de publicación. */
-  slots: { summary: string; main: string; clips: string };
+  /** Horas locales HH:MM de publicación de los vídeos largos (cada una, un vídeo al día; solo YouTube). */
+  videoTimes: string[];
+  /** Horas locales HH:MM de publicación de los clips (cada una, un clip al día en todas las redes elegidas). */
+  clipTimes: string[];
   /** Duración del resumen (min) y del vídeo principal (min). */
   summaryMinutes: number;
   mainMinutes: number;
+  /** Visibilidad en YouTube de lo que crea el piloto automático. */
+  visibility: Visibility;
   /** Guardar la actividad del chat del directo (anónimo, solo lectura) para detectar momentos. */
   chatCapture: boolean;
   llm: { provider: LlmChoice; model: string; apiKey: string };
@@ -58,9 +64,8 @@ export interface SettingsPatch {
   whisperPath?: string;
   whisperModel?: string;
   whisperLanguage?: string;
-  autopilot?: Partial<Omit<AutopilotSettings, 'llm' | 'slots'>> & {
+  autopilot?: Partial<Omit<AutopilotSettings, 'llm'>> & {
     llm?: Partial<AutopilotSettings['llm']>;
-    slots?: Partial<AutopilotSettings['slots']>;
   };
 }
 
@@ -120,6 +125,22 @@ export interface UpdateStatus {
   progress?: number;
   lastCheck?: string;
   error?: string;
+}
+
+/** Motor nocturno: edita tus directos en GitHub Actions aunque tu PC y el programa estén apagados. */
+export interface EngineStatus {
+  enabled: boolean;
+  repo: string;
+  hasToken: boolean;
+  /** Cuándo se subió por última vez la configuración al motor. */
+  lastSync: string | null;
+  error: string | null;
+  /** Desde cuándo vigila: los directos anteriores no se tocan. */
+  since: string | null;
+  /** La nube (cola de publicación) debe estar activada primero. */
+  cloudReady: boolean;
+  /** Estado que dejó la última ejecución del motor, si se ha podido leer. */
+  last?: { at: string; processed: number; pending: number; note?: string };
 }
 
 export interface CloudStatus {
@@ -188,6 +209,8 @@ export interface OutputItem {
   playlist?: string;
   /** Sin valor se trata como privado: nada se publica abierto por accidente. */
   visibility?: Visibility;
+  /** Vive solo en la nube (lo creó el motor nocturno): no hay archivos en este PC. */
+  remote?: boolean;
   /** Creado por el piloto automático. */
   auto?: { role: AutoRole; review: 'pending' | 'approved' };
 }
@@ -398,6 +421,11 @@ export interface Api {
   cloudSync(): Promise<CloudStatus>;
   /** Apaga el modo nube: borra lo subido y vuelve a publicar desde el PC. */
   cloudDisable(): Promise<CloudStatus>;
+  engineStatus(): Promise<EngineStatus>;
+  /** Instala el motor nocturno en un repositorio PÚBLICO tuyo (minutos de GitHub Actions gratis e ilimitados). */
+  engineSetup(repo: string, token: string): Promise<EngineStatus>;
+  engineSync(): Promise<EngineStatus>;
+  engineDisable(): Promise<EngineStatus>;
   approveOutput(outputId: string): Promise<OutputItem>;
   /** Borra el vídeo (archivos, miniatura y publicaciones pendientes). */
   /** Borra un vídeo (sus archivos y lo pendiente de publicar). El VOD de origen se conserva. */
@@ -478,6 +506,10 @@ export const CHANNELS = {
   cloudSetup: 'cloud:setup',
   cloudSync: 'cloud:sync',
   cloudDisable: 'cloud:disable',
+  engineStatus: 'engine:status',
+  engineSetup: 'engine:setup',
+  engineSync: 'engine:sync',
+  engineDisable: 'engine:disable',
   outputsApprove: 'outputs:approve',
   outputsDelete: 'outputs:delete',
   outputsDeleteMany: 'outputs:delete-many',

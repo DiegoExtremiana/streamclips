@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.9
+
+- **Edición nocturna sin tu PC** (`docs/MOTOR.md`): al acabar tu directo, un flujo de GitHub Actions descarga el VOD, lo transcribe en **castellano de España**, lo edita durante la noche y deja vídeos y clips **programados**, aunque tu ordenador y el programa estén apagados. Por la mañana abres el programa y lo ves en Programación. *No se ha probado contra GitHub/Twitch reales; límites en el documento.*
+- **Programación automática por defecto**: 4 vídeos al día en YouTube (08:00, 12:00, 16:00, 21:30) y 3 clips al día (10:00, 14:00, 19:00) en YouTube Shorts, TikTok e Instagram; las horas y cuántos se crean por directo se cambian en Ajustes. Lo automático se programa solo (sin pedir visto bueno, configurable) y sale público (configurable).
+- **Programación abre en calendario**: pulsa un día para ver su plan, con una sección de **Vídeos** y otra de **Clips**, con la hora y las redes de cada uno editables ahí mismo; pulsa un vídeo o clip para abrir todas sus características (nombre, descripción, lista, visibilidad, hora, redes…). Los clips ahora también tienen descripción y visibilidad.
+
 ## Novedades de la v0.8
 
 - **Clip con pestañas Horizontal / Vertical**: la ventana de un clip separa sus dos versiones. Cada pestaña muestra su vídeo, su descarga y sus opciones; recorte, subtítulos y publicación siguen comunes.
@@ -44,7 +50,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Límites y lo que no se ha podido probar
 
-- **Nada de esto se ha probado contra los servicios reales** (Twitch, Google, TikTok, Meta, GitHub, Hugging Face): solo contra servidores simulados que reproducen su protocolo. Tampoco el instalador ni la actualización automática en Windows, ni la ejecución real del flujo de Actions, ni Whisper con voz real (solo con un `whisper-cli` simulado).
+- **Nada de esto se ha probado contra los servicios reales** (Twitch, Google, TikTok, Meta, GitHub, Hugging Face): solo contra servidores simulados que reproducen su protocolo. Tampoco el instalador ni la actualización automática en Windows, ni la ejecución real de los flujos de Actions (publicación y motor nocturno), ni Whisper con voz real (solo con un `whisper-cli` simulado).
 - YouTube: mientras tu app de Google no esté verificada, los vídeos subidos quedan **privados** y la cuota es baja; en modo «Testing» el acceso caduca a los 7 días. TikTok: sin auditoría, los vídeos se publican privados. Instagram: necesita cuenta profesional y la app en modo desarrollo. TikTok puede rechazar la redirección `http://127.0.0.1`.
 - Directos de 3–4 h: el análisis es por flujo (memoria constante) y se probó con vídeos sintéticos de 4 h, pero un VOD ocupa 6–15 GB en disco y Whisper en CPU puede tardar 1–3 h por directo.
 - La cuota de YouTube (≈6 subidas/día) es la de la API gratuita estándar según su documentación; no se ha podido comprobar contra tu cuenta.
@@ -53,7 +59,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Qué se ha probado y cómo
 
-`npm run check` ejecuta tipos, ESLint y 377 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (47 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
+`npm run check` ejecuta tipos, ESLint y 445 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (71 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
 
 **No se ha probado**: en Windows, ni contra Twitch real (yt-dlp real sí se ha probado con una URL local: acepta los parámetros que usa la app y devuelve el MP4), ni el instalador final `.exe` (aquí solo se pudo generar la carpeta de la aplicación para Windows; el instalador se genera en GitHub Actions).
 

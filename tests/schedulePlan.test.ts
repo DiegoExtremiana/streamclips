@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OutputItem, Publication } from '../shared/types';
-import { addDays, atFromDayMinutes, dayStartMs, daysFrom, defaultWhenForDay, groupBlocks, hhmm, layoutLanes, minutesOfDay, monthGrid, moveToDay, snapMinutes, unscheduledOutputs, validateMove } from '../shared/schedulePlan';
+import { addDays, atFromDayMinutes, entriesForBlockEdit, dayStartMs, daysFrom, defaultWhenForDay, groupBlocks, hhmm, layoutLanes, minutesOfDay, monthGrid, moveToDay, snapMinutes, unscheduledOutputs, validateMove } from '../shared/schedulePlan';
 
 const T = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime();
 const pub = (outputId: string, platform: Publication['platform'], at: number, status: Publication['status'] = 'scheduled', note?: string): Publication => ({ key: `${outputId}:${platform}`, outputId, platform, scheduledAt: new Date(at).toISOString(), status, ...(note ? { note } : {}) });
@@ -84,5 +84,17 @@ describe('schedulePlan', () => {
     assert.equal(defaultWhenForDay('2026-10-15', T(15, 21, 10), ['07:00', '16:00', '20:00']), '2026-10-15T22:00');
     assert.equal(defaultWhenForDay('2026-10-16', now, []), '2026-10-16T16:00');
     assert.equal(dayStartMs('2026-10-16'), T(16, 0));
+  });
+  it('entriesForBlockEdit: cambia solo ese bloque y conserva las demás subidas del vídeo', () => {
+    const pubs = [pub('a', 'youtube', T(16, 8)), pub('a', 'tiktok', T(16, 8)), pub('a', 'instagram', T(17, 19)), pub('a', 'youtube', T(18, 9), 'published')];
+    const blocks = groupBlocks(pubs, [out('a')]);
+    const first = blocks.find((b) => b.at === T(16, 8))!;
+    // nueva hora y solo YouTube: TikTok del bloque se quita, Instagram (otro día) se queda
+    const e = entriesForBlockEdit(first, pubs, { at: T(16, 12), platforms: ['youtube'] });
+    assert.deepEqual(e.map((x) => [x.platform, Date.parse(x.atIso)]), [['instagram', T(17, 19)], ['youtube', T(16, 12)]]);
+    // añadir una red al bloque
+    const e2 = entriesForBlockEdit(first, pubs, { at: T(16, 8), platforms: ['youtube', 'tiktok', 'instagram'] });
+    assert.deepEqual(e2.map((x) => x.platform).sort(), ['instagram', 'tiktok', 'youtube']);
+    assert.ok(e2.filter((x) => x.platform === 'instagram').every((x) => Date.parse(x.atIso) === T(16, 8)), 'la red añadida al bloque toma la hora del bloque');
   });
 });

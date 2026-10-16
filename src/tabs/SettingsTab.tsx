@@ -4,6 +4,7 @@ import { errMsg } from '../lib';
 import AutopilotCard from './AutopilotCard';
 import UpdatesCard from './UpdatesCard';
 import CloudCard from './CloudCard';
+import EngineCard from './EngineCard';
 
 export default function SettingsTab() {
   const [outputDir, setOutputDir] = useState('');
@@ -179,7 +180,7 @@ export default function SettingsTab() {
             </select>
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label htmlFor="whisper-lang">Idioma (vacío = detectar)</label>
+            <label htmlFor="whisper-lang">Idioma (es = español de España; vacío = detectar)</label>
             <input id="whisper-lang" type="text" value={whisperLanguage} onChange={(e) => setWhisperLanguage(e.target.value)} placeholder="es" maxLength={3} />
           </div>
         </div>
@@ -187,6 +188,7 @@ export default function SettingsTab() {
       </section>
 
       <CloudCard />
+      <EngineCard />
     </div>
   );
 }

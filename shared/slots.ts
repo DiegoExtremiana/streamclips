@@ -10,3 +10,14 @@ export function nextSlot(after: Date, hhmm: string, taken: ReadonlySet<number> =
   }
   throw new Error('No se encontró una hora libre.');
 }
+
+/** La primera hora libre posterior a `after` entre varias horas del día (HH:MM). */
+export function nextFreeSlot(after: Date, times: readonly string[], taken: ReadonlySet<number> = new Set()): Date {
+  if (!times.length) throw new Error('No hay horas de publicación configuradas.');
+  let best: Date | null = null;
+  for (const t of times) {
+    const d = nextSlot(after, t, taken);
+    if (!best || d.getTime() < best.getTime()) best = d;
+  }
+  return best as Date;
+}

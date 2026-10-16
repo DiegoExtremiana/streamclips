@@ -9,13 +9,19 @@ const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'instagram', label: 'Instagram' },
 ];
 
+/** De «8:00, 12:00 21:30» a ['08:00','12:00','21:30'] (lo inválido se deja tal cual para que el servidor lo rechace). */
+function parseTimes(t: string): string[] {
+  return t.split(/[\s,;]+/).filter(Boolean).map((x) => (/^\d:\d\d$/.test(x) ? `0${x}` : x));
+}
+
 export default function AutopilotCard() {
   const [a, setA] = useState<AutopilotSettings | null>(null);
   const [key, setKey] = useState('');
+  const [timesText, setTimesText] = useState({ video: '', clip: '' });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    window.api.getSettings().then((s) => { setA(s.autopilot); setKey(s.autopilot.llm.apiKey); }).catch((e) => setMsg({ ok: false, text: errMsg(e) }));
+    window.api.getSettings().then((s) => { setA(s.autopilot); setKey(s.autopilot.llm.apiKey); setTimesText({ video: s.autopilot.videoTimes.join(', '), clip: s.autopilot.clipTimes.join(', ') }); }).catch((e) => setMsg({ ok: false, text: errMsg(e) }));
   }, []);
   if (!a) return <section className="card"><h2>Piloto automático</h2><div className="muted">Cargando…</div></section>;
 
@@ -28,12 +34,13 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          slots: a.slots, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture,
+          visibility: a.visibility, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
       setA(s.autopilot);
       setKey(s.autopilot.llm.apiKey);
+      setTimesText({ video: s.autopilot.videoTimes.join(', '), clip: s.autopilot.clipTimes.join(', ') });
       setMsg({ ok: true, text: 'Guardado.' });
     } catch (e) {
       setMsg({ ok: false, text: errMsg(e) });
@@ -46,19 +53,24 @@ export default function AutopilotCard() {
     <section className="card" aria-label="Piloto automático">
       <h2>Piloto automático</h2>
       <div className="muted small">
-        Al terminar un directo, el programa recoge el VOD, lo transcribe, busca los mejores momentos (volumen, voz y chat) y prepara un resumen
-        para la mañana, un vídeo principal para la tarde y clips. Por defecto todo espera tu visto bueno en el Panel.
+        Al terminar un directo, el programa recoge el VOD, lo transcribe (en castellano), busca los mejores momentos (volumen, voz y chat) y prepara
+        un resumen, varios vídeos y clips. Los programa solos en las horas de abajo (uno por hueco y día). Todo lo programado se puede cambiar
+        en la pestaña Programación.
       </div>
       <label className="row" style={{ gap: 8, marginTop: 10 }}>
         <input type="checkbox" checked={a.enabled} onChange={(e) => up({ enabled: e.target.checked })} /> Activar el piloto automático
       </label>
       <label className="row" style={{ gap: 8 }}>
-        <input type="checkbox" checked={a.requireApproval} onChange={(e) => up({ requireApproval: e.target.checked })} /> Pedir mi visto bueno antes de programar (recomendado)
+        <input type="checkbox" checked={a.requireApproval} onChange={(e) => up({ requireApproval: e.target.checked })} /> Pedir mi visto bueno antes de programar (si no, se programa solo)
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.chatCapture} onChange={(e) => up({ chatCapture: e.target.checked })} /> Guardar la actividad del chat durante el directo (anónimo, solo cuenta mensajes)
       </label>
       <div className="row" style={{ marginTop: 10 }}>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ap-videos">Vídeos por directo (resumen incluido)</label>
+          <input id="ap-videos" type="text" inputMode="numeric" value={a.maxVideos} onChange={(e) => up({ maxVideos: num(e.target.value, a.maxVideos) })} />
+        </div>
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="ap-clips">Clips por directo</label>
           <input id="ap-clips" type="text" inputMode="numeric" value={a.maxClips} onChange={(e) => up({ maxClips: num(e.target.value, a.maxClips) })} />
@@ -73,12 +85,14 @@ export default function AutopilotCard() {
         </div>
       </div>
       <div className="row">
-        {(['summary', 'main', 'clips'] as const).map((k) => (
-          <div className="field" style={{ flex: 1 }} key={k}>
-            <label htmlFor={`ap-slot-${k}`}>Hora {k === 'summary' ? 'del resumen' : k === 'main' ? 'del principal' : 'de los clips'}</label>
-            <input id={`ap-slot-${k}`} type="text" placeholder="07:00" value={a.slots[k]} onChange={(e) => up({ slots: { ...a.slots, [k]: e.target.value } })} />
-          </div>
-        ))}
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ap-vtimes">Horas de los vídeos en YouTube (una por vídeo al día)</label>
+          <input id="ap-vtimes" type="text" placeholder="08:00, 12:00, 16:00, 21:30" value={timesText.video} onChange={(e) => setTimesText({ ...timesText, video: e.target.value })} />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ap-ctimes">Horas de los clips (uno al día por cada hora, en todas las redes)</label>
+          <input id="ap-ctimes" type="text" placeholder="10:00, 14:00, 19:00" value={timesText.clip} onChange={(e) => setTimesText({ ...timesText, clip: e.target.value })} />
+        </div>
       </div>
       <div className="field">
         <label>Publicar en</label>
@@ -94,6 +108,13 @@ export default function AutopilotCard() {
             </label>
           ))}
         </div>
+      </div>
+      <div className="field">
+        <label htmlFor="ap-vis">Visibilidad en YouTube de lo automático</label>
+        <select id="ap-vis" value={a.visibility} onChange={(e) => up({ visibility: e.target.value as AutopilotSettings['visibility'] })}>
+          <option value="public">Público (sale abierto a su hora)</option>
+          <option value="private">Privado (solo tú lo ves; lo haces público a mano)</option>
+        </select>
       </div>
       <div className="field">
         <label htmlFor="ap-subs">Subtítulos grabados en lo automático</label>

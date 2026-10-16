@@ -5,7 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { execFileSync } from 'node:child_process';
-import { nextSlot } from '../shared/slots';
+import { nextFreeSlot, nextSlot } from '../shared/slots';
 import { addDownloadedVod, makeEnv, rmDir, tmpDir, type TestEnv } from './helpers';
 
 const envs: TestEnv[] = [];
@@ -28,6 +28,17 @@ describe('horas de publicación', () => {
     assert.equal(b.getDate(), 16);
     assert.equal(b.getHours(), 7);
   });
+  it('nextFreeSlot elige el primer hueco libre entre varias horas y pasa al día siguiente cuando se acaban', () => {
+    const times = ['08:00', '12:00', '16:00', '21:30'];
+    const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m, 0, 0);
+    assert.deepEqual(nextFreeSlot(at(16, 7), times), at(16, 8));
+    assert.deepEqual(nextFreeSlot(at(16, 9), times), at(16, 12));
+    assert.deepEqual(nextFreeSlot(at(16, 22), times), at(17, 8));
+    const taken = new Set([at(16, 8).getTime(), at(16, 12).getTime(), at(16, 16).getTime(), at(16, 21, 30).getTime(), at(17, 8).getTime()]);
+    assert.deepEqual(nextFreeSlot(at(16, 7), times, taken), at(17, 12));
+    assert.throws(() => nextFreeSlot(at(16, 7), []), /No hay horas/);
+  });
+
   it('aguanta el cambio de hora de octubre/marzo', () => {
     for (const d of ['2026-10-24T20:00:00', '2027-03-27T20:00:00']) {
       const a = nextSlot(at(d), '07:00');
@@ -53,7 +64,7 @@ function setup(extra: Parameters<typeof makeEnv>[0] = {}) {
   const e = makeEnv(extra);
   envs.push(e);
   const vod = addDownloadedVod(e, video);
-  e.ctx.settings.set({ autopilot: { summaryMinutes: 3, mainMinutes: 3, maxClips: 2, platforms: ['youtube'] } });
+  e.ctx.settings.set({ autopilot: { summaryMinutes: 3, mainMinutes: 3, maxClips: 2, maxVideos: 2, requireApproval: true, platforms: ['youtube'] } });
   return { e, vod };
 }
 
@@ -95,49 +106,52 @@ describe('piloto automático', () => {
     console.log(`      (piloto completo en ${Math.round((Date.now() - t0) / 1000)} s)`);
   });
 
-  it('al dar el visto bueno programa resumen a las 07:00, principal a las 16:00 del mismo día y un clip por día', async () => {
+  it('al dar el visto bueno rellena los huecos: vídeos en las horas de vídeos, clips en las de clips, uno por hueco', async () => {
     const { e, vod } = setup();
     await e.ctx.autopilot.run(vod.id);
-    for (const o of [...e.ctx.store.data.outputs]) e.ctx.autopilot.approve(o.id);
+    mock.timers.enable({ apis: ['Date'], now: new Date(2030, 9, 16, 7, 0, 0).getTime() });
+    try {
+      const order = { summary: 0, main: 1, clip: 2 } as const;
+      for (const o of [...e.ctx.store.data.outputs].sort((a, b) => order[a.auto!.role] - order[b.auto!.role])) e.ctx.autopilot.approve(o.id);
+    } finally {
+      mock.timers.reset();
+    }
     const pubs = e.ctx.store.data.publications;
     const by = (role: string) => e.ctx.store.data.outputs.filter((o) => o.auto?.role === role).map((o) => new Date(pubs.find((p) => p.outputId === o.id)!.scheduledAt));
     const [sum] = by('summary');
     const [main] = by('main');
-    const clipDays = by('clip');
-    assert.equal(sum.getHours(), 7);
-    assert.equal(main.getHours(), 16);
-    assert.equal(main.getDate(), sum.getDate());
-    assert.equal(new Set(clipDays.map((d) => d.toDateString())).size, 2, 'un clip por día');
-    assert.ok(clipDays.every((d) => d.getHours() === 20));
+    assert.deepEqual([sum.getDate(), sum.getHours(), sum.getMinutes()], [16, 8, 0]);
+    assert.deepEqual([main.getDate(), main.getHours(), main.getMinutes()], [16, 12, 0]);
+    const clips = by('clip').sort((a, b) => a.getTime() - b.getTime());
+    assert.deepEqual(clips.map((d) => [d.getDate(), d.getHours()]), [[16, 10], [16, 14]]);
     assert.ok(e.ctx.store.data.outputs.every((o) => o.auto!.review === 'approved'));
     // aprobar dos veces no duplica
     e.ctx.autopilot.approve(e.ctx.store.data.outputs[0].id);
     assert.equal(e.ctx.store.data.publications.length, 4);
   });
 
-  it('el resumen y el principal salen el mismo día aunque se apruebe antes el principal (y sea media mañana)', async () => {
+  it('los huecos ocupados se saltan y al acabarse el día sigue con el siguiente', async () => {
     const { e, vod } = setup();
     await e.ctx.autopilot.run(vod.id);
-    const outs = e.ctx.store.data.outputs;
-    const summary = outs.find((o) => o.auto?.role === 'summary')!;
-    const main = outs.find((o) => o.auto?.role === 'main')!;
-    mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 16, 11, 20, 0).getTime() }); // entre las 07:00 y las 16:00
+    const others = e.ctx.store.data.outputs.filter((o) => o.auto?.role !== 'summary');
+    const sum = e.ctx.store.data.outputs.find((o) => o.auto?.role === 'summary')!;
+    mock.timers.enable({ apis: ['Date'], now: new Date(2030, 9, 16, 7, 0, 0).getTime() });
     try {
-      e.ctx.autopilot.approve(main.id);
-      e.ctx.autopilot.approve(summary.id);
+      // hoy ya hay algo en las 08:00, 12:00 y 16:00
+      [8, 12, 16].forEach((h, i) => e.ctx.pubs.schedule(others[i].id, ['youtube'], new Date(2030, 9, 16, h, 0, 0).toISOString()));
+      e.ctx.autopilot.approve(sum.id);
+      const at = new Date(e.ctx.store.data.publications.find((p) => p.outputId === sum.id)!.scheduledAt);
+      assert.deepEqual([at.getDate(), at.getHours(), at.getMinutes()], [16, 21, 30]);
     } finally {
       mock.timers.reset();
     }
-    const when = (id: string) => new Date(e.ctx.store.data.publications.find((p) => p.outputId === id)!.scheduledAt);
-    assert.equal(when(summary.id).getHours(), 7);
-    assert.equal(when(main.id).getHours(), 16);
-    assert.equal(when(main.id).toDateString(), when(summary.id).toDateString());
   });
 
   it('sin aprobación previa lo programa todo directamente', async () => {
     const { e, vod } = setup();
     e.ctx.settings.set({ autopilot: { requireApproval: false } });
     await e.ctx.autopilot.run(vod.id);
+    assert.match(e.ctx.store.data.vods[0].autopilot?.note ?? '', /4 programados/);
     assert.equal(e.ctx.store.data.publications.length, e.ctx.store.data.outputs.length);
     assert.ok(e.ctx.store.data.outputs.every((o) => o.auto!.review === 'approved'));
   });
@@ -159,7 +173,7 @@ describe('piloto automático', () => {
   it('con modelo de lenguaje usa sus títulos (limpiados) y envía solo texto de la transcripción', async () => {
     const srv = await llmServer(() => ({
       status: 200,
-      body: { choices: [{ message: { content: JSON.stringify({ resumen: { titulo: 'Gran <b>resumen</b>', descripcion: 'Lo mejor.' }, principal: { titulo: 'La historia', descripcion: 'Desc principal' }, clips: [{ id: 'clip1', titulo: 'Clip uno', descripcion: 'd' }, { id: 'clip2', titulo: 'Clip dos', descripcion: 'd' }] }) } }] },
+      body: { choices: [{ message: { content: JSON.stringify({ resumen: { titulo: 'Gran <b>resumen</b>', descripcion: 'Lo mejor.' }, videos: [{ id: 'video1', titulo: 'La historia', descripcion: 'Desc principal' }], clips: [{ id: 'clip1', titulo: 'Clip uno', descripcion: 'd' }, { id: 'clip2', titulo: 'Clip dos', descripcion: 'd' }] }) } }] },
     }));
     try {
       const { e, vod } = setup({ llmBaseUrl: srv.url });
@@ -235,7 +249,10 @@ describe('piloto automático', () => {
     e.ctx.settings.set({ autopilot: { enabled: false } });
     e.ctx.autopilot.onLiveVod(addDownloadedVod(e, video));
     assert.equal(e.ctx.store.data.vods[0].autopilot, undefined);
-    assert.throws(() => e.ctx.settings.set({ autopilot: { slots: { main: '25:00' } } }), /HH:MM/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { videoTimes: ['25:00'] } }), /HH:MM/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { clipTimes: ['9:00'] } }), /HH:MM/);
+    assert.throws(() => e.ctx.settings.set({ autopilot: { maxVideos: 50 } }), /entre 0 y 12/);
+    assert.deepEqual(e.ctx.settings.set({ autopilot: { videoTimes: ['21:30', '08:00', '08:00'] } }).autopilot.videoTimes, ['08:00', '21:30']);
     assert.throws(() => e.ctx.settings.set({ autopilot: { maxClips: 99 } }), /entre 0 y 20/);
     assert.throws(() => e.ctx.settings.set({ autopilot: { platforms: ['myspace' as never] } }), /no reconocida/);
     assert.throws(() => e.ctx.settings.set({ autopilot: { subtitles: 'feo' as never } }), /subtítulos/);

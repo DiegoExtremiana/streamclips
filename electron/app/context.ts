@@ -21,6 +21,7 @@ import { Autopilot } from '../domain/autopilot';
 import { ChannelMonitor } from '../domain/channel';
 import { PublicationService } from '../domain/publications';
 import { Scheduler } from '../domain/scheduler';
+import { EngineService } from '../domain/engine';
 import { ConnectionService } from '../domain/connections';
 import { lookupAccount, type AccountEnv } from '../services/social/accounts';
 import type { PROVIDERS, OAuthProvider } from '../services/oauth';
@@ -52,6 +53,9 @@ export interface ContextOptions {
   /** Abre una dirección en el navegador del sistema (Electron: shell.openExternal). */
   /** electron-updater (null/ausente en desarrollo y en pruebas). */
   runnerSource?: () => string;
+  /** Contenido del motor nocturno (engine.js) que se instala en el repositorio público. */
+  engineSource?: () => string;
+  engineIntervalMs?: number;
   /** Solo pruebas: GitHub. */
   github?: Partial<GithubOpts>;
   cloudIntervalMs?: number;
@@ -64,6 +68,10 @@ export interface ContextOptions {
   chatPort?: number;
   energy?: typeof audioEnergy;
   echoLog?: boolean;
+  /** Sin interfaz (motor nocturno en GitHub Actions): la nube no toca las claves de tus redes. */
+  headless?: boolean;
+  /** Solo el motor nocturno: motivo para no transcribir un directo de esta duración. */
+  canTranscribe?: (durationSec: number) => string | null;
 }
 
 /**
@@ -88,6 +96,7 @@ export class AppContext {
   readonly connections: ConnectionService;
   readonly updates: UpdateService;
   readonly cloud: CloudService;
+  readonly engine: EngineService;
   readonly cloudQueue = new SerialQueue();
   readonly autopilotQueue = new SerialQueue();
   /** Las descargas y los renders van en colas distintas, cada una de una en una. */
@@ -161,6 +170,7 @@ export class AppContext {
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
+      canTranscribe: o.canTranscribe,
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
     this.connections = new ConnectionService({
@@ -191,6 +201,18 @@ export class AppContext {
       runnerSource: o.runnerSource ?? (() => { throw new Error('El publicador de la nube no está incluido en esta instalación.'); }),
       github: o.github,
       intervalMs: o.cloudIntervalMs,
+      headless: o.headless,
+    });
+    this.engine = new EngineService({
+      store: this.store,
+      secrets,
+      log: this.log,
+      notifier: o.notifier,
+      engineSource: o.engineSource ?? (() => { throw new Error('El motor nocturno no está incluido en esta instalación.'); }),
+      twitchCreds: () => this.settings.twitchCreds(),
+      llmKey: () => this.settings.llmKey(),
+      github: o.github,
+      intervalMs: o.engineIntervalMs,
     });
     this.scheduler = new Scheduler(
       this.store,
@@ -234,6 +256,7 @@ export class AppContext {
     this.channel.start();
     this.updates.start();
     this.cloud.start();
+    this.engine.start();
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${(e as Error).message}`));
     this.log.info('Aplicación iniciada.');
   }
@@ -243,5 +266,6 @@ export class AppContext {
     this.channel.stop();
     this.updates.stop();
     this.cloud.stop();
+    this.engine.stop();
   }
 }

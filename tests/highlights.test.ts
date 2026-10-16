@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bestStretch, buildSummary, fallbackTitle, findMoments, mergeSegments, robustZ, scoreSeconds, smooth, snapToSentences, textOf, type Signals } from '../shared/highlights';
+import { bestStretch, bestStretches, buildSummary, fallbackTitle, findMoments, mergeSegments, robustZ, scoreSeconds, smooth, snapToSentences, textOf, type Signals } from '../shared/highlights';
 import type { Word } from '../shared/subtitles';
 
 /** Directo de 1 hora con ruido bajo y dos explosiones (en 600 s y 2400 s). */
@@ -127,5 +127,21 @@ describe('highlights: directos largos (3-4 h)', () => {
     const total = sum.reduce((a, x) => a + x.end - x.start, 0);
     assert.ok(total >= 600 && total <= 901, `${total}`);
     assert.ok(main && main.end - main.start >= 500);
+  });
+  it('bestStretches: varios tramos distintos, sin solaparse, en orden cronológico y respetando lo que se evita', () => {
+    const dur = 7200;
+    const energy = Array.from({ length: dur }, (_, i) => -35 + Math.sin(i / 7) * 1.5);
+    for (const c of [900, 3000, 5400]) for (let i = c - 120; i < c + 120; i++) energy[i] = -12;
+    const sig: Signals = { durationSec: dur, energyDb: energy, chat: new Array(dur).fill(0) };
+    const three = bestStretches(sig, 300, 3);
+    assert.equal(three.length, 3);
+    for (let i = 1; i < three.length; i++) assert.ok(three[i].start >= three[i - 1].end, JSON.stringify(three));
+    assert.ok(three.some((s) => s.start < 900 && s.end > 900) && three.some((s) => s.start < 3000 && s.end > 3000) && three.some((s) => s.start < 5400 && s.end > 5400), JSON.stringify(three));
+    const avoid = bestStretches(sig, 300, 1, [{ start: 800, end: 1000 }])[0];
+    assert.ok(avoid.end <= 800 || avoid.start >= 1000, JSON.stringify(avoid));
+    assert.deepEqual(bestStretches(sig, 300, 0), []);
+    assert.equal(bestStretches({ durationSec: 100, energyDb: [] }, 300, 3).length, 0);
+    // pide más de los que hay: devuelve solo los que de verdad destacan
+    assert.ok(bestStretches(sig, 300, 50).length < 50);
   });
 });

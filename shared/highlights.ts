@@ -247,25 +247,53 @@ export function buildSummary(sig: Signals, o: { minSec: number; maxSec: number }
 
 /** El tramo continuo más intenso de `len` segundos (para el vídeo principal), ajustado a frases. */
 export function bestStretch(sig: Signals, len: number): Seg | null {
-  if (sig.durationSec < len * 1.2) return null;
+  return bestStretches(sig, len, 1)[0] ?? null;
+}
+
+/**
+ * Hasta `count` tramos continuos de `len` segundos, de más a menos intensos y sin solaparse entre sí
+ * ni con los tramos de `avoid`. Se devuelven en orden cronológico.
+ */
+export function bestStretches(sig: Signals, len: number, count: number, avoid: Seg[] = []): Seg[] {
+  if (count <= 0 || sig.durationSec < len * 1.2) return [];
   const { score } = scoreSeconds(sig);
   const n = score.length;
   const w = Math.min(Math.round(len), n);
-  let acc = 0;
-  for (let i = 0; i < w; i++) acc += score[i];
-  let best = acc;
-  let at = 0;
-  for (let i = w; i < n; i++) {
-    acc += score[i] - score[i - w];
-    if (acc > best) {
-      best = acc;
-      at = i - w + 1;
+  if (w < 1) return [];
+  const used = new Array<boolean>(n).fill(false);
+  for (const a of avoid) for (let i = Math.max(0, Math.floor(a.start)); i < Math.min(n, Math.ceil(a.end)); i++) used[i] = true;
+  const out: Seg[] = [];
+  for (let k = 0; k < count; k++) {
+    let acc = 0;
+    let blocked = 0;
+    for (let i = 0; i < w; i++) {
+      acc += score[i];
+      if (used[i]) blocked++;
     }
+    let best = -Infinity;
+    let at = -1;
+    if (!blocked) {
+      best = acc;
+      at = 0;
+    }
+    for (let i = w; i < n; i++) {
+      acc += score[i] - score[i - w];
+      blocked += (used[i] ? 1 : 0) - (used[i - w] ? 1 : 0);
+      if (!blocked && acc > best) {
+        best = acc;
+        at = i - w + 1;
+      }
+    }
+    if (at < 0 || best / w < 0.2) break; // no queda ninguna zona libre que destaque de verdad
+    let seg = { start: at, end: Math.min(sig.durationSec, at + w) };
+    for (let i = at; i < Math.min(n, at + w); i++) used[i] = true;
+    if (sig.words?.length) seg = snapToSentences(seg.start, seg.end, sig.words, 20);
+    out.push({ start: Math.max(0, seg.start), end: Math.min(sig.durationSec, seg.end) });
   }
-  if (best / w < 0.2) return null; // ninguna zona destaca de verdad
-  let seg = { start: at, end: Math.min(sig.durationSec, at + w) };
-  if (sig.words?.length) seg = snapToSentences(seg.start, seg.end, sig.words, 20);
-  return { start: Math.max(0, seg.start), end: Math.min(sig.durationSec, seg.end) };
+  out.sort((a, b) => a.start - b.start);
+  // ajustar a frases puede correr un borde unos segundos: nunca se pisan
+  for (let i = 1; i < out.length; i++) if (out[i].start < out[i - 1].end) out[i].start = out[i - 1].end;
+  return out.filter((s) => s.end - s.start >= Math.min(30, len / 2));
 }
 
 /** Texto de un tramo, para títulos y para el modelo de lenguaje. */

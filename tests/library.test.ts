@@ -108,11 +108,13 @@ describe('Biblioteca: datos de YouTube', () => {
     }
     assert.equal(JSON.stringify(ctx.store.data.outputs[0]), before);
   });
-  it('los clips solo admiten nombre (hasta 120) y no tienen datos de YouTube', () => {
+  it('los clips admiten nombre (hasta 120), descripción, lista y visibilidad (salen como Shorts)', () => {
     const { ctx } = two();
     assert.equal(ctx.library.setMeta('c', { title: 'x'.repeat(120) }).title.length, 120);
-    assert.throws(() => ctx.library.setMeta('c', { description: 'a' }), /solo de los vídeos largos/);
-    assert.throws(() => ctx.library.setMeta('c', { visibility: 'public' }), /solo de los vídeos largos/);
+    const c = ctx.library.setMeta('c', { description: 'Mi clip', playlist: 'Shorts', visibility: 'public' });
+    assert.deepEqual([c.description, c.playlist, c.visibility], ['Mi clip', 'Shorts', 'public']);
+    assert.throws(() => ctx.library.setMeta('c', { description: '<b>' }), /< ni >/);
+    assert.throws(() => ctx.library.setMeta('c', { visibility: 'secreto' as never }), /pública o privada/);
     assert.throws(() => ctx.library.setMeta('nope', {}), /no existe/);
   });
   it('lo guardado sobrevive a reabrir el almacén', () => {

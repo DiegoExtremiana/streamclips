@@ -39,6 +39,10 @@ export default function CalendarView(props: {
                 className={`cal-cell ${inMonth ? '' : 'out'} ${day === props.todayKey ? 'today' : ''} ${day < props.todayKey ? 'past' : ''} ${isOver ? 'over' : ''}`}
                 data-cell-day={day}
                 data-testid={`cal-${day}`}
+                onClick={(e) => {
+                  // un clic en el hueco del día abre su plan; los chips, el «+» y «más» hacen lo suyo
+                  if (!(e.target as HTMLElement).closest('.cal-chip, .cal-add, .cal-more')) props.onOpenDay(day);
+                }}
               >
                 <div className="cal-num">
                   <span>{Number(day.slice(8))}</span>

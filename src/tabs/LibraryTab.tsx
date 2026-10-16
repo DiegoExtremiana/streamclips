@@ -129,7 +129,9 @@ export default function LibraryTab(props: {
   const itemMenu = (o: OutputItem): MenuItem[] => [
     { label: 'Abrir', onClick: () => setOpenId(o.id) },
     { label: 'Programar subida…', onClick: () => setDialog({ type: 'schedule', outputId: o.id }) },
-    ...(o.kind === 'long'
+    ...(o.remote
+      ? [] // vive solo en la nube: no hay archivo que descargar
+      : o.kind === 'long'
       ? [{ label: 'Descargar vídeo', onClick: () => download(o, 'long') }]
       : [
           { label: 'Descargar en horizontal', onClick: () => download(o, 'horizontal') },

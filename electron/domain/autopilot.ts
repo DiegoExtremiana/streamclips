@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { bestStretch, buildSummary, fallbackTitle, findMoments, textOf, type Seg, type Signals } from '../../shared/highlights';
-import { nextSlot } from '../../shared/slots';
+import { bestStretches, buildSummary, fallbackTitle, findMoments, textOf, type Seg, type Signals } from '../../shared/highlights';
+import { nextFreeSlot } from '../../shared/slots';
 import { ChatBins } from '../services/chatlog';
 import { audioEnergy } from '../services/audioEnergy';
 import { LLM_PROVIDERS, askJson, type LlmConfig } from '../services/llm';
@@ -36,6 +36,8 @@ export interface AutopilotDeps {
   llmFetch?: typeof fetch;
   energy?: typeof audioEnergy;
   now?: () => number;
+  /** Motor nocturno: devuelve el motivo si no hay tiempo para transcribir un directo de esta duración. */
+  canTranscribe?: (durationSec: number) => string | null;
 }
 
 interface Titles {
@@ -111,7 +113,9 @@ export class Autopilot {
       let words = this.d.transcripts.words(vod.id);
       if (!words.length) {
         const st = this.d.transcripts.status();
-        if (st.engine) {
+        const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? (await this.d.clips.vodDuration(vod.id))) : null;
+        if (skip) notes.push(`Sin transcripción: ${skip}.`);
+        else if (st.engine) {
           this.mark(vod, 'transcribing');
           task.update(2, 'Transcribiendo el directo (puede tardar)…');
           try {
@@ -141,8 +145,10 @@ export class Autopilot {
       // 3) tramos
       const moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
       const summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
-      const main = bestStretch(sig, this.cfg.mainMinutes * 60);
-      if (!moments.length && !summary.length && !main) {
+      // el resumen cuenta como uno de los vídeos del directo; el resto son tramos continuos distintos
+      const mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
+      if (!this.cfg.maxVideos) summary.length = 0;
+      if (!moments.length && !summary.length && !mains.length) {
         this.mark(vod, 'skipped', ['No se encontraron momentos que destaquen en este directo.', ...notes].join(' '));
         task.done('Sin momentos destacados');
         return vod;
@@ -150,18 +156,19 @@ export class Autopilot {
 
       // 4) títulos
       task.update(55, 'Poniendo títulos…');
-      const titles = await this.titles(vod, words, moments, main, notes);
+      const titles = await this.titles(vod, words, moments, mains, notes);
 
       // 5) montaje
       this.mark(vod, 'rendering');
       const created: OutputItem[] = [];
       const errors: string[] = [];
-      const total = (summary.length ? 1 : 0) + (main ? 1 : 0) + moments.length;
+      const total = (summary.length ? 1 : 0) + mains.length + moments.length;
       let doneCount = 0;
       const step = async (role: AutoRole, label: string, fn: () => Promise<OutputItem>, t: Titles) => {
         try {
           const item = await fn();
           item.auto = { role, review: 'pending' };
+          item.visibility = this.cfg.visibility;
           if (item.kind === 'long' && t.description) this.d.library.setMeta(item.id, { description: t.description });
           this.d.store.save();
           created.push(item);
@@ -171,7 +178,10 @@ export class Autopilot {
         task.update(55 + (++doneCount / total) * 40, `Montando (${doneCount}/${total})…`);
       };
       if (summary.length) await step('summary', 'resumen', () => this.d.clips.createLong(vod.id, { title: titles.summary.title, segments: summary, ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), titles.summary);
-      if (main) await step('main', 'vídeo principal', () => this.d.clips.createLong(vod.id, { title: titles.main.title, segments: [main], ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), titles.main);
+      for (const [i, m] of mains.entries()) {
+        const t = titles.mains[i];
+        await step('main', `vídeo ${i + 1}`, () => this.d.clips.createLong(vod.id, { title: t.title, segments: [m], ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), t);
+      }
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
         await step('clip', `clip ${i + 1}`, () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), t);
@@ -179,8 +189,18 @@ export class Autopilot {
       if (!created.length) throw new Error(`No se pudo montar ningún vídeo. ${errors.join(' ')}`);
 
       // 6) visto bueno o programación
-      if (!this.cfg.requireApproval) for (const o of created) this.approve(o.id);
-      const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ' y programados'}.`;
+      let scheduled = 0;
+      if (!this.cfg.requireApproval) {
+        for (const o of created) {
+          try {
+            this.approve(o.id);
+            scheduled++;
+          } catch (e) {
+            errors.push(`${o.title}: ${(e as Error).message}`); // se queda para revisar a mano
+          }
+        }
+      }
+      const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ` (${scheduled} programados)`}.`;
       this.mark(vod, 'done', [msg, ...errors, ...notes].join(' '));
       task.done(msg);
       return vod;
@@ -192,10 +212,10 @@ export class Autopilot {
     }
   }
 
-  private async titles(vod: VodJob, words: Word[], moments: Seg[], main: Seg | null, notes: string[]) {
+  private async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]) {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: '' },
-      main: { title: clean(main && words.length ? fallbackTitle(words, main, 0) : `Directo del ${this.dateLabel(vod)}`, 100), description: '' },
+      mains: mains.map((m, i) => ({ title: clean(words.length ? fallbackTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: '' })),
       clips: moments.map((m, i) => ({ title: clean(words.length ? fallbackTitle(words, m, i) : `Momento ${i + 1}`, 100), description: '' })),
     };
     const llm = this.cfg.llm;
@@ -206,19 +226,20 @@ export class Autopilot {
     }
     const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
     const items = [
-      ...(main ? [{ id: 'principal', texto: textOf(words, main.start, Math.min(main.end, main.start + 240), 900) }] : []),
+      ...mains.map((m, i) => ({ id: `video${i + 1}`, texto: textOf(words, m.start, Math.min(m.end, m.start + 240), 900) })),
       ...moments.map((m, i) => ({ id: `clip${i + 1}`, texto: textOf(words, m.start, m.end, 600) })),
     ];
     try {
       const raw = (await askJson(
         conf,
-        'Eres editor de contenido de un streamer en español. Escribes títulos cortos y atractivos (máximo 70 caracteres, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.',
-        `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"principal":{"titulo":"","descripcion":""},"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.\n"resumen" es el resumen de todo el directo (no tienes su texto: titúlalo a partir de los demás fragmentos). Fragmentos:\n${JSON.stringify(items)}`,
+        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes títulos cortos y atractivos (máximo 70 caracteres, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.',
+        `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.\n"resumen" es el resumen de todo el directo (no tienes su texto: titúlalo a partir de los demás fragmentos). Fragmentos:\n${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch },
-      )) as { resumen?: Record<string, unknown>; principal?: Record<string, unknown>; clips?: Record<string, unknown>[] };
+      )) as { resumen?: Record<string, unknown>; videos?: Record<string, unknown>[]; clips?: Record<string, unknown>[] };
       const pick = (o: Record<string, unknown> | undefined, fb: Titles): Titles => ({ title: clean(o?.titulo, 100) || fb.title, description: clean(o?.descripcion, 500) || fb.description });
       base.summary = pick(raw.resumen, base.summary);
-      base.main = pick(raw.principal, base.main);
+      const byVideo = new Map((Array.isArray(raw.videos) ? raw.videos : []).map((c) => [String(c.id), c]));
+      base.mains = base.mains.map((fb, i) => pick(byVideo.get(`video${i + 1}`), fb));
       const byId = new Map((Array.isArray(raw.clips) ? raw.clips : []).map((c) => [String(c.id), c]));
       base.clips = base.clips.map((fb, i) => pick(byId.get(`clip${i + 1}`), fb));
     } catch (e) {
@@ -244,17 +265,8 @@ export class Autopilot {
     }
     const taken = new Set(this.d.store.data.publications.filter((p) => p.status !== 'failed').map((p) => Date.parse(p.scheduledAt)));
     const now = new Date(this.now + 5 * 60_000);
-    let at: Date;
-    if (role === 'summary') at = nextSlot(now, this.cfg.slots.summary, taken);
-    else if (role === 'main') {
-      const sum = this.d.store.data.outputs.find((x) => x.vodId === o.vodId && x.auto?.role === 'summary');
-      const sumAt = sum ? this.d.store.data.publications.find((p) => p.outputId === sum.id)?.scheduledAt : undefined;
-      // el principal sale el mismo día que el resumen, por la tarde
-      // (aunque el resumen aún no esté aprobado se calcula cuándo le tocaría, para que el orden de aprobación no cambie el día)
-      const sumFrom = sumAt ? new Date(sumAt) : nextSlot(now, this.cfg.slots.summary, taken);
-      const from = new Date(Math.max(now.getTime(), sumFrom.getTime()));
-      at = nextSlot(from, this.cfg.slots.main, taken);
-    } else at = nextSlot(now, this.cfg.slots.clips, taken); // un clip por día
+    // cada hora configurada es un hueco al día: los vídeos van a los de vídeos y los clips a los de clips
+    const at = nextFreeSlot(now, role === 'clip' ? this.cfg.clipTimes : this.cfg.videoTimes, taken);
     this.d.pubs.schedule(outputId, platforms, at.toISOString());
     o.auto = { role, review: 'approved' };
     this.d.store.save();

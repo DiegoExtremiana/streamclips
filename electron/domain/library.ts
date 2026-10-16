@@ -91,7 +91,7 @@ export class LibraryService {
 
   /**
    * Nombre y datos de YouTube. Todo se valida antes de cambiar nada: si un campo falla, no se guarda ninguno.
-   * Descripción, lista y visibilidad son solo de los vídeos largos.
+   * Descripción, lista y visibilidad valen para vídeos y clips (los clips salen como Shorts en YouTube).
    */
   setMeta(id: string, meta: OutputMeta): OutputItem {
     const o = this.find(id);
@@ -105,8 +105,6 @@ export class LibraryService {
       if (o.kind === 'long' && hasAngle(t)) throw new Error('El nombre no puede contener < ni > (YouTube no los admite).');
       next.title = t;
     }
-    const youtubeOnly = meta.description !== undefined || meta.playlist !== undefined || meta.visibility !== undefined;
-    if (youtubeOnly && o.kind !== 'long') throw new Error('La descripción, la lista y la visibilidad son solo de los vídeos largos.');
     if (meta.description !== undefined) {
       if (typeof meta.description !== 'string') throw new Error('La descripción no es válida.');
       const d = meta.description.replace(/\s+$/, '');

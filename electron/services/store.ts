@@ -23,7 +23,7 @@ export function normalizeOutput(raw: unknown): OutputItem | null {
     if (legacy === 'vertical' || legacy === 'horizontal' || legacy === 'long') files[legacy] = o.file;
   }
   const kind: OutputItem['kind'] = o.kind === 'long' || files.long ? 'long' : 'clip';
-  if (!Object.keys(files).length) return null;
+  if (!Object.keys(files).length && o.remote !== true) return null; // sin archivos solo valen los que viven en la nube
   const { file: _legacyFile, ...rest } = o as Record<string, unknown>;
   void _legacyFile;
   return { ...(rest as unknown as OutputItem), kind, files };
@@ -39,6 +39,19 @@ export interface DataShape {
   channel: ChannelState;
   connections: Partial<Record<Platform, StoredConnection>>;
   cloud: CloudState;
+  engine: EngineState;
+}
+
+/** Motor nocturno (repositorio público con GitHub Actions). */
+export interface EngineState {
+  enabled: boolean;
+  repo: string;
+  /** Token de GitHub, cifrado. */
+  token: string;
+  since: string | null;
+  lastSync: string | null;
+  /** Huella de la última configuración subida (para volver a subirla solo si cambia). */
+  payloadHash: string;
 }
 
 export interface CloudState {
@@ -49,6 +62,8 @@ export interface CloudState {
   lastSync: string | null;
   /** Para volver a escribir el flujo cuando cambian las horas de publicación o el huso horario. */
   workflowCrons: string;
+  /** Claves de las subidas de la cola que este programa ya conoce (propias o traídas): lo cancelado aquí no se vuelve a traer. */
+  known: string[];
 }
 
 /** Datos de una red social. Todo lo secreto va cifrado (ver Secrets). */
@@ -81,14 +96,17 @@ function defaults(defaultOutputDir: string): DataShape {
       twitch: { clientId: '', clientSecret: '', login: '' },
       whisperPath: '',
       whisperModel: 'small',
-      whisperLanguage: '',
+      whisperLanguage: 'es',
       autopilot: {
         enabled: true,
-        requireApproval: true,
-        maxClips: 5,
+        requireApproval: false,
+        maxClips: 3,
+        maxVideos: 4,
+        visibility: 'public',
         subtitles: '',
-        platforms: ['youtube'],
-        slots: { summary: '07:00', main: '16:00', clips: '20:00' },
+        platforms: ['youtube', 'tiktok', 'instagram'],
+        videoTimes: ['08:00', '12:00', '16:00', '21:30'],
+        clipTimes: ['10:00', '14:00', '19:00'],
         summaryMinutes: 12,
         mainMinutes: 10,
         chatCapture: true,
@@ -101,8 +119,16 @@ function defaults(defaultOutputDir: string): DataShape {
     publications: [],
     channel: { autoImport: true, autoSince: null, seenVodIds: [], importedClipIds: [] },
     connections: {},
-    cloud: { enabled: false, repo: '', token: '', lastSync: null, workflowCrons: '' },
+    cloud: { enabled: false, repo: '', token: '', lastSync: null, workflowCrons: '', known: [] },
+    engine: { enabled: false, repo: '', token: '', since: null, lastSync: null, payloadHash: '' },
   };
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** Lista de horas HH:MM válida (sin repetidas y ordenada); si no hay ninguna válida, la de por defecto. */
+function times(v: unknown, fallback: string[]): string[] {
+  const ok = Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && HHMM_RE.test(x)))].sort() : [];
+  return ok.length ? ok : [...fallback];
 }
 
 /** Cuántos identificadores antiguos se recuerdan (evita que el archivo crezca sin límite). */
@@ -158,19 +184,23 @@ export class Store {
       settings: {
         ...base.settings,
         ...saved.settings,
+        // el programa edita en español de España: un ajuste antiguo «detectar» pasa a «es»
+        whisperLanguage: saved.settings?.whisperLanguage || base.settings.whisperLanguage,
         twitch: { ...base.settings.twitch, ...saved.settings?.twitch },
         autopilot: {
           ...base.settings.autopilot,
           ...saved.settings?.autopilot,
-          slots: { ...base.settings.autopilot.slots, ...saved.settings?.autopilot?.slots },
           llm: { ...base.settings.autopilot.llm, ...saved.settings?.autopilot?.llm },
+          videoTimes: times(saved.settings?.autopilot?.videoTimes, base.settings.autopilot.videoTimes),
+          clipTimes: times(saved.settings?.autopilot?.clipTimes, base.settings.autopilot.clipTimes),
         },
       },
       vods: arr<VodJob>(saved.vods),
       outputs: arr<unknown>(saved.outputs).map(normalizeOutput).filter((x): x is OutputItem => x !== null),
       groups: arr<Group>(saved.groups),
       publications: arr<Publication>(saved.publications),
-      cloud: { ...base.cloud, ...(typeof saved.cloud === 'object' && saved.cloud !== null ? saved.cloud : {}) },
+      cloud: { ...base.cloud, ...(typeof saved.cloud === 'object' && saved.cloud !== null ? saved.cloud : {}), known: arr<string>(saved.cloud?.known).slice(-MAX_SEEN) },
+      engine: { ...base.engine, ...(typeof saved.engine === 'object' && saved.engine !== null ? saved.engine : {}) },
       connections: typeof saved.connections === 'object' && saved.connections !== null && !Array.isArray(saved.connections) ? saved.connections : {},
       channel: {
         ...base.channel,

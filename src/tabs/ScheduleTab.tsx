@@ -5,11 +5,14 @@ import { dayLabel, localDayKey } from '../../shared/agenda';
 import { fmtTime } from '../../shared/time';
 import { addDays, atFromDayMinutes, daysFrom, defaultWhenForDay, groupBlocks, hhmm, moveToDay, unscheduledOutputs, validateMove, type Block } from '../../shared/schedulePlan';
 import { errMsg, notify } from '../lib';
+import { Modal } from '../library/ui';
+import ItemModal from '../library/ItemModal';
 import type { TabId } from '../App';
 import { IconCalendar, IconChevron, IconFilm } from '../icons';
 import ScheduleDialog from '../library/ScheduleDialog';
 import BlockDialog from '../schedule/BlockDialog';
 import CalendarView from '../schedule/CalendarView';
+import DayView from '../schedule/DayView';
 import Timeline from '../schedule/Timeline';
 import { GhostChip, useDragDrop, type DragPayload, type DropTarget } from '../schedule/drag';
 import PanelTab from './PanelTab';
@@ -19,9 +22,9 @@ type Filter = 'all' | 'videos' | 'clips';
 const VIEW_KEY = 'streamclips.schedule.view';
 const readView = (): View => {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'timeline';
+    return localStorage.getItem(VIEW_KEY) === 'timeline' ? 'timeline' : 'calendar'; // por defecto, el calendario
   } catch {
-    return 'timeline';
+    return 'calendar';
   }
 };
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -48,7 +51,11 @@ export default function ScheduleTab(props: {
   const [anchor, setAnchor] = useState(todayKey);
   const [month, setMonth] = useState(() => ({ year: new Date().getFullYear(), month0: new Date().getMonth() }));
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [slots, setSlots] = useState<string[]>([]);
+  const [times, setTimes] = useState<{ video: string[]; clip: string[] }>({ video: [], clip: [] });
+  const slots = useMemo(() => [...new Set([...times.video, ...times.clip])].sort(), [times]);
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [askDelete, setAskDelete] = useState<OutputItem | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
 
   useEffect(() => {
@@ -59,7 +66,7 @@ export default function ScheduleTab(props: {
     let alive = true;
     window.api
       .getSettings()
-      .then((s) => alive && setSlots([...new Set(Object.values(s.autopilot.slots))]))
+      .then((s) => alive && setTimes({ video: s.autopilot.videoTimes, clip: s.autopilot.clipTimes }))
       .catch(() => undefined);
     return () => {
       alive = false;
@@ -101,6 +108,19 @@ export default function ScheduleTab(props: {
     }
   }
 
+  const openItem = openItemId ? outputs.find((o) => o.id === openItemId) ?? null : null;
+  async function deleteOne(o: OutputItem) {
+    setAskDelete(null);
+    try {
+      const r = await window.api.deleteOutputs([o.id]);
+      await props.onChanged();
+      if (r.removed) notify('Vídeo eliminado.', 'ok');
+      for (const e of r.errors) notify(`No se pudo eliminar «${e.title}»: ${e.reason}`, 'bad');
+    } catch (e) {
+      notify(errMsg(e), 'bad');
+    }
+  }
+
   const drag = useDragDrop({
     onClick: (p: DragPayload) => setDialog(p.kind === 'block' ? { type: 'block', block: p.block } : { type: 'add', outputId: p.output.id }),
     onDrop: (p: DragPayload, t: DropTarget) => {
@@ -139,6 +159,7 @@ export default function ScheduleTab(props: {
               <button className="btn small" onClick={() => setDialog({ type: 'add' })}><IconCalendar /> Añadir subida</button>
             </div>
           </div>
+          {!(view === 'calendar' && openDay) && (<>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <div className="row" style={{ gap: 6 }}>
               <button className="btn ghost small iconflip" aria-label={view === 'timeline' ? 'Semana anterior' : 'Mes anterior'} onClick={() => (view === 'timeline' ? setAnchor(addDays(anchor, -DAYS_SHOWN)) : shiftMonth(-1))}><IconChevron /></button>
@@ -157,6 +178,7 @@ export default function ScheduleTab(props: {
             </div>
             <span className="legend"><i className="dot video" /> Vídeo <i className="dot clip" /> Clip</span>
           </div>
+          </>)}
 
           {failed.length > 0 && (
             <div className="msg bad" role="alert">
@@ -169,7 +191,22 @@ export default function ScheduleTab(props: {
             </div>
           )}
 
-          {view === 'timeline' ? (
+          {view === 'calendar' && openDay ? (
+            <DayView
+              dayKey={openDay}
+              now={now}
+              blocks={allBlocks}
+              outputs={outputs}
+              pubs={pubs}
+              videoTimes={times.video}
+              clipTimes={times.clip}
+              onBack={() => setOpenDay(null)}
+              onShift={(n) => setOpenDay(addDays(openDay, n))}
+              onAdd={(day, t) => setDialog({ type: 'add', defaultWhen: t ? `${day}T${t}` : defaultWhenForDay(day, Date.now(), slots) })}
+              onOpen={(id) => setOpenItemId(id)}
+              onChanged={props.onChanged}
+            />
+          ) : view === 'timeline' ? (
             <Timeline days={days} blocks={blocks} now={now} drag={drag} todayKey={todayKey} />
           ) : (
             <CalendarView
@@ -179,13 +216,10 @@ export default function ScheduleTab(props: {
               todayKey={todayKey}
               drag={drag}
               onAdd={(day) => setDialog({ type: 'add', defaultWhen: defaultWhenForDay(day, Date.now(), slots) })}
-              onOpenDay={(day) => {
-                setAnchor(day);
-                setView('timeline');
-              }}
+              onOpenDay={(day) => setOpenDay(day)}
             />
           )}
-          {blocks.length === 0 && <div className="muted small">Todavía no hay subidas programadas. Arrastra un vídeo de la bandeja «Sin programar» a un día, o pulsa «Añadir subida».</div>}
+          {blocks.length === 0 && !openDay && <div className="muted small">Todavía no hay subidas programadas. Arrastra un vídeo de la bandeja «Sin programar» a un día, o pulsa «Añadir subida».</div>}
         </section>
 
         <aside className="card tray" aria-label="Sin programar">
@@ -263,6 +297,26 @@ export default function ScheduleTab(props: {
 
       <GhostChip ghost={drag.ghost} />
       {dialog?.type === 'add' && <ScheduleDialog outputs={outputs} pubs={pubs} outputId={dialog.outputId} defaultWhen={dialog.defaultWhen} onChanged={props.onChanged} onClose={() => setDialog(null)} />}
+      {openItem && (
+        <ItemModal
+          key={openItem.id}
+          output={openItem}
+          pubs={pubs.filter((p) => p.outputId === openItem.id)}
+          playlists={[...new Set(outputs.map((o) => o.playlist).filter((p): p is string => Boolean(p)))].sort()}
+          onChanged={props.onChanged}
+          onClose={() => setOpenItemId(null)}
+          onDelete={() => { setAskDelete(openItem); setOpenItemId(null); }}
+        />
+      )}
+      {askDelete && (
+        <Modal title="Eliminar vídeo" onClose={() => setAskDelete(null)}>
+          <div>¿Eliminar «{askDelete.title}»? Se borran sus archivos y sus subidas pendientes. Lo ya publicado en las redes no se toca.</div>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn ghost" onClick={() => setAskDelete(null)}>Cancelar</button>
+            <button className="btn danger" onClick={() => void deleteOne(askDelete)}>Eliminar</button>
+          </div>
+        </Modal>
+      )}
       {dialog?.type === 'block' && <BlockDialog block={dialog.block} onChanged={props.onChanged} onClose={() => setDialog(null)} onOpenVideo={props.onOpenVideo} />}
     </div>
   );

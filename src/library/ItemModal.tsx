@@ -57,21 +57,9 @@ export default function ItemModal(props: {
   const ownPlatforms = PLATFORMS.filter((p) => platformsFor(o.kind).includes(p.id));
   const canReedit = isClip && o.vodId !== undefined && o.start !== undefined && o.end !== undefined;
 
-  // ---- nombre
   const [title, setTitle] = useState(o.title);
-  const [nameMsg, setNameMsg] = useState<Msg>(null);
-  async function saveName() {
-    setNameMsg(null);
-    try {
-      await window.api.renameOutput(o.id, title);
-      await props.onChanged();
-      setNameMsg({ ok: true, text: 'Nombre guardado.' });
-    } catch (e) {
-      setNameMsg({ ok: false, text: errMsg(e) });
-    }
-  }
 
-  // ---- datos de YouTube (vídeos largos)
+  // ---- nombre, descripción y visibilidad (vídeos y clips)
   const [description, setDescription] = useState(o.description ?? '');
   const [playlist, setPlaylist] = useState(o.playlist ?? '');
   const [visibility, setVisibility] = useState<Visibility>(o.visibility ?? 'private');
@@ -312,7 +300,7 @@ export default function ItemModal(props: {
 
   return (
     <Modal title={o.title} onClose={props.onClose} wide>
-      {isClip && (
+      {isClip && !o.remote && (
       <div className="viewtabs" role="tablist" aria-label="Versión del clip">
         {(['horizontal', 'vertical'] as const).map((v) => (
           <button key={v} type="button" role="tab" id={`tab-${v}`} aria-selected={view === v} className="viewtab" onClick={() => setView(v)}>
@@ -321,7 +309,7 @@ export default function ItemModal(props: {
         ))}
       </div>
       )}
-      {isClip && view === 'vertical' && (
+      {isClip && !o.remote && view === 'vertical' && (
         <section className="vsection" aria-label="Composición vertical">
           <h3>Composición vertical</h3>
           {!canReedit ? (
@@ -349,6 +337,12 @@ export default function ItemModal(props: {
       )}
       <div className={`itemgrid ${isClip ? 'clipgrid' : ''}`}>
         <div className="playercol">
+          {o.remote ? (
+            <div className="msg small" role="note">
+              Este vídeo está en la nube (lo creó el motor nocturno), así que aquí no hay vista previa ni edición de imagen. Puedes cambiar su nombre, descripción, redes y hora; se aplican en la nube.
+            </div>
+          ) : (
+            <>
           {isClip ? (
             <>
               {(() => {
@@ -418,12 +412,14 @@ export default function ItemModal(props: {
               <Notice msg={thumbMsg} />
             </section>
           )}
+            </>
+          )}
         </div>
 
         <div className="formcol">
-          {o.kind === 'long' ? (
-            <section aria-label="Datos de YouTube">
-              <h3>Datos de YouTube</h3>
+          {(
+            <section aria-label="Datos de la publicación">
+              <h3>{o.kind === 'long' ? 'Datos de YouTube' : 'Datos de la publicación'}</h3>
               <form
                 className="ytform"
                 onSubmit={(e) => {
@@ -460,24 +456,9 @@ export default function ItemModal(props: {
               </form>
               <Notice msg={ytMsg} />
             </section>
-          ) : (
-                      <section aria-label="Nombre">
-            <h3>Nombre</h3>
-            <form
-              className="row"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void saveName();
-              }}
-            >
-              <input type="text" aria-label="Nombre del vídeo" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} />
-              <button type="submit" className="btn small" disabled={!title.trim() || title === o.title}>Guardar nombre</button>
-            </form>
-            <Notice msg={nameMsg} />
-          </section>
           )}
 
-          {o.kind !== 'long' && (
+          {o.kind !== 'long' && !o.remote && (
             <section aria-label="Recorte">
               <h3>Recorte</h3>
               {!canReedit ? (
@@ -503,6 +484,7 @@ export default function ItemModal(props: {
             </section>
           )}
 
+          {!o.remote && (
           <section aria-label="Subtítulos">
             <h3>Subtítulos</h3>
             {!canSubtitle ? (
@@ -553,6 +535,7 @@ export default function ItemModal(props: {
             )}
             <Notice msg={subsMsg} />
           </section>
+          )}
 
           <section aria-label="Publicación">
             <h3>Cuándo se sube y dónde</h3>

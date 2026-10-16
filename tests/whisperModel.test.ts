@@ -1,5 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -110,5 +111,48 @@ describe('parseWhisperCppJson', () => {
     assert.throws(() => parseWhisperCppJson('{no'), /JSON/);
     assert.throws(() => parseWhisperCppJson(JSON.stringify({ result: {} })), /formato esperado/);
     assert.deepEqual(parseWhisperCppJson(JSON.stringify({ transcription: [] })), []);
+  });
+});
+
+describe('descarga del modelo: huella SHA-256', () => {
+  const SIZE = 71_000_000;
+  const zeros = Buffer.alloc(SIZE);
+  const goodHash = crypto.createHash('sha256').update(zeros).digest('hex');
+  let srv: http.Server;
+  let url: string;
+  let etag = goodHash;
+  let body: Buffer = zeros;
+  before(async () => {
+    srv = http.createServer((req, res) => {
+      if (req.method === 'HEAD') return void res.writeHead(307, etag ? { 'x-linked-etag': `"${etag}"` } : {}).end();
+      res.writeHead(200, { 'content-length': body.length }).end(body);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+  });
+  after(() => srv.close());
+  const fresh = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sc-wmh-'));
+
+  it('acepta el archivo cuando la huella coincide', async () => {
+    const d = fresh();
+    etag = goodHash;
+    body = zeros;
+    await downloadModel(d, 'tiny', () => undefined, { baseUrl: url });
+    assert.ok(modelInstalled(d, 'tiny'));
+  });
+  it('rechaza un archivo del tamaño correcto pero corrupto y no deja nada instalado', async () => {
+    const d = fresh();
+    etag = goodHash;
+    body = Buffer.alloc(SIZE, 1);
+    await assert.rejects(() => downloadModel(d, 'tiny', () => undefined, { baseUrl: url }), /dañado/);
+    assert.equal(modelInstalled(d, 'tiny'), false);
+    assert.deepEqual(fs.readdirSync(d), []);
+  });
+  it('sin huella publicada sigue con las comprobaciones de tamaño', async () => {
+    const d = fresh();
+    etag = '';
+    body = zeros;
+    await downloadModel(d, 'tiny', () => undefined, { baseUrl: url });
+    assert.ok(modelInstalled(d, 'tiny'));
   });
 });

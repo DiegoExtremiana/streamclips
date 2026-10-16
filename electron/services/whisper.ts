@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -50,6 +51,17 @@ export async function downloadModel(dir: string, name: string, onProgress: (pct:
   const part = `${dest}.part`;
   const url = `${o.baseUrl ?? MODEL_BASE_URL}/${WHISPER_MODELS[name].file}`;
   try {
+    // Hugging Face publica la huella SHA-256 del archivo en la primera respuesta (antes de la redirección): se usa para
+    // comprobar que lo descargado es idéntico. Si no se puede leer, se sigue solo con las comprobaciones de tamaño.
+    let expected = '';
+    try {
+      const head = await (o.fetchFn ?? fetch)(url, { method: 'HEAD', redirect: 'manual' });
+      const tag = (head.headers.get('x-linked-etag') ?? '').replace(/"/g, '').toLowerCase();
+      if (/^[0-9a-f]{64}$/.test(tag)) expected = tag;
+    } catch {
+      /* sin huella */
+    }
+    const hash = crypto.createHash('sha256');
     let res: Response;
     try {
       res = await (o.fetchFn ?? fetch)(url, { redirect: 'follow' });
@@ -63,6 +75,7 @@ export async function downloadModel(dir: string, name: string, onProgress: (pct:
     const body = Readable.fromWeb(res.body as never);
     body.on('data', (c: Buffer) => {
       got += c.length;
+      hash.update(c);
       if (total) {
         const pct = Math.floor((got / total) * 100);
         if (pct !== last) {
@@ -74,6 +87,7 @@ export async function downloadModel(dir: string, name: string, onProgress: (pct:
     await pipeline(body, fs.createWriteStream(part));
     if (total && got !== total) throw new Error('La descarga del modelo se cortó. Vuelve a intentarlo.');
     if (got < WHISPER_MODELS[name].minBytes) throw new Error('El archivo descargado es demasiado pequeño para ser el modelo. Vuelve a intentarlo.');
+    if (expected && hash.digest('hex') !== expected) throw new Error('El modelo de Whisper se descargó dañado (su huella no coincide). Vuelve a intentarlo.');
     fs.renameSync(part, dest);
     onProgress(100);
     return dest;
@@ -121,8 +135,8 @@ function runCli(exe: string, args: string[], onPct: (pct: number) => void): Prom
     const feed = (d: Buffer) => {
       const t = d.toString();
       tail = (tail + t).slice(-1500);
-      const m = [...t.matchAll(/progress\s*=\s*(\d+)%/g)].pop();
-      if (m) onPct(Math.min(100, Number(m[1])));
+      // varias líneas pueden llegar juntas: se informa de todas, en orden
+      for (const m of t.matchAll(/progress\s*=\s*(\d+)%/g)) onPct(Math.min(100, Number(m[1])));
     };
     p.stdout.on('data', feed);
     p.stderr.on('data', feed);

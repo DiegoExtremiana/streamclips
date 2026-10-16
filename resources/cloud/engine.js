@@ -205,9 +205,9 @@ var require_libsodium = __commonJS({
             Module.getRandomValue = randomValuesStandard;
           } catch (e) {
             try {
-              var crypto8 = require("crypto");
+              var crypto9 = require("crypto");
               var randomValueNodeJS = function() {
-                var buf = crypto8["randomBytes"](4);
+                var buf = crypto9["randomBytes"](4);
                 return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
               };
               randomValueNodeJS();
@@ -27109,7 +27109,7 @@ var require_libsodium = __commonJS({
                   try {
                     var window_2 = "object" === typeof window ? window : self;
                     var crypto_2 = typeof window_2.crypto !== "undefined" ? window_2.crypto : window_2.msCrypto;
-                    crypto_2 = crypto_2 === void 0 ? crypto9 : crypto_2;
+                    crypto_2 = crypto_2 === void 0 ? crypto10 : crypto_2;
                     var randomValuesStandard2 = function() {
                       var buf = new Uint32Array(1);
                       crypto_2.getRandomValues(buf);
@@ -27119,9 +27119,9 @@ var require_libsodium = __commonJS({
                     Module3.getRandomValue = randomValuesStandard2;
                   } catch (e) {
                     try {
-                      var crypto9 = require("crypto");
+                      var crypto10 = require("crypto");
                       var randomValueNodeJS2 = function() {
-                        var buf = crypto9["randomBytes"](4);
+                        var buf = crypto10["randomBytes"](4);
                         return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
                       };
                       randomValueNodeJS2();
@@ -27767,7 +27767,7 @@ var require_libsodium = __commonJS({
               try {
                 var window_2 = "object" === typeof window ? window : self;
                 var crypto_2 = typeof window_2.crypto !== "undefined" ? window_2.crypto : window_2.msCrypto;
-                crypto_2 = crypto_2 === void 0 ? crypto9 : crypto_2;
+                crypto_2 = crypto_2 === void 0 ? crypto10 : crypto_2;
                 var randomValuesStandard2 = function() {
                   var buf = new Uint32Array(1);
                   crypto_2.getRandomValues(buf);
@@ -27777,9 +27777,9 @@ var require_libsodium = __commonJS({
                 Module2.getRandomValue = randomValuesStandard2;
               } catch (e) {
                 try {
-                  var crypto9 = require("crypto");
+                  var crypto10 = require("crypto");
                   var randomValueNodeJS2 = function() {
-                    var buf = crypto9["randomBytes"](4);
+                    var buf = crypto10["randomBytes"](4);
                     return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
                   };
                   randomValueNodeJS2();
@@ -32729,6 +32729,7 @@ ${transcriptForClaude(words)}
 
 // electron/services/whisper.ts
 var import_node_child_process3 = require("node:child_process");
+var import_node_crypto4 = __toESM(require("node:crypto"));
 var import_node_fs10 = __toESM(require("node:fs"));
 var import_node_os3 = __toESM(require("node:os"));
 var import_node_path9 = __toESM(require("node:path"));
@@ -32763,6 +32764,14 @@ async function downloadModel(dir, name, onProgress, o = {}) {
   const part = `${dest}.part`;
   const url = `${o.baseUrl ?? MODEL_BASE_URL}/${WHISPER_MODELS[name].file}`;
   try {
+    let expected = "";
+    try {
+      const head = await (o.fetchFn ?? fetch)(url, { method: "HEAD", redirect: "manual" });
+      const tag = (head.headers.get("x-linked-etag") ?? "").replace(/"/g, "").toLowerCase();
+      if (/^[0-9a-f]{64}$/.test(tag)) expected = tag;
+    } catch {
+    }
+    const hash = import_node_crypto4.default.createHash("sha256");
     let res;
     try {
       res = await (o.fetchFn ?? fetch)(url, { redirect: "follow" });
@@ -32776,6 +32785,7 @@ async function downloadModel(dir, name, onProgress, o = {}) {
     const body = import_node_stream.Readable.fromWeb(res.body);
     body.on("data", (c) => {
       got += c.length;
+      hash.update(c);
       if (total) {
         const pct = Math.floor(got / total * 100);
         if (pct !== last) {
@@ -32787,6 +32797,7 @@ async function downloadModel(dir, name, onProgress, o = {}) {
     await (0, import_promises.pipeline)(body, import_node_fs10.default.createWriteStream(part));
     if (total && got !== total) throw new Error("La descarga del modelo se cort\xF3. Vuelve a intentarlo.");
     if (got < WHISPER_MODELS[name].minBytes) throw new Error("El archivo descargado es demasiado peque\xF1o para ser el modelo. Vuelve a intentarlo.");
+    if (expected && hash.digest("hex") !== expected) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (su huella no coincide). Vuelve a intentarlo.");
     import_node_fs10.default.renameSync(part, dest);
     onProgress(100);
     return dest;
@@ -32820,8 +32831,7 @@ function runCli(exe, args, onPct) {
     const feed = (d) => {
       const t = d.toString();
       tail = (tail + t).slice(-1500);
-      const m = [...t.matchAll(/progress\s*=\s*(\d+)%/g)].pop();
-      if (m) onPct(Math.min(100, Number(m[1])));
+      for (const m of t.matchAll(/progress\s*=\s*(\d+)%/g)) onPct(Math.min(100, Number(m[1])));
     };
     p.stdout.on("data", feed);
     p.stderr.on("data", feed);
@@ -32948,12 +32958,28 @@ var TranscriptService = class {
       await this.downloadModel();
       const task = this.d.tasks.start("transcribe", `Transcribiendo "${vod.title || vod.url}"`);
       try {
-        const words = await transcribeVideo(this.d.tools(), input, {
+        const run2 = () => transcribeVideo(this.d.tools(), input, {
           exe,
           model: modelPath(this.modelsDir, s.whisperModel),
           language: s.whisperLanguage,
           onProgress: (pct, detail) => task.update(pct, detail)
         });
+        let words;
+        try {
+          words = await run2();
+        } catch (e) {
+          if (!/unknown tensor|bad magic|invalid model|has wrong size|unexpected end|failed to read/i.test(e.message)) throw e;
+          this.d.log.warn(`El modelo de Whisper parece da\xF1ado; se vuelve a descargar. ${e.message.split("\n")[0]}`);
+          task.update(0, "El modelo estaba da\xF1ado: descarg\xE1ndolo otra vez\u2026");
+          import_node_fs11.default.rmSync(modelPath(this.modelsDir, s.whisperModel), { force: true });
+          await this.downloadModel();
+          try {
+            words = await run2();
+          } catch (e2) {
+            throw new Error(`Whisper no puede cargar el modelo \xAB${s.whisperModel}\xBB ni tras descargarlo de nuevo. Prueba con otro modelo en Ajustes (por ejemplo \xABbase\xBB).
+${e2.message}`);
+          }
+        }
         this.d.log.info(`Transcripci\xF3n con Whisper (${words.length} palabras) para "${vod.title}"`);
         const v = this.save(vod, words, "whisper");
         task.done(`${words.length} palabras`);
@@ -32975,7 +33001,7 @@ var TranscriptService = class {
 };
 
 // electron/domain/groups.ts
-var import_node_crypto4 = __toESM(require("node:crypto"));
+var import_node_crypto5 = __toESM(require("node:crypto"));
 var GroupService = class {
   constructor(store, notifier) {
     this.store = store;
@@ -33036,7 +33062,7 @@ var GroupService = class {
       if (this.depth(parentId) >= MAX_GROUP_DEPTH) throw new Error(`No se pueden anidar m\xE1s de ${MAX_GROUP_DEPTH} niveles.`);
     }
     this.assertUnique(n, section, parentId);
-    const g = { id: import_node_crypto4.default.randomUUID(), name: n, kind, section, parentId, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const g = { id: import_node_crypto5.default.randomUUID(), name: n, kind, section, parentId, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.store.data.groups.push(g);
     this.done();
     return g;
@@ -33097,7 +33123,7 @@ var GroupService = class {
 };
 
 // electron/domain/tasks.ts
-var import_node_crypto5 = __toESM(require("node:crypto"));
+var import_node_crypto6 = __toESM(require("node:crypto"));
 var KEEP = 40;
 var TaskTracker = class {
   constructor(notifier) {
@@ -33108,7 +33134,7 @@ var TaskTracker = class {
     return this.tasks.map((t) => ({ ...t }));
   }
   start(kind, label) {
-    const info = { id: import_node_crypto5.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const info = { id: import_node_crypto6.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.tasks.unshift(info);
     this.tasks.length = Math.min(this.tasks.length, KEEP);
     this.notifier.task({ ...info });
@@ -35395,7 +35421,7 @@ var Scheduler = class {
 };
 
 // electron/domain/engine.ts
-var import_node_crypto6 = __toESM(require("node:crypto"));
+var import_node_crypto7 = __toESM(require("node:crypto"));
 
 // electron/engine/workflow.ts
 function engineCrons(offsetMinutes = (/* @__PURE__ */ new Date()).getTimezoneOffset(), fromHour = 20, toHour = 4) {
@@ -35571,7 +35597,7 @@ var EngineService = class {
     };
   }
   hash(payload, crons) {
-    return import_node_crypto6.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
+    return import_node_crypto7.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
   async put(gh, path16, text, msg) {
     const cur = await gh.getContent(path16);
@@ -35683,7 +35709,7 @@ var EngineService = class {
 };
 
 // electron/services/oauth.ts
-var import_node_crypto7 = __toESM(require("node:crypto"));
+var import_node_crypto8 = __toESM(require("node:crypto"));
 var import_node_http = __toESM(require("node:http"));
 var PROVIDERS = {
   google: {
@@ -35722,8 +35748,8 @@ var PROVIDERS = {
   }
 };
 function pkcePair() {
-  const verifier = import_node_crypto7.default.randomBytes(48).toString("base64url");
-  return { verifier, challenge: import_node_crypto7.default.createHash("sha256").update(verifier).digest("base64url") };
+  const verifier = import_node_crypto8.default.randomBytes(48).toString("base64url");
+  return { verifier, challenge: import_node_crypto8.default.createHash("sha256").update(verifier).digest("base64url") };
 }
 var redirectUri = (p) => `http://127.0.0.1:${p.port}/callback`;
 function buildAuthUrl(p, c, state, challenge) {
@@ -35842,7 +35868,7 @@ async function refreshToken(p, c, t, d = {}) {
 }
 async function authorize(p, c, openUrl, d = {}) {
   if (!c.clientId || !c.clientSecret) throw new Error(`Faltan el ID y el secreto de la app de ${p.label}.`);
-  const state = import_node_crypto7.default.randomBytes(16).toString("hex");
+  const state = import_node_crypto8.default.randomBytes(16).toString("hex");
   const pk = p.pkce ? pkcePair() : void 0;
   const w = waitForCode(p, state, d.timeoutMs);
   d.onCancel?.(w.close);

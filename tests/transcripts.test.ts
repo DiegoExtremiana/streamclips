@@ -1,6 +1,7 @@
 import { describe, it, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -151,6 +152,46 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     await assert.rejects(() => e.ctx.transcripts.transcribe(vod.id), /código 1[\s\S]*failed to load model/);
     assert.equal(e.ctx.store.data.vods[0].transcript, undefined);
     assert.equal(e.notifier.tasks.filter((x) => x.kind === 'transcribe').pop()?.status, 'error');
+  });
+  it('con el modelo dañado («unknown tensor», código 3) lo borra, lo vuelve a descargar y transcribe', async () => {
+    const http = await import('node:http');
+    const srv = http.createServer((_q, res) => res.writeHead(200, { 'content-length': 71_000_000 }).end(Buffer.alloc(71_000_000)));
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    try {
+      const e2 = makeEnv({ modelBaseUrl: base });
+      const vod = addDownloadedVod(e2, black);
+      process.env.FAKE_MODE = 'ok';
+      process.env.FAKE_LOG = path.join(e2.root, 'w.log');
+      e2.ctx.settings.set({ whisperPath: fakeWhisper(), whisperModel: 'tiny', whisperLanguage: 'es' });
+      const bad = installFakeModel(e2, 'tiny');
+      fs.writeFileSync(bad, Buffer.concat([Buffer.from('BAD!'), Buffer.alloc(71_000_000)]));
+      const v = await e2.ctx.transcripts.transcribe(vod.id);
+      assert.equal(v.transcript?.source, 'whisper');
+      assert.notEqual(fs.readFileSync(bad).subarray(0, 4).toString('latin1'), 'BAD!', 'el modelo dañado debe haberse sustituido');
+      e2.cleanup();
+    } finally {
+      srv.close();
+    }
+  });
+  it('si el modelo sigue dañado tras descargarlo otra vez, lo explica y sugiere otro modelo', async () => {
+    const http = await import('node:http');
+    const bad = Buffer.concat([Buffer.from('BAD!'), Buffer.alloc(71_000_000)]);
+    const srv = http.createServer((_q, res) => res.writeHead(200, { 'content-length': bad.length }).end(bad));
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    try {
+      const e2 = makeEnv({ modelBaseUrl: base });
+      const vod = addDownloadedVod(e2, black);
+      process.env.FAKE_MODE = 'ok';
+      e2.ctx.settings.set({ whisperPath: fakeWhisper(), whisperModel: 'tiny', whisperLanguage: 'es' });
+      fs.writeFileSync(installFakeModel(e2, 'tiny'), bad);
+      await assert.rejects(() => e2.ctx.transcripts.transcribe(vod.id), /ni tras descargarlo de nuevo[\s\S]*otro modelo/);
+      assert.equal(e2.notifier.tasks.filter((t) => t.kind === 'transcribe').pop()?.status, 'error');
+      e2.cleanup();
+    } finally {
+      srv.close();
+    }
   });
   it('sin archivo de salida, sin palabras o con JSON roto, lo dice', async () => {
     const a = withWhisper('nofile');

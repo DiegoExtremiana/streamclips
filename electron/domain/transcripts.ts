@@ -125,12 +125,29 @@ export class TranscriptService {
       await this.downloadModel();
       const task = this.d.tasks.start('transcribe', `Transcribiendo "${vod.title || vod.url}"`);
       try {
-        const words = await transcribeVideo(this.d.tools(), input, {
-          exe,
-          model: modelPath(this.modelsDir, s.whisperModel),
-          language: s.whisperLanguage,
-          onProgress: (pct, detail) => task.update(pct, detail),
-        });
+        const run = () =>
+          transcribeVideo(this.d.tools(), input, {
+            exe,
+            model: modelPath(this.modelsDir, s.whisperModel),
+            language: s.whisperLanguage,
+            onProgress: (pct, detail) => task.update(pct, detail),
+          });
+        let words;
+        try {
+          words = await run();
+        } catch (e) {
+          // un modelo dañado (descarga cortada o corrupta) no se arregla reintentando: se borra, se baja otra vez y se prueba una vez más
+          if (!/unknown tensor|bad magic|invalid model|has wrong size|unexpected end|failed to read/i.test((e as Error).message)) throw e;
+          this.d.log.warn(`El modelo de Whisper parece dañado; se vuelve a descargar. ${(e as Error).message.split('\n')[0]}`);
+          task.update(0, 'El modelo estaba dañado: descargándolo otra vez…');
+          fs.rmSync(modelPath(this.modelsDir, s.whisperModel), { force: true });
+          await this.downloadModel();
+          try {
+            words = await run();
+          } catch (e2) {
+            throw new Error(`Whisper no puede cargar el modelo «${s.whisperModel}» ni tras descargarlo de nuevo. Prueba con otro modelo en Ajustes (por ejemplo «base»).\n${(e2 as Error).message}`);
+          }
+        }
         this.d.log.info(`Transcripción con Whisper (${words.length} palabras) para "${vod.title}"`);
         const v = this.save(vod, words, 'whisper');
         task.done(`${words.length} palabras`);

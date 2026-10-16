@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type RefObject } from 'react';
 import type { FramingPreview } from '../../shared/types';
 import {
   applyPresetKeeping, defaultPreset, layoutFromPreset, moveSrc, presetsFor, resizeFromCorner, resizeSrc,
@@ -44,15 +44,20 @@ export default function VerticalEditor(props: {
   videoUrl?: string;
   layout: VerticalLayout;
   onChange: (l: VerticalLayout) => void;
+  /** Si ya hay un reproductor de esta versión horizontal en pantalla, se usa ese en vez de abrir otro (menos decodificadores de vídeo a la vez). */
+  sharedVideo?: RefObject<HTMLVideoElement>;
 }) {
   const { framing, layout, onChange } = props;
   const aspect = framing.width / framing.height;
-  const useVideo = Boolean(props.videoUrl) && Math.abs(aspect - 16 / 9) < 0.03;
+  const useVideo = (Boolean(props.videoUrl) || Boolean(props.sharedVideo)) && Math.abs(aspect - 16 / 9) < 0.03;
   const count = layout.windows.length;
   const [selected, setSelected] = useState(0);
   const sel = Math.min(selected, count - 1);
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mirrorRef = useRef<HTMLCanvasElement>(null);
+  const [mirrorOk, setMirrorOk] = useState(false);
+  const shared = props.sharedVideo;
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -67,11 +72,30 @@ export default function VerticalEditor(props: {
   // vista previa en vivo: se redibuja siempre (es muy barato) con el fotograma o con el vídeo si está listo
   useEffect(() => {
     let raf = 0;
+    let frame = 0;
+    const probe = document.createElement('canvas');
+    probe.width = 16;
+    probe.height = 9;
     const tick = () => {
       const c = canvasRef.current;
       const ctx = c?.getContext('2d');
       if (c && ctx) {
-        const v = videoRef.current;
+        const v = shared?.current ?? videoRef.current;
+        // con un reproductor compartido, el fotograma de arriba se dibuja aquí; si el vídeo solo da negro, se sigue viendo el fotograma fijo
+        const m = mirrorRef.current;
+        if (shared && m && v && v.readyState >= 2 && v.videoWidth > 0) {
+          m.getContext('2d')?.drawImage(v, 0, 0, m.width, m.height);
+          if (frame++ % 20 === 0) {
+            const pg = probe.getContext('2d');
+            if (pg) {
+              pg.drawImage(v, 0, 0, 16, 9);
+              const d = pg.getImageData(0, 0, 16, 9).data;
+              let sum = 0;
+              for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+              setMirrorOk(sum / (d.length / 4) / 3 > 3);
+            }
+          }
+        }
         const img = imgRef.current;
         if (useVideo && v && v.readyState >= 2 && v.videoWidth > 0) drawComposition(ctx, v, v.videoWidth, v.videoHeight, layoutRef.current);
         else if (img && img.complete && img.naturalWidth > 0) drawComposition(ctx, img, img.naturalWidth, img.naturalHeight, layoutRef.current);
@@ -80,7 +104,7 @@ export default function VerticalEditor(props: {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [useVideo]);
+  }, [useVideo, shared]);
 
   const setWindow = useCallback(
     (i: number, src: Rect) => {
@@ -192,7 +216,8 @@ export default function VerticalEditor(props: {
         <div className="vsourcecol">
           <div className="muted small">Arrastra cada recuadro sobre el vídeo; la esquina cambia su tamaño. Con el teclado: flechas para mover, + y − para el tamaño.</div>
           <div ref={boxRef} className="vsource" data-testid="vsource" style={{ aspectRatio: `${framing.width} / ${framing.height}` }}>
-            {useVideo && (
+            {useVideo && shared && <canvas ref={mirrorRef} width={640} height={360} aria-hidden="true" style={{ opacity: mirrorOk ? 1 : 0 }} data-testid="vmirror" />}
+            {useVideo && !shared && (
               <video
                 ref={videoRef}
                 src={props.videoUrl}
@@ -210,7 +235,7 @@ export default function VerticalEditor(props: {
                 style={{ opacity: videoOk ? 1 : 0 }}
               />
             )}
-            <img ref={imgRef} src={framing.dataUrl} alt="Fotograma del vídeo" draggable={false} style={{ opacity: useVideo && videoOk ? 0 : 1 }} />
+            <img ref={imgRef} src={framing.dataUrl} alt="Fotograma del vídeo" draggable={false} style={{ opacity: useVideo && (shared ? mirrorOk : videoOk) ? 0 : 1 }} />
             {layout.windows.map((w, i) => (
               <div
                 key={i}
@@ -240,7 +265,7 @@ export default function VerticalEditor(props: {
               </div>
             ))}
           </div>
-          {useVideo && videoOk && (
+          {useVideo && !shared && videoOk && (
             <div className="row" style={{ gap: 10 }}>
               <button type="button" className="btn ghost small" aria-label={playing ? 'Pausar' : 'Reproducir'} onClick={togglePlay}>
                 {playing ? <IconPause size={14} /> : <IconPlay size={14} />}

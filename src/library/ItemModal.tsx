@@ -381,6 +381,7 @@ export default function ItemModal(props: {
               <VerticalEditor
                 framing={framing}
                 videoUrl={o.files.horizontal ? mediaUrl(o.id, 'horizontal', o.files.horizontal) : undefined}
+                sharedVideo={o.files.horizontal ? videoRef : undefined}
                 layout={layoutDraft}
                 onChange={setLayoutDraft}
               />

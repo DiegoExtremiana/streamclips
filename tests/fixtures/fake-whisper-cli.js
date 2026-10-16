@@ -22,6 +22,11 @@ if (!model || !fs.existsSync(model)) {
   console.error('error: no se encuentra el modelo');
   process.exit(2);
 }
+// modelo dañado: whisper.cpp lo lee, se pierde a mitad y termina con código 3 («unknown tensor»)
+if (fs.readFileSync(model).subarray(0, 4).toString('latin1') === 'BAD!') {
+  console.error('whisper_model_load:          CPU total size =   487.01 MB\nwhisper_model_load: unknown tensor \'\u0001\u0002\ufffd\' in model file\nwhisper_init_with_params_no_state: failed to load model\nerror: failed to initialize whisper context');
+  process.exit(3);
+}
 if (!wav || !fs.existsSync(wav) || fs.statSync(wav).size < 2000) {
   console.error('error: audio vacío');
   process.exit(3);

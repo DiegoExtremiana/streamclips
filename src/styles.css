@@ -329,7 +329,7 @@ button.btn.danger-text { color: var(--bad); }
 @media (max-width: 800px) { .vmain { grid-template-columns: 1fr; } }
 .vsourcecol, .vprevcol { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .vsource { position: relative; width: 100%; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); user-select: none; touch-action: none; }
-.vsource video, .vsource img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; display: block; }
+.vsource video, .vsource img, .vsource canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; display: block; }
 .vwin { position: absolute; border: 2px solid; border-radius: 3px; cursor: move; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); outline: none; }
 .vwin.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(0, 0, 0, 0.5); z-index: 2; }
 .vwin:focus-visible { box-shadow: 0 0 0 3px var(--accent-2); }
@@ -405,3 +405,5 @@ button.btn.danger-text { color: var(--bad); }
 .studio-bar .time { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .studio-trim { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
 @media (max-width: 760px) { .studio-views { flex-direction: column; } .studio-col.v { flex: none; width: min(100%, 270px); align-self: center; } }
+
+.player-error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; text-align: center; background: rgba(0,0,0,.75); color: #fff; font-size: 13px; }

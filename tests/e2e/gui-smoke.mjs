@@ -373,6 +373,24 @@ try {
     const d = await dlg.getByTestId(`player-Reproductor ${v}`).evaluate((e) => [e.videoWidth, e.videoHeight, Math.round(e.duration)]);
     assert.deepEqual(d, v === 'vertical' ? [1080, 1920, 3] : [1920, 1080, 3]);
   }
+  // las dos versiones muestran imagen de verdad nada más abrir (sin pulsar play): se mira lo que se pinta en pantalla
+  for (const v of ['horizontal', 'vertical']) {
+    const png = await dlg.getByTestId(`player-Reproductor ${v}`).screenshot();
+    const mean = await page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = 48; c.height = 48;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, 48, 48);
+      const d = g.getImageData(0, 0, 48, 48).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+      return sum / (d.length / 4) / 3;
+    }, png.toString('base64'));
+    assert.ok(mean > 20, `la versión ${v} se ve en negro nada más abrir (brillo ${Math.round(mean)})`);
+  }
   // el sonido: la horizontal suena (la vertical va en silencio para no duplicarlo) y la barra única manda sobre las dos
   assert.equal(await dlg.getByTestId('player-Reproductor horizontal').evaluate((e) => e.muted), false, 'el clip se oye');
   assert.equal(await dlg.getByTestId('player-Reproductor vertical').evaluate((e) => e.muted), true);
@@ -427,7 +445,7 @@ try {
   await ed.waitFor();
   const vsrc = ed.getByTestId('vsource');
   await vsrc.locator('img').waitFor();
-  const previewPixels = () => ed.locator('canvas').evaluate((c) => {
+  const previewPixels = () => ed.locator('canvas[aria-label="Vista previa del vídeo vertical"]').evaluate((c) => {
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let lit = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) lit++;

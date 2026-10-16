@@ -9,6 +9,7 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -23,8 +24,23 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
     events.forEach((e) => v.addEventListener(e, sync));
     const activate = () => props.onActivate?.(v);
     ['play', 'seeked'].forEach((e) => v.addEventListener(e, activate));
+    // algunos motores no pintan el primer fotograma hasta que se mueve un poco la posición: sin esto el vídeo se ve negro
+    const firstFrame = () => {
+      setFailed(null);
+      if (v.paused && v.currentTime === 0) v.currentTime = 0.001;
+    };
+    const onError = () => {
+      const code = v.error?.code;
+      const why = code === 3 ? 'el archivo no se puede decodificar' : code === 4 ? 'el formato no es compatible o el archivo no está' : code === 2 ? 'falló la lectura del archivo' : 'no se pudo cargar';
+      setFailed(`${why} (código ${code ?? '?'})`);
+    };
+    v.addEventListener('loadeddata', firstFrame);
+    v.addEventListener('error', onError);
+    setFailed(null);
     sync();
     return () => {
+      v.removeEventListener('loadeddata', firstFrame);
+      v.removeEventListener('error', onError);
       events.forEach((e) => v.removeEventListener(e, sync));
       ['play', 'seeked'].forEach((e) => v.removeEventListener(e, activate));
     };
@@ -47,8 +63,14 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
   return (
     <div className={`playerbox ${props.vertical ? 'vertical' : ''}`}>
       <div className="stage">
-        <video ref={videoRef} className="player" data-testid={props.label ? `player-${props.label}` : 'player'} aria-label={props.label} preload="metadata" src={props.src} poster={props.poster} onClick={toggle} muted={props.silent} playsInline />
+        <video ref={videoRef} className="player" data-testid={props.label ? `player-${props.label}` : 'player'} aria-label={props.label} preload="auto" src={props.src} poster={props.poster} onClick={toggle} muted={props.silent} playsInline />
         {props.overlay}
+        {failed && (
+          <div className="player-error" role="alert" data-testid="player-error">
+            <span>No se puede reproducir: {failed}.</span>
+            <button className="btn small" onClick={() => { setFailed(null); videoRef.current?.load(); }}>Reintentar</button>
+          </div>
+        )}
       </div>
       {!props.bare && <div className="controls">
         <button className="iconbtn" aria-label="Volver al inicio" title="Volver al inicio" onClick={restart}><IconRestart /></button>

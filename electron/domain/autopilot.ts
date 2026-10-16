@@ -250,7 +250,9 @@ export class Autopilot {
       const sum = this.d.store.data.outputs.find((x) => x.vodId === o.vodId && x.auto?.role === 'summary');
       const sumAt = sum ? this.d.store.data.publications.find((p) => p.outputId === sum.id)?.scheduledAt : undefined;
       // el principal sale el mismo día que el resumen, por la tarde
-      const from = sumAt ? new Date(Math.max(now.getTime(), Date.parse(sumAt))) : now;
+      // (aunque el resumen aún no esté aprobado se calcula cuándo le tocaría, para que el orden de aprobación no cambie el día)
+      const sumFrom = sumAt ? new Date(sumAt) : nextSlot(now, this.cfg.slots.summary, taken);
+      const from = new Date(Math.max(now.getTime(), sumFrom.getTime()));
       at = nextSlot(from, this.cfg.slots.main, taken);
     } else at = nextSlot(now, this.cfg.slots.clips, taken); // un clip por día
     this.d.pubs.schedule(outputId, platforms, at.toISOString());

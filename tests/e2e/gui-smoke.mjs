@@ -365,15 +365,19 @@ try {
   await page.getByRole('tab', { name: 'Clips', exact: true }).click();
   await page.getByTestId('item-Mi clip vertical').click();
   await dlg.waitFor();
-  await dlg.getByTestId('version-vertical').waitFor();
-  await dlg.getByTestId('version-horizontal').waitFor();
-  for (const v of ['vertical', 'horizontal']) {
-    await page.waitForFunction((n) => document.querySelector(`[data-testid="player-Reproductor ${n}"]`).readyState >= 1, v);
+  await dlg.getByRole('tab', { name: 'Horizontal' }).waitFor();
+  assert.equal(await dlg.getByRole('tab', { name: 'Horizontal' }).getAttribute('aria-selected'), 'true', 'se abre en Horizontal');
+  assert.equal(await dlg.getByTestId('version-vertical').count(), 0, 'la versión vertical no se muestra mientras estás en Horizontal');
+  for (const v of ['horizontal', 'vertical']) {
+    await dlg.getByRole('tab', { name: v === 'vertical' ? 'Vertical' : 'Horizontal' }).click();
+    await dlg.getByTestId(`version-${v}`).waitFor();
+    await page.waitForFunction((n) => document.querySelector(`[data-testid="player-Reproductor ${n}"]`)?.readyState >= 1, v);
     const d = await dlg.getByTestId(`player-Reproductor ${v}`).evaluate((e) => [e.videoWidth, e.videoHeight, Math.round(e.duration)]);
     assert.deepEqual(d, v === 'vertical' ? [1080, 1920, 3] : [1920, 1080, 3]);
   }
-  await shot(page, '8a-modal-clip-dos-versiones');
-  log('la ventana de un clip muestra las dos versiones a la vez y cada reproductor carga su vídeo (1080×1920 y 1920×1080)');
+  assert.equal(await dlg.getByTestId('vertical-editor').count() > 0 || await dlg.getByText('Cargando el fotograma…').count() > 0, true, 'la pestaña Vertical muestra la composición');
+  await shot(page, '8a-modal-clip-pestanas');
+  log('la ventana de un clip separa Horizontal y Vertical en pestañas: cada una carga su vídeo (1920×1080 y 1080×1920) y solo Vertical ofrece la composición');
 
   // descargar con el botón de cada versión (el cuadro de guardado del sistema se sustituye por una ruta fija)
   const saveVertical = path.join(work, 'descarga-vertical.mp4');
@@ -383,28 +387,94 @@ try {
   assert.equal(dimsOf(saveVertical), '1080,1920');
   log('«Descargar» en la versión vertical guarda una copia 1080×1920 donde elige el usuario');
 
-  await dlg.getByRole('button', { name: 'Ver sobre el fotograma' }).click();
-  const framing = dlg.getByTestId('framing');
-  await framing.locator('img').waitFor();
-  const crop = dlg.getByTestId('crop-window');
-  const leftBefore = await crop.evaluate((e) => parseFloat(e.style.left));
-  const box = await framing.boundingBox();
-  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+  // composición vertical: ventanas arrastrables con vista previa en vivo
+  const ed = dlg.getByTestId('vertical-editor');
+  await ed.waitFor();
+  const vsrc = ed.getByTestId('vsource');
+  await vsrc.locator('img').waitFor();
+  const previewPixels = () => ed.locator('canvas').evaluate((c) => {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let lit = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) lit++;
+    return lit;
+  });
+  await poll(async () => (await previewPixels()) > 1000);
+  const w0 = ed.getByTestId('vwin-0');
+  const leftOf = (loc) => loc.evaluate((e) => parseFloat(e.style.left));
+  const widthOf = (loc) => loc.evaluate((e) => parseFloat(e.style.width));
+  await vsrc.scrollIntoViewIfNeeded();
+  const leftBefore = await leftOf(w0);
+  const sbox = await vsrc.boundingBox();
+  const wbox = await w0.boundingBox();
+  await page.mouse.move(wbox.x + wbox.width / 2, wbox.y + wbox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.95, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.move(wbox.x + wbox.width / 2 + sbox.width * 0.3, wbox.y + wbox.height / 2, { steps: 6 });
   await page.mouse.up();
-  const leftAfter = await crop.evaluate((e) => parseFloat(e.style.left));
-  assert.ok(leftAfter > leftBefore + 10, `el recuadro debe moverse a la derecha (${leftBefore} → ${leftAfter})`);
-  await shot(page, '8-modal-encuadre');
+  const leftAfter = await leftOf(w0);
+  assert.ok(leftAfter > leftBefore + 10, `la ventana debe moverse a la derecha (${leftBefore} → ${leftAfter})`);
+  log('composición vertical: una ventana se arrastra sobre el fotograma y la vista previa vertical se dibuja en vivo');
+
+  // tamaño con la esquina, conservando la proporción
+  const wBefore = await widthOf(w0);
+  await ed.getByTestId('vwin-0-resize').scrollIntoViewIfNeeded();
+  const hbox = await ed.getByTestId('vwin-0-resize').boundingBox();
+  await page.mouse.move(hbox.x + hbox.width / 2, hbox.y + hbox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hbox.x + hbox.width / 2 - 40, hbox.y + hbox.height / 2 - 30, { steps: 5 });
+  await page.mouse.up();
+  assert.ok((await widthOf(w0)) < wBefore - 1, 'la esquina reduce la ventana');
+  // teclado: flechas
+  await w0.focus();
+  const k0 = await leftOf(w0);
+  await page.keyboard.press('ArrowLeft');
+  assert.ok((await leftOf(w0)) < k0, 'la flecha izquierda mueve la ventana');
+  log('composición vertical: la esquina cambia el tamaño y el teclado (flechas) mueve la ventana');
+
+  // 2 ventanas y disposiciones por defecto
+  await ed.getByRole('button', { name: '2 ventanas' }).click();
+  await ed.getByTestId('vwin-1').waitFor();
+  assert.equal(await ed.getByTestId('vwin-2').count(), 0);
+  const presets = ed.getByRole('group', { name: 'Disposición' }).getByRole('button');
+  assert.ok((await presets.count()) >= 3, 'hay varias disposiciones para 2 ventanas');
+  await ed.getByRole('button', { name: 'Mitad y mitad' }).click();
+  assert.equal(await ed.getByRole('button', { name: 'Mitad y mitad' }).getAttribute('aria-pressed'), 'true');
+  await ed.getByRole('button', { name: '3 ventanas' }).click();
+  await ed.getByTestId('vwin-2').waitFor();
+  await ed.getByRole('button', { name: 'Cámara, juego y chat' }).waitFor();
+  await ed.getByRole('button', { name: '2 ventanas' }).click();
+  await ed.getByRole('button', { name: 'Mitad y mitad' }).click();
+  await poll(async () => (await previewPixels()) > 1000);
+  await shot(page, '8-modal-composicion');
+  log('composición vertical: 1, 2 o 3 ventanas con varias disposiciones por defecto para elegir');
+
+  // mover la segunda ventana y guardar: se vuelve a renderizar y la composición queda guardada con el clip
+  const w1 = ed.getByTestId('vwin-1');
+  await w1.scrollIntoViewIfNeeded();
+  const b1 = await w1.boundingBox();
+  await page.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b1.x + b1.width / 2 - 60, b1.y + b1.height / 2 - 20, { steps: 5 });
+  await page.mouse.up();
   const oldVertical = fs.readdirSync(verticalDir);
-  await dlg.getByRole('button', { name: 'Aplicar y renderizar de nuevo' }).click();
-  await dlg.getByText('Clip renderizado de nuevo y validado.').waitFor({ timeout: 60000 });
+  await dlg.getByRole('button', { name: 'Guardar composición' }).click();
+  await dlg.getByText('Clip renderizado de nuevo y validado.').waitFor({ timeout: 90000 });
   const newVertical = fs.readdirSync(verticalDir);
   assert.equal(newVertical.length, 1, 'el archivo anterior se borra');
   assert.notDeepEqual(newVertical, oldVertical);
   assert.equal(dimsOf(path.join(verticalDir, newVertical[0])), '1080,1920');
   assert.equal(fs.readdirSync(path.join(outDir, 'horizontal')).length, 2, 'la versión horizontal también se renderiza de nuevo, sin dejar archivos viejos');
-  log('encuadre: arrastrar el recuadro y aplicar vuelve a renderizar (1080×1920) y sustituye el archivo');
+  const savedClip = dataNow().outputs.find((o) => o.title === 'Mi clip vertical');
+  assert.equal(savedClip.layout.windows.length, 2, 'la composición queda guardada con el clip');
+  assert.equal(savedClip.layout.preset, 'dos-mitad');
+  log('composición vertical: guardar vuelve a renderizar (1080×1920), sustituye el archivo y guarda las 2 ventanas con el clip');
+  await dlg.getByRole('button', { name: 'Cerrar' }).click();
+  await page.getByTestId('item-Mi clip vertical').click();
+  await dlg.getByRole('tab', { name: 'Vertical' }).click();
+  await dlg.getByTestId('vwin-1').waitFor();
+  assert.equal(await dlg.getByTestId('vwin-2').count(), 0);
+  assert.equal(await dlg.getByRole('button', { name: 'Mitad y mitad' }).getAttribute('aria-pressed'), 'true');
+  log('composición vertical: al volver a abrir el clip se recuperan sus ventanas y su disposición');
+  await dlg.getByRole('tab', { name: 'Horizontal' }).click();
 
   await dlg.getByTestId('pub-instagram').getByRole('checkbox').check();
   await dlg.getByLabel('Fecha y hora en Instagram').fill('2031-01-01T10:00');
@@ -419,6 +489,7 @@ try {
 
   // clip creado solo en horizontal: falta la vertical y se puede generar
   await page.getByTestId('item-Clip horizontal').click();
+  await dlg.getByRole('tab', { name: 'Vertical' }).click();
   await dlg.getByTestId('version-vertical').getByText('Esta versión no está disponible.').waitFor();
   await dlg.getByRole('button', { name: 'Generar versión vertical' }).click();
   await dlg.getByRole('button', { name: 'Descargar versión vertical' }).waitFor({ timeout: 60000 });
@@ -438,7 +509,12 @@ try {
   assert.equal(await dlg.getByTestId('style-clasico').getAttribute('aria-checked'), 'true');
   await dlg.getByTestId('caption-sample').waitFor();
   await dlg.getByTestId('caption-layer').first().waitFor();
-  assert.equal(await dlg.getByTestId('caption-layer').count(), 2, 'la vista previa aparece sobre las dos versiones');
+  assert.equal(await dlg.getByTestId('caption-layer').count(), 1, 'la vista previa aparece sobre la versión que estás viendo');
+  await dlg.getByRole('tab', { name: 'Vertical' }).click();
+  await dlg.getByTestId('caption-layer').waitFor();
+  assert.equal(await dlg.getByTestId('caption-layer').count(), 1, 'y también sobre la vertical al cambiar de pestaña');
+  await dlg.getByRole('tab', { name: 'Horizontal' }).click();
+  await dlg.getByTestId('caption-layer').waitFor();
   const hp = dlg.getByTestId('player-Reproductor horizontal');
   const seekTo = (loc, t) => loc.evaluate((v, t2) => new Promise((res) => { v.addEventListener('seeked', () => res(), { once: true }); v.currentTime = t2; }), t);
   await seekTo(hp, 0.5);

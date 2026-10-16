@@ -1,5 +1,6 @@
 import type { ClipSpec, Effect, EditPlan, LongSpec } from './types';
 import { isSubtitleStyleId } from './subtitles';
+import { normalizeLayout, validateLayout } from './layout';
 import { MIN_CUT_SEC, MIN_KEPT_SEC, keptRanges, totalDuration, type Range } from './timeline';
 
 export const MIN_CLIP_SEC = 1;
@@ -38,6 +39,10 @@ export function validateClipSpec(c: unknown, vodDurationSec?: number): string | 
   if (dur > MAX_CLIP_SEC) return `dura más de ${MAX_CLIP_SEC / 60} minutos`;
   if (vodDurationSec !== undefined && c.end > vodDurationSec + END_TOLERANCE_SEC) return 'acaba después del final del VOD';
   if (c.cropX !== undefined && (!isNum(c.cropX) || c.cropX < 0 || c.cropX > 1)) return 'cropX debe estar entre 0 y 1';
+  if (c.layout !== undefined) {
+    const lr = validateLayout(c.layout);
+    if (lr) return lr;
+  }
   if (c.title !== undefined && typeof c.title !== 'string') return 'el título debe ser texto';
   const kept = c.cuts === undefined ? [{ start: c.start, end: c.end }] : null;
   let ranges: Range[] = kept ?? [];
@@ -134,6 +139,7 @@ export function normalizeClip(c: ClipSpec, fallbackTitle: string): ClipSpec {
   if (c.cuts?.length) out.cuts = c.cuts.map((x) => ({ start: x.start, end: x.end })).sort((a, b) => a.start - b.start);
   if (c.effects?.length) out.effects = normalizeEffects(c.effects);
   if (c.subtitles) out.subtitles = c.subtitles;
+  if (c.layout) out.layout = normalizeLayout(c.layout);
   return out;
 }
 

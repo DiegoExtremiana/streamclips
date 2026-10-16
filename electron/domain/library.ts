@@ -11,6 +11,7 @@ import { extractFrame, probe, renderClip, renderLong, validateRender } from '../
 import { slug, thumbnailPath, uniqueOutputPath } from '../services/files';
 import { allFiles, primaryFile, primaryRender } from '../../shared/outputs';
 import { keptRanges, totalDuration } from '../../shared/timeline';
+import { normalizeLayout, validateLayout } from '../../shared/layout';
 import { isSubtitleStyleId } from '../../shared/subtitles';
 import { withSubtitles, type SubtitleEnv } from './subtitleJob';
 import { autoThumbnail } from '../services/thumbnails';
@@ -189,6 +190,14 @@ export class LibraryService {
       const start = edit.start ?? o.start;
       const end = edit.end ?? o.end;
       const cropX = edit.cropX ?? o.cropX ?? 0.5;
+      // la composición pedida manda; null vuelve al encuadre simple; sin valor se conserva la que tenga
+      let layout = edit.layout === undefined ? o.layout : (edit.layout ?? undefined);
+      if (edit.cropX !== undefined && edit.layout === undefined) layout = undefined; // un encuadre simple nuevo sustituye a la composición
+      if (layout) {
+        const lr = validateLayout(layout);
+        if (lr) throw new Error(`Composición no válida: ${lr}.`);
+        layout = normalizeLayout(layout);
+      }
       if (edit.subtitles !== undefined && edit.subtitles !== null && !isSubtitleStyleId(edit.subtitles)) {
         throw new Error('El estilo de subtítulos no existe.');
       }
@@ -197,7 +206,7 @@ export class LibraryService {
       const cuts = o.cuts?.filter((c) => c.start >= start && c.end <= end);
       const effects = o.effects?.filter((e) => e.type !== 'punch' || (e.at >= start && e.at <= end));
       const vodDur = (await probe(this.d.tools(), vod.filePath)).durationSec;
-      const reason = validateClipSpec({ kind: 'both', start, end, title: o.title, cropX, cuts, effects, subtitles }, vodDur);
+      const reason = validateClipSpec({ kind: 'both', start, end, title: o.title, cropX, layout, cuts, effects, subtitles }, vodDur);
       if (reason) throw new Error(`Clip no válido: ${reason}.`);
       const ranges = keptRanges(start, end, cuts);
       const expected = totalDuration(ranges);
@@ -212,7 +221,7 @@ export class LibraryService {
           const out = uniqueOutputPath(outDir, kind, o.title);
           written.push(out);
           await withSubtitles(this.d.subtitles, o.vodId, subtitles, ranges, kind, (subs) =>
-            renderClip(this.d.tools(), vod.filePath!, { kind, start, end, cropX, cuts, effects, subs }, out),
+            renderClip(this.d.tools(), vod.filePath!, { kind, start, end, cropX, layout, cuts, effects, subs }, out),
           );
           const info = await validateRender(this.d.tools(), out, kind, expected, 1.5 + ranges.length * 0.2);
           files[kind] = out;
@@ -230,6 +239,7 @@ export class LibraryService {
         o.start = start;
         o.end = end;
         o.cropX = cropX;
+        o.layout = layout;
         o.cuts = cuts?.length ? cuts : undefined;
         o.effects = effects?.length ? effects : undefined;
         o.subtitles = subtitles;
@@ -250,7 +260,7 @@ export class LibraryService {
 
   /** Vídeo largo: solo cambian los subtítulos; se monta de nuevo desde los tramos guardados. */
   private async reeditLong(o: OutputItem, edit: ClipEdit): Promise<OutputItem> {
-    if (edit.start !== undefined || edit.end !== undefined || edit.cropX !== undefined) {
+    if (edit.start !== undefined || edit.end !== undefined || edit.cropX !== undefined || edit.layout !== undefined) {
       throw new Error('En un vídeo largo solo se pueden cambiar los subtítulos.');
     }
     if (!o.segments?.length || o.vodId === undefined) throw new Error('Este vídeo es anterior a esta versión y no guarda de qué tramos sale, así que no se puede volver a montar.');

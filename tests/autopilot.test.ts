@@ -1,4 +1,4 @@
-import { describe, it, afterEach, before, after } from 'node:test';
+import { describe, it, afterEach, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -113,6 +113,25 @@ describe('piloto automático', () => {
     // aprobar dos veces no duplica
     e.ctx.autopilot.approve(e.ctx.store.data.outputs[0].id);
     assert.equal(e.ctx.store.data.publications.length, 4);
+  });
+
+  it('el resumen y el principal salen el mismo día aunque se apruebe antes el principal (y sea media mañana)', async () => {
+    const { e, vod } = setup();
+    await e.ctx.autopilot.run(vod.id);
+    const outs = e.ctx.store.data.outputs;
+    const summary = outs.find((o) => o.auto?.role === 'summary')!;
+    const main = outs.find((o) => o.auto?.role === 'main')!;
+    mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 16, 11, 20, 0).getTime() }); // entre las 07:00 y las 16:00
+    try {
+      e.ctx.autopilot.approve(main.id);
+      e.ctx.autopilot.approve(summary.id);
+    } finally {
+      mock.timers.reset();
+    }
+    const when = (id: string) => new Date(e.ctx.store.data.publications.find((p) => p.outputId === id)!.scheduledAt);
+    assert.equal(when(summary.id).getHours(), 7);
+    assert.equal(when(main.id).getHours(), 16);
+    assert.equal(when(main.id).toDateString(), when(summary.id).toDateString());
   });
 
   it('sin aprobación previa lo programa todo directamente', async () => {

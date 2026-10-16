@@ -1,6 +1,10 @@
 {
   "name": "streamclips",
-  "version": "0.7.0",
+  "version": "0.8.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DiegoExtremiana/streamclips.git"
+  },
   "description": "Convierte tus VODs de Twitch en clips verticales, horizontales y vídeos largos, y los programa para publicar.",
   "private": true,
   "main": "dist-electron/electron/main.js",

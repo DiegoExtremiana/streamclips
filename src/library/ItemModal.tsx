@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { platformsFor, VIDEO_ONLY_YOUTUBE } from '../../shared/types';
 import type { FramingPreview, OutputItem, Platform, Publication, RenderKind, Visibility } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
@@ -10,6 +10,8 @@ import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS, wordsForOutput, type SubtitleStyle
 import { keptRanges } from '../../shared/timeline';
 import Captions, { SampleCaptions } from './Captions';
 import Player from './Player';
+import VerticalEditor from './VerticalEditor';
+import { layoutFromCropX, normalizeLayout, type VerticalLayout } from '../../shared/layout';
 import { Modal } from './ui';
 
 export const PLATFORMS: { id: Platform; label: string }[] = [
@@ -114,29 +116,31 @@ export default function ItemModal(props: {
   // ---- recorte y encuadre (clips)
   const [start, setStart] = useState(o.start === undefined ? '' : fmtTime(o.start));
   const [end, setEnd] = useState(o.end === undefined ? '' : fmtTime(o.end));
-  const [cropX, setCropX] = useState(o.cropX ?? 0.5);
+  const [view, setView] = useState<'horizontal' | 'vertical'>('horizontal');
   const [framing, setFraming] = useState<FramingPreview | null>(null);
+  const [layoutDraft, setLayoutDraft] = useState<VerticalLayout | null>(null);
   const [editMsg, setEditMsg] = useState<Msg>(null);
   const [rendering, setRendering] = useState(false);
-  const dragRef = useRef<HTMLDivElement>(null);
 
-  async function showFraming() {
-    setEditMsg(null);
-    try {
-      setFraming(await window.api.framingPreview(o.id));
-    } catch (e) {
-      setEditMsg({ ok: false, text: errMsg(e) });
-    }
-  }
-  const cropFromPointer = (e: RPointerEvent) => {
-    const box = dragRef.current?.getBoundingClientRect();
-    if (!box || !framing) return;
-    const frac = (framing.height * 9) / 16 / framing.width; // ancho del recuadro / ancho del fotograma
-    const overlay = box.width * Math.min(1, frac);
-    const free = box.width - overlay;
-    if (free <= 0) return;
-    setCropX(Math.min(1, Math.max(0, (e.clientX - box.left - overlay / 2) / free)));
-  };
+  // el fotograma se carga al abrir la pestaña Vertical (hace falta para colocar las ventanas)
+  useEffect(() => {
+    if (view !== 'vertical' || !canReedit || framing) return;
+    let alive = true;
+    window.api
+      .framingPreview(o.id)
+      .then((f) => alive && setFraming(f))
+      .catch((e) => alive && setEditMsg({ ok: false, text: errMsg(e) }));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, o.id]);
+  // lo guardado (la composición, o el encuadre simple de antes como una sola ventana) y el borrador que se edita
+  const savedLayout = useMemo(() => (framing ? (o.layout ?? layoutFromCropX(o.cropX ?? 0.5, framing.width / framing.height)) : null), [framing, o.layout, o.cropX]);
+  useEffect(() => {
+    if (savedLayout) setLayoutDraft(savedLayout);
+  }, [savedLayout]);
+  const layoutDirty = Boolean(layoutDraft && savedLayout && JSON.stringify(normalizeLayout(layoutDraft)) !== JSON.stringify(normalizeLayout(savedLayout)));
 
   async function applyEdit() {
     const s = parseTime(start);
@@ -148,7 +152,7 @@ export default function ItemModal(props: {
     setRendering(true);
     setEditMsg(null);
     try {
-      await window.api.reeditClip(o.id, { start: s, end: e, cropX });
+      await window.api.reeditClip(o.id, { start: s, end: e, ...(layoutDirty && layoutDraft ? { layout: normalizeLayout(layoutDraft) } : {}) });
       await props.onChanged();
       setEditMsg({ ok: true, text: 'Clip renderizado de nuevo y validado.' });
     } catch (err) {
@@ -305,21 +309,56 @@ export default function ItemModal(props: {
   }
 
   // El reproductor se detiene al cerrar la ventana (el elemento desaparece) y se recarga si el archivo cambia.
-  const frac = framing ? Math.min(1, (framing.height * 9) / 16 / framing.width) : 1;
 
   return (
     <Modal title={o.title} onClose={props.onClose} wide>
+      {isClip && (
+      <div className="viewtabs" role="tablist" aria-label="Versión del clip">
+        {(['horizontal', 'vertical'] as const).map((v) => (
+          <button key={v} type="button" role="tab" id={`tab-${v}`} aria-selected={view === v} className="viewtab" onClick={() => setView(v)}>
+            {v === 'horizontal' ? 'Horizontal' : 'Vertical'}
+          </button>
+        ))}
+      </div>
+      )}
+      {isClip && view === 'vertical' && (
+        <section className="vsection" aria-label="Composición vertical">
+          <h3>Composición vertical</h3>
+          {!canReedit ? (
+            <div className="muted small">Este clip es anterior a la Biblioteca y no guarda de qué parte del VOD sale, así que no se puede recomponer.</div>
+          ) : !framing || !layoutDraft ? (
+            <div className="muted small" role="status">{editMsg && !editMsg.ok ? editMsg.text : 'Cargando el fotograma…'}</div>
+          ) : (
+            <>
+              <VerticalEditor
+                framing={framing}
+                videoUrl={o.files.horizontal ? mediaUrl(o.id, 'horizontal', o.files.horizontal) : undefined}
+                layout={layoutDraft}
+                onChange={setLayoutDraft}
+              />
+              <div className="row">
+                <button className="btn small" disabled={rendering || !layoutDirty} onClick={() => void applyEdit()}>Guardar composición</button>
+                <button className="btn ghost small" disabled={rendering || !layoutDirty} onClick={() => savedLayout && setLayoutDraft(savedLayout)}>Descartar cambios</button>
+                {layoutDirty && !rendering && <span className="muted small">Hay cambios sin guardar.</span>}
+                {rendering && <span className="muted small" role="status">Renderizando…</span>}
+              </div>
+              <Notice msg={editMsg} />
+            </>
+          )}
+        </section>
+      )}
       <div className={`itemgrid ${isClip ? 'clipgrid' : ''}`}>
         <div className="playercol">
           {isClip ? (
-            <div className="versions">
-              {(['horizontal', 'vertical'] as const).map((v) => {
+            <>
+              {(() => {
+                const v = view;
                 const file = o.files[v];
                 const label = v === 'vertical' ? 'Vertical 1080×1920' : 'Horizontal 1920×1080';
                 return (
-                  <div key={v} className={`version ${v}`} data-testid={`version-${v}`}>
+                  <div className={`version ${v}`} data-testid={`version-${v}`} role="tabpanel" aria-labelledby={`tab-${v}`}>
                     <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <span className="small muted">{label}</span>
+                      <span className="small muted">{label}{v === 'vertical' ? ' · resultado actual' : ''}</span>
                       {file && (
                         <button className="btn ghost small" aria-label={`Descargar versión ${v}`} onClick={() => void download(v)}>
                           <IconDownload size={14} /> Descargar
@@ -328,6 +367,7 @@ export default function ItemModal(props: {
                     </div>
                     {file ? (
                       <Player
+                        key={v}
                         videoRef={v === 'vertical' ? verticalRef : videoRef}
                         vertical={v === 'vertical'}
                         label={`Reproductor ${v}`}
@@ -344,8 +384,8 @@ export default function ItemModal(props: {
                     )}
                   </div>
                 );
-              })}
-            </div>
+              })()}
+            </>
           ) : (
             <>
               <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -438,8 +478,8 @@ export default function ItemModal(props: {
           )}
 
           {o.kind !== 'long' && (
-            <section aria-label="Recorte y encuadre">
-              <h3>Encuadre y recorte</h3>
+            <section aria-label="Recorte">
+              <h3>Recorte</h3>
               {!canReedit ? (
                 <div className="muted small">Este clip es anterior a la Biblioteca y no guarda de qué parte del VOD sale, así que no se puede reeditar.</div>
               ) : (
@@ -453,38 +493,13 @@ export default function ItemModal(props: {
                     <button className="btn ghost small" onClick={() => pointToTime('end')}>= punto actual</button>
                   </div>
                   <div className="muted small">Tiempos del VOD original. «= punto actual» usa el instante que muestra el reproductor.</div>
-                  {isClip && (
-                    <>
-                      <div className="row">
-                        <label className="small muted" htmlFor="ed-crop">Encuadre (de izquierda a derecha)</label>
-                        <input id="ed-crop" type="range" min={0} max={1} step={0.01} value={cropX} onChange={(e) => setCropX(Number(e.target.value))} style={{ flex: 1 }} />
-                        {!framing && <button className="btn ghost small" onClick={() => void showFraming()}>Ver sobre el fotograma</button>}
-                      </div>
-                      {framing && (
-                        <div
-                          ref={dragRef}
-                          className="framing"
-                          data-testid="framing"
-                          style={{ aspectRatio: `${framing.width} / ${framing.height}` }}
-                          onPointerDown={(e) => {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                            cropFromPointer(e);
-                          }}
-                          onPointerMove={(e) => e.buttons === 1 && cropFromPointer(e)}
-                        >
-                          <img src={framing.dataUrl} alt="Fotograma del VOD" draggable={false} />
-                          <div className="crop" data-testid="crop-window" style={{ width: `${frac * 100}%`, left: `${(1 - frac) * cropX * 100}%` }} />
-                        </div>
-                      )}
-                    </>
-                  )}
                   <div className="row">
                     <button className="btn small" disabled={rendering} onClick={() => void applyEdit()}>Aplicar y renderizar de nuevo</button>
                     {rendering && <span className="muted small" role="status">Renderizando…</span>}
                   </div>
                 </>
               )}
-              <Notice msg={editMsg} />
+              {view === 'horizontal' && <Notice msg={editMsg} />}
             </section>
           )}
 

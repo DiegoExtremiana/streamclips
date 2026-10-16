@@ -1,4 +1,5 @@
 import type { SubtitleStyleId, Word } from './subtitles';
+import type { VerticalLayout } from './layout';
 /** Qué se renderiza (cada uno es un archivo con su medida). */
 export type RenderKind = 'vertical' | 'horizontal' | 'long';
 /** Qué es un elemento de la Biblioteca: un clip (con versión vertical y horizontal) o un vídeo largo. */
@@ -170,6 +171,8 @@ export interface OutputItem {
   end?: number;
   /** Posición del recorte vertical usada en el último render (0..1). */
   cropX?: number;
+  /** Composición de la versión vertical (1 a 3 ventanas); si falta, un solo recuadro según `cropX`. */
+  layout?: VerticalLayout;
   cuts?: { start: number; end: number }[];
   /** Vídeo largo: tramos del VOD que lo forman (permite volver a montarlo). */
   segments?: { start: number; end: number }[];
@@ -264,6 +267,8 @@ export interface ClipSpec {
   end: number;
   title: string;
   cropX?: number; // 0..1, posición horizontal del recorte vertical (0 = izquierda, 1 = derecha)
+  /** Composición vertical con varias ventanas (sustituye a `cropX`). */
+  layout?: VerticalLayout;
   /** Partes que se quitan de dentro de [start, end] (silencios, tiempos muertos). Corte seco entre lo que queda. */
   cuts?: { start: number; end: number }[];
   effects?: Effect[];
@@ -289,6 +294,8 @@ export interface ClipEdit {
   start?: number;
   end?: number;
   cropX?: number;
+  /** Composición vertical; null = volver al encuadre simple. */
+  layout?: VerticalLayout | null;
   /** Estilo de subtítulos, o null para quitarlos. Sin valor se conserva lo que tenga. */
   subtitles?: SubtitleStyleId | null;
 }

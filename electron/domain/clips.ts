@@ -113,6 +113,7 @@ export class ClipService {
       if (clip.cuts) extra.cuts = clip.cuts;
       if (clip.effects) extra.effects = clip.effects;
       if (clip.subtitles) extra.subtitles = clip.subtitles;
+      if (clip.layout) extra.layout = clip.layout;
       return this.build(
         vodId,
         'clip',
@@ -125,7 +126,7 @@ export class ClipService {
           render: k,
           run: (input, out) =>
             withSubtitles(this.d.subtitles, vodId, clip.subtitles, ranges, k, (subs) =>
-              renderClip(this.d.tools(), input, { kind: k, start: clip.start, end: clip.end, cropX, cuts: clip.cuts, effects: clip.effects, subs }, out),
+              renderClip(this.d.tools(), input, { kind: k, start: clip.start, end: clip.end, cropX, layout: clip.layout, cuts: clip.cuts, effects: clip.effects, subs }, out),
             ),
         })),
       );

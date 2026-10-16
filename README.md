@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.8
+
+- **Clip con pestañas Horizontal / Vertical**: la ventana de un clip separa sus dos versiones. Cada pestaña muestra su vídeo, su descarga y sus opciones; recorte, subtítulos y publicación siguen comunes.
+- **Composición vertical de 1, 2 o 3 ventanas**: en la pestaña Vertical eliges cuántas ventanas quieres (cámara, juego, chat…) y arrastras cada recuadro sobre el vídeo del directo (la esquina cambia el tamaño; con el teclado, flechas y +/−). A la derecha ves **en tiempo real** cómo queda el vídeo 1080×1920 (puedes reproducir el vídeo para verlo en movimiento). Cada número de ventanas trae **disposiciones por defecto** (p. ej. «Cámara arriba», «Mitad y mitad», «Dos arriba y juego»…) que puedes elegir y luego mover. «Guardar composición» vuelve a renderizar el clip y la guarda con él; al reabrirlo la recuperas. Los clips anteriores se abren como una sola ventana equivalente a su encuadre de siempre.
+
 ## Novedades de la v0.7
 
 - **Pestaña «Programación» (sustituye al Panel)**: una **línea de tiempo** con una franja por día y un **calendario** mensual con tus próximas subidas. Se arrastran con el ratón: horizontal = cambiar la hora (de 15 en 15 min), a otra franja o día = cambiar el día; Escape cancela. Los vídeos listos sin subida esperan en la bandeja «Sin programar»: arrástralos a un día y una hora. Clic en un bloque para editar la hora o quitarlo. Las subidas pasadas o en publicación no se pueden mover.
@@ -54,7 +59,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Instalar en Windows (sin terminal)
 
-El instalador `StreamClips-Setup-x.y.z.exe` incluye ffmpeg, ffprobe y yt-dlp: no hay que instalar nada más. Se genera gratis con GitHub Actions: sube el proyecto a un repositorio de GitHub y ejecuta el flujo **Instalador de Windows** (pestaña Actions → Run workflow; o sube una etiqueta `v0.7.0`). Con una etiqueta `v*` el flujo publica además la versión en GitHub Releases, de donde los programas instalados se actualizan solos. También se puede generar en un Windows con `npm install` y `npm run dist` (el resultado queda en `release/`).
+El instalador `StreamClips-Setup-x.y.z.exe` incluye ffmpeg, ffprobe y yt-dlp: no hay que instalar nada más. Se genera gratis con GitHub Actions: sube el proyecto a un repositorio de GitHub y ejecuta el flujo **Instalador de Windows** (pestaña Actions → Run workflow; o sube una etiqueta `v0.8.0`). Con una etiqueta `v*` el flujo publica además la versión en GitHub Releases, de donde los programas instalados se actualizan solos. También se puede generar en un Windows con `npm install` y `npm run dist` (el resultado queda en `release/`).
 
 Aviso: el instalador no está firmado digitalmente, así que Windows SmartScreen mostrará «Windows protegió tu PC»; pulsa «Más información» y «Ejecutar de todas formas». Firmarlo requiere un certificado de pago, así que no se hace. ffmpeg (paquete ffmpeg-static) se distribuye con licencia GPL; es de uso libre y gratuito.
 

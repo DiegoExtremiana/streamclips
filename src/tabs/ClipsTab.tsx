@@ -81,7 +81,7 @@ export default function ClipsTab(props: {
 
   return (
     <div className="grid">
-      <TwitchClips onChanged={props.onChanged} />
+      <TwitchClips vods={props.vods} outputs={props.outputs} onChanged={props.onChanged} />
       <section className="card">
         <h2>Crear clips</h2>
         {ready.length === 0 ? (

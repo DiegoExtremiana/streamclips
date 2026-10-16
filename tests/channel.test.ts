@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { TwitchClip, TwitchStream, TwitchVod } from '../shared/types';
 import { TwitchClient } from '../electron/services/twitch';
-import { makeEnv, makeVideo, type TestEnv } from './helpers';
+import { fakeYtdlp, makeEnv, makeVideo, type TestEnv } from './helpers';
 
 /** Twitch de mentira: lo que devuelve se cambia desde la prueba. */
 class FakeTwitch extends TwitchClient {
@@ -210,5 +210,29 @@ describe('clips del canal', () => {
     const { e, twitch } = setup();
     twitch.clipList = [];
     await assert.rejects(() => e.ctx.channel.importClip('zzz'), /ya no está/);
+  });
+
+  it('ver un clip sin descargarlo: da la dirección directa y no añade nada a la Biblioteca', async () => {
+    const { e, twitch, downloads } = setup();
+    twitch.clipList = [{ id: 'a', title: 'A', url: 'https://clips.twitch.tv/a', durationSec: 10, createdAt: T0, creator: 'x', views: 1, thumbnail: '' }];
+    e.ctx.settings.set({ ytdlpPath: fakeYtdlp() });
+    const log = path.join(e.root, 'ytdlp.log');
+    process.env.FAKE_LOG = log;
+    process.env.FAKE_STREAM = 'https://clips.example.test/a.mp4';
+    try {
+      assert.equal(await e.ctx.channel.clipStream('a'), 'https://clips.example.test/a.mp4');
+      const args = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0]) as string[];
+      assert.ok(args.includes('-g'));
+      assert.equal(args.at(-2), '--');
+      assert.equal(args.at(-1), 'https://clips.twitch.tv/a');
+      process.env.FAKE_STREAM = 'file:///etc/passwd';
+      await assert.rejects(() => e.ctx.channel.clipStream('a'), /dirección válida/);
+      await assert.rejects(() => e.ctx.channel.clipStream('zzz'), /ya no está/);
+    } finally {
+      delete process.env.FAKE_LOG;
+      delete process.env.FAKE_STREAM;
+    }
+    assert.equal(downloads.length, 0);
+    assert.equal(e.ctx.store.data.vods.filter((v) => v.origin === 'clip').length, 0);
   });
 });

@@ -20,6 +20,7 @@ const api: Api = {
   channelRefresh: () => call(CHANNELS.channelRefresh),
   channelClips: () => call(CHANNELS.channelClips),
   channelImportClip: (id) => call(CHANNELS.channelImportClip, id),
+  channelClipStream: (id) => call(CHANNELS.channelClipStream, id),
   listConnections: () => call(CHANNELS.connList),
   setConnectionApp: (p, id, secret) => call(CHANNELS.connSet, p, id, secret),
   connectPlatform: (p) => call(CHANNELS.connConnect, p),

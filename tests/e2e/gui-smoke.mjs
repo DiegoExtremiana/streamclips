@@ -28,7 +28,7 @@ execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsr
   '-f', 'lavfi', '-i', 'sine=frequency=440:duration=14', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', source]);
 
 const launchArgs = ['--no-sandbox', `--user-data-dir=${userData}`, ...(packaged ? [] : ['.'])];
-const launchEnv = { ...process.env, FAKE_SOURCE: source, FAKE_DELAY: '5', FAKE_ID: 'e2e1', ELECTRON_ENABLE_LOGGING: '0' };
+const launchEnv = { ...process.env, FAKE_SOURCE: source, FAKE_DELAY: '5', FAKE_ID: 'e2e1', FAKE_STREAM: 'https://clips-media-assets2.twitch.tv/clip.mp4', ELECTRON_ENABLE_LOGGING: '0' };
 
 let step = 0;
 const log = (m) => console.log(`  ✔ ${String(++step).padStart(2, '0')} ${m}`);
@@ -38,7 +38,8 @@ async function launch() {
   const page = await app.firstWindow();
   const problems = [];
   page.on('console', (m) => {
-    if (m.type() === 'error') problems.push(`console.error: ${m.text()}`);
+    // la vista previa de un clip de Twitch pide un vídeo a internet: sin red (como en el CI aislado) falla la conexión, y eso no es un fallo de la aplicación
+    if (m.type() === 'error' && !/Failed to load resource: net::ERR_(TUNNEL_CONNECTION_FAILED|NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_)/.test(m.text())) problems.push(`console.error: ${m.text()}`);
     if (/Content Security Policy|Refused to/i.test(m.text())) problems.push(`CSP: ${m.text()}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
@@ -171,6 +172,43 @@ try {
 
   // ── Clips ──
   await tab(page, 'Clips y publicación');
+  // clips del canal de Twitch: orden, búsqueda, cuadrícula y vista previa sin descargar (la API de Twitch se simula en el proceso principal)
+  await app.evaluate(() => {
+    const real = globalThis.fetch;
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+    const clip = (id, title, created) => ({ id, title, url: `https://clips.twitch.tv/${id}`, duration: 24.5, created_at: created, creator_name: 'fan', view_count: 7, thumbnail_url: png });
+    globalThis.fetch = async (url, init) => {
+      const u = String(url);
+      if (u.startsWith('https://id.twitch.tv/')) return Response.json({ access_token: 't', expires_in: 3600 });
+      if (u.includes('/helix/users')) return Response.json({ data: [{ id: '1', display_name: 'Don_Diegons' }] });
+      if (u.includes('/helix/clips')) return Response.json({ data: [clip('c-old', 'Pentakill increíble', '2026-10-10T10:00:00Z'), clip('c-new', 'Fallo épico', '2026-10-14T10:00:00Z'), clip('c-mid', 'Susto en la cueva', '2026-10-12T10:00:00Z')] });
+      return real(url, init);
+    };
+  });
+  await tab(page, 'Clips y publicación');
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await page.getByTestId('twitch-clips').locator('[data-testid^=twclip-]').first().waitFor({ timeout: 20000 });
+  const twTitles = () => page.getByTestId('twitch-clips').locator('.tile-title').allInnerTexts();
+  assert.deepEqual(await twTitles(), ['Fallo épico', 'Susto en la cueva', 'Pentakill increíble'], 'más recientes arriba');
+  for (const id of ['c-new', 'c-mid', 'c-old']) assert.equal(await page.getByTestId(`twclip-${id}`).getAttribute('data-state'), 'none', 'ninguno está en la Biblioteca todavía');
+  assert.equal(await page.getByTestId('twitch-clips').locator('img').count(), 3, 'cada clip enseña su miniatura (la política de seguridad la permite)');
+  await page.getByRole('button', { name: 'Buscar clips' }).click();
+  await page.getByLabel('Buscar clips por nombre').fill('EPICO');
+  assert.deepEqual(await twTitles(), ['Fallo épico'], 'la búsqueda no distingue mayúsculas ni tildes');
+  await page.getByLabel('Buscar clips por nombre').fill('zzz');
+  await page.getByText('Ningún clip se llama así.').waitFor();
+  await page.getByLabel('Buscar clips por nombre').fill('');
+  assert.equal((await twTitles()).length, 3);
+  await page.getByTestId('twclip-c-mid').click();
+  const prev = page.getByTestId('clip-preview');
+  await prev.waitFor();
+  await page.getByTestId('clip-preview-video').waitFor();
+  assert.equal(await page.getByTestId('clip-preview-video').getAttribute('src'), 'https://clips-media-assets2.twitch.tv/clip.mp4', 'se ve con la dirección directa, sin descargar nada');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).vods.filter((v) => v.origin === 'clip').length, 0, 'verlo no lo añade a la Biblioteca');
+  await shot(page, '3b-clips-twitch');
+  await page.keyboard.press('Escape');
+  await prev.waitFor({ state: 'detached' });
+  log('clips de Twitch: más recientes arriba, cuadrícula con miniaturas, lupa que busca por nombre y vista previa sin descargar ni añadir a la Biblioteca');
   await page.getByLabel('Inicio', { exact: true }).fill('abc');
   await page.getByLabel('Fin', { exact: true }).fill('4');
   await page.getByRole('button', { name: 'Crear clip' }).click();
@@ -407,6 +445,25 @@ try {
   assert.equal(await dlg.getByTestId('player-Reproductor horizontal').evaluate((e) => e.muted), false);
   await dlg.getByTestId('clip-timeline').waitFor();
   assert.equal(await dlg.getByTestId('vertical-editor').count(), 0, 'el diseño solo aparece al pulsar «Editar diseño»');
+  // mantener el clic y mover por la línea de tiempo: el tiempo va con el ratón mientras se arrastra
+  {
+    const hv = dlg.getByTestId('player-Reproductor horizontal');
+    const sel = await dlg.locator('.ctl-sel').boundingBox();
+    const y = sel.y + sel.height / 2;
+    await page.mouse.move(sel.x + sel.width * 0.1, y);
+    await page.mouse.down();
+    await page.waitForTimeout(250);
+    const t1 = await hv.evaluate((e) => e.currentTime);
+    await page.mouse.move(sel.x + sel.width * 0.5, y, { steps: 8 });
+    await page.waitForTimeout(250);
+    const t2 = await hv.evaluate((e) => e.currentTime);
+    await page.mouse.move(sel.x + sel.width * 0.85, y, { steps: 8 });
+    await page.waitForTimeout(250);
+    const t3 = await hv.evaluate((e) => e.currentTime);
+    await page.mouse.up();
+    assert.ok(t1 < t2 - 0.3 && t2 < t3 - 0.3, `el tiempo sigue al ratón mientras se arrastra (${t1.toFixed(2)} < ${t2.toFixed(2)} < ${t3.toFixed(2)})`);
+    log('línea de tiempo: manteniendo el clic y moviendo, el tiempo del vídeo va con el ratón');
+  }
   // recorte con la línea de tiempo: el agarre del final se mueve con el teclado y «Aplicar recorte» vuelve a renderizar
   const clipBefore = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).outputs.find((o) => o.title === 'Mi clip vertical');
   const endBefore = Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow'));
@@ -443,16 +500,27 @@ try {
   await dlg.getByRole('button', { name: 'Editar diseño' }).click();
   const ed = dlg.getByTestId('vertical-editor');
   await ed.waitFor();
-  const vsrc = ed.getByTestId('vsource');
-  await vsrc.locator('img').waitFor();
-  const previewPixels = () => ed.locator('canvas[aria-label="Vista previa del vídeo vertical"]').evaluate((c) => {
+  const vsrc = dlg.getByTestId('design-overlay');
+  await vsrc.waitFor();
+  // las ventanas están DENTRO de la versión horizontal, y la vertical se compone en directo (ya no es el vídeo ya renderizado)
+  const hb = await dlg.getByTestId('player-Reproductor horizontal').boundingBox();
+  const ob = await vsrc.boundingBox();
+  assert.ok(Math.abs(ob.x - hb.x) < 2 && Math.abs(ob.width - hb.width) < 2 && Math.abs(ob.height - hb.height) < 2, 'el recuadro de las ventanas cubre justo el vídeo horizontal');
+  assert.equal(await dlg.getByTestId('player-Reproductor vertical').count(), 0, 'con el diseño abierto la vertical es la composición en vivo');
+  assert.equal(await dlg.getByTestId('vsource').count(), 0, 'ya no hay un segundo fotograma aparte');
+  await dlg.getByTestId('clip-studio').scrollIntoViewIfNeeded();
+  await dlg.getByTestId('studio-play').click();
+  await page.waitForTimeout(600);
+  await shot(page, '8-modal-ventanas-sobre-el-horizontal');
+  await dlg.getByTestId('studio-play').click();
+  const previewPixels = () => dlg.locator('canvas[aria-label="Vista previa del vídeo vertical"]').evaluate((c) => {
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let lit = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) lit++;
     return lit;
   });
   await poll(async () => (await previewPixels()) > 1000);
-  const w0 = ed.getByTestId('vwin-0');
+  const w0 = dlg.getByTestId('vwin-0');
   const leftOf = (loc) => loc.evaluate((e) => parseFloat(e.style.left));
   const widthOf = (loc) => loc.evaluate((e) => parseFloat(e.style.width));
   await vsrc.scrollIntoViewIfNeeded();
@@ -469,8 +537,8 @@ try {
 
   // tamaño con la esquina, conservando la proporción
   const wBefore = await widthOf(w0);
-  await ed.getByTestId('vwin-0-resize').scrollIntoViewIfNeeded();
-  const hbox = await ed.getByTestId('vwin-0-resize').boundingBox();
+  await dlg.getByTestId('vwin-0-resize').scrollIntoViewIfNeeded();
+  const hbox = await dlg.getByTestId('vwin-0-resize').boundingBox();
   await page.mouse.move(hbox.x + hbox.width / 2, hbox.y + hbox.height / 2);
   await page.mouse.down();
   await page.mouse.move(hbox.x + hbox.width / 2 - 40, hbox.y + hbox.height / 2 - 30, { steps: 5 });
@@ -485,14 +553,14 @@ try {
 
   // 2 ventanas y disposiciones por defecto
   await ed.getByRole('button', { name: '2 ventanas' }).click();
-  await ed.getByTestId('vwin-1').waitFor();
-  assert.equal(await ed.getByTestId('vwin-2').count(), 0);
+  await dlg.getByTestId('vwin-1').waitFor();
+  assert.equal(await dlg.getByTestId('vwin-2').count(), 0);
   const presets = ed.getByRole('group', { name: 'Disposición' }).getByRole('button');
   assert.ok((await presets.count()) >= 3, 'hay varias disposiciones para 2 ventanas');
   await ed.getByRole('button', { name: 'Mitad y mitad' }).click();
   assert.equal(await ed.getByRole('button', { name: 'Mitad y mitad' }).getAttribute('aria-pressed'), 'true');
   await ed.getByRole('button', { name: '3 ventanas' }).click();
-  await ed.getByTestId('vwin-2').waitFor();
+  await dlg.getByTestId('vwin-2').waitFor();
   await ed.getByRole('button', { name: 'Cámara, juego y chat' }).waitFor();
   await ed.getByRole('button', { name: '2 ventanas' }).click();
   await ed.getByRole('button', { name: 'Mitad y mitad' }).click();
@@ -501,7 +569,7 @@ try {
   log('composición vertical: 1, 2 o 3 ventanas con varias disposiciones por defecto para elegir');
 
   // mover la segunda ventana y guardar: se vuelve a renderizar y la composición queda guardada con el clip
-  const w1 = ed.getByTestId('vwin-1');
+  const w1 = dlg.getByTestId('vwin-1');
   await w1.scrollIntoViewIfNeeded();
   const b1 = await w1.boundingBox();
   await page.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);

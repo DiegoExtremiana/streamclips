@@ -58,7 +58,7 @@ var init_twitch = __esm({
     "use strict";
     REQUEST_TIMEOUT_MS = 15e3;
     TwitchClient = class {
-      constructor(fetchFn = fetch, now = Date.now) {
+      constructor(fetchFn = (u, i) => fetch(u, i), now = Date.now) {
         this.fetchFn = fetchFn;
         this.now = now;
       }
@@ -151,7 +151,7 @@ var init_twitch = __esm({
         return { live: true, title: s.title, game: s.game_name, viewers: s.viewer_count, startedAt: s.started_at };
       }
       /** Clips del canal, los más recientes primero. */
-      async listClips(c, limit = 50) {
+      async listClips(c, limit = 100) {
         this.needCreds(c);
         const u = await this.userId(c);
         const r2 = await this.helix(`clips?broadcaster_id=${u.id}&first=${Math.max(1, Math.min(100, limit))}`, c);
@@ -35079,6 +35079,15 @@ var ChannelMonitor = class {
     const done = new Set(this.state.importedClipIds);
     return list.map((c) => ({ ...c, imported: done.has(c.id) }));
   }
+  /** Dirección directa para ver un clip en el programa sin descargarlo ni añadirlo a la Biblioteca. */
+  async clipStream(clipId) {
+    const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
+    if (!clip) throw new Error("Ese clip ya no est\xE1 en la lista de Twitch. Actualiza la lista.");
+    if (!this.d.streamUrl) throw new Error("No se puede ver el clip desde aqu\xED.");
+    const url = await this.d.streamUrl(clip.url);
+    if (!/^https?:\/\//.test(url)) throw new Error("Twitch no dio una direcci\xF3n v\xE1lida para ver el clip.");
+    return url;
+  }
   /** Descarga un clip de Twitch; al terminar se renderiza en vertical y horizontal. */
   async importClip(clipId) {
     const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
@@ -36103,6 +36112,10 @@ var AppContext = class {
       vods: this.vods,
       clips: this.clips,
       intervalMs: o.channelIntervalMs ?? 6e4,
+      streamUrl: async (pageUrl) => {
+        const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
+        return r2.stdout.trim().split("\n")[0] ?? "";
+      },
       chat: { dir: import_node_path14.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
     this.autopilot = new Autopilot({

@@ -5,6 +5,7 @@ import { parseTime } from '../../shared/time';
 import { IconCrop, IconDownload, IconMute, IconPause, IconPlay, IconRestart, IconVolume } from '../icons';
 import ClipTimeline from './ClipTimeline';
 import Player from './Player';
+import { LivePreview, WindowsOverlay, type DesignState } from './DesignOverlay';
 
 /**
  * Editor de clips al estilo del de Twitch: la versión horizontal y la vertical lado a lado, una sola barra de reproducción
@@ -25,6 +26,8 @@ export default function ClipStudio(props: {
   canReedit: boolean;
   rendering: boolean;
   designOpen: boolean;
+  /** Con el diseño abierto: las ventanas se dibujan sobre la versión horizontal y la vertical se compone en directo. */
+  design?: DesignState | null;
   onToggleDesign: () => void;
   onApply: () => void;
   onDownload: (v: RenderKind) => void;
@@ -38,6 +41,8 @@ export default function ClipStudio(props: {
   const [muted, setMuted] = useState(false);
   const [text, setText] = useState({ start: fmtTenths(props.range.start), end: fmtTenths(props.range.end) });
   const [hint, setHint] = useState<string | null>(null);
+  const [selWin, setSelWin] = useState(0);
+  const designing = Boolean(props.designOpen && props.design);
 
   // los campos de texto siguen a los agarres de la línea
   useEffect(() => {
@@ -111,7 +116,7 @@ export default function ClipStudio(props: {
   );
 
   return (
-    <section className="studio" aria-label="Editar clip" data-testid="clip-studio">
+    <section className={`studio ${designing ? 'designing' : ''}`} aria-label="Editar clip" data-testid="clip-studio">
       <div className="studio-views">
         <div className="studio-col h" data-testid="version-horizontal">
           <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -119,7 +124,7 @@ export default function ClipStudio(props: {
             {props.hSrc && <button className="btn ghost small" aria-label="Descargar versión horizontal" onClick={() => props.onDownload('horizontal')}><IconDownload size={14} /> Descargar</button>}
           </div>
           {props.hSrc ? (
-            <Player videoRef={hRef} bare label="Reproductor horizontal" src={props.hSrc} poster={props.poster} overlay={props.hOverlay} />
+            <Player videoRef={hRef} bare label="Reproductor horizontal" src={props.hSrc} poster={props.poster} overlay={<>{props.hOverlay}{designing && props.design && <WindowsOverlay design={props.design} selected={selWin} onSelect={setSelWin} />}</>} />
           ) : missing('horizontal')}
         </div>
         <div className="studio-col v" data-testid="version-vertical">
@@ -127,7 +132,9 @@ export default function ClipStudio(props: {
             <strong className="small">Versión vertical</strong>
             {props.vSrc && <button className="btn ghost small" aria-label="Descargar versión vertical" onClick={() => props.onDownload('vertical')}><IconDownload size={14} /> Descargar</button>}
           </div>
-          {props.vSrc ? (
+          {designing && props.design ? (
+            <div className="playerbox vertical"><LivePreview design={props.design} video={hRef} selected={selWin} onSelect={setSelWin} /></div>
+          ) : props.vSrc ? (
             <Player videoRef={vRef} bare silent vertical label="Reproductor vertical" src={props.vSrc} overlay={props.vOverlay} />
           ) : missing('vertical')}
           <button type="button" className="btn ghost studio-design" aria-expanded={props.designOpen} disabled={!props.canReedit} onClick={props.onToggleDesign} title={props.canReedit ? undefined : 'Este clip no guarda de qué parte del VOD sale'}>
@@ -161,6 +168,10 @@ export default function ClipStudio(props: {
                 setHint(null);
                 seek(t - o.start);
               } else setHint('Esa parte aún no está en el vídeo: aplica el recorte para verla.');
+            }}
+            onScrub={(t) => {
+              // al arrastrar un agarre se ve el fotograma de ese punto (hasta donde llega lo ya renderizado)
+              if (o.start !== undefined && o.end !== undefined) seek(Math.min(o.end, Math.max(o.start, t)) - o.start);
             }}
           />
           <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>

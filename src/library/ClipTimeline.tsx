@@ -13,11 +13,14 @@ export default function ClipTimeline(props: {
   onChange: (r: TrimRange) => void;
   /** El usuario pincha en la línea: segundo del directo. */
   onSeek: (vodTime: number) => void;
+  /** Mientras se arrastra un agarre: segundo del directo que marca (para ver ese fotograma). */
+  onScrub?: (vodTime: number) => void;
   disabled?: boolean;
 }) {
   const { range, vodDuration, disabled } = props;
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<'start' | 'end' | null>(null);
+  const scrubbing = useRef(false);
   // la ventana se calcula al abrir (y no se mueve mientras se arrastra, para que los agarres no «huyan»)
   const win = useRef<TrimRange>(timelineWindow(range, vodDuration));
   if (range.start < win.current.start || range.end > win.current.end) win.current = timelineWindow(range, vodDuration);
@@ -37,7 +40,9 @@ export default function ClipTimeline(props: {
   };
   const move = (e: PointerEvent) => {
     if (!dragging.current) return;
-    props.onChange(moveHandle(dragging.current, timeAt(e.clientX), range, vodDuration));
+    const next = moveHandle(dragging.current, timeAt(e.clientX), range, vodDuration);
+    props.onChange(next);
+    props.onScrub?.(next[dragging.current]);
   };
   const up = (e: PointerEvent) => {
     dragging.current = null;
@@ -65,11 +70,22 @@ export default function ClipTimeline(props: {
       <div
         ref={trackRef}
         className="ctl-track"
+        // mantener el clic y mover: el punto de reproducción va con el ratón
         onPointerDown={(e) => {
           if (disabled || dragging.current) return;
-          const t = timeAt(e.clientX);
-          props.onSeek(Math.min(range.end, Math.max(range.start, t)));
+          scrubbing.current = true;
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* sin captura */
+          }
+          props.onSeek(Math.min(range.end, Math.max(range.start, timeAt(e.clientX))));
         }}
+        onPointerMove={(e) => {
+          if (scrubbing.current) props.onSeek(Math.min(range.end, Math.max(range.start, timeAt(e.clientX))));
+        }}
+        onPointerUp={() => { scrubbing.current = false; }}
+        onPointerCancel={() => { scrubbing.current = false; }}
       >
         <div className="ctl-dim" style={{ left: 0, width: `${a}%` }} />
         <div className="ctl-sel" style={{ left: `${a}%`, width: `${Math.max(0, b - a)}%` }} />

@@ -402,6 +402,8 @@ export interface Api {
   channelClips(): Promise<TwitchClip[]>;
   /** Descarga el clip de Twitch y lo deja en la Biblioteca (vertical y horizontal). */
   channelImportClip(clipId: string): Promise<VodJob>;
+  /** Dirección directa para ver un clip de Twitch sin descargarlo. */
+  channelClipStream(clipId: string): Promise<string>;
   setAutoImport(on: boolean): Promise<ChannelStatus>;
   /** Da el visto bueno: se programa en su hora. */
   listConnections(): Promise<ConnectionInfo[]>;
@@ -497,6 +499,7 @@ export const CHANNELS = {
   channelRefresh: 'channel:refresh',
   channelClips: 'channel:clips',
   channelImportClip: 'channel:import-clip',
+  channelClipStream: 'channel:clip-stream',
   channelAuto: 'channel:auto',
   connList: 'conn:list',
   connSet: 'conn:set',

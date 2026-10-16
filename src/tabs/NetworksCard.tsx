@@ -23,6 +23,7 @@ const INFO: Record<Platform, { name: string; redirect: string; steps: string[]; 
       'Entra en developers.tiktok.com, crea una app y añade los productos «Login Kit» y «Content Posting API».',
       `Pon como URI de redirección la dirección de abajo. Si TikTok no acepta una dirección http, esta conexión no podrá completarse: dímelo y buscamos otra vía.`,
       'Copia la Client key y el Client secret aquí.',
+      'Si al conectar sale «non_sandbox_target»: tu app está en modo Sandbox (su Client key empieza por «sbaw…») y la cuenta con la que inicias sesión no está autorizada. En el portal de TikTok abre Sandbox > «Target users», añade esa cuenta de TikTok y vuelve a pulsar Conectar con ella. Mientras TikTok no audite tu app, lo que se sube sale como privado.',
     ],
   },
   instagram: {

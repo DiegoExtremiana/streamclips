@@ -362,6 +362,7 @@ export default function ItemModal(props: {
           canReedit={canReedit}
           rendering={rendering}
           designOpen={designOpen}
+          design={designOpen && framing && layoutDraft ? { framing, layout: layoutDraft, onChange: setLayoutDraft } : null}
           onToggleDesign={() => setDesignOpen((x) => !x)}
           onApply={() => void applyEdit()}
           onDownload={(v) => void download(v)}
@@ -378,10 +379,11 @@ export default function ItemModal(props: {
             <div className="muted small" role="status">{editMsg && !editMsg.ok ? editMsg.text : 'Cargando el fotograma…'}</div>
           ) : (
             <>
+              <div className="muted small">Las ventanas están dibujadas sobre la versión horizontal de arriba: arrástralas para moverlas y tira de la esquina para cambiar su tamaño (o usa las flechas, + y −). Dale a reproducir y verás a la derecha cómo queda mientras se mueve el vídeo.</div>
               <VerticalEditor
                 framing={framing}
                 videoUrl={o.files.horizontal ? mediaUrl(o.id, 'horizontal', o.files.horizontal) : undefined}
-                sharedVideo={o.files.horizontal ? videoRef : undefined}
+                controlsOnly
                 layout={layoutDraft}
                 onChange={setLayoutDraft}
               />

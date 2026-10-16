@@ -70,6 +70,7 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.channelRefresh, () => ctx.channel.poll());
   handle(CHANNELS.channelClips, () => ctx.channel.clips());
   handle(CHANNELS.channelImportClip, (id) => ctx.channel.importClip(str(id, 'clip')));
+  handle(CHANNELS.channelClipStream, (id) => ctx.channel.clipStream(str(id, 'clip')));
   handle(CHANNELS.channelAuto, (on) => {
     if (typeof on !== 'boolean') throw new Error('Valor no válido.');
     return ctx.channel.setAutoImport(on);

@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react';
  * inyecta scripts en línea y una política estricta rompería la recarga en caliente.
  */
 function productionCsp(): Plugin {
-  const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: sc-media:; media-src 'self' sc-media:; connect-src 'self'";
+  const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: sc-media: https://*.twitch.tv https://*.twitchcdn.net https://*.jtvnw.net; media-src 'self' sc-media: https://*.twitch.tv https://*.twitchcdn.net https://*.jtvnw.net; connect-src 'self'";
   return {
     name: 'production-csp',
     apply: 'build',

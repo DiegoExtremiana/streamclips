@@ -31,7 +31,7 @@ export class TwitchClient {
   private token: { clientId: string; value: string; expiresAt: number } | null = null;
 
   constructor(
-    private fetchFn: FetchFn = fetch,
+    private fetchFn: FetchFn = (u, i) => fetch(u, i),
     private now: () => number = Date.now,
   ) {}
 
@@ -132,7 +132,7 @@ export class TwitchClient {
   }
 
   /** Clips del canal, los más recientes primero. */
-  async listClips(c: TwitchCreds, limit = 50): Promise<TwitchClip[]> {
+  async listClips(c: TwitchCreds, limit = 100): Promise<TwitchClip[]> {
     this.needCreds(c);
     const u = await this.userId(c);
     const r = await this.helix<{

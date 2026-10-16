@@ -3,7 +3,7 @@ import { Store } from '../services/store';
 import { Logger } from '../services/logger';
 import { Secrets, type Cipher } from '../services/secrets';
 import { SerialQueue } from '../services/queue';
-import { resolveToolPaths, type BundledTools, type ToolPaths } from '../services/tools';
+import { resolveToolPaths, run, type BundledTools, type ToolPaths } from '../services/tools';
 import { TwitchClient } from '../services/twitch';
 import type { audioEnergy } from '../services/audioEnergy';
 import type { downloadVod } from '../services/downloader';
@@ -153,6 +153,10 @@ export class AppContext {
       vods: this.vods,
       clips: this.clips,
       intervalMs: o.channelIntervalMs ?? 60_000,
+      streamUrl: async (pageUrl) => {
+        const r = await run(this.tools().ytdlp, ['--no-warnings', '--no-playlist', '-g', '-f', 'b[height<=720]/b', '--', pageUrl], 60_000);
+        return r.stdout.trim().split('\n')[0] ?? '';
+      },
       chat: { dir: path.join(o.userDataDir, 'chat'), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort },
     });
     this.autopilot = new Autopilot({

@@ -10,6 +10,8 @@ import { IconMute, IconPause, IconPlay, IconVolume } from '../icons';
 const COLORS = ['#ff4fa3', '#22d3ee', '#facc15'];
 const PREVIEW_W = 270;
 const PREVIEW_H = 480;
+export const COMPOSITION_W = PREVIEW_W;
+export const COMPOSITION_H = PREVIEW_H;
 
 /** Dibuja en el lienzo lo mismo que hará ffmpeg: cada ventana llena su hueco sin deformar (escala hasta cubrir y recorta el sobrante). */
 export function drawComposition(ctx: CanvasRenderingContext2D, source: CanvasImageSource, sw: number, sh: number, layout: VerticalLayout) {
@@ -46,6 +48,8 @@ export default function VerticalEditor(props: {
   onChange: (l: VerticalLayout) => void;
   /** Si ya hay un reproductor de esta versión horizontal en pantalla, se usa ese en vez de abrir otro (menos decodificadores de vídeo a la vez). */
   sharedVideo?: RefObject<HTMLVideoElement>;
+  /** Solo los controles (ventanas, disposición, restablecer): el recuadro sobre el vídeo y la vista previa van en el editor de clips. */
+  controlsOnly?: boolean;
 }) {
   const { framing, layout, onChange } = props;
   const aspect = framing.width / framing.height;
@@ -212,7 +216,7 @@ export default function VerticalEditor(props: {
         </button>
       </div>
 
-      <div className="vmain">
+      {!props.controlsOnly && <div className="vmain">
         <div className="vsourcecol">
           <div className="muted small">Arrastra cada recuadro sobre el vídeo; la esquina cambia su tamaño. Con el teclado: flechas para mover, + y − para el tamaño.</div>
           <div ref={boxRef} className="vsource" data-testid="vsource" style={{ aspectRatio: `${framing.width} / ${framing.height}` }}>
@@ -310,7 +314,7 @@ export default function VerticalEditor(props: {
             ))}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

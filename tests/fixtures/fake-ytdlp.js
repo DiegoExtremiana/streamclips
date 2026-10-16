@@ -26,6 +26,12 @@ if (dd === -1 || dd !== args.length - 2) {
   process.exit(2);
 }
 
+if (args.includes('-g')) {
+  if (mode === 'nometa') process.exit(0);
+  console.log(process.env.FAKE_STREAM || 'https://clips.example.test/clip.mp4');
+  process.exit(0);
+}
+
 if (args.includes('--print')) {
   if (mode === 'nometa') process.exit(0);
   console.log(`${id}\tTítulo del VOD`);

@@ -18,6 +18,8 @@ export interface ChannelDeps {
   vods: VodService;
   clips: ClipService;
   intervalMs: number;
+  /** Dirección directa del vídeo de un clip (para verlo sin descargarlo). */
+  streamUrl?: (pageUrl: string) => Promise<string>;
   now?: () => number;
   /** Captura del chat mientras estás en directo. Sin esto no se guarda actividad del chat. */
   chat?: { dir: string; enabled: () => boolean; host?: string; port?: number };
@@ -217,6 +219,16 @@ export class ChannelMonitor {
     const list = await this.d.twitch.listClips(this.d.creds());
     const done = new Set(this.state.importedClipIds);
     return list.map((c) => ({ ...c, imported: done.has(c.id) }));
+  }
+
+  /** Dirección directa para ver un clip en el programa sin descargarlo ni añadirlo a la Biblioteca. */
+  async clipStream(clipId: string): Promise<string> {
+    const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
+    if (!clip) throw new Error('Ese clip ya no está en la lista de Twitch. Actualiza la lista.');
+    if (!this.d.streamUrl) throw new Error('No se puede ver el clip desde aquí.');
+    const url = await this.d.streamUrl(clip.url);
+    if (!/^https?:\/\//.test(url)) throw new Error('Twitch no dio una dirección válida para ver el clip.');
+    return url;
   }
 
   /** Descarga un clip de Twitch; al terminar se renderiza en vertical y horizontal. */

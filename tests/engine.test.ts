@@ -58,7 +58,7 @@ async function desktop(gh: Awaited<ReturnType<typeof fakeGithub>>) {
   e.ctx.settings.set({
     twitch: { clientId: 'TID', clientSecret: 'TSECRET', login: 'diego' },
     whisperModel: 'tiny',
-    autopilot: { summaryMinutes: 3, mainMinutes: 3, maxClips: 2, maxVideos: 2, platforms: ['youtube', 'tiktok', 'instagram'] },
+    autopilot: { summaryMinutes: 1, mainMinutes: 1, maxClips: 2, maxVideos: 2, platforms: ['youtube', 'tiktok', 'instagram'] },
   });
   await e.ctx.cloud.setup('diego/nube', 'GHTOKEN');
   return e;

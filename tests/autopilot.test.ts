@@ -64,7 +64,7 @@ function setup(extra: Parameters<typeof makeEnv>[0] = {}) {
   const e = makeEnv(extra);
   envs.push(e);
   const vod = addDownloadedVod(e, video);
-  e.ctx.settings.set({ autopilot: { summaryMinutes: 3, mainMinutes: 3, maxClips: 2, maxVideos: 2, requireApproval: true, platforms: ['youtube'] } });
+  e.ctx.settings.set({ autopilot: { summaryMinutes: 1, mainMinutes: 1, maxClips: 2, maxVideos: 2, requireApproval: true, platforms: ['youtube'] } });
   return { e, vod };
 }
 
@@ -213,7 +213,7 @@ describe('piloto automático', () => {
     const e = makeEnv({ energy: async () => new Array(240).fill(-30) });
     envs.push(e);
     const vod = addDownloadedVod(e, video);
-    e.ctx.settings.set({ autopilot: { summaryMinutes: 3, mainMinutes: 3 } });
+    e.ctx.settings.set({ autopilot: { summaryMinutes: 1, mainMinutes: 1 } });
     await e.ctx.autopilot.run(vod.id);
     assert.equal(e.ctx.store.data.outputs.length, 0);
     assert.equal(vod.autopilot?.status, 'skipped');

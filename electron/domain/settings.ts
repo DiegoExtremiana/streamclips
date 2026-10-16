@@ -66,7 +66,7 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   for (const k of ['summaryMinutes', 'mainMinutes'] as const) {
     const v = p[k];
     if (v !== undefined) {
-      if (!Number.isInteger(v) || v < 3 || v > 60) throw new Error('La duración debe estar entre 3 y 60 minutos.');
+      if (!Number.isInteger(v) || v < 1 || v > 60) throw new Error('La duración debe estar entre 1 y 60 minutos.');
       n[k] = v;
     }
   }

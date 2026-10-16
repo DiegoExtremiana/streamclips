@@ -20,7 +20,7 @@
     "dist": "npm run tools:fetch && npm run build && electron-builder --win --x64",
     "typecheck": "tsc -p electron/tsconfig.json --noEmit && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
-    "test": "tsc -p tsconfig.test.json && node --test --test-reporter=spec --test-concurrency=1 \"dist-test/tests/**/*.test.js\"",
+    "test": "tsc -p tsconfig.test.json && node --test --test-reporter=spec --test-concurrency=1 --test-timeout=300000 \"dist-test/tests/**/*.test.js\"",
     "test:e2e": "npm run build && node tests/e2e/gui-smoke.mjs",
     "check": "npm run typecheck && npm run lint && npm test",
     "tools:fetch": "node scripts/fetch-ytdlp.mjs",

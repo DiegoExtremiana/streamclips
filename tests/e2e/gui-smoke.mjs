@@ -39,7 +39,7 @@ async function launch() {
   const problems = [];
   page.on('console', (m) => {
     // la vista previa de un clip de Twitch pide un vídeo a internet: sin red (como en el CI aislado) falla la conexión, y eso no es un fallo de la aplicación
-    if (m.type() === 'error' && !/Failed to load resource: net::ERR_(TUNNEL_CONNECTION_FAILED|NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_)/.test(m.text())) problems.push(`console.error: ${m.text()}`);
+    if (m.type() === 'error' && !(/Failed to load resource/.test(m.text()) && /clips-media-assets2\.twitch\.tv/.test(m.location().url || '')) && !/Failed to load resource: net::ERR_(TUNNEL_CONNECTION_FAILED|NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_)/.test(m.text())) problems.push(`console.error: ${m.text()}`);
     if (/Content Security Policy|Refused to/i.test(m.text())) problems.push(`CSP: ${m.text()}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));

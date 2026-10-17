@@ -13,11 +13,11 @@ import Toasts from './Toasts';
 export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'conexiones' | 'ajustes';
 
 const TABS: { id: TabId; label: string; hint: string; icon: ReactNode }[] = [
-  { id: 'programacion', label: 'Programación', hint: 'Tus próximas subidas en una línea de tiempo y un calendario: arrástralas para cambiar el día y la hora.', icon: <IconPanel /> },
+  { id: 'programacion', label: 'Programación', hint: 'Cómo va tu canal, lo que espera tu visto bueno y tus próximas subidas: arrástralas para cambiar el día y la hora.', icon: <IconPanel /> },
   { id: 'biblioteca', label: 'Biblioteca', hint: 'Tus clips y vídeos: edítalos, ordénalos en carpetas y programa su publicación.', icon: <IconLibrary /> },
-  { id: 'clips', label: 'Clips y publicación', hint: 'Crea clips y vídeos largos a partir de un VOD.', icon: <IconScissors /> },
+  { id: 'clips', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, y las herramientas para crear los tuyos a partir de un directo.', icon: <IconScissors /> },
   { id: 'conexiones', label: 'Conexiones', hint: 'Tu canal de Twitch y tus redes sociales.', icon: <IconLink /> },
-  { id: 'ajustes', label: 'Ajustes', hint: 'Carpetas y herramientas.', icon: <IconSettings /> },
+  { id: 'ajustes', label: 'Ajustes', hint: 'Carpetas y herramientas, piloto automático y subtítulos, y publicar con el PC apagado.', icon: <IconSettings /> },
 ];
 
 export default function App() {

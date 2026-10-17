@@ -52,11 +52,14 @@ function normalizeLogin(input) {
   s = s.replace(/^@/, "");
   return /^[a-z0-9_]{1,25}$/.test(s) ? s : null;
 }
-var REQUEST_TIMEOUT_MS, TwitchClient;
+var REQUEST_TIMEOUT_MS, CLIP_WINDOW_MS, CLIP_MAX_WINDOWS, CLIP_MAX_PAGES, TwitchClient;
 var init_twitch = __esm({
   "electron/services/twitch.ts"() {
     "use strict";
     REQUEST_TIMEOUT_MS = 15e3;
+    CLIP_WINDOW_MS = 90 * 864e5;
+    CLIP_MAX_WINDOWS = 32;
+    CLIP_MAX_PAGES = 12;
     TwitchClient = class {
       constructor(fetchFn = (u, i) => fetch(u, i), now = Date.now) {
         this.fetchFn = fetchFn;
@@ -151,20 +154,45 @@ var init_twitch = __esm({
         return { live: true, title: s.title, game: s.game_name, viewers: s.viewer_count, startedAt: s.started_at };
       }
       /** Clips del canal, los más recientes primero. */
-      async listClips(c, limit = 100) {
+      /**
+       * Clips del canal, del más reciente al más antiguo. Twitch los devuelve ordenados por visualizaciones, de 100 en 100 y
+       * por ventanas de fechas, así que se piden por tramos de fechas y con paginación hasta tenerlos todos.
+       * Con `sinceMs` solo se piden los de desde esa fecha (para refrescar lo reciente sin repasar todo el historial).
+       */
+      async listClips(c, o = {}) {
         this.needCreds(c);
         const u = await this.userId(c);
-        const r2 = await this.helix(`clips?broadcaster_id=${u.id}&first=${Math.max(1, Math.min(100, limit))}`, c);
-        return r2.data.map((x) => ({
-          id: x.id,
-          title: x.title,
-          url: x.url,
-          durationSec: x.duration,
-          createdAt: x.created_at,
-          creator: x.creator_name,
-          views: x.view_count,
-          thumbnail: x.thumbnail_url
-        })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        const seen = /* @__PURE__ */ new Map();
+        const page = async (from, to) => {
+          let cursor = "";
+          let got = 0;
+          for (let i = 0; i < CLIP_MAX_PAGES; i++) {
+            const q = `clips?broadcaster_id=${u.id}&first=100&started_at=${encodeURIComponent(new Date(from).toISOString())}&ended_at=${encodeURIComponent(new Date(to).toISOString())}${cursor ? `&after=${encodeURIComponent(cursor)}` : ""}`;
+            const r2 = await this.helix(q, c);
+            for (const x of r2.data) {
+              got++;
+              seen.set(x.id, { id: x.id, title: x.title, url: x.url, durationSec: x.duration, createdAt: x.created_at, creator: x.creator_name, views: x.view_count, thumbnail: x.thumbnail_url });
+            }
+            cursor = r2.pagination?.cursor ?? "";
+            if (!cursor || r2.data.length === 0) break;
+          }
+          return got;
+        };
+        const end = this.now();
+        if (o.sinceMs !== void 0) {
+          await page(o.sinceMs, end);
+        } else {
+          let to = end;
+          let emptyDays = 0;
+          for (let w = 0; w < CLIP_MAX_WINDOWS; w++) {
+            const from = to - CLIP_WINDOW_MS;
+            const n = await page(from, to);
+            emptyDays = n === 0 ? emptyDays + CLIP_WINDOW_MS : 0;
+            if (emptyDays >= 365 * 864e5) break;
+            to = from;
+          }
+        }
+        return [...seen.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       }
       needCreds(c) {
         if (!c.clientId || !c.clientSecret) throw new Error("Faltan las credenciales de Twitch (pesta\xF1a Conexiones).");
@@ -34910,6 +34938,8 @@ var import_node_path13 = __toESM(require("node:path"));
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
 var OFFLINE_CONFIRMATIONS = 2;
 var MIN_IMPORT_SEC = 60;
+var CLIPS_FULL_MS = 20 * 6e4;
+var CLIPS_RECENT_MS = 3 * 864e5;
 var ChannelMonitor = class {
   constructor(d) {
     this.d = d;
@@ -34928,6 +34958,7 @@ var ChannelMonitor = class {
   chatBins = new ChatBins();
   chatStart = null;
   chatSaved = 0;
+  clipCache;
   clipOutputs = /* @__PURE__ */ new Map();
   get now() {
     return (this.d.now ?? Date.now)();
@@ -35073,15 +35104,26 @@ var ChannelMonitor = class {
     if (st.seenVodIds.length > 500) st.seenVodIds.splice(0, st.seenVodIds.length - 500);
     this.d.store.save();
   }
-  /** Clips del canal con la marca de los que ya están importados. */
-  async clips() {
-    const list = await this.d.twitch.listClips(this.d.creds());
-    const done = new Set(this.state.importedClipIds);
-    return list.map((c) => ({ ...c, imported: done.has(c.id) }));
+  /** Todos los clips del canal, más recientes primero. El historial se pide entero de vez en cuando; entre medias solo lo reciente. */
+  async clips(force = false) {
+    const now = this.now;
+    const fresh = this.clipCache && now - this.clipCache.fullAt < CLIPS_FULL_MS;
+    if (force || !fresh) {
+      const all = await this.d.twitch.listClips(this.d.creds());
+      this.clipCache = { fullAt: now, byId: new Map(all.map((c) => [c.id, c])) };
+    } else {
+      const recent = await this.d.twitch.listClips(this.d.creds(), { sinceMs: now - CLIPS_RECENT_MS });
+      for (const c of recent) this.clipCache.byId.set(c.id, c);
+    }
+    return [...this.clipCache.byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+  }
+  async clipById(clipId) {
+    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).find((c) => c.id === clipId);
+    return known;
   }
   /** Dirección directa para ver un clip en el programa sin descargarlo ni añadirlo a la Biblioteca. */
   async clipStream(clipId) {
-    const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
+    const clip = await this.clipById(clipId);
     if (!clip) throw new Error("Ese clip ya no est\xE1 en la lista de Twitch. Actualiza la lista.");
     if (!this.d.streamUrl) throw new Error("No se puede ver el clip desde aqu\xED.");
     const url = await this.d.streamUrl(clip.url);
@@ -35090,7 +35132,7 @@ var ChannelMonitor = class {
   }
   /** Descarga un clip de Twitch; al terminar se renderiza en vertical y horizontal. */
   async importClip(clipId) {
-    const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
+    const clip = await this.clipById(clipId);
     if (!clip) throw new Error("Ese clip ya no est\xE1 en la lista de Twitch. Actualiza la lista.");
     if (this.state.importedClipIds.includes(clip.id)) {
       const prev = this.d.store.data.vods.find((v) => v.twitchId === clip.id && v.status !== "error");

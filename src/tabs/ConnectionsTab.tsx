@@ -54,7 +54,10 @@ export default function ConnectionsTab() {
   return (
     <div className="grid">
       <section className="card">
-        <h2>Twitch</h2>
+        <div className="row" style={{ gap: 10 }}>
+          <h2>Twitch</h2>
+          <span className={`badge ${clientId && login ? 'ok' : 'warn'}`}>{clientId && login ? 'Configurado' : 'Sin configurar'}</span>
+        </div>
         <div className="muted small">
           Crea una aplicación gratuita en dev.twitch.tv (consola de desarrollador) y copia aquí su Client ID y su Client Secret.
           Solo se usa para leer tus VODs públicos.

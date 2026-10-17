@@ -30,6 +30,9 @@ const LIVE_VOD_SLACK_MS = 5 * 60_000;
 /** Lecturas seguidas «sin directo» antes de recoger el VOD (evita recoger a medias si se corta un momento la conexión). */
 const OFFLINE_CONFIRMATIONS = 2;
 const MIN_IMPORT_SEC = 60;
+/** Cada cuánto se repasa todo el historial de clips, y cuánto atrás se mira en las vueltas rápidas. */
+const CLIPS_FULL_MS = 20 * 60_000;
+const CLIPS_RECENT_MS = 3 * 86_400_000;
 
 /**
  * Vigila el canal de Twitch: sabe si estás en directo, recoge solo el VOD cuando el directo termina
@@ -49,6 +52,7 @@ export class ChannelMonitor {
   private chatBins = new ChatBins();
   private chatStart: string | null = null;
   private chatSaved = 0;
+  private clipCache?: { fullAt: number; byId: Map<string, TwitchClip> };
   private clipOutputs = new Map<string, Promise<OutputItem>>();
 
   constructor(private d: ChannelDeps) {
@@ -214,16 +218,28 @@ export class ChannelMonitor {
     this.d.store.save();
   }
 
-  /** Clips del canal con la marca de los que ya están importados. */
-  async clips(): Promise<TwitchClip[]> {
-    const list = await this.d.twitch.listClips(this.d.creds());
-    const done = new Set(this.state.importedClipIds);
-    return list.map((c) => ({ ...c, imported: done.has(c.id) }));
+  /** Todos los clips del canal, más recientes primero. El historial se pide entero de vez en cuando; entre medias solo lo reciente. */
+  async clips(force = false): Promise<TwitchClip[]> {
+    const now = this.now;
+    const fresh = this.clipCache && now - this.clipCache.fullAt < CLIPS_FULL_MS;
+    if (force || !fresh) {
+      const all = await this.d.twitch.listClips(this.d.creds());
+      this.clipCache = { fullAt: now, byId: new Map(all.map((c) => [c.id, c])) };
+    } else {
+      const recent = await this.d.twitch.listClips(this.d.creds(), { sinceMs: now - CLIPS_RECENT_MS });
+      for (const c of recent) this.clipCache!.byId.set(c.id, c);
+    }
+    return [...this.clipCache!.byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+  }
+
+  private async clipById(clipId: string): Promise<TwitchClip | undefined> {
+    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).find((c) => c.id === clipId);
+    return known;
   }
 
   /** Dirección directa para ver un clip en el programa sin descargarlo ni añadirlo a la Biblioteca. */
   async clipStream(clipId: string): Promise<string> {
-    const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
+    const clip = await this.clipById(clipId);
     if (!clip) throw new Error('Ese clip ya no está en la lista de Twitch. Actualiza la lista.');
     if (!this.d.streamUrl) throw new Error('No se puede ver el clip desde aquí.');
     const url = await this.d.streamUrl(clip.url);
@@ -233,7 +249,7 @@ export class ChannelMonitor {
 
   /** Descarga un clip de Twitch; al terminar se renderiza en vertical y horizontal. */
   async importClip(clipId: string): Promise<VodJob> {
-    const clip = (await this.d.twitch.listClips(this.d.creds())).find((c) => c.id === clipId);
+    const clip = await this.clipById(clipId);
     if (!clip) throw new Error('Ese clip ya no está en la lista de Twitch. Actualiza la lista.');
     if (this.state.importedClipIds.includes(clip.id)) {
       const prev = this.d.store.data.vods.find((v) => v.twitchId === clip.id && v.status !== 'error');

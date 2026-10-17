@@ -1,5 +1,5 @@
 import { useEffect, useState, type DragEvent } from 'react';
-import { platformsFor } from '../../shared/types';
+import { platformsFor, sectionOf } from '../../shared/types';
 import type { Group, GroupKind, OutputItem, Publication, RenderKind, Section } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
 import { childGroups, countInside, groupLabel, itemsIn, pathOf } from '../../shared/groupTree';
@@ -8,7 +8,7 @@ import { errMsg, notify } from '../lib';
 import ItemModal from '../library/ItemModal';
 import { PlatformDots } from '../library/PlatformSwitch';
 import { ConfirmDialog, GroupDialog, MoveDialog } from '../library/dialogs';
-import { IconCalendar, IconCheck, IconFilm, IconFolder, IconLibrary, IconMore, IconPlus, IconTrash } from '../icons';
+import { IconCalendar, IconCheck, IconFilm, IconFolder, IconLibrary, IconMore, IconPlus, IconSearch, IconTrash } from '../icons';
 import ScheduleDialog from '../library/ScheduleDialog';
 import { ContextMenu, type MenuItem } from '../library/ui';
 
@@ -55,14 +55,22 @@ export default function LibraryTab(props: {
       onOpened?.();
     }
   }, [requestedId, onOpened]);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'new' | 'old' | 'name'>('new');
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Si la carpeta actual se borró o se movió a otra sección, se vuelve a la raíz.
   const here = groups.some((g) => g.id === current[section] && g.section === section) ? current[section] : undefined;
   const crumbs = pathOf(groups, here);
-  const subgroups = childGroups(groups, section, here);
-  const items = itemsIn(outputs, groups, section, here);
+  const plain = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const q = plain(query.trim());
+  const searching = q.length > 0;
+  // buscando se mira en toda la sección (da igual en qué carpeta esté); si no, solo en la carpeta actual
+  const subgroups = searching ? [] : childGroups(groups, section, here);
+  const items = [...(searching ? outputs.filter((o) => sectionOf(o.kind) === section && plain(o.title).includes(q)) : itemsIn(outputs, groups, section, here))].sort((a, b) =>
+    sort === 'name' ? a.title.localeCompare(b.title, 'es') : sort === 'old' ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt),
+  );
   const openItem = outputs.find((o) => o.id === openId) ?? null;
 
   const goTo = (id: string | undefined) => setCurrent((c) => ({ ...c, [section]: id }));
@@ -206,6 +214,15 @@ export default function LibraryTab(props: {
             </button>
           ))}
         </div>
+        <label className="searchbox">
+          <IconSearch size={16} />
+          <input type="search" aria-label="Buscar en la Biblioteca" placeholder={`Buscar ${section === 'clips' ? 'clips' : 'vídeos'} por nombre…`} value={query} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+        <select aria-label="Ordenar por" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} style={{ width: 'auto' }}>
+          <option value="new">Más recientes primero</option>
+          <option value="old">Más antiguos primero</option>
+          <option value="name">Por nombre (A-Z)</option>
+        </select>
         <div className="row">
           {!selecting && items.length > 0 && <button className="btn ghost small" onClick={() => setSelecting(true)}><IconCheck /> Seleccionar</button>}
           <button className="btn ghost small" onClick={() => setDialog({ type: 'new-group', parentId: here, withItems: [] })}><IconPlus /> Nueva carpeta</button>
@@ -240,7 +257,8 @@ export default function LibraryTab(props: {
       {msg && <div className="msg bad" role="alert" style={{ marginBottom: 12 }}>{msg}</div>}
       {notice && <div className="msg ok" role="status" style={{ marginBottom: 12 }}>{notice}</div>}
 
-      {subgroups.length === 0 && items.length === 0 && (
+      {searching && items.length === 0 && <div className="muted" style={{ marginBottom: 12 }}>Nada se llama así en {section === 'clips' ? 'los clips' : 'los vídeos'}.</div>}
+      {subgroups.length === 0 && items.length === 0 && !searching && (
         <div className="empty">
           <IconFilm size={34} />
           <div>

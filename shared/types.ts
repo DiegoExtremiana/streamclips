@@ -399,7 +399,8 @@ export interface Api {
   channelStatus(): Promise<ChannelStatus>;
   /** Comprueba ya el canal (sin esperar al siguiente turno). */
   channelRefresh(): Promise<ChannelStatus>;
-  channelClips(): Promise<TwitchClip[]>;
+  /** Todos los clips del canal, más recientes primero. `force` vuelve a pedir todo el historial a Twitch. */
+  channelClips(force?: boolean): Promise<TwitchClip[]>;
   /** Descarga el clip de Twitch y lo deja en la Biblioteca (vertical y horizontal). */
   channelImportClip(clipId: string): Promise<VodJob>;
   /** Dirección directa para ver un clip de Twitch sin descargarlo. */

@@ -68,7 +68,7 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
 
   handle(CHANNELS.channelStatus, () => ctx.channel.status());
   handle(CHANNELS.channelRefresh, () => ctx.channel.poll());
-  handle(CHANNELS.channelClips, () => ctx.channel.clips());
+  handle(CHANNELS.channelClips, (force) => ctx.channel.clips(force === true));
   handle(CHANNELS.channelImportClip, (id) => ctx.channel.importClip(str(id, 'clip')));
   handle(CHANNELS.channelClipStream, (id) => ctx.channel.clipStream(str(id, 'clip')));
   handle(CHANNELS.channelAuto, (on) => {

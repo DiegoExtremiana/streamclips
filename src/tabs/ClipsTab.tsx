@@ -7,6 +7,7 @@ import type { TabId } from '../App';
 import ScheduleDialog from '../library/ScheduleDialog';
 import { IconCalendar } from '../icons';
 import TwitchClips from './TwitchClips';
+import { SubTabs, useSubTab } from '../SubTabs';
 
 const KIND_LABEL = { clip: 'Clip', long: 'Vídeo largo' } as const;
 const PLAN_EXAMPLE = `{
@@ -29,6 +30,7 @@ export default function ClipsTab(props: {
   onChanged: () => Promise<void>;
   onNavigate: (tab: TabId) => void;
 }) {
+  const [sub, setSub] = useSubTab('streamclips.clips.sub', ['canal', 'crear']);
   const [scheduling, setScheduling] = useState<string | null>(null);
   const ready = props.vods.filter((v) => v.status === 'downloaded' && v.origin !== 'clip');
   const [vodId, setVodId] = useState('');
@@ -80,10 +82,21 @@ export default function ClipsTab(props: {
     });
 
   return (
+    <div className="stack">
+      <SubTabs
+        label="Clips y publicación"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'canal', label: 'Clips de tu canal', hint: 'Los clips que la gente (o tú) ha creado en Twitch: míralos y elige cuáles llevar a la Biblioteca.' },
+          { id: 'crear', label: 'Crear desde un VOD', hint: 'Corta tus propios clips y vídeos de un directo ya descargado. Los que se creen aparecen en la Biblioteca.' },
+        ]}
+      />
+      {sub === 'canal' && <TwitchClips vods={props.vods} outputs={props.outputs} onChanged={props.onChanged} />}
+      {sub === 'crear' && (
     <div className="grid">
-      <TwitchClips vods={props.vods} outputs={props.outputs} onChanged={props.onChanged} />
       <section className="card">
-        <h2>Crear clips</h2>
+        <h2>Crear un clip a mano</h2>
         {ready.length === 0 ? (
           <div className="muted">Aún no hay ningún VOD descargado. Cuando termine tu próximo directo, el programa lo recogerá solo (o añade uno a mano en el Panel).</div>
         ) : (
@@ -151,10 +164,10 @@ export default function ClipsTab(props: {
 
       <section className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h2>Últimos vídeos creados</h2>
+          <h2>Recién creados</h2>
           <button className="btn ghost small" onClick={() => props.onNavigate('biblioteca')}>Abrir la Biblioteca</button>
         </div>
-        {props.outputs.length === 0 && <div className="muted">Aún no hay vídeos. Los clips aparecen aquí cuando el render se valida.</div>}
+        {props.outputs.length === 0 && <div className="muted">Aún no hay vídeos creados. Aparecen aquí en cuanto se validan.</div>}
         <div className="list">
           {props.outputs.slice(0, 6).map((o) => {
             const mine = props.pubs.filter((p) => p.outputId === o.id && p.status === 'scheduled').length;
@@ -172,6 +185,8 @@ export default function ClipsTab(props: {
           })}
         </div>
       </section>
+    </div>
+      )}
       {scheduling && <ScheduleDialog outputs={props.outputs} pubs={props.pubs} outputId={scheduling} onChanged={props.onChanged} onClose={() => setScheduling(null)} />}
     </div>
   );

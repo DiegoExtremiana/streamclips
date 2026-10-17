@@ -194,14 +194,52 @@ describe('twitch: directo y clips', () => {
     await assert.rejects(() => new TwitchClient(stream([]).fn).streamStatus({ ...creds, clientSecret: '' }), /Faltan las credenciales/);
     await assert.rejects(() => new TwitchClient(stream([]).fn).streamStatus({ ...creds, login: 'no válido' }), /no es válido/);
   });
-  it('listClips: formato, orden (recientes primero) y límite', async () => {
+  it('listClips: formato y orden (recientes primero)', async () => {
     const m = stream([
       { id: 'a', title: 'Viejo', url: 'https://clips.twitch.tv/a', duration: 20.5, created_at: '2026-10-10T10:00:00Z', creator_name: 'x', view_count: 3, thumbnail_url: 'https://t/a.jpg' },
       { id: 'b', title: 'Nuevo', url: 'https://clips.twitch.tv/b', duration: 30, created_at: '2026-10-14T10:00:00Z', creator_name: 'y', view_count: 9, thumbnail_url: 'https://t/b.jpg' },
     ]);
-    const clips = await new TwitchClient(m.fn).listClips(creds, 500);
+    const clips = await new TwitchClient(m.fn).listClips(creds);
     assert.deepEqual(clips.map((c) => c.id), ['b', 'a']);
     assert.deepEqual(clips[0], { id: 'b', title: 'Nuevo', url: 'https://clips.twitch.tv/b', durationSec: 30, createdAt: '2026-10-14T10:00:00Z', creator: 'y', views: 9, thumbnail: 'https://t/b.jpg' });
-    assert.match(m.calls.find((c) => c.url.includes('/helix/clips'))!.url, /broadcaster_id=42&first=100$/);
+    assert.match(m.calls.find((c) => c.url.includes('/helix/clips'))!.url, /broadcaster_id=42&first=100&started_at=.*&ended_at=/);
+  });
+
+  describe('todos los clips', () => {
+    const NOW = Date.parse('2026-10-17T12:00:00Z');
+    const DAY = 86_400_000;
+    const mk = (n: number, daysAgo: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `c${daysAgo}-${i}`, title: `Clip ${daysAgo}-${i}`, url: `https://clips.twitch.tv/c${daysAgo}-${i}`, duration: 10, created_at: new Date(NOW - daysAgo * DAY - i * 60_000).toISOString(), creator_name: 'x', view_count: n - i, thumbnail_url: 't' }));
+    // 130 clips recientes (dos páginas), 5 de hace ~200 días y nada más
+    const historia = () =>
+      mockFetch((url) => {
+        if (url.includes('oauth2/token')) return json({ access_token: 'tok1', expires_in: 3600 });
+        if (url.includes('/helix/users')) return json({ data: [{ id: '42', display_name: 'Don_Diegons' }] });
+        const from = Date.parse(decodeURIComponent(/started_at=([^&]+)/.exec(url)![1]));
+        const to = Date.parse(decodeURIComponent(/ended_at=([^&]+)/.exec(url)![1]));
+        const inWindow = (d: number) => NOW - d * DAY >= from && NOW - d * DAY <= to;
+        const all = [...mk(130, 1), ...mk(5, 200)].filter((c) => inWindow((NOW - Date.parse(c.created_at)) / DAY));
+        const after = /after=([^&]+)/.exec(url)?.[1];
+        if (!after) return json({ data: all.slice(0, 100), pagination: all.length > 100 ? { cursor: 'c1' } : {} });
+        return json({ data: all.slice(100), pagination: {} });
+      });
+
+    it('pide todos: pagina con el cursor, recorre los tramos de fechas y los ordena del más reciente al más antiguo', async () => {
+      const m = historia();
+      const clips = await new TwitchClient(m.fn, () => NOW).listClips(creds);
+      assert.equal(clips.length, 135);
+      assert.equal(new Set(clips.map((c) => c.id)).size, 135);
+      assert.deepEqual(clips.map((c) => c.createdAt), [...clips.map((c) => c.createdAt)].sort().reverse());
+      const urls = m.calls.map((c) => c.url).filter((u) => u.includes('/helix/clips'));
+      assert.ok(urls.some((u) => u.includes('after=c1')), 'usa el cursor de la página siguiente');
+      assert.ok(urls.every((u) => u.includes('started_at=') && u.includes('ended_at=')), 'siempre con las dos fechas (si no, Twitch solo mira una semana)');
+      assert.ok(urls.length >= 8 && urls.length <= 10, `se detiene tras un año sin clips (${urls.length} peticiones)`);
+    });
+    it('con sinceMs solo mira lo reciente', async () => {
+      const m = historia();
+      const clips = await new TwitchClient(m.fn, () => NOW).listClips(creds, { sinceMs: NOW - 3 * DAY });
+      assert.equal(clips.length, 130);
+      assert.equal(m.calls.filter((c) => c.url.includes('/helix/clips')).length, 2);
+    });
   });
 });

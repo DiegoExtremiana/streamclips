@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { OutputItem, TwitchClip, VodJob } from '../../shared/types';
 import { fmtDate, fmtTime } from '../../shared/time';
 import { clipLibraryState, filterClips, type ClipLibraryState } from '../../shared/twitchClips';
+
 import { errMsg } from '../lib';
 import { IconPlus, IconSearch } from '../icons';
 import { Modal } from '../library/ui';
@@ -40,25 +41,33 @@ function ClipPreview({ clip, state, busy, onAdd, onClose }: { clip: TwitchClip; 
   );
 }
 
+const PAGE = 60;
+type Show = 'all' | 'new' | 'library';
+
 /**
- * Clips del canal de Twitch: del más reciente al más antiguo, en cuadrícula, con búsqueda por nombre.
- * Se actualizan solos y el estado «en la Biblioteca» se comprueba contra lo que hay ahora mismo.
+ * Clips del canal de Twitch: todos, del más reciente al más antiguo, en cuadrícula, con búsqueda por nombre y filtro
+ * por si están ya en la Biblioteca. Se actualizan solos y ese estado se comprueba contra lo que hay ahora mismo.
  * Se pueden ver aquí sin descargarlos; tú eliges cuáles pasan a la Biblioteca.
  */
 export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob[]; outputs: OutputItem[]; onChanged: () => Promise<void> }) {
   const [clips, setClips] = useState<TwitchClip[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
+  const [show, setShow] = useState<Show>('all');
+  const [limit, setLimit] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    setLoading(true);
     try {
-      setClips(await window.api.channelClips());
+      setClips(await window.api.channelClips(force));
       setError('');
     } catch (e) {
       setError(`${errMsg(e)}`);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -68,8 +77,17 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
     return () => clearInterval(t);
   }, [load]);
 
-  const shown = useMemo(() => filterClips(clips ?? [], query), [clips, query]);
   const stateOf = (c: TwitchClip) => clipLibraryState(c.id, vods, outputs);
+  const counts = useMemo(() => {
+    const all = clips ?? [];
+    const inLib = all.filter((c) => clipLibraryState(c.id, vods, outputs) !== 'none').length;
+    return { all: all.length, library: inLib, fresh: all.length - inLib };
+  }, [clips, vods, outputs]);
+  const matching = useMemo(() => {
+    const byName = filterClips(clips ?? [], query);
+    return byName.filter((c) => show === 'all' || (show === 'library') === (clipLibraryState(c.id, vods, outputs) !== 'none'));
+  }, [clips, query, show, vods, outputs]);
+  const shown = matching.slice(0, limit);
   const current = clips?.find((c) => c.id === open) ?? null;
 
   async function importClip(id: string) {
@@ -86,32 +104,28 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
 
   return (
     <section className="card" aria-label="Clips de tu canal de Twitch">
-      <div className="row" style={{ justifyContent: 'space-between' }}>
+      <div className="row" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <h2>Clips de tu canal de Twitch</h2>
-        <div className="row" style={{ gap: 6 }}>
-          {searching && (
-            <input
-              type="search"
-              autoFocus
-              aria-label="Buscar clips por nombre"
-              placeholder="Buscar por nombre…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setSearching(false); } }}
-              style={{ width: 220 }}
-            />
-          )}
-          <button className="btn ghost small" aria-label="Buscar clips" aria-pressed={searching} title="Buscar por nombre" onClick={() => { if (searching) setQuery(''); setSearching(!searching); }}><IconSearch /></button>
-          <button className="btn ghost small" onClick={() => void load()}>Actualizar</button>
-        </div>
+        <button className="btn ghost small" disabled={loading} onClick={() => void load(true)} title="Vuelve a pedir todos los clips a Twitch">{loading ? 'Actualizando…' : 'Actualizar'}</button>
       </div>
       <div className="muted small">
-        Del más reciente al más antiguo. Pulsa un clip para verlo aquí sin descargarlo; con «Añadir» se descarga y queda en la Biblioteca en vertical y horizontal.
-        {clips ? ` ${query.trim() ? `${shown.length} de ${clips.length}` : clips.length} clip(s).` : ''}
+        Todos los clips de tu canal, del más reciente al más antiguo. Pulsa uno para verlo aquí sin descargarlo; «Añadir» lo descarga y lo deja en la Biblioteca en vertical y horizontal.
+      </div>
+      <div className="row twtools" style={{ gap: 12, flexWrap: 'wrap' }}>
+        <label className="searchbox">
+          <IconSearch size={16} />
+          <input type="search" aria-label="Buscar clips por nombre" placeholder="Buscar por nombre…" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} />
+        </label>
+        <div className="seg" role="group" aria-label="Qué clips mostrar">
+          <button type="button" aria-pressed={show === 'all'} className={`segbtn ${show === 'all' ? 'active' : ''}`} onClick={() => { setShow('all'); setLimit(PAGE); }}>Todos ({counts.all})</button>
+          <button type="button" aria-pressed={show === 'new'} className={`segbtn ${show === 'new' ? 'active' : ''}`} onClick={() => { setShow('new'); setLimit(PAGE); }}>Sin añadir ({counts.fresh})</button>
+          <button type="button" aria-pressed={show === 'library'} className={`segbtn ${show === 'library' ? 'active' : ''}`} onClick={() => { setShow('library'); setLimit(PAGE); }}>En la Biblioteca ({counts.library})</button>
+        </div>
       </div>
       {error && <div className="msg bad" role="alert">{error} (revisa la pestaña Conexiones)</div>}
+      {!clips && !error && <div className="muted" role="status">Cargando los clips de tu canal (la primera vez puede tardar unos segundos)…</div>}
       {clips && clips.length === 0 && !error && <div className="muted" style={{ marginTop: 8 }}>Tu canal no tiene clips todavía.</div>}
-      {clips && clips.length > 0 && shown.length === 0 && <div className="muted" style={{ marginTop: 8 }}>Ningún clip se llama así.</div>}
+      {clips && clips.length > 0 && matching.length === 0 && <div className="muted" style={{ marginTop: 8 }}>{query.trim() ? 'Ningún clip se llama así.' : 'No hay clips en esta lista.'}</div>}
       <div className="tiles twclips" data-testid="twitch-clips">
         {shown.map((c) => {
           const st = stateOf(c);
@@ -135,6 +149,11 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           );
         })}
       </div>
+      {matching.length > shown.length && (
+        <div className="row" style={{ justifyContent: 'center' }}>
+          <button className="btn ghost" onClick={() => setLimit(limit + PAGE)}>Mostrar más ({matching.length - shown.length} restantes)</button>
+        </div>
+      )}
       {current && <ClipPreview clip={current} state={stateOf(current)} busy={busy === current.id} onAdd={() => void importClip(current.id)} onClose={() => setOpen(null)} />}
     </section>
   );

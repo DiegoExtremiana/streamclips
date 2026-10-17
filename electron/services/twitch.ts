@@ -26,6 +26,10 @@ export function normalizeLogin(input: string): string | null {
   return /^[a-z0-9_]{1,25}$/.test(s) ? s : null;
 }
 
+const CLIP_WINDOW_MS = 90 * 86_400_000;
+const CLIP_MAX_WINDOWS = 32;
+const CLIP_MAX_PAGES = 12;
+
 /** Cliente mínimo de la API Helix de Twitch con credenciales de aplicación (solo lectura pública). */
 export class TwitchClient {
   private token: { clientId: string; value: string; expiresAt: number } | null = null;
@@ -132,24 +136,49 @@ export class TwitchClient {
   }
 
   /** Clips del canal, los más recientes primero. */
-  async listClips(c: TwitchCreds, limit = 100): Promise<TwitchClip[]> {
+  /**
+   * Clips del canal, del más reciente al más antiguo. Twitch los devuelve ordenados por visualizaciones, de 100 en 100 y
+   * por ventanas de fechas, así que se piden por tramos de fechas y con paginación hasta tenerlos todos.
+   * Con `sinceMs` solo se piden los de desde esa fecha (para refrescar lo reciente sin repasar todo el historial).
+   */
+  async listClips(c: TwitchCreds, o: { sinceMs?: number } = {}): Promise<TwitchClip[]> {
     this.needCreds(c);
     const u = await this.userId(c);
-    const r = await this.helix<{
-      data: { id: string; title: string; url: string; duration: number; created_at: string; creator_name: string; view_count: number; thumbnail_url: string }[];
-    }>(`clips?broadcaster_id=${u.id}&first=${Math.max(1, Math.min(100, limit))}`, c);
-    return r.data
-      .map((x) => ({
-        id: x.id,
-        title: x.title,
-        url: x.url,
-        durationSec: x.duration,
-        createdAt: x.created_at,
-        creator: x.creator_name,
-        views: x.view_count,
-        thumbnail: x.thumbnail_url,
-      }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const seen = new Map<string, TwitchClip>();
+    const page = async (from: number, to: number): Promise<number> => {
+      let cursor = '';
+      let got = 0;
+      for (let i = 0; i < CLIP_MAX_PAGES; i++) {
+        const q = `clips?broadcaster_id=${u.id}&first=100&started_at=${encodeURIComponent(new Date(from).toISOString())}&ended_at=${encodeURIComponent(new Date(to).toISOString())}${cursor ? `&after=${encodeURIComponent(cursor)}` : ''}`;
+        const r = await this.helix<{
+          data: { id: string; title: string; url: string; duration: number; created_at: string; creator_name: string; view_count: number; thumbnail_url: string }[];
+          pagination?: { cursor?: string };
+        }>(q, c);
+        for (const x of r.data) {
+          got++;
+          seen.set(x.id, { id: x.id, title: x.title, url: x.url, durationSec: x.duration, createdAt: x.created_at, creator: x.creator_name, views: x.view_count, thumbnail: x.thumbnail_url });
+        }
+        cursor = r.pagination?.cursor ?? '';
+        if (!cursor || r.data.length === 0) break;
+      }
+      return got;
+    };
+    const end = this.now();
+    if (o.sinceMs !== undefined) {
+      await page(o.sinceMs, end);
+    } else {
+      // por tramos de 90 días hacia atrás; se para tras un año entero sin ningún clip (y nunca más allá de 8 años)
+      let to = end;
+      let emptyDays = 0;
+      for (let w = 0; w < CLIP_MAX_WINDOWS; w++) {
+        const from = to - CLIP_WINDOW_MS;
+        const n = await page(from, to);
+        emptyDays = n === 0 ? emptyDays + CLIP_WINDOW_MS : 0;
+        if (emptyDays >= 365 * 86_400_000) break;
+        to = from;
+      }
+    }
+    return [...seen.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   private needCreds(c: TwitchCreds): void {

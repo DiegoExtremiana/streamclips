@@ -62,6 +62,7 @@ async function poll(fn, ms = 10000) {
 }
 
 const tab = (page, name) => page.getByRole('tab', { name }).click();
+const sub = (page, name) => page.getByRole('tab', { name, exact: true }).click();
 const alertText = async (page) => (await page.getByRole('alert').first().innerText()).trim();
 const shot = (page, name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
 
@@ -81,7 +82,7 @@ try {
   log('el puente seguro (window.api) funciona y la página no tiene acceso a Node');
 
   // ── las cuatro pestañas ──
-  for (const [name, heading] of [['Programación', 'Tu canal'], ['Clips y publicación', 'Crear clips'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
+  for (const [name, heading] of [['Programación', 'Tu canal'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
     await tab(page, name);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
   }
@@ -91,6 +92,7 @@ try {
 
   // ── Programación: guía de inicio y teclado ──
   await tab(page, 'Programación');
+  await shot(page, '0-inicio');
   const guide = page.getByRole('region', { name: 'Primeros pasos' });
   await guide.waitFor();
   await guide.getByText('Descarga el modelo de Whisper').waitFor();
@@ -124,6 +126,7 @@ try {
   await shot(page, '1-ajustes');
   log('comprobación de herramientas: ffmpeg, ffprobe y yt-dlp detectados');
 
+  await sub(page, 'Piloto automático y subtítulos');
   await page.locator('#whisper-path').fill('whisper.exe');
   await page.getByRole('button', { name: 'Guardar transcripción' }).click();
   assert.match(await alertText(page), /ruta de whisper debe ser absoluta/);
@@ -153,9 +156,9 @@ try {
   await shot(page, '2-conexiones');
   log('Twitch: el canal se normaliza, el secreto se enmascara y no queda en claro en disco');
 
-  // ── Programación: URL inválida y descarga (en «Directos recogidos y actividad») ──
+  // ── Programación: URL inválida y descarga (en «Actividad y directos recogidos») ──
   await tab(page, 'Programación');
-  await page.getByText('Directos recogidos y actividad').click();
+  await page.getByText('Actividad y directos recogidos').click();
   await page.getByText('Añadir un VOD a mano').click();
   await page.getByLabel('URL del VOD').fill('--exec rm -rf /');
   await page.getByRole('button', { name: 'Descargar', exact: true }).click();
@@ -192,13 +195,19 @@ try {
   assert.deepEqual(await twTitles(), ['Fallo épico', 'Susto en la cueva', 'Pentakill increíble'], 'más recientes arriba');
   for (const id of ['c-new', 'c-mid', 'c-old']) assert.equal(await page.getByTestId(`twclip-${id}`).getAttribute('data-state'), 'none', 'ninguno está en la Biblioteca todavía');
   assert.equal(await page.getByTestId('twitch-clips').locator('img').count(), 3, 'cada clip enseña su miniatura (la política de seguridad la permite)');
-  await page.getByRole('button', { name: 'Buscar clips' }).click();
+  await page.getByRole('button', { name: 'Todos (3)' }).waitFor();
+  await page.getByRole('button', { name: 'Sin añadir (3)' }).click();
+  assert.equal((await twTitles()).length, 3);
+  await page.getByRole('button', { name: 'En la Biblioteca (0)' }).click();
+  await page.getByText('No hay clips en esta lista.').waitFor();
+  await page.getByRole('button', { name: 'Todos (3)' }).click();
   await page.getByLabel('Buscar clips por nombre').fill('EPICO');
   assert.deepEqual(await twTitles(), ['Fallo épico'], 'la búsqueda no distingue mayúsculas ni tildes');
   await page.getByLabel('Buscar clips por nombre').fill('zzz');
   await page.getByText('Ningún clip se llama así.').waitFor();
   await page.getByLabel('Buscar clips por nombre').fill('');
   assert.equal((await twTitles()).length, 3);
+  await shot(page, '3a-clips-canal');
   await page.getByTestId('twclip-c-mid').click();
   const prev = page.getByTestId('clip-preview');
   await prev.waitFor();
@@ -208,7 +217,8 @@ try {
   await shot(page, '3b-clips-twitch');
   await page.keyboard.press('Escape');
   await prev.waitFor({ state: 'detached' });
-  log('clips de Twitch: más recientes arriba, cuadrícula con miniaturas, lupa que busca por nombre y vista previa sin descargar ni añadir a la Biblioteca');
+  log('clips de Twitch: más recientes arriba, cuadrícula con miniaturas, lupa que busca por nombre, filtros por estado y vista previa sin descargar ni añadir a la Biblioteca');
+  await sub(page, 'Crear desde un VOD');
   await page.getByLabel('Inicio', { exact: true }).fill('abc');
   await page.getByLabel('Fin', { exact: true }).fill('4');
   await page.getByRole('button', { name: 'Crear clip' }).click();
@@ -766,6 +776,7 @@ try {
 
   // ── Eliminar clips y vídeos desde la Biblioteca ──
   await tab(page, 'Clips y publicación');
+  await sub(page, 'Crear desde un VOD');
   for (const t of ['Borrar A', 'Borrar B', 'Borrar C', 'Borrar D', 'Borrar E']) {
     await page.getByLabel('Inicio', { exact: true }).fill('1');
     await page.getByLabel('Fin', { exact: true }).fill('3');
@@ -851,7 +862,7 @@ try {
   // ── persistencia tras recargar y tras reiniciar ──
   await page.reload();
   await page.getByRole('tab', { name: 'Programación' }).waitFor();
-  await page.getByText('Directos recogidos y actividad').click();
+  await page.getByText('Actividad y directos recogidos').click();
   await page.getByText('Título del VOD').waitFor();
   log('al recargar la ventana los datos siguen ahí');
 
@@ -865,12 +876,13 @@ try {
 
   await app.close();
   ({ app, page, problems } = await launch());
-  await page.getByText('Directos recogidos y actividad').click();
+  await page.getByText('Actividad y directos recogidos').click();
   await page.getByText('Título del VOD').waitFor();
   await tab(page, 'Biblioteca');
   await page.getByTestId('group-Pokémon').waitFor();
   await page.getByTestId('item-Mi clip vertical').waitFor();
   await tab(page, 'Clips y publicación');
+  await sub(page, 'Crear desde un VOD');
   await page.getByText('Mi clip vertical', { exact: true }).waitFor();
   await page.getByText('Resumen renombrado', { exact: true }).waitFor();
   await tab(page, 'Programación');

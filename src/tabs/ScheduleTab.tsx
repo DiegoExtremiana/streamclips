@@ -90,6 +90,7 @@ export default function ScheduleTab(props: {
   const nVideos = allBlocks.filter((b) => b.kind === 'long').length;
   const nClips = allBlocks.length - nVideos;
   const failed = pubs.filter((p) => p.status === 'failed');
+  const activeCount = props.vods.filter((v) => v.origin !== 'clip' && (v.status === 'queued' || v.status === 'downloading' || ['waiting', 'transcribing', 'analyzing', 'rendering'].includes(v.autopilot?.status ?? ''))).length;
 
   async function moveBlock(b: Block, t: DropTarget) {
     const newAt = t.minutes !== undefined ? atFromDayMinutes(t.dayKey, t.minutes) : moveToDay(b.at, t.dayKey);
@@ -145,7 +146,8 @@ export default function ScheduleTab(props: {
 
   return (
     <div className="stack">
-      <PanelTab vods={props.vods} outputs={outputs} pubs={pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="top" />
+      <PanelTab vods={props.vods} outputs={outputs} pubs={pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="status" />
+      <PanelTab vods={props.vods} outputs={outputs} pubs={pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="attention" />
 
       <div className="sched">
         <section className="card" aria-label="Próximas subidas">
@@ -289,7 +291,7 @@ export default function ScheduleTab(props: {
       </div>
 
       <details className="adv" style={{ marginTop: 4 }}>
-        <summary>Directos recogidos y actividad</summary>
+        <summary>Actividad y directos recogidos{activeCount ? ` · ${activeCount} en curso` : ''}</summary>
         <div className="adv-body">
           <PanelTab vods={props.vods} outputs={outputs} pubs={pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="bottom" />
         </div>

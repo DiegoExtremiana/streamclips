@@ -5,6 +5,7 @@ import AutopilotCard from './AutopilotCard';
 import UpdatesCard from './UpdatesCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
+import { SubTabs, useSubTab } from '../SubTabs';
 
 export default function SettingsTab() {
   const [outputDir, setOutputDir] = useState('');
@@ -17,6 +18,7 @@ export default function SettingsTab() {
   const [wprog, setWprog] = useState<number | null>(null);
   const [tools, setTools] = useState<ToolStatus | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [sub, setSub] = useSubTab('streamclips.settings.sub', ['general', 'auto', 'nube']);
 
   useEffect(() => {
     window.api
@@ -108,7 +110,18 @@ export default function SettingsTab() {
     );
 
   return (
-    <div className="grid">
+    <div className="stack">
+      <SubTabs
+        label="Ajustes"
+        value={sub}
+        onChange={setSub}
+        tabs={[
+          { id: 'general', label: 'General', hint: 'Dónde se guardan los vídeos, las herramientas que usa el programa y las actualizaciones.' },
+          { id: 'auto', label: 'Piloto automático y subtítulos', hint: 'Qué prepara solo el programa al acabar un directo y cómo escucha lo que dices (Whisper).' },
+          { id: 'nube', label: 'Publicar con el PC apagado', hint: 'Opcional: que un servicio gratuito de GitHub prepare y suba los vídeos mientras tu PC está apagado.' },
+        ]}
+      />
+      {sub === 'general' && <div className="grid">
       <section className="card">
         <h2>Carpeta de salida</h2>
         <div className="muted small">Aquí se guardan los VODs descargados (subcarpeta vods) y los clips (vertical, horizontal y long).</div>
@@ -142,7 +155,9 @@ export default function SettingsTab() {
       </section>
 
       <UpdatesCard />
+      </div>}
 
+      {sub === 'auto' && <div className="grid">
       <AutopilotCard />
 
       <section className="card">
@@ -185,10 +200,15 @@ export default function SettingsTab() {
           </div>
         </div>
         <button className="btn" onClick={() => void save()}>Guardar transcripción</button>
+        {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
       </section>
 
-      <CloudCard />
-      <EngineCard />
+      </div>}
+
+      {sub === 'nube' && <div className="grid">
+        <CloudCard />
+        <EngineCard />
+      </div>}
     </div>
   );
 }

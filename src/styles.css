@@ -113,7 +113,7 @@ button:focus-visible, [role=button]:focus-visible { outline: 2px solid var(--acc
 .empty .icon { color: var(--faint); }
 
 /* ---------- biblioteca ---------- */
-.libbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.libbar { display: flex; justify-content: flex-start; align-items: center; gap: 12px; flex-wrap: wrap; }
 .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 11px; padding: 3px; }
 .segbtn { background: none; border: 0; color: var(--muted); padding: 6px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; transition: color .12s; }
 .segbtn:hover { color: var(--text); }
@@ -420,3 +420,28 @@ button.btn.danger-text { color: var(--bad); }
 .dov .vwin { pointer-events: auto; }
 .studio.designing .studio-col .player { max-height: none; }
 .studio-col.v .vpreview { max-width: none; }
+
+/* Secciones de una pantalla como pestañas */
+.subtabs-wrap { display: flex; flex-direction: column; gap: 10px; }
+.subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.subtab { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); padding: 9px 16px; cursor: pointer; font-weight: 600; font-size: 14px; display: inline-flex; gap: 8px; align-items: center; }
+.subtab:hover { color: var(--text); }
+.subtab.active { color: #fff; border-bottom-color: var(--accent-2); }
+.subtab:focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; border-radius: 6px; }
+.subtab-badge { background: var(--surface-3); color: var(--muted); font-size: 11px; padding: 1px 8px; border-radius: 10px; font-weight: 600; }
+.subtab.active .subtab-badge { background: rgba(161, 139, 255, .25); color: #fff; }
+.subtab-hint { margin-top: -2px; }
+
+.searchbox { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; padding: 0 12px; min-width: 240px; flex: 1 1 240px; max-width: 360px; color: var(--muted); }
+.searchbox:focus-within { border-color: var(--accent-2); color: var(--text); }
+.searchbox input { border: 0; background: transparent; padding: 8px 0; outline: none; flex: 1; min-width: 0; box-shadow: none; }
+.twtools { margin: 12px 0 2px; }
+
+/* Primeros pasos: una fila compacta de pasos en vez de una lista alta */
+.card.guide { padding: 14px 18px; }
+.card.guide .steps { flex-direction: row; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.card.guide .steps li { flex: 1 1 280px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); flex-wrap: wrap; }
+.card.guide .steps li.done { opacity: .65; }
+.card.guide .steps li > .btn { margin-left: 36px; }
+.libbar > .row:last-child { margin-left: auto; }
+.libbar { margin-bottom: 10px; }

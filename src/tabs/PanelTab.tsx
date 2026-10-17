@@ -24,7 +24,7 @@ const AUTO_STATUS: Record<NonNullable<VodJob['autopilot']>['status'], { label: s
 };
 const ROLE_LABEL = { summary: 'Resumen', main: 'Vídeo principal', clip: 'Clip' } as const;
 
-export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void; part: 'top' | 'bottom' }) {
+export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void; part: 'status' | 'attention' | 'bottom' }) {
   const { vods, outputs, onChanged } = props;
   const [channel, setChannel] = useState<ChannelStatus | null>(null);
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
@@ -70,8 +70,7 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
 
   return (
     <div className="grid">
-      {props.part === 'top' && <GuideCard onNavigate={props.onNavigate} refreshKey={outputs.length + props.pubs.length} />}
-      {props.part === 'top' && (
+      {props.part === 'status' && (
       <section className="card statusbar" aria-label="Tu canal">
         <div className="row" style={{ gap: 12 }}>
           <h2>Tu canal</h2>
@@ -99,11 +98,11 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
           </div>
         )}
         {channel?.error && <div className="msg bad" role="alert">{channel.error}</div>}
-        {props.part === 'top' && error && <div className="msg bad" role="alert">{error}</div>}
+        {props.part === 'status' && error && <div className="msg bad" role="alert">{error}</div>}
       </section>
       )}
 
-      {props.part === 'top' && pending.length > 0 && (
+      {props.part === 'attention' && pending.length > 0 && (
       <section className="card" aria-label="Pendientes de tu visto bueno">
         <h2>Pendientes de tu visto bueno</h2>
         <div className="muted small">El programa ha preparado esto a partir de tu último directo. Apruébalo para que se programe, o recházalo.</div>
@@ -134,6 +133,8 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
         </div>
       </section>
       )}
+
+      {props.part === 'attention' && <GuideCard onNavigate={props.onNavigate} refreshKey={outputs.length + props.pubs.length} />}
 
       {props.part === 'bottom' && (
       <section className="card" aria-label="Actividad">

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { bestStretches, buildSummary, fallbackTitle, findMoments, textOf, type Seg, type Signals } from '../../shared/highlights';
+import { bestStretches, buildSummary, dedupeTitles, findMoments, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
@@ -228,13 +228,19 @@ export class Autopilot {
   private async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]) {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: '' },
-      mains: mains.map((m, i) => ({ title: clean(words.length ? fallbackTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: '' })),
-      clips: moments.map((m, i) => ({ title: clean(words.length ? fallbackTitle(words, m, i) : `Momento ${i + 1}`, 100), description: '' })),
+      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: '' })),
+      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: '' })),
+    };
+    const uniq = () => {
+      const u = dedupeTitles([...base.mains.map((t) => t.title), ...base.clips.map((t) => t.title)]);
+      base.mains.forEach((t, i) => (t.title = u[i]));
+      base.clips.forEach((t, i) => (t.title = u[base.mains.length + i]));
     };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === 'none' || !key || !words.length) {
       if (llm.provider !== 'none' && !words.length) notes.push('Títulos sin modelo de lenguaje: no hay transcripción.');
+      uniq();
       return base;
     }
     const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
@@ -245,7 +251,7 @@ export class Autopilot {
     try {
       const raw = (await askJson(
         conf,
-        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes títulos cortos y atractivos (máximo 70 caracteres, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.',
+        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, máximo 40 caracteres, que digan qué pasa en él, distintos entre sí, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.',
         `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.\n"resumen" es el resumen de todo el directo (no tienes su texto: titúlalo a partir de los demás fragmentos). Fragmentos:\n${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch },
       )) as { resumen?: Record<string, unknown>; videos?: Record<string, unknown>[]; clips?: Record<string, unknown>[] };
@@ -258,6 +264,7 @@ export class Autopilot {
     } catch (e) {
       notes.push(`Títulos sin modelo de lenguaje: ${(e as Error).message}`);
     }
+    uniq();
     return base;
   }
 
@@ -269,7 +276,7 @@ export class Autopilot {
     const words = this.d.transcripts.words(vodId);
     const seg: Seg = { start, end };
     if (!words.some((w) => w.start >= start && w.end <= end + 0.5)) return null;
-    const fb = clean(fallbackTitle(words, seg, 0), 100);
+    const fb = clean(shortTitle(words, seg, 0), 100);
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider !== 'none' && key) {
@@ -277,7 +284,7 @@ export class Autopilot {
         const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
         const raw = (await askJson(
           conf,
-          'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes títulos cortos y atractivos (máximo 70 caracteres, sin clickbait falso, sin emojis). Responde SOLO con JSON.',
+          'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes un nombre muy corto para el fragmento (2 a 5 palabras, máximo 40 caracteres, que diga qué pasa en él, sin clickbait falso, sin emojis). Responde SOLO con JSON.',
           `Texto transcrito de un fragmento. Devuelve {"titulo":""}.\n${textOf(words, start, Math.min(end, start + 240), 900)}`,
           { fetchFn: this.d.llmFetch },
         )) as { titulo?: unknown };

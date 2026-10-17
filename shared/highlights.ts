@@ -316,3 +316,69 @@ export function fallbackTitle(words: Word[], m: Seg, index: number): string {
   if (!base) return `Momento ${index + 1}`;
   return base.length > 70 ? `${base.slice(0, 67).trimEnd()}…` : base;
 }
+
+const STOP = new Set(
+  ('a al algo ante aquí así aunque bien cada como con contra cosa cosas cual cuando de del desde donde dos el él ella ellas ellos en entre era eran es esa ese eso esos esta este esto está están estoy fue ha han hasta hay he hemos la las le les lo los me mi mis muy ni no nos o os otra otro para pero poco por porque pues que qué quien se sea ser si sí sin sobre son soy su sus también tan te tengo tiene tienes todo todos tu tus un una uno unos vale venga vamos va vas voy ya yo oye mira digo bueno entonces esto eso eh ah um jo pues claro vale así luego ahora aquí allí muy más menos solo sólo tío tía chat chicos gente').split(' '),
+);
+
+const tokenOf = (t: string) => t.replace(/[^\p{L}\p{N}]/gu, '');
+const isStop = (t: string) => t.length < 3 || STOP.has(t.toLowerCase());
+
+/**
+ * Nombre corto (2-5 palabras, hasta ~40 caracteres) para un tramo, sacado de lo que se dice en él: se elige la frase con más
+ * contenido (las palabras raras en el resto del directo pesan más que las muletillas) y de ella el tramo de palabras más
+ * significativo. Sin palabras da «Momento n».
+ */
+export function shortTitle(words: Word[], m: Seg, index: number, o: { maxWords?: number; maxChars?: number } = {}): string {
+  const maxWords = o.maxWords ?? 5;
+  const maxChars = o.maxChars ?? 40;
+  const inside = words.filter((w) => w.start >= m.start && w.end <= m.end + 0.5);
+  const counts = new Map<string, number>();
+  for (const w of words) {
+    const k = tokenOf(w.text).toLowerCase();
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const weight = (raw: string): number => {
+    const k = tokenOf(raw).toLowerCase();
+    if (!k || isStop(k)) return 0;
+    return (1 + Math.min(k.length, 10) / 10) / Math.log(2 + (counts.get(k) ?? 1));
+  };
+  type Best = { score: number; toks: string[] };
+  let best: Best | null = null;
+  for (const s of sentences(inside)) {
+    const sw = inside.filter((w) => w.start >= s.start && w.end <= s.end + 0.01);
+    const toks = sw.map((w) => w.text);
+    const ws = toks.map(weight);
+    const bonus = /[!?]/.test(toks.join(' ')) ? 1.5 : 0;
+    for (let i = 0; i < toks.length; i++) {
+      if (ws[i] === 0) continue;
+      for (let j = i; j < Math.min(toks.length, i + maxWords); j++) {
+        if (ws[j] === 0) continue;
+        const slice = toks.slice(i, j + 1).map(tokenOf);
+        if (slice.some((t) => !t)) continue;
+        let text = slice.join(' ');
+        while (text.length > maxChars && slice.length > 1) {
+          slice.pop();
+          text = slice.join(' ');
+        }
+        if (text.length > maxChars || ws.slice(i, j + 1).filter((x) => x > 0).length < Math.min(2, ws.filter((x) => x > 0).length)) continue;
+        const score = ws.slice(i, j + 1).reduce((a, b) => a + b, 0) + bonus - 0.05 * (j - i);
+        if (!best || score > best.score + 1e-9) best = { score, toks: slice };
+      }
+    }
+  }
+  if (!best) return `Momento ${index + 1}`;
+  const t = best.toks.join(' ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** Evita dos nombres iguales en una misma tanda: al repetido se le añade « 2», « 3»… */
+export function dedupeTitles(titles: string[]): string[] {
+  const seen = new Map<string, number>();
+  return titles.map((t) => {
+    const k = t.toLowerCase();
+    const n = (seen.get(k) ?? 0) + 1;
+    seen.set(k, n);
+    return n === 1 ? t : `${t} ${n}`;
+  });
+}

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bestStretch, bestStretches, buildSummary, fallbackTitle, findMoments, mergeSegments, robustZ, scoreSeconds, smooth, snapToSentences, textOf, type Signals } from '../shared/highlights';
+import { bestStretch, bestStretches, buildSummary, dedupeTitles, fallbackTitle, shortTitle, findMoments, mergeSegments, robustZ, scoreSeconds, smooth, snapToSentences, textOf, type Signals } from '../shared/highlights';
 import type { Word } from '../shared/subtitles';
 
 /** Directo de 1 hora con ruido bajo y dos explosiones (en 600 s y 2400 s). */
@@ -143,5 +143,31 @@ describe('highlights: directos largos (3-4 h)', () => {
     assert.equal(bestStretches({ durationSec: 100, energyDb: [] }, 300, 3).length, 0);
     // pide más de los que hay: devuelve solo los que de verdad destacan
     assert.ok(bestStretches(sig, 300, 50).length < 50);
+  });
+});
+
+describe('highlights: nombres cortos', () => {
+  const speech = (txt: string): Word[] => {
+    let t = 0;
+    return txt.split(' ').map((x) => W(x, (t += 0.4)));
+  };
+  it('shortTitle da de 2 a 5 palabras, máximo 40 caracteres, de lo que se dice en el tramo', () => {
+    const w = speech('Bueno chicos mirad esto vamos a entrar en la cueva y de repente aparece un creeper enorme. Ahora vamos a construir la casa del pueblo con madera de roble');
+    const a = shortTitle(w, { start: 0, end: 8 }, 0);
+    const b = shortTitle(w, { start: 8, end: 30 }, 1);
+    for (const t of [a, b]) {
+      assert.ok(t.split(' ').length >= 2 && t.split(' ').length <= 5, t);
+      assert.ok(t.length <= 40, t);
+    }
+    assert.match(a, /creeper|cueva/i);
+    assert.match(b, /casa|pueblo|madera|roble|construir/i);
+    assert.notEqual(a, b);
+  });
+  it('shortTitle sin palabras o solo muletillas cae en «Momento n»', () => {
+    assert.equal(shortTitle([], { start: 0, end: 5 }, 2), 'Momento 3');
+    assert.equal(shortTitle(speech('vale bueno pues eso'), { start: 0, end: 5 }, 0), 'Momento 1');
+  });
+  it('dedupeTitles distingue los repetidos', () => {
+    assert.deepEqual(dedupeTitles(['Casa', 'Cueva', 'casa', 'Casa']), ['Casa', 'Cueva', 'casa 2', 'Casa 3']);
   });
 });

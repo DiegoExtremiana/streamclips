@@ -7,6 +7,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Todos los clips de tu canal, en orden**: se piden a Twitch por tramos de 90 días con paginación (antes solo llegaban los más vistos de una semana) y se muestran del más reciente al más antiguo, con filtros «Todos / Sin añadir / En la Biblioteca» y búsqueda.
 - **Clips y publicación reorganizada** en dos pestañas: «Clips de tu canal» y «Crear desde un VOD».
 - **Panel inicial reordenado**: primero el estado de tu canal y los primeros pasos, después las próximas subidas y lo que está sin programar.
+- **Nombres cortos automáticos** para clips y vídeos: de 2 a 5 palabras (máximo 40 caracteres) sacadas de lo que se dice en cada tramo, distintas entre sí dentro de una misma tanda; con un modelo de lenguaje configurado los redacta él con el mismo límite. Sin transcripción se queda en «Momento n».
 - **Ajustes** dividido en subpestañas, **Biblioteca** con búsqueda y orden, e indicador de estado en **Conexiones**; la última subpestaña usada se recuerda.
 
 ## Novedades de la v0.11
@@ -87,7 +88,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Qué se ha probado y cómo
 
-`npm run check` ejecuta tipos, ESLint y 467 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (74 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
+`npm run check` ejecuta tipos, ESLint y 470 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (74 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
 
 **No se ha probado**: en Windows, ni contra Twitch real (yt-dlp real sí se ha probado con una URL local: acepta los parámetros que usa la app y devuelve el MP4), ni el instalador final `.exe` (aquí solo se pudo generar la carpeta de la aplicación para Windows; el instalador se genera en GitHub Actions).
 

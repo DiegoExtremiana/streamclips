@@ -55,7 +55,7 @@ export default function AutopilotCard() {
       <div className="muted small">
         Al terminar un directo, el programa recoge el VOD, lo transcribe (en castellano), busca los mejores momentos (volumen, voz y chat) y prepara
         un resumen, varios vídeos y clips. Los programa solos en las horas de abajo (uno por hueco y día). Todo lo programado se puede cambiar
-        en la pestaña Programación.
+        en la pestaña Inicio.
       </div>
       <label className="row" style={{ gap: 8, marginTop: 10 }}>
         <input type="checkbox" checked={a.enabled} onChange={(e) => up({ enabled: e.target.checked })} /> Activar el piloto automático

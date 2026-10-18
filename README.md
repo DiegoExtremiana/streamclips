@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.15
+
+- **Nuevo Inicio** (antes «Programación»): una sola pantalla, sin scroll general, con tres paneles alineados en horizontal: **cuadrícula de los últimos clips**, **cuadrícula de los últimos vídeos** (los que aún no tienen subida) y el **calendario**. Agarras una miniatura y la sueltas en un día —o en una hora exacta, con la vista «Línea de tiempo»— y se abre «Añadir subida» con ese día y esa hora para configurarla (redes, título, visibilidad…). Cada panel hace scroll por dentro si hay muchos.
+- Aviso si ves «no se encontró ffmpeg.dll» al abrir el programa: es un fallo de la instalación local (instalación o actualización interrumpida, o un antivirus que movió el archivo), no del instalador, que sí lo incluye. Se arregla reinstalando con `StreamClips-Setup-X.exe` encima.
+
 ## Novedades de la v0.14
 
 (v0.14.1: la transcripción bajo demanda es solo del tramo del clip o vídeo. v0.14.2: Whisper se compila con instrucciones de CPU fijas (AVX2) y con una versión básica de reserva, porque la anterior fallaba con «instrucción ilegal» en procesadores sin AVX-512; los errores de transcripción se muestran con su motivo real.)
@@ -54,7 +59,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Novedades de la v0.9
 
-- **Edición nocturna sin tu PC** (`docs/MOTOR.md`): al acabar tu directo, un flujo de GitHub Actions descarga el VOD, lo transcribe en **castellano de España**, lo edita durante la noche y deja vídeos y clips **programados**, aunque tu ordenador y el programa estén apagados. Por la mañana abres el programa y lo ves en Programación. *No se ha probado contra GitHub/Twitch reales; límites en el documento.*
+- **Edición nocturna sin tu PC** (`docs/MOTOR.md`): al acabar tu directo, un flujo de GitHub Actions descarga el VOD, lo transcribe en **castellano de España**, lo edita durante la noche y deja vídeos y clips **programados**, aunque tu ordenador y el programa estén apagados. Por la mañana abres el programa y lo ves en Inicio. *No se ha probado contra GitHub/Twitch reales; límites en el documento.*
 - **Programación automática por defecto**: 4 vídeos al día en YouTube (08:00, 12:00, 16:00, 21:30) y 3 clips al día (10:00, 14:00, 19:00) en YouTube Shorts, TikTok e Instagram; las horas y cuántos se crean por directo se cambian en Ajustes. Lo automático se programa solo (sin pedir visto bueno, configurable) y sale público (configurable).
 - **Programación abre en calendario**: pulsa un día para ver su plan, con una sección de **Vídeos** y otra de **Clips**, con la hora y las redes de cada uno editables ahí mismo; pulsa un vídeo o clip para abrir todas sus características (nombre, descripción, lista, visibilidad, hora, redes…). Los clips ahora también tienen descripción y visibilidad.
 

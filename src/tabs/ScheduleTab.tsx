@@ -28,12 +28,12 @@ const readView = (): View => {
 };
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DAYS_SHOWN = 7;
-const TRAY_MAX = 12; // en la bandeja solo los últimos; el resto está en la Biblioteca
+const TRAY_MAX = 24; // en la bandeja solo los últimos; el resto está en la Biblioteca
 
 type Dialog = { type: 'add'; outputId?: string; defaultWhen?: string } | { type: 'block'; block: Block };
 
 /**
- * Programación: tus próximas subidas en una línea de tiempo y en un calendario. Se arrastran para cambiar el día
+ * Inicio: tus últimos clips, tus últimos vídeos y el calendario, en una sola pantalla. Se arrastran para cambiar el día
  * y la hora; los vídeos sin programar se arrastran desde la bandeja hasta el día y la hora que quieras.
  */
 export default function ScheduleTab(props: {
@@ -157,80 +157,52 @@ export default function ScheduleTab(props: {
 
   return (
     <div className="stack">
-      <div className="sched">
-        <aside className="card tray" aria-label="Sin programar">
-          <h2>Sin programar</h2>
-          <div className="muted small">Lo último que aún no tiene subida. Arrástralo a un día del calendario, o púlsalo.</div>
-          <h3 className="tray-h">Vídeos</h3>
-          <div className="muted small">Solo se publican en YouTube. Los gestionas desde aquí.</div>
-          {trayVideos.length === 0 && <div className="muted small">Nada pendiente.</div>}
-          <div className="traylist">
-            {trayVideos.map((o) => (
-              <div
-                key={o.id}
-                className={`trayitem ${drag.dragging?.kind === 'video' && drag.dragging.output.id === o.id ? 'ghosted' : ''}`}
-                role="button"
-                tabIndex={0}
-                data-testid={`tray-${o.title}`}
-                aria-label={`${o.title}: programar subida`}
-                onPointerDown={(e) => drag.start(e, { kind: 'video', output: o }, o.title)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    drag.onActivate({ kind: 'video', output: o });
-                  }
-                }}
-              >
-                <div className="traythumb">
-                  {o.thumbnail ? <img src={mediaUrl(o.id, 'thumb', o.thumbnail)} alt="" draggable={false} /> : <IconFilm size={20} />}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="title-ellipsis" style={{ maxWidth: 150, fontWeight: 600 }}>{o.title}</div>
-                  <div className="muted small">{o.kind === 'long' ? 'Vídeo' : 'Clip'} · {fmtTime(o.durationSec)}{o.auto?.review === 'pending' ? ' · por aprobar' : ''}</div>
-                </div>
-                {o.auto?.review === 'pending' && (
-                  <button type="button" className="btn small" style={{ marginLeft: 'auto' }} title="Dar el visto bueno y programarlo" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void approve(o); }}>Aprobar</button>
-                )}
+      <div className="sched home">
+        {([
+          { label: 'Últimos clips', note: 'YouTube, TikTok e Instagram', all: trayClipsAll, shown: trayClips },
+          { label: 'Últimos vídeos', note: 'Solo YouTube', all: trayVideosAll, shown: trayVideos },
+        ] as const).map((pane) => (
+          <aside key={pane.label} className="card pane tray" aria-label={pane.label}>
+            <div className="pane-head">
+              <h2>{pane.label}</h2>
+              <span className="muted small">{pane.all.length ? `${pane.all.length} sin programar · ${pane.note}` : pane.note}</span>
+            </div>
+            <div className="pane-body">
+              {pane.shown.length === 0 && <div className="muted small">Todo programado. Lo nuevo aparecerá aquí.</div>}
+              <div className="tilegrid">
+                {pane.shown.map((o) => (
+                  <div
+                    key={o.id}
+                    className={`tile ${drag.dragging?.kind === 'video' && drag.dragging.output.id === o.id ? 'ghosted' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    data-testid={`tray-${o.title}`}
+                    aria-label={`${o.title}: programar subida`}
+                    title={`${o.title}\nArrástralo a un día u hora del calendario, o púlsalo para programarlo.`}
+                    onPointerDown={(e) => drag.start(e, { kind: 'video', output: o }, o.title)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        drag.onActivate({ kind: 'video', output: o });
+                      }
+                    }}
+                  >
+                    <div className="tilethumb">
+                      {o.thumbnail ? <img src={mediaUrl(o.id, 'thumb', o.thumbnail)} alt="" draggable={false} /> : <IconFilm size={22} />}
+                      <span className="tiledur">{fmtTime(o.durationSec)}</span>
+                    </div>
+                    <div className="tiletitle">{o.title}</div>
+                    {o.auto?.review === 'pending' ? (
+                      <button type="button" className="btn small" title="Dar el visto bueno y programarlo" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void approve(o); }}>Aprobar</button>
+                    ) : null}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {trayVideosAll.length > trayVideos.length && <div className="muted small">Y {trayVideosAll.length - trayVideos.length} más en la Biblioteca.</div>}
-          <h3 className="tray-h">Clips</h3>
-          <div className="muted small">Pueden ir a YouTube, TikTok e Instagram.</div>
-          {trayClips.length === 0 && <div className="muted small">Nada pendiente.</div>}
-          <div className="traylist">
-            {trayClips.map((o) => (
-              <div
-                key={o.id}
-                className={`trayitem ${drag.dragging?.kind === 'video' && drag.dragging.output.id === o.id ? 'ghosted' : ''}`}
-                role="button"
-                tabIndex={0}
-                data-testid={`tray-${o.title}`}
-                aria-label={`${o.title}: programar subida`}
-                onPointerDown={(e) => drag.start(e, { kind: 'video', output: o }, o.title)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    drag.onActivate({ kind: 'video', output: o });
-                  }
-                }}
-              >
-                <div className="traythumb">
-                  {o.thumbnail ? <img src={mediaUrl(o.id, 'thumb', o.thumbnail)} alt="" draggable={false} /> : <IconFilm size={20} />}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="title-ellipsis" style={{ maxWidth: 150, fontWeight: 600 }}>{o.title}</div>
-                  <div className="muted small">{o.kind === 'long' ? 'Vídeo' : 'Clip'} · {fmtTime(o.durationSec)}{o.auto?.review === 'pending' ? ' · por aprobar' : ''}</div>
-                </div>
-                {o.auto?.review === 'pending' && (
-                  <button type="button" className="btn small" style={{ marginLeft: 'auto' }} title="Dar el visto bueno y programarlo" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void approve(o); }}>Aprobar</button>
-                )}
-              </div>
-            ))}
-          </div>
-          {trayClipsAll.length > trayClips.length && <div className="muted small">Y {trayClipsAll.length - trayClips.length} más en la Biblioteca.</div>}
-        </aside>
-        <section className="card" aria-label="Próximas subidas">
+              {pane.all.length > pane.shown.length && <div className="muted small">Y {pane.all.length - pane.shown.length} más en la Biblioteca.</div>}
+            </div>
+          </aside>
+        ))}
+        <section className="card pane cal-pane" aria-label="Próximas subidas">
           <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
             <h2>Próximas subidas</h2>
             <div className="row">
@@ -249,7 +221,7 @@ export default function ScheduleTab(props: {
               <button className="btn ghost small" aria-label={view === 'timeline' ? 'Semana siguiente' : 'Mes siguiente'} onClick={() => (view === 'timeline' ? setAnchor(addDays(anchor, DAYS_SHOWN)) : shiftMonth(1))}><IconChevron /></button>
               <strong className="cap1" style={{ marginLeft: 8 }} aria-live="polite">{view === 'timeline' ? rangeLabel : `${MONTHS[month.month0]} de ${month.year}`}</strong>
             </div>
-            <span className="muted small">Arrastra una subida para cambiar su {view === 'timeline' ? 'día y su hora' : 'día'}.</span>
+            <span className="muted small hint">Arrastra una subida para cambiar su {view === 'timeline' ? 'día y su hora' : 'día'}.</span>
           </div>
 
           <div className="row" style={{ gap: 10 }}>
@@ -258,7 +230,7 @@ export default function ScheduleTab(props: {
               <button type="button" aria-pressed={filter === 'videos'} className={`segbtn ${filter === 'videos' ? 'active' : ''}`} onClick={() => setFilter('videos')}>Vídeos · YouTube ({nVideos})</button>
               <button type="button" aria-pressed={filter === 'clips'} className={`segbtn ${filter === 'clips' ? 'active' : ''}`} onClick={() => setFilter('clips')}>Clips · todas las redes ({nClips})</button>
             </div>
-            <span className="legend"><i className="dot video" /> Vídeo <i className="dot clip" /> Clip</span>
+            <span className="legend hint"><i className="dot video" /> Vídeo <i className="dot clip" /> Clip</span>
           </div>
           </>)}
 
@@ -301,7 +273,7 @@ export default function ScheduleTab(props: {
               onOpenDay={(day) => setOpenDay(day)}
             />
           )}
-          {blocks.length === 0 && !openDay && <div className="muted small">Todavía no hay subidas programadas. Arrastra un vídeo de la bandeja «Sin programar» a un día, o pulsa «Añadir subida».</div>}
+          {blocks.length === 0 && !openDay && <div className="muted small hint">Todavía no hay subidas programadas. Arrastra un vídeo de la bandeja «Sin programar» a un día, o pulsa «Añadir subida».</div>}
         </section>
 
       </div>

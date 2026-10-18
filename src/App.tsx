@@ -13,7 +13,7 @@ import Toasts from './Toasts';
 export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'conexiones' | 'ajustes';
 
 const TABS: { id: TabId; label: string; hint: string; icon: ReactNode }[] = [
-  { id: 'programacion', label: 'Programación', hint: 'Tus vídeos y clips sin programar, a la izquierda: arrástralos a un día del calendario para elegir cuándo se publican.', icon: <IconPanel /> },
+  { id: 'programacion', label: 'Inicio', hint: 'Tus últimos clips y vídeos a la izquierda: arrástralos a un día (o una hora, en la línea de tiempo) del calendario y configura ahí su publicación.', icon: <IconPanel /> },
   { id: 'biblioteca', label: 'Biblioteca', hint: 'Tus clips y vídeos: edítalos, ordénalos en carpetas y programa su publicación.', icon: <IconLibrary /> },
   { id: 'clips', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, las herramientas para crear los tuyos a partir de un directo y los directos recogidos.', icon: <IconScissors /> },
   { id: 'conexiones', label: 'Conexiones', hint: 'Estado de tu canal de Twitch, primeros pasos y tus redes sociales.', icon: <IconLink /> },
@@ -122,7 +122,7 @@ export default function App() {
           <h1>{current.label}</h1>
           <p>{current.hint}</p>
         </header>
-        <main className="main">
+        <main className={`main ${tab === 'programacion' ? 'fit' : ''}`}>
           {loadError && <div className="msg bad" style={{ marginBottom: 16 }}>No se pudieron cargar los datos: {loadError}</div>}
           {tab === 'programacion' && <ScheduleTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} onOpenVideo={(id) => { setOpenOutput(id); setTab('biblioteca'); }} />}
           {tab === 'biblioteca' && <LibraryTab outputs={outputs} groups={groups} pubs={pubs} onChanged={refresh} openId={openOutput} onOpened={() => setOpenOutput(null)} />}

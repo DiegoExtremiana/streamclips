@@ -73,7 +73,7 @@ try {
   ({ app, page, problems } = await launch());
 
   // ── ventana y aislamiento ──
-  await page.getByRole('tab', { name: 'Programación' }).waitFor({ timeout: 20000 });
+  await page.getByRole('tab', { name: 'Inicio' }).waitFor({ timeout: 20000 });
   assert.equal(await page.title(), 'StreamClips');
   log('la ventana abre y carga la interfaz (con la política de seguridad de producción)');
   assert.equal(await page.evaluate(() => typeof window.api), 'object');
@@ -82,7 +82,7 @@ try {
   log('el puente seguro (window.api) funciona y la página no tiene acceso a Node');
 
   // ── las cuatro pestañas ──
-  for (const [name, heading] of [['Programación', 'Próximas subidas'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
+  for (const [name, heading] of [['Inicio', 'Próximas subidas'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
     await tab(page, name);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
   }
@@ -90,15 +90,20 @@ try {
   await page.getByRole('tab', { name: 'Vídeos', exact: true }).waitFor();
   log('las cinco pestañas se muestran');
 
-  // ── Programación: solo el calendario y lo sin programar (a su izquierda) ──
-  await tab(page, 'Programación');
+  // ── Inicio: últimos clips, últimos vídeos y calendario alineados en horizontal, sin scroll general ──
+  await tab(page, 'Inicio');
   await shot(page, '0-inicio');
-  const tray0 = await page.getByRole('complementary', { name: 'Sin programar' }).boundingBox();
+  const clips0 = await page.getByRole('complementary', { name: 'Últimos clips' }).boundingBox();
+  const vids0 = await page.getByRole('complementary', { name: 'Últimos vídeos' }).boundingBox();
   const cal0 = await page.getByRole('region', { name: 'Próximas subidas' }).boundingBox();
-  assert.ok(tray0 && cal0 && tray0.x + tray0.width <= cal0.x + 1, '«Sin programar» queda a la izquierda del calendario');
-  assert.equal(await page.getByRole('region', { name: 'Tu canal' }).count(), 0, 'el estado del canal ya no está en Programación');
-  assert.equal(await page.getByRole('region', { name: 'Primeros pasos' }).count(), 0, 'los primeros pasos ya no están en Programación');
-  log('Programación: solo calendario y «Sin programar» a su izquierda');
+  assert.ok(clips0 && vids0 && cal0, 'los tres paneles existen');
+  assert.ok(clips0.x + clips0.width <= vids0.x + 1 && vids0.x + vids0.width <= cal0.x + 1, 'clips, vídeos y calendario van en ese orden, de izquierda a derecha');
+  assert.ok(Math.abs(clips0.y - vids0.y) < 2 && Math.abs(vids0.y - cal0.y) < 2, 'los tres paneles están alineados en horizontal');
+  const scrolls = await page.evaluate(() => { const m = document.querySelector('main.main'); return m.scrollHeight - m.clientHeight; });
+  assert.ok(scrolls <= 1, `Inicio no tiene scroll general (sobran ${scrolls}px)`);
+  assert.equal(await page.getByRole('region', { name: 'Tu canal' }).count(), 0, 'el estado del canal ya no está en Inicio');
+  assert.equal(await page.getByRole('region', { name: 'Primeros pasos' }).count(), 0, 'los primeros pasos ya no están en Inicio');
+  log('Inicio: clips, vídeos y calendario en horizontal y sin scroll general');
 
   // ── Conexiones: estado del canal y guía de inicio ──
   await tab(page, 'Conexiones');
@@ -110,7 +115,7 @@ try {
   await page.getByRole('heading', { name: 'Carpeta de salida', exact: true }).waitFor();
   await page.keyboard.press('Control+1');
   await page.getByRole('heading', { name: 'Próximas subidas', exact: true }).waitFor();
-  assert.equal(await page.getByRole('tab', { name: 'Programación' }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.getByRole('tab', { name: 'Inicio' }).getAttribute('aria-selected'), 'true');
   log('Conexiones: el estado del canal y la guía de primeros pasos muestran lo que falta y llevan a Ajustes; Ctrl+1 vuelve a la primera pestaña');
 
   // ── Ajustes ──
@@ -872,7 +877,7 @@ try {
 
   // ── persistencia tras recargar y tras reiniciar ──
   await page.reload();
-  await page.getByRole('tab', { name: 'Programación' }).waitFor();
+  await page.getByRole('tab', { name: 'Inicio' }).waitFor();
   await tab(page, 'Clips y publicación');
   await sub(page, 'Directos y actividad');
   await page.getByText('Título del VOD').waitFor();
@@ -902,30 +907,34 @@ try {
   await sub(page, 'Crear desde un VOD');
   await page.getByText('Mi clip vertical', { exact: true }).waitFor();
   await page.getByText('Resumen renombrado', { exact: true }).waitFor();
-  await tab(page, 'Programación');
+  await tab(page, 'Inicio');
   const progr = page.getByRole('region', { name: 'Próximas subidas' });
   const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return toLocal(d).slice(0, 10); };
   // por defecto se abre el calendario; la línea de tiempo está en la otra pestaña
   await progr.getByRole('group', { name: 'Calendario' }).waitFor();
   assert.equal(await progr.getByRole('tab', { name: 'Calendario' }).getAttribute('aria-selected'), 'true');
-  log('Programación: se abre en modo calendario por defecto');
+  log('Inicio: se abre en modo calendario por defecto');
   await progr.getByRole('tab', { name: 'Línea de tiempo' }).click();
   await progr.getByTestId(`tl-row-${day(2)}`).waitFor();
   assert.ok((await progr.locator('.tl-chip').count()) >= 3, 'la línea de tiempo muestra las subidas programadas');
   await shot(page, '10-linea-de-tiempo');
-  log('Programación: la línea de tiempo muestra una franja por día con las subidas en su hora');
+  log('Inicio: la línea de tiempo muestra una franja por día con las subidas en su hora');
 
   // ── arrastrar en la línea de tiempo ──
   const trackBox = async (n) => { const l = progr.locator(`[data-track-day="${day(n)}"]`); await l.scrollIntoViewIfNeeded(); return await l.boundingBox(); };
   const chip = (re) => progr.getByRole('button', { name: re });
-  const dragChip = async (loc, toX, toY) => {
+  // el destino se mide DESPUÉS de colocar el bloque a la vista: el calendario de Inicio tiene su propio scroll interior
+  const dragChip = async (loc, dayN, frac, dx = 0) => {
+    // los avisos se apilan abajo a la derecha, encima del calendario: se espera a que se vayan antes de agarrar nada
+    await page.locator('.toasts .toast').first().waitFor({ state: 'detached', timeout: 20000 }).catch(() => undefined);
     await loc.scrollIntoViewIfNeeded();
     const b = await loc.boundingBox();
     const grab = 12;
     await page.mouse.move(b.x + grab, b.y + b.height / 2);
     await page.mouse.down();
     await page.mouse.move(b.x + grab + 30, b.y + b.height / 2 + 4, { steps: 3 });
-    await page.mouse.move(toX + grab, toY, { steps: 8 });
+    const t = await page.locator(`[data-track-day="${day(dayN)}"]`).boundingBox();
+    await page.mouse.move(t.x + t.width * frac + dx + grab, t.y + t.height / 2, { steps: 8 });
     return { release: () => page.mouse.up() };
   };
   const ytPub = () => dataNow().publications.find((p) => p.platform === 'youtube' && p.outputId === dataNow().outputs.find((o) => o.title === 'Mi clip vertical').id);
@@ -935,7 +944,7 @@ try {
   let tb = await trackBox(2);
   await page.locator(`[data-track-day="${day(2)}"]`).scrollIntoViewIfNeeded();
   tb = await trackBox(2);
-  let h = await dragChip(chip(/Mi clip vertical, 18:00/), tb.x + tb.width * (20 / 24), tb.y + tb.height / 2);
+  let h = await dragChip(chip(/Mi clip vertical, 18:00/), 2, 20 / 24);
   await page.locator('.tl-marker').getByText('20:00').waitFor();
   await h.release();
   await page.getByText(/«Mi clip vertical» movida a .* a las 20:00/).first().waitFor();
@@ -945,7 +954,7 @@ try {
 
   // 2) cambiar el día: arrastre vertical a otra franja, misma hora
   tb = await trackBox(3);
-  h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + tb.width * (20 / 24), tb.y + tb.height / 2);
+  h = await dragChip(chip(/Mi clip vertical, 20:00/), 3, 20 / 24);
   await h.release();
   await poll(() => localDayKeyOf(ytPub().scheduledAt) === day(3));
   assert.equal(hhmmOf(ytPub().scheduledAt), '20:00');
@@ -956,7 +965,7 @@ try {
   if (new Date().getHours() >= 1) {
     // (de 00:00 a 01:00 «las 00:15 de hoy» aún es futuro, así que esta comprobación solo tiene sentido después)
     tb = await trackBox(0);
-    h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + 4, tb.y + tb.height / 2);
+    h = await dragChip(chip(/Mi clip vertical, 20:00/), 0, 0, 4);
     await h.release();
     await page.getByText(/Esa hora ya ha pasado/).first().waitFor();
     assert.equal(ytPub().scheduledAt, pubBefore);
@@ -967,14 +976,14 @@ try {
 
   // 4) Escape cancela un arrastre
   tb = await trackBox(5);
-  h = await dragChip(chip(/Mi clip vertical, 20:00/), tb.x + tb.width * 0.5, tb.y + tb.height / 2);
+  h = await dragChip(chip(/Mi clip vertical, 20:00/), 5, 0.5);
   await page.keyboard.press('Escape');
   await h.release();
   assert.equal(ytPub().scheduledAt, pubBefore);
   log('Escape cancela un arrastre sin cambiar nada');
 
   // 5) bandeja «Sin programar» → línea de tiempo
-  const tray = page.getByRole('complementary', { name: 'Sin programar' });
+  const tray = page.getByRole('complementary', { name: 'Últimos vídeos' });
   await tray.getByTestId('tray-Resumen renombrado').waitFor();
   const tb1 = await trackBox(1);
   const trayBox = await tray.getByTestId('tray-Resumen renombrado').boundingBox();

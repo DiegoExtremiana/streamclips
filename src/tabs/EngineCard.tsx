@@ -40,7 +40,7 @@ export default function EngineCard() {
       <div className="muted small">
         Al terminar tu directo (normalmente sobre las 21:30), GitHub descarga el VOD, lo transcribe en castellano, lo edita durante la noche y deja los vídeos y los clips
         programados en tu repositorio privado de la nube. Tu ordenador y el programa pueden estar apagados: por la mañana abres el programa y ves todo en
-        Programación, listo para cambiarlo.
+        Inicio, listo para cambiarlo.
       </div>
       {!s?.enabled && (
         <>

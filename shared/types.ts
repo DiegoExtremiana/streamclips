@@ -173,6 +173,8 @@ export interface VodJob {
   /** Qué ha hecho el piloto automático con este VOD. */
   autopilot?: AutopilotState;
   transcript?: TranscriptInfo;
+  /** Categorías de Twitch (juego o actividad) a lo largo del directo; vacío = solo una o desconocidas. */
+  chapters?: { start: number; end: number; title: string }[];
   url: string;
   title: string;
   status: VodStatus;

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { run, type ToolPaths } from './tools';
+import { parseChapters, type Chapter } from '../../shared/categories';
 
 export interface DownloadResult {
   title: string;
@@ -26,6 +27,12 @@ export function parseVodUrl(input: string): string | null {
 function safeId(id: string): string {
   const clean = id.replace(/[^A-Za-z0-9._-]/g, '_');
   return clean && clean !== '.' && clean !== '..' ? clean : 'video';
+}
+
+/** Categorías de Twitch a lo largo de un VOD (capítulos de yt-dlp). Vacío si no hay o no se pueden leer. */
+export async function fetchChapters(tools: ToolPaths, url: string): Promise<Chapter[]> {
+  const r = await run(tools.ytdlp, ['--no-warnings', '--no-playlist', '--skip-download', '--print', '%(chapters)j', '--', url], 90_000);
+  return parseChapters(r.stdout);
 }
 
 /** Descarga un VOD (o cualquier URL compatible con yt-dlp) a <outDir>/<id>.mp4. */

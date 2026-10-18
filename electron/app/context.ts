@@ -10,6 +10,8 @@ import type { downloadVod } from '../services/downloader';
 import { SettingsService } from '../domain/settings';
 import { VodService } from '../domain/vods';
 import { ClipService } from '../domain/clips';
+import { CategoryService } from '../domain/categories';
+import type { Chapter } from '../../shared/categories';
 import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
 import { GroupService } from '../domain/groups';
@@ -29,6 +31,8 @@ import { realPublishers, youtubePlaylists, type PublisherEnv, type Publishers } 
 import type { Notifier } from '../domain/notifier';
 
 export interface ContextOptions {
+  /** Solo pruebas: categorías del VOD. */
+  fetchChapters?: (url: string) => Promise<Chapter[]>;
   userDataDir: string;
   defaultOutputDir: string;
   cipher: Cipher;
@@ -85,6 +89,7 @@ export class AppContext {
   readonly twitch: TwitchClient;
   readonly vods: VodService;
   readonly clips: ClipService;
+  readonly categories: CategoryService;
   readonly library: LibraryService;
   readonly transcripts: TranscriptService;
   readonly tasks: TaskTracker;
@@ -140,7 +145,8 @@ export class AppContext {
       modelBaseUrl: o.modelBaseUrl,
     });
     const subtitles = { words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string) => this.transcripts.ensure(vodId), fontsDir: o.fontsDir };
-    this.clips = new ClipService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
+    this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
+    this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
     this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });
     this.groups = new GroupService(this.store, o.notifier);
     this.pubs = new PublicationService(this.store, o.notifier);
@@ -168,6 +174,7 @@ export class AppContext {
       tools,
       transcripts: this.transcripts,
       clips: this.clips,
+      categories: this.categories,
       library: this.library,
       pubs: this.pubs,
       chatDir: path.join(o.userDataDir, 'chat'),

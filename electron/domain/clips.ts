@@ -14,6 +14,8 @@ import { ensureFreeSpace, freeBytes, RENDER_MIN_BYTES, uniqueOutputPath } from '
 import { autoThumbnail } from '../services/thumbnails';
 import { probe, renderClip, renderLong, validateRender } from '../services/ffmpeg';
 import type { Notifier } from './notifier';
+import type { CategoryService } from './categories';
+import { mixedCategories } from '../../shared/categories';
 
 export interface ClipDeps {
   store: Store;
@@ -22,6 +24,8 @@ export interface ClipDeps {
   queue: SerialQueue;
   tools: () => ToolPaths;
   subtitles: SubtitleEnv;
+  /** Categorías del directo: un clip o vídeo no puede mezclar dos. */
+  categories?: CategoryService;
   /** Para las pruebas: espacio libre del disco. */
   freeBytes?: (dir: string) => number | null;
 }
@@ -108,6 +112,8 @@ export class ClipService {
       const vodDur = info.durationSec;
       const bound = validateClipSpec(clip, vodDur);
       if (bound) throw new Error(`Clip no válido: ${bound}.`);
+      const mixed = mixedCategories((await this.d.categories?.ensure(vodId)) ?? [], [{ start: clip.start, end: clip.end }]);
+      if (mixed) throw new Error(`Clip no válido: ${mixed}.`);
       // Por defecto el clip vertical lleva dos ventanas: la cámara del streamer arriba y la pantalla (el juego) debajo.
       // Solo si quien lo pide fija un encuadre concreto (una columna con cropX o una composición propia) se respeta tal cual.
       if (!clip.layout && clip.cropX === undefined && info.width > 0 && info.height > 0) {
@@ -148,6 +154,8 @@ export class ClipService {
       const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
       const bound = validateLongSpec(long, vodDur);
       if (bound) throw new Error(`Vídeo largo no válido: ${bound}.`);
+      const mixed = mixedCategories((await this.d.categories?.ensure(vodId)) ?? [], long.segments);
+      if (mixed) throw new Error(`Vídeo largo no válido: ${mixed}.`);
       const expected = long.segments.reduce((a, s) => a + (s.end - s.start), 0);
       // cada tramo puede desviarse unas décimas al cortar: la tolerancia crece con el número de tramos
       const tolerance = 1.5 + long.segments.length * 0.2;

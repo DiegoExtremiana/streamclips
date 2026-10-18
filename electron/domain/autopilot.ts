@@ -17,6 +17,8 @@ import type { Notifier } from './notifier';
 import type { TaskTracker } from './tasks';
 import type { TranscriptService } from './transcripts';
 import type { ClipService } from './clips';
+import type { CategoryService } from './categories';
+import { dominantCategory, fitToCategory } from '../../shared/categories';
 import type { LibraryService } from './library';
 import type { PublicationService } from './publications';
 
@@ -29,6 +31,7 @@ export interface AutopilotDeps {
   tools: () => ToolPaths;
   transcripts: TranscriptService;
   clips: ClipService;
+  categories: CategoryService;
   library: LibraryService;
   pubs: PublicationService;
   chatDir: string;
@@ -145,11 +148,28 @@ export class Autopilot {
       if (!energyDb && !chat && !words.length) throw new Error('No hay ninguna señal para analizar (ni audio, ni chat, ni transcripción).');
 
       // 3) tramos
-      const moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
-      const summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
+      let moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
+      let summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
       // el resumen cuenta como uno de los vídeos del directo; el resto son tramos continuos distintos
-      const mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
+      let mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
       if (!this.cfg.maxVideos) summary.length = 0;
+      // Cada clip y cada vídeo es de una sola categoría de Twitch: se recorta a la del momento y lo que no cabe se descarta.
+      const cats = await this.d.categories.ensure(vod.id);
+      if (new Set(cats.map((c) => c.title)).size > 1) {
+        const before = moments.length + mains.length;
+        moments = moments.flatMap((m) => {
+          const f = fitToCategory(m, cats, 15);
+          return f ? [{ ...m, start: f.start, end: f.end }] : [];
+        });
+        mains = mains.flatMap((m) => {
+          const f = fitToCategory(m, cats, 90);
+          return f ? [f] : [];
+        });
+        const dom = dominantCategory(summary, cats, 8);
+        if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
+        summary = dom.segs;
+        if (before !== moments.length + mains.length) notes.push('Algunos momentos se recortaron o descartaron para no mezclar categorías.');
+      }
       if (!moments.length && !summary.length && !mains.length) {
         this.mark(vod, 'skipped', ['No se encontraron momentos que destaquen en este directo.', ...notes].join(' '));
         task.done('Sin momentos destacados');

@@ -32,6 +32,11 @@ if (args.includes('-g')) {
   process.exit(0);
 }
 
+if (args.includes('--print') && args.includes('%(chapters)j')) {
+  console.log(process.env.FAKE_CHAPTERS || 'null');
+  process.exit(0);
+}
+
 if (args.includes('--print')) {
   if (mode === 'nometa') process.exit(0);
   console.log(`${id}\tTítulo del VOD`);

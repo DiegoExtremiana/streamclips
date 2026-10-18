@@ -107,6 +107,22 @@ describe('piloto automático', () => {
     console.log(`      (piloto completo en ${Math.round((Date.now() - t0) / 1000)} s)`);
   });
 
+  it('nunca mezcla categorías de Twitch: cada clip y cada vídeo cae entero en una sola', async () => {
+    const { e, vod } = setup();
+    vod.chapters = [
+      { start: 0, end: 120, title: 'Minecraft' },
+      { start: 120, end: 240, title: 'Just Chatting' },
+    ];
+    await e.ctx.autopilot.run(vod.id);
+    const outs = e.ctx.store.data.outputs;
+    assert.ok(outs.length >= 2, 'hay resultados');
+    const within = (a: number, b: number) => vod.chapters!.some((c) => a >= c.start - 0.01 && b <= c.end + 0.01);
+    for (const o of outs) {
+      const segs = o.kind === 'long' ? o.segments! : [{ start: o.start!, end: o.end! }];
+      assert.ok(segs.every((g) => within(g.start, g.end)) && new Set(segs.map((g) => vod.chapters!.find((c) => g.start >= c.start - 0.01 && g.start < c.end)?.title)).size === 1, `${o.title}: ${JSON.stringify(segs)}`);
+    }
+  });
+
   it('al dar el visto bueno rellena los huecos: vídeos en las horas de vídeos, clips en las de clips, uno por hueco', async () => {
     const { e, vod } = setup();
     await e.ctx.autopilot.run(vod.id);

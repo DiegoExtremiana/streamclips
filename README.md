@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.14
+
+- **Vista previa de los clips de Twitch**: ya no se queda cargando; la política de seguridad de la ventana no dejaba reproducir el vídeo que sirve Twitch desde su CDN (CloudFront).
+- **Clips verticales con dos ventanas por defecto**: la cámara del streamer arriba y la pantalla debajo. Solo si mueves la barra «Recorte vertical» se usa una sola columna. Se retoca después en la Biblioteca.
+- **Al abrir el programa** se revisa la Biblioteca: lo que sigue llamándose «Momento n», «Directo del…» o «Resumen del directo…» y no tiene nombre puesto por ti se transcribe (si hace falta) y se renombra según de qué se habla, incluidos los que ya existían.
+- **Descripción de YouTube automática** (1 a 3 frases, unos 280 caracteres como máximo) para clips y vídeos, a partir de lo que pasa; con modelo de lenguaje la redacta él. No se pisa una descripción escrita por ti.
+- **Modelos de Whisper a prueba de archivos dañados**: se comprueba la estructura del modelo al descargarlo y antes de usarlo; si está roto se borra y se baja de nuevo, y si aun así falla se usa el modelo «base» para esa transcripción.
+- **Portafolio**: StreamClips y sus repositorios tampoco salen desde GitHub en vivo ni desde la caché del navegador.
+
 ## Novedades de la v0.13
 
 - **Programación solo con lo esencial**: a la izquierda «Sin programar» (lo último, vídeos y clips, con «Aprobar» en lo que el piloto deja para tu visto bueno) y a la derecha el calendario; arrastras de uno a otro. El estado del canal y los primeros pasos pasan a **Conexiones**, y los directos recogidos y la actividad a **Clips y publicación › Directos y actividad**.

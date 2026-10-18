@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import type { ClipSpec, LongSpec, OutputItem, OutputKind, RenderKind } from '../../shared/types';
 import { primaryRender } from '../../shared/outputs';
+import { defaultPreset, layoutFromPreset } from '../../shared/layout';
 import { keptRanges, totalDuration } from '../../shared/timeline';
 import { withSubtitles, type SubtitleEnv } from './subtitleJob';
 import { normalizeClip, normalizeLong, parsePlan, validateClipSpec, validateLongSpec } from '../../shared/plan';
@@ -103,9 +104,15 @@ export class ClipService {
     if (reason) throw new Error(`Clip no válido: ${reason}.`);
     const clip = normalizeClip(spec, 'Clip');
     return this.d.queue.run(async () => {
-      const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
+      const info = await probe(this.d.tools(), this.vodFile(vodId));
+      const vodDur = info.durationSec;
       const bound = validateClipSpec(clip, vodDur);
       if (bound) throw new Error(`Clip no válido: ${bound}.`);
+      // Por defecto el clip vertical lleva dos ventanas: la cámara del streamer arriba y la pantalla (el juego) debajo.
+      // Solo si quien lo pide fija un encuadre concreto (una columna con cropX o una composición propia) se respeta tal cual.
+      if (!clip.layout && clip.cropX === undefined && info.width > 0 && info.height > 0) {
+        clip.layout = layoutFromPreset(defaultPreset(2), info.width / info.height);
+      }
       const kinds: ('horizontal' | 'vertical')[] = clip.kind === 'both' ? ['horizontal', 'vertical'] : [clip.kind as 'vertical' | 'horizontal'];
       const cropX = clip.cropX ?? 0.5;
       const ranges = keptRanges(clip.start, clip.end, clip.cuts);

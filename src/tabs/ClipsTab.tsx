@@ -41,7 +41,7 @@ export default function ClipsTab(props: {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [title, setTitle] = useState('');
-  const [cropX, setCropX] = useState(0.5);
+  const [cropX, setCropX] = useState<number | null>(null);
   const [subs, setSubs] = useState<SubtitleStyleId | ''>('');
   const [planJson, setPlanJson] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,7 +71,7 @@ export default function ClipsTab(props: {
       // sin título, se pone uno provisional a partir de lo que se dice en el tramo
       let name = title.trim();
       if (!name) name = (await window.api.suggestTitle(selected, s, e).catch(() => null))?.title ?? 'Clip';
-      await window.api.createClip(selected, { kind, start: s, end: e, title: name, cropX, ...(subs ? { subtitles: subs } : {}) });
+      await window.api.createClip(selected, { kind, start: s, end: e, title: name, ...(cropX !== null ? { cropX } : {}), ...(subs ? { subtitles: subs } : {}) });
       return 'Clip creado y validado.';
     });
 
@@ -130,8 +130,13 @@ export default function ClipsTab(props: {
             </div>
             {kind !== 'horizontal' && (
               <div className="field">
-                <label htmlFor="clip-crop">Posición del recorte vertical (de izquierda a derecha)</label>
-                <input id="clip-crop" type="range" min={0} max={1} step={0.05} value={cropX} onChange={(e) => setCropX(Number(e.target.value))} />
+                <label htmlFor="clip-crop">Recorte vertical</label>
+                <input id="clip-crop" type="range" min={0} max={1} step={0.05} value={cropX ?? 0.5} onChange={(e) => setCropX(Number(e.target.value))} />
+                <div className="muted small">
+                  {cropX === null
+                    ? 'Sin tocar: dos ventanas, la cámara del streamer arriba y la pantalla debajo (se retoca después en la biblioteca). Mueve la barra para usar una sola columna.'
+                    : 'Una sola columna del vídeo, en la posición elegida.'}
+                </div>
               </div>
             )}
             <div className="field">

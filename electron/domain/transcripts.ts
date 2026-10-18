@@ -7,7 +7,7 @@ import { buildClaudePrompt } from '../../shared/claudePrompt';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
 import type { ToolPaths } from '../services/tools';
-import { WHISPER_MODELS, downloadModel, isKnownModel, modelInstalled, modelPath, transcribeVideo } from '../services/whisper';
+import { WHISPER_MODELS, downloadModel, ggmlProblem, isKnownModel, modelInstalled, modelPath, transcribeVideo } from '../services/whisper';
 import type { TaskTracker } from './tasks';
 import type { SerialQueue } from '../services/queue';
 import type { Notifier } from './notifier';
@@ -103,7 +103,12 @@ export class TranscriptService {
   async downloadModel(): Promise<WhisperStatus> {
     const name = this.d.store.data.settings.whisperModel;
     if (!isKnownModel(name)) throw new Error(`Modelo de Whisper desconocido: ${name} (usa tiny, base, small o medium).`);
-    if (modelInstalled(this.modelsDir, name)) return this.status();
+    if (modelInstalled(this.modelsDir, name)) {
+      const bad = ggmlProblem(modelPath(this.modelsDir, name));
+      if (!bad) return this.status();
+      this.d.log.warn(`El modelo de Whisper «${name}» está dañado (${bad}); se descarga otra vez.`);
+      fs.rmSync(modelPath(this.modelsDir, name), { force: true });
+    }
     const task = this.d.tasks.start('model', `Descargando el modelo de Whisper (${name}, ~${WHISPER_MODELS[name].approxMb} MB)`);
     try {
       await downloadModel(this.modelsDir, name, (pct) => task.update(pct), { baseUrl: this.d.modelBaseUrl });
@@ -152,7 +157,23 @@ export class TranscriptService {
           try {
             words = await run();
           } catch (e2) {
-            throw new Error(`Whisper no puede cargar el modelo «${s.whisperModel}» ni tras descargarlo de nuevo. Prueba con otro modelo en Ajustes (por ejemplo «base»).\n${(e2 as Error).message}`);
+            // último recurso: un modelo menor (verificado) para que la transcripción no se quede bloqueada
+            const alt = s.whisperModel === 'base' || s.whisperModel === 'tiny' ? '' : 'base';
+            if (alt) {
+              try {
+                await downloadModel(this.modelsDir, alt, (pct) => task.update(pct, `Descargando el modelo ${alt}…`), { baseUrl: this.d.modelBaseUrl });
+                this.d.log.warn(`Whisper no pudo con «${s.whisperModel}»; se usa «${alt}» en esta transcripción.`);
+                words = await transcribeVideo(this.d.tools(), input, {
+                  exe,
+                  model: modelPath(this.modelsDir, alt),
+                  language: s.whisperLanguage,
+                  onProgress: (pct, detail) => task.update(pct, detail),
+                });
+              } catch {
+                /* se informa del error original */
+              }
+            }
+            if (!words) throw new Error(`Whisper no puede cargar el modelo «${s.whisperModel}» ni tras descargarlo de nuevo. Prueba con otro modelo en Ajustes (por ejemplo «base»).\n${(e2 as Error).message}`);
           }
         }
         this.d.log.info(`Transcripción con Whisper (${words.length} palabras) para "${vod.title}"`);

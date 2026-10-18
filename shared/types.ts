@@ -215,6 +215,8 @@ export interface OutputItem {
   remote?: boolean;
   /** Quién puso el nombre: el programa (se puede volver a poner solo) o el usuario (no se toca). */
   titleSource?: 'auto' | 'manual';
+  /** Quién escribió la descripción: el programa (se puede rehacer) o el usuario (no se toca). */
+  descSource?: 'auto' | 'manual';
   /** Creado por el piloto automático. */
   auto?: { role: AutoRole; review: 'pending' | 'approved' };
 }
@@ -356,6 +358,8 @@ export interface TwitchStream {
 
 export interface AutoNameResult {
   renamed: number;
+  /** Descripciones de YouTube escritas a partir de lo que pasa en el vídeo. */
+  described: number;
   /** No tienen transcripción: sin ella no hay de qué sacar el nombre. */
   noTranscript: number;
   /** Ya tenían un nombre corto, o lo escribiste tú. */

@@ -304,7 +304,9 @@ describe('piloto automático', () => {
     assert.match(by('c').title, /escrito por mí mismo/);
     assert.equal(by('d').title, 'Clip 3', 'sin palabras en su tramo no hay de qué sacar el nombre');
     const r = await e.ctx.autopilot.autoNameLibrary();
-    assert.deepEqual(r, { renamed: 0, noTranscript: 1, kept: 3 });
+    assert.deepEqual(r, { renamed: 0, described: 0, noTranscript: 1, kept: 3 });
+    assert.match(by('a').description ?? '', /creeper/i, 'también se escribe la descripción de YouTube');
+    assert.equal(by('a').descSource, 'auto');
     // dos elementos del mismo tramo no se llaman igual
     mk('e', 'Otro título larguísimo del mismo tramo que se tiene que distinguir del anterior');
     await e.ctx.autopilot.autoNameLibrary();
@@ -315,6 +317,50 @@ describe('piloto automático', () => {
     assert.equal(by('a').titleSource, 'manual');
     await e.ctx.autopilot.autoNameLibrary();
     assert.equal(by('a').title, 'Mi nombre');
+  });
+
+  it('al arrancar: renombra solo lo genérico no escrito por el usuario, describe lo que no tiene descripción y respeta la del usuario', async () => {
+    const { e, vod } = setup();
+    const mk = (id: string, title: string, o: Partial<OutputItem> = {}) => {
+      e.ctx.store.data.outputs.push({ id, vodId: vod.id, kind: 'clip', title, files: {}, durationSec: 30, createdAt: '2026-10-10T10:00:00Z', start: 10, end: 40, ...o });
+    };
+    mk('g1', 'Momento 4');
+    mk('g2', 'Directo del 4 de octubre (parte 2)');
+    mk('g3', 'Resumen del directo - 4 de octubre', { kind: 'long', segments: [{ start: 10, end: 40 }] });
+    mk('keep', 'Un título largo pero que no es genérico, así que el arranque no lo toca para nada');
+    mk('mine', 'Momento 9', { titleSource: 'manual' });
+    mk('desc', 'Mi clip', { description: 'Descripción mía', descSource: 'manual' });
+    const tr = path.join(root, 'tr-start.json');
+    fs.writeFileSync(tr, JSON.stringify({ words: ['¡No', 'me', 'lo', 'puedo', 'creer,', 'un', 'creeper', 'a', 'mis', 'espaldas!', 'Casi', 'me', 'da', 'un', 'infarto', 'aquí', 'delante', 'de', 'todos.'].map((text, i) => ({ text, start: 12 + i * 0.5, end: 12.5 + i * 0.5 })) }));
+    e.ctx.transcripts.importFile(vod.id, tr);
+    await new Promise((r) => setTimeout(r, 100)); // el guardado de la transcripción lanza su propio repaso
+    for (const o of e.ctx.store.data.outputs) {
+      if (o.id === 'keep' || o.id === 'mine') {
+        o.title = o.id === 'keep' ? o.title : 'Momento 9';
+        delete o.description;
+        delete o.descSource;
+      }
+    }
+    for (const id of ['g1', 'g2', 'g3']) {
+      const o = e.ctx.store.data.outputs.find((x) => x.id === id)!;
+      o.title = id === 'g1' ? 'Momento 4' : id === 'g2' ? 'Directo del 4 de octubre (parte 2)' : 'Resumen del directo - 4 de octubre';
+      o.titleSource = undefined;
+      delete o.description;
+      delete o.descSource;
+    }
+    const r = await e.ctx.autopilot.refreshLibraryAtStart();
+    const by = (id: string) => e.ctx.store.data.outputs.find((o) => o.id === id)!;
+    assert.ok(r && r.renamed >= 3, JSON.stringify(r));
+    for (const id of ['g1', 'g2', 'g3']) {
+      assert.match(by(id).title, /creeper|infarto|espaldas/i, by(id).title);
+      assert.equal(by(id).titleSource, 'auto');
+      assert.ok((by(id).description ?? '').length > 30 && (by(id).description ?? '').length <= 300, by(id).description);
+      assert.equal(by(id).descSource, 'auto');
+    }
+    assert.equal(by('keep').title.startsWith('Un título largo'), true, 'un nombre largo pero no genérico no se toca al arrancar');
+    assert.equal(by('mine').title, 'Momento 9', 'lo escrito por el usuario no se toca aunque suene genérico');
+    assert.equal(by('desc').description, 'Descripción mía');
+    assert.equal(new Set(['g1', 'g2', 'g3'].map((id) => by(id).title.toLowerCase())).size, 3, 'sin repetidos');
   });
 
   it('desactivado, no hace nada al terminar un directo; los ajustes se validan', () => {

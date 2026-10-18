@@ -177,7 +177,7 @@ export class AppContext {
       canTranscribe: o.canTranscribe,
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
-    this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId).catch((e) => this.log.warn(`Nombres automáticos: ${(e as Error).message}`));
+    this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId, { generic: false }).catch((e) => this.log.warn(`Nombres automáticos: ${(e as Error).message}`));
     this.connections = new ConnectionService({
       store: this.store,
       secrets,
@@ -263,6 +263,7 @@ export class AppContext {
     this.cloud.start();
     this.engine.start();
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${(e as Error).message}`));
+    void this.autopilot.refreshLibraryAtStart();
     this.log.info('Aplicación iniciada.');
   }
 

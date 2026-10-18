@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
+import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
@@ -179,7 +179,7 @@ export class Autopilot {
           item.auto = { role, review: 'pending' };
           item.titleSource = 'auto';
           item.visibility = this.cfg.visibility;
-          if (item.kind === 'long' && t.description) this.d.library.setMeta(item.id, { description: t.description });
+          if (t.description) this.d.library.setAutoDescription(item.id, t.description);
           this.d.store.save();
           created.push(item);
         } catch (e) {
@@ -229,8 +229,8 @@ export class Autopilot {
   private async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]) {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: '' },
-      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: '' })),
-      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: '' })),
+      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean(shortDescription(words, m), 500) })),
+      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean(shortDescription(words, m), 500) })),
     };
     const uniq = () => {
       const u = dedupeTitles([...base.mains.map((t) => t.title), ...base.clips.map((t) => t.title)]);
@@ -252,7 +252,7 @@ export class Autopilot {
     try {
       const raw = (await askJson(
         conf,
-        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, máximo 40 caracteres, que digan qué pasa en él, distintos entre sí, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.',
+        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, máximo 40 caracteres, que digan qué pasa en él, distintos entre sí, sin clickbait falso, sin emojis) y descripciones para YouTube de 1-3 frases (60 a 280 caracteres) que cuenten de qué trata y qué pasa, sin hashtags ni emojis ni enlaces. Responde SOLO con JSON.',
         `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.\n"resumen" es el resumen de todo el directo (no tienes su texto: titúlalo a partir de los demás fragmentos). Fragmentos:\n${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch },
       )) as { resumen?: Record<string, unknown>; videos?: Record<string, unknown>[]; clips?: Record<string, unknown>[] };
@@ -274,14 +274,20 @@ export class Autopilot {
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
-    return this.nameFor(vodId, [{ start, end }]);
+    const r = await this.nameFor(vodId, [{ start, end }]);
+    return r && r.title ? { title: r.title, source: r.source } : null;
   }
 
-  /** Nombre corto para uno o varios tramos de un VOD: con modelo de lenguaje lo redacta él; si no, sale de lo que se dice. */
-  private async nameFor(vodId: string, segs: Seg[]): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
+  /**
+   * Nombre corto y descripción de YouTube para uno o varios tramos de un VOD: con modelo de lenguaje los redacta él; si no,
+   * salen de lo que se dice. Sin transcripción de esos tramos devuelve null.
+   */
+  private async nameFor(vodId: string, segs: Seg[]): Promise<{ title: string; description: string; source: 'llm' | 'transcript' } | null> {
     const words = this.d.transcripts.words(vodId);
     if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
-    const fb = clean(shortTitle(words, segs, 0), 100);
+    const fbTitle = clean(shortTitle(words, segs, 0), 100);
+    const fbDesc = clean(shortDescription(words, segs), 500);
+    const local = { title: /^Momento \d+$/.test(fbTitle) ? '' : fbTitle, description: fbDesc, source: 'transcript' as const };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider !== 'none' && key) {
@@ -290,30 +296,34 @@ export class Autopilot {
         const text = segs.map((g) => textOf(words, g.start, Math.min(g.end, g.start + 240), 900)).join(' / ').slice(0, 1400);
         const raw = (await askJson(
           conf,
-          'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes un nombre muy corto para el fragmento (2 a 5 palabras, máximo 40 caracteres, que diga qué pasa en él, sin clickbait falso, sin emojis). Responde SOLO con JSON.',
-          `Texto transcrito de un fragmento. Devuelve {"titulo":""}.\n${text}`,
+          'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España. Para el fragmento escribes un nombre muy corto (2 a 5 palabras, máximo 40 caracteres, que diga qué pasa en él, sin clickbait falso, sin emojis) y una descripción para YouTube de 1 a 3 frases (60 a 280 caracteres) que cuente de qué trata y qué ocurre, sin hashtags, sin emojis y sin enlaces. Responde SOLO con JSON.',
+          `Texto transcrito de un fragmento. Devuelve {"titulo":"","descripcion":""}.\n${text}`,
           { fetchFn: this.d.llmFetch },
-        )) as { titulo?: unknown };
+        )) as { titulo?: unknown; descripcion?: unknown };
         const t = clean(raw.titulo, 100);
-        if (t) return { title: t, source: 'llm' };
+        const d = clean(raw.descripcion, 500);
+        if (t || d) return { title: t || local.title, description: d || local.description, source: 'llm' };
       } catch {
-        /* se usa el nombre local */
+        /* se usa lo local */
       }
     }
-    return fb && !/^Momento \d+$/.test(fb) ? { title: fb, source: 'transcript' } : null;
+    return local.title || local.description ? local : null;
   }
 
   /**
-   * Pone un nombre corto a los clips y vídeos de la Biblioteca (con `onlyVodId`, solo a los de ese VOD). No toca los que
-   * nombró el usuario ni los que ya son cortos. Evita repetir nombres entre todo lo que hay en la Biblioteca.
+   * Pone un nombre corto y, si no la tiene, una descripción de YouTube a los clips y vídeos de la Biblioteca (con `onlyVodId`,
+   * solo a los de ese VOD). No toca lo que escribió el usuario ni los nombres que ya son cortos. Evita repetir nombres.
+   * `generic`: regla del arranque, solo se renombran los nombres genéricos («Momento 3», «Directo del…», «Resumen del directo…»).
    */
-  async autoNameLibrary(onlyVodId?: string): Promise<AutoNameResult> {
-    const res: AutoNameResult = { renamed: 0, noTranscript: 0, kept: 0 };
+  async autoNameLibrary(onlyVodId?: string, o2: { generic?: boolean } = {}): Promise<AutoNameResult> {
+    const res: AutoNameResult = { renamed: 0, described: 0, noTranscript: 0, kept: 0 };
     const outs = this.d.store.data.outputs;
     const used = new Set(outs.map((o) => o.title.toLowerCase()));
     for (const o of outs) {
       if (onlyVodId && o.vodId !== onlyVodId) continue;
-      if (!isAutoNameable(o)) {
+      const wantTitle = o2.generic ? isGenericAutoTitle(o) : isAutoNameable(o);
+      const wantDesc = o.descSource !== 'manual' && !o.description;
+      if (!wantTitle && !wantDesc) {
         res.kept++;
         continue;
       }
@@ -321,6 +331,18 @@ export class Autopilot {
       const r = o.vodId && segs ? await this.nameFor(o.vodId, segs) : null;
       if (!r) {
         res.noTranscript++;
+        continue;
+      }
+      if (wantDesc && r.description) {
+        try {
+          this.d.library.setAutoDescription(o.id, r.description);
+          res.described++;
+        } catch (e) {
+          this.d.log.warn(`No se pudo poner descripción a "${o.title}": ${(e as Error).message}`);
+        }
+      }
+      if (!wantTitle || !r.title) {
+        res.kept++;
         continue;
       }
       let t = r.title;
@@ -339,8 +361,36 @@ export class Autopilot {
         this.d.log.warn(`No se pudo renombrar "${o.title}": ${(e as Error).message}`);
       }
     }
-    if (res.renamed) this.d.log.info(`Nombres cortos automáticos: ${res.renamed} renombrado(s)`);
+    if (res.renamed || res.described) this.d.log.info(`Nombres y descripciones automáticos: ${res.renamed} nombre(s), ${res.described} descripción(es)`);
     return res;
+  }
+
+  /**
+   * Al abrir el programa: revisa la Biblioteca y, a los clips y vídeos que siguen con un nombre genérico (o sin descripción)
+   * y no son del usuario, les pone nombre y descripción según de qué se habla. Si el VOD no tiene transcripción y está
+   * descargado, la hace antes con Whisper (una por VOD, una detrás de otra). Nunca lanza: lo que falle se anota en el registro.
+   */
+  async refreshLibraryAtStart(): Promise<AutoNameResult | null> {
+    try {
+      const need = this.d.store.data.outputs.filter((o) => o.vodId && (isGenericAutoTitle(o) || (o.descSource !== 'manual' && !o.description)));
+      if (!need.length) return null;
+      const vodIds = [...new Set(need.map((o) => o.vodId as string))];
+      for (const id of vodIds) {
+        const vod = this.d.store.data.vods.find((v) => v.id === id);
+        if (!vod || this.d.transcripts.words(id).length) continue;
+        if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) continue;
+        if (!this.d.transcripts.status().engine) break; // sin Whisper no se puede transcribir
+        try {
+          await this.d.transcripts.transcribe(id);
+        } catch (e) {
+          this.d.log.warn(`Nombres automáticos: no se pudo transcribir "${vod.title ?? id}": ${(e as Error).message.split('\n')[0]}`);
+        }
+      }
+      return await this.autoNameLibrary(undefined, { generic: true });
+    } catch (e) {
+      this.d.log.warn(`Nombres automáticos al arrancar: ${(e as Error).message}`);
+      return null;
+    }
   }
 
   private dateLabel(vod: VodJob): string {

@@ -94,6 +94,15 @@ export class LibraryService {
     return o;
   }
 
+  /** Descripción escrita por el programa: se puede rehacer sola, a diferencia de una escrita por el usuario. */
+  setAutoDescription(id: string, description: string): OutputItem {
+    const o = this.find(id);
+    o.description = description.replace(/\s+$/, '').slice(0, YT_DESC_MAX) || undefined;
+    o.descSource = o.description ? 'auto' : undefined;
+    this.changed();
+    return o;
+  }
+
   rename(id: string, title: string): OutputItem {
     return this.setMeta(id, { title });
   }
@@ -121,6 +130,7 @@ export class LibraryService {
       if (d.length > YT_DESC_MAX) throw new Error(`La descripción no puede pasar de ${YT_DESC_MAX} caracteres.`);
       if (hasAngle(d)) throw new Error('La descripción no puede contener < ni > (YouTube no los admite).');
       next.description = d || undefined;
+      if (d !== (o.description ?? '')) next.descSource = d ? 'manual' : undefined;
     }
     if (meta.playlist !== undefined) {
       if (typeof meta.playlist !== 'string') throw new Error('La lista no es válida.');

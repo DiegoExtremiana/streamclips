@@ -38,6 +38,79 @@ export function modelInstalled(dir: string, name: string): boolean {
   }
 }
 
+/** Bytes por elemento (o por bloque) de cada tipo de tensor ggml que puede traer un modelo de Whisper. */
+const GGML_TYPES: Record<number, { block: number; bytes: number }> = {
+  0: { block: 1, bytes: 4 },
+  1: { block: 1, bytes: 2 },
+  2: { block: 32, bytes: 18 },
+  3: { block: 32, bytes: 20 },
+  6: { block: 32, bytes: 22 },
+  7: { block: 32, bytes: 24 },
+  8: { block: 32, bytes: 34 },
+};
+
+/**
+ * Recorre la estructura de un modelo ggml (cabecera, filtros mel, vocabulario y la cabecera de cada tensor) saltando los datos,
+ * y comprueba que todo encaja y que el archivo termina exactamente donde debe. Un archivo con tamaño correcto pero con bloques
+ * dañados (descarga corrupta, antivirus, disco) se descubre así sin tener que cargarlo entero. Devuelve el problema o null.
+ * Si el archivo no empieza por la firma ggml no se juzga (null): lo rechazará Whisper con su propio mensaje.
+ */
+export function ggmlProblem(file: string): string | null {
+  let fd = -1;
+  try {
+    fd = fs.openSync(file, 'r');
+    const size = fs.fstatSync(fd).size;
+    const buf = Buffer.alloc(4096);
+    let pos = 0;
+    const read = (n: number): Buffer => {
+      if (pos + n > size) throw new Error('el archivo termina antes de tiempo');
+      const b = n <= buf.length ? buf : Buffer.alloc(n);
+      fs.readSync(fd, b, 0, n, pos);
+      pos += n;
+      return b;
+    };
+    const i32 = () => read(4).readInt32LE(0);
+    if (size < 4 || read(4).readUInt32LE(0) !== 0x67676d6c) return null;
+    for (let i = 0; i < 11; i++) i32(); // hiperparámetros
+    const melRows = i32();
+    const melCols = i32();
+    if (melRows < 0 || melCols < 0 || melRows * melCols > 1_000_000) throw new Error('filtros mel con tamaño absurdo');
+    pos += melRows * melCols * 4;
+    const nVocab = i32();
+    if (nVocab < 0 || nVocab > 200_000) throw new Error('vocabulario con tamaño absurdo');
+    for (let i = 0; i < nVocab; i++) {
+      const len = read(4).readUInt32LE(0);
+      if (len > 1000) throw new Error('palabra de vocabulario con tamaño absurdo');
+      pos += len;
+    }
+    let tensors = 0;
+    while (pos < size) {
+      const at = pos;
+      const nd = i32();
+      const nameLen = i32();
+      const ft = i32();
+      if (nd < 1 || nd > 4 || nameLen < 1 || nameLen > 200 || !GGML_TYPES[ft]) throw new Error(`cabecera de tensor ${tensors} dañada (byte ${at})`);
+      let n = 1;
+      for (let d = 0; d < nd; d++) {
+        const v = i32();
+        if (v < 1 || v > 1_000_000) throw new Error(`dimensión absurda en el tensor ${tensors} (byte ${at})`);
+        n *= v;
+      }
+      const name = read(nameLen).toString('latin1', 0, nameLen);
+      if (!/^[A-Za-z0-9_.]+$/.test(name)) throw new Error(`nombre de tensor ilegible en el byte ${at}`);
+      const t = GGML_TYPES[ft];
+      pos += Math.ceil(n / t.block) * t.bytes;
+      tensors++;
+    }
+    if (pos !== size) throw new Error('los datos no terminan donde deberían');
+    return tensors > 0 ? null : 'no contiene tensores';
+  } catch (e) {
+    return (e as Error).message;
+  } finally {
+    if (fd >= 0) fs.closeSync(fd);
+  }
+}
+
 export interface DownloadOpts {
   baseUrl?: string;
   fetchFn?: typeof fetch;
@@ -88,6 +161,8 @@ export async function downloadModel(dir: string, name: string, onProgress: (pct:
     if (total && got !== total) throw new Error('La descarga del modelo se cortó. Vuelve a intentarlo.');
     if (got < WHISPER_MODELS[name].minBytes) throw new Error('El archivo descargado es demasiado pequeño para ser el modelo. Vuelve a intentarlo.');
     if (expected && hash.digest('hex') !== expected) throw new Error('El modelo de Whisper se descargó dañado (su huella no coincide). Vuelve a intentarlo.');
+    const bad = ggmlProblem(part);
+    if (bad) throw new Error(`El modelo de Whisper se descargó dañado (${bad}). Vuelve a intentarlo.`);
     fs.renameSync(part, dest);
     onProgress(100);
     return dest;

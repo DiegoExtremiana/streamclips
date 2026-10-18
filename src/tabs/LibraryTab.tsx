@@ -63,9 +63,9 @@ export default function LibraryTab(props: {
     try {
       const r = await window.api.autoNameLibrary();
       await props.onChanged();
-      const parts = [`${r.renamed} renombrado(s)`];
+      const parts = [`${r.renamed} renombrado(s)`, `${r.described} descripción(es) de YouTube`];
       if (r.noTranscript) parts.push(`${r.noTranscript} sin transcripción (transcribe el directo en «Clips y publicación» para nombrarlos)`);
-      notify(`Nombres cortos: ${parts.join(', ')}.`, r.renamed ? 'ok' : 'warn');
+      notify(`Nombres cortos: ${parts.join(', ')}.`, r.renamed || r.described ? 'ok' : 'warn');
     } catch (e) {
       notify(errMsg(e), 'bad');
     } finally {

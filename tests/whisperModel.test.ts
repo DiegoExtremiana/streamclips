@@ -6,7 +6,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { downloadModel, modelInstalled, parseWhisperCppJson, isKnownModel, WHISPER_MODELS } from '../electron/services/whisper';
+import { downloadModel, ggmlProblem, modelInstalled, parseWhisperCppJson, isKnownModel, WHISPER_MODELS } from '../electron/services/whisper';
 
 let server: http.Server;
 let base: string;
@@ -155,4 +155,44 @@ describe('descarga del modelo: huella SHA-256', () => {
     await downloadModel(d, 'tiny', () => undefined, { baseUrl: url });
     assert.ok(modelInstalled(d, 'tiny'));
   });
+});
+
+function fakeGgml(opts: { shift?: boolean; trailing?: number } = {}): Buffer {
+  const parts: Buffer[] = [];
+  const i32 = (...v: number[]) => parts.push(Buffer.from(Int32Array.from(v).buffer));
+  i32(0x67676d6c);
+  i32(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1); // hiperparámetros
+  i32(2, 3); // mel 2x3
+  parts.push(Buffer.alloc(24));
+  i32(2); // vocabulario de 2 palabras
+  for (const w of ['ab', 'c']) {
+    i32(w.length);
+    parts.push(Buffer.from(w));
+  }
+  for (const [name, dims, ft] of [['encoder.a.weight', [4, 3], 1], ['encoder.a.bias', [5], 0]] as const) {
+    i32(dims.length, name.length, ft, ...dims);
+    parts.push(Buffer.from(name));
+    const n = dims.reduce((a, b) => a * b, 1) * (ft === 1 ? 2 : 4);
+    parts.push(Buffer.alloc(n + (opts.shift && name.endsWith('weight') ? 5 : 0), 7));
+  }
+  if (opts.trailing) parts.push(Buffer.alloc(opts.trailing, 1));
+  return Buffer.concat(parts);
+}
+
+describe('ggmlProblem: estructura del modelo', () => {
+  const write = (b: Buffer) => {
+    const f = path.join(dir, `g${Math.random()}.bin`);
+    fs.writeFileSync(f, b);
+    return f;
+  };
+  it('acepta un modelo bien formado', () => assert.equal(ggmlProblem(write(fakeGgml())), null));
+  it('descubre datos desplazados o sobrantes (mismo tamaño aparente, estructura rota)', () => {
+    assert.match(ggmlProblem(write(fakeGgml({ shift: true }))) ?? '', /.+/);
+    assert.match(ggmlProblem(write(fakeGgml({ trailing: 9 }))) ?? '', /.+/);
+  });
+  it('descubre un archivo cortado', () => {
+    const b = fakeGgml();
+    assert.match(ggmlProblem(write(b.subarray(0, b.length - 3))) ?? '', /.+/);
+  });
+  it('no juzga lo que no es ggml', () => assert.equal(ggmlProblem(write(Buffer.alloc(100))), null));
 });

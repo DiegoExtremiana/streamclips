@@ -373,6 +373,59 @@ export function shortTitle(words: Word[], m: Seg | Seg[], index: number, o: { ma
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+/**
+ * Descripción breve para YouTube (1-3 frases, hasta ~280 caracteres) hecha con las frases más sustanciosas de lo que se dice
+ * en el tramo, en el orden en que se dicen. Sin modelo de lenguaje es lo mejor que se puede sacar solo de la transcripción.
+ * Devuelve '' si no hay texto suficiente.
+ */
+export function shortDescription(words: Word[], m: Seg | Seg[], o: { maxChars?: number; maxSentences?: number } = {}): string {
+  const maxChars = o.maxChars ?? 280;
+  const maxSentences = o.maxSentences ?? 3;
+  const segs = Array.isArray(m) ? m : [m];
+  const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5));
+  const counts = new Map<string, number>();
+  for (const w of words) {
+    const k = tokenOf(w.text).toLowerCase();
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const weight = (raw: string): number => {
+    const k = tokenOf(raw).toLowerCase();
+    if (!k || isStop(k)) return 0;
+    return (1 + Math.min(k.length, 10) / 10) / Math.log(2 + (counts.get(k) ?? 1));
+  };
+  const cands = sentences(inside)
+    .map((s, order) => {
+      const toks = inside.filter((w) => w.start >= s.start && w.end <= s.end + 0.01).map((w) => w.text);
+      const text = toks.join(' ').replace(/\s+/g, ' ').trim();
+      const useful = toks.filter((t) => weight(t) > 0).length;
+      const score = toks.reduce((a, t) => a + weight(t), 0) / Math.sqrt(Math.max(toks.length, 1)) + (/[!?]/.test(text) ? 0.5 : 0);
+      return { order, text, useful, score };
+    })
+    .filter((c) => c.useful >= 3 && c.text.length >= 25);
+  if (!cands.length) return '';
+  const chosen: typeof cands = [];
+  let len = 0;
+  for (const c of [...cands].sort((a, b) => b.score - a.score)) {
+    if (chosen.length >= maxSentences) break;
+    if (len + c.text.length + 1 > maxChars) continue;
+    chosen.push(c);
+    len += c.text.length + 1;
+  }
+  if (!chosen.length) {
+    const c = cands.sort((a, b) => b.score - a.score)[0];
+    const cut = c.text.slice(0, maxChars - 1);
+    return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 20)).replace(/[,;:\s]+$/, '')}…`;
+  }
+  const out = chosen
+    .sort((a, b) => a.order - b.order)
+    .map((c) => {
+      const t = c.text.charAt(0).toUpperCase() + c.text.slice(1);
+      return /[.!?…]$/.test(t) ? t : `${t}.`;
+    })
+    .join(' ');
+  return out;
+}
+
 /** Evita dos nombres iguales en una misma tanda: al repetido se le añade « 2», « 3»… */
 export function dedupeTitles(titles: string[]): string[] {
   const seen = new Map<string, number>();
@@ -393,3 +446,12 @@ export function isAutoNameable(o: { title: string; titleSource?: 'auto' | 'manua
   if (o.titleSource === 'auto') return true;
   return o.title.length > 40 || /^(clip|momento|directo del|resumen del directo)\b/i.test(o.title.trim());
 }
+
+/** Nombres que el programa pone cuando todavía no sabe de qué va el vídeo («Momento 3», «Directo del 4 de octubre…», «Resumen del directo…»). */
+export const GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
+
+/**
+ * Regla del arranque del programa: se renombra solo lo que sigue con un nombre genérico y no lo escribió el usuario.
+ * (El botón «Nombres cortos» de la Biblioteca es más amplio: ver `isAutoNameable`.)
+ */
+export const isGenericAutoTitle = (o: { title: string; titleSource?: 'auto' | 'manual' }): boolean => o.titleSource !== 'manual' && GENERIC_TITLE.test(o.title.trim());

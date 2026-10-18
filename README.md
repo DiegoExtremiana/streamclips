@@ -107,7 +107,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Qué se ha probado y cómo
 
-`npm run check` ejecuta tipos, ESLint y 476 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (76 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
+`npm run check` ejecuta tipos, ESLint y 499 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (76 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
 
 **No se ha probado**: en Windows, ni contra Twitch real (yt-dlp real sí se ha probado con una URL local: acepta los parámetros que usa la app y devuelve el MP4), ni el instalador final `.exe` (aquí solo se pudo generar la carpeta de la aplicación para Windows; el instalador se genera en GitHub Actions).
 

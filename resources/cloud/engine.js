@@ -31280,6 +31280,7 @@ function validateAutopilot(cur, p, enc) {
   };
   if (p.enabled !== void 0) n.enabled = bool(p.enabled, "El interruptor del piloto autom\xE1tico");
   if (p.requireApproval !== void 0) n.requireApproval = bool(p.requireApproval, "La aprobaci\xF3n previa");
+  if (p.proEdit !== void 0) n.proEdit = bool(p.proEdit, "La edici\xF3n profesional");
   if (p.chatCapture !== void 0) n.chatCapture = bool(p.chatCapture, "La captura del chat");
   if (p.maxClips !== void 0) {
     if (!Number.isInteger(p.maxClips) || p.maxClips < 0 || p.maxClips > 20) throw new Error("Los clips por directo deben ser un n\xFAmero entre 0 y 20.");
@@ -31403,6 +31404,91 @@ var import_node_path5 = __toESM(require("node:path"));
 var import_node_child_process2 = require("node:child_process");
 var import_node_fs5 = __toESM(require("node:fs"));
 var import_node_path4 = __toESM(require("node:path"));
+
+// shared/categories.ts
+var CATEGORY_TOLERANCE_SEC = 3;
+function parseChapters(text) {
+  let raw;
+  try {
+    raw = JSON.parse(text.trim().split("\n").pop() ?? "null");
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const c of raw) {
+    if (typeof c?.start_time !== "number" || typeof c.end_time !== "number" || c.end_time <= c.start_time) continue;
+    out.push({ start: c.start_time, end: c.end_time, title: typeof c.title === "string" && c.title.trim() ? c.title.trim() : "Sin categor\xEDa" });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+var overlap = (a, b) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
+function categoriesOf(chapters, seg) {
+  const names = [];
+  for (const c of chapters) {
+    if (overlap(seg, c) > CATEGORY_TOLERANCE_SEC && !names.includes(c.title)) names.push(c.title);
+  }
+  return names;
+}
+function mixedCategories(chapters, segs) {
+  if (chapters.length < 2) return null;
+  const names = [];
+  for (const s of segs) for (const n of categoriesOf(chapters, s)) if (!names.includes(n)) names.push(n);
+  return names.length > 1 ? `mezcla ${names.length} categor\xEDas del directo (${names.map((n) => `\xAB${n}\xBB`).join(" y ")}); cada clip o v\xEDdeo tiene que ser de una sola` : null;
+}
+function fitToCategory(seg, chapters, minSec) {
+  if (chapters.length < 2) return seg;
+  const merged = [];
+  for (const c of chapters) {
+    const last = merged[merged.length - 1];
+    if (last && last.title === c.title && c.start - last.end < 1) last.end = c.end;
+    else merged.push({ ...c });
+  }
+  let best = null;
+  let bestOv = 0;
+  for (const c of merged) {
+    const ov = overlap(seg, c);
+    if (ov > bestOv) {
+      best = c;
+      bestOv = ov;
+    }
+  }
+  if (!best) return null;
+  const out = { start: Math.max(seg.start, best.start), end: Math.min(seg.end, best.end) };
+  return out.end - out.start >= minSec ? out : null;
+}
+function dominantCategory(segs, chapters, minSec) {
+  if (chapters.length < 2 || !segs.length) return { segs, category: null };
+  const totals = /* @__PURE__ */ new Map();
+  for (const s of segs) for (const c of chapters) totals.set(c.title, (totals.get(c.title) ?? 0) + overlap(s, c));
+  const [name] = [...totals.entries()].sort((a, b) => b[1] - a[1])[0];
+  const mine = chapters.filter((c) => c.title === name);
+  const out = [];
+  for (const s of segs) {
+    for (const c of mine) {
+      const o = { start: Math.max(s.start, c.start), end: Math.min(s.end, c.end) };
+      if (o.end - o.start >= minSec) out.push(o);
+    }
+  }
+  return { segs: out.sort((a, b) => a.start - b.start), category: name };
+}
+function categoryOf(chapters, segs) {
+  const totals = /* @__PURE__ */ new Map();
+  for (const s of segs) for (const c of chapters) totals.set(c.title, (totals.get(c.title) ?? 0) + overlap(s, c));
+  const top = [...totals.entries()].filter(([, t]) => t > 0).sort((a, b) => b[1] - a[1])[0];
+  return top?.[0];
+}
+var CATEGORY_LINE = /\n*Categoría: .*$/;
+function withCategoryLine(description, category) {
+  const base = (description ?? "").replace(CATEGORY_LINE, "").replace(/\s+$/, "");
+  if (!category) return base;
+  return base ? `${base}
+
+Categor\xEDa: ${category}` : `Categor\xEDa: ${category}`;
+}
+var hasCategoryLine = (description) => CATEGORY_LINE.test(description ?? "");
+
+// electron/services/downloader.ts
 function parseVodUrl(input) {
   let u;
   try {
@@ -31418,6 +31504,10 @@ function parseVodUrl(input) {
 function safeId(id) {
   const clean2 = id.replace(/[^A-Za-z0-9._-]/g, "_");
   return clean2 && clean2 !== "." && clean2 !== ".." ? clean2 : "video";
+}
+async function fetchChapters(tools, url) {
+  const r2 = await run(tools.ytdlp, ["--no-warnings", "--no-playlist", "--skip-download", "--print", "%(chapters)j", "--", url], 9e4);
+  return parseChapters(r2.stdout);
 }
 async function downloadVod(tools, url, outDir, onProgress) {
   import_node_fs5.default.mkdirSync(outDir, { recursive: true });
@@ -31747,6 +31837,7 @@ function validateEffects(effects, ranges) {
   if (!Array.isArray(effects)) return '"effects" debe ser una lista';
   if (effects.length > MAX_EFFECTS) return `tiene m\xE1s de ${MAX_EFFECTS} efectos`;
   const fades = /* @__PURE__ */ new Set();
+  let polish = false;
   const total = totalDuration(ranges);
   for (let i = 0; i < effects.length; i++) {
     const e = effects[i];
@@ -31768,8 +31859,16 @@ function validateEffects(effects, ranges) {
         return `el efecto ${i + 1}: duration debe estar entre ${FADE.min} y ${FADE.max} s`;
       }
       if ((e.duration ?? FADE.default) * 2 > total) return `el efecto ${i + 1}: el fundido es m\xE1s largo que el v\xEDdeo`;
+    } else if (e.type === "sfx") {
+      const at = e.at;
+      if (!isNum2(at)) return `el efecto ${i + 1} (sfx) necesita "at" num\xE9rico`;
+      if (!ranges.some((r2) => at >= r2.start && at <= r2.end)) return `el efecto ${i + 1} (sfx) cae en una parte cortada o fuera del clip`;
+      if (e.sound !== void 0 && e.sound !== "whoosh" && e.sound !== "pop" && e.sound !== "hit") return `el efecto ${i + 1}: sound debe ser whoosh, pop o hit`;
+    } else if (e.type === "polish") {
+      if (polish) return "solo puede haber un polish";
+      polish = true;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn o fadeOut)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx o polish)`;
     }
   }
   return null;
@@ -31807,6 +31906,8 @@ function normalizeClip(c, fallbackTitle) {
 function normalizeEffects(list) {
   return list.map((e) => {
     if (e.type === "punch") return { type: "punch", at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
+    if (e.type === "sfx") return { type: "sfx", at: e.at, sound: e.sound ?? "pop" };
+    if (e.type === "polish") return { type: "polish" };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });
 }
@@ -31927,10 +32028,17 @@ function punchFilter(w, h, punches) {
   const z = `(1+${terms.join("+")})`;
   return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=${w}:${h}`;
 }
+var SFX = {
+  whoosh: { src: "anoisesrc=d=0.45:c=pink:r=48000:a=0.8,highpass=f=300,lowpass=f=5500,afade=t=in:d=0.2,afade=t=out:st=0.2:d=0.25", dur: 0.45, vol: 0.55 },
+  pop: { src: "sine=f=980:d=0.14:r=48000,afade=t=out:d=0.14", dur: 0.14, vol: 0.45 },
+  hit: { src: "sine=f=70:d=0.32:r=48000,afade=t=out:d=0.32", dur: 0.32, vol: 0.9 }
+};
+var POLISH_AF = "loudnorm=I=-16:TP=-1.5:LRA=11";
 async function cutSegment(tools, input, start, end, o, out) {
   const dur = end - start;
   const vf = o.vf ? [o.vf] : [];
   const af = [];
+  if (o.polish) af.push(POLISH_AF);
   if (o.fadeIn) {
     vf.push(`fade=t=in:st=0:d=${o.fadeIn}`);
     af.push(`afade=t=in:st=0:d=${o.fadeIn}`);
@@ -31938,6 +32046,35 @@ async function cutSegment(tools, input, start, end, o, out) {
   if (o.fadeOut) {
     vf.push(`fade=t=out:st=${Math.max(0, dur - o.fadeOut).toFixed(3)}:d=${o.fadeOut}`);
     af.push(`afade=t=out:st=${Math.max(0, dur - o.fadeOut).toFixed(3)}:d=${o.fadeOut}`);
+  }
+  const sfx = o.sfx ?? [];
+  if (sfx.length) {
+    const inputs = sfx.flatMap((x) => ["-f", "lavfi", "-i", SFX[x.sound].src]);
+    const vchain = o.layout ? `${composeGraph(o.layout)};[base]${vf.length ? vf.join(",") : "null"}[vout]` : `[0:v]${vf.length ? vf.join(",") : "null"}[vout]`;
+    const mix = sfx.map((x, i) => `[${i + 1}:a]adelay=${Math.round(Math.max(0, x.at) * 1e3)}:all=1,volume=${SFX[x.sound].vol}[s${i}]`).join(";");
+    const graph = `${vchain};[0:a]${af.length ? af.join(",") : "anull"}[a0];${mix};[a0]${sfx.map((_, i) => `[s${i}]`).join("")}amix=inputs=${sfx.length + 1}:duration=first:dropout_transition=0:normalize=0[aout]`;
+    await run(tools.ffmpeg, [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-ss",
+      String(start),
+      "-i",
+      input,
+      "-t",
+      String(dur),
+      ...inputs,
+      "-filter_complex",
+      graph,
+      "-map",
+      "[vout]",
+      "-map",
+      "[aout]",
+      ...ENCODE_CODEC,
+      out
+    ]);
+    return;
   }
   const video = o.layout ? ["-filter_complex", `${composeGraph(o.layout)};[base]${vf.length ? vf.join(",") : "null"}[vout]`, "-map", "[vout]", "-map", "0:a:0?", ...ENCODE_CODEC] : ["-vf", vf.join(","), ...ENCODE];
   await run(tools.ffmpeg, [
@@ -31964,7 +32101,10 @@ async function renderTimeline(tools, input, t, out) {
   const total = totalDuration(t.ranges);
   const clampFade = (d) => Math.min(d ?? FADE.default, total / 2);
   const tmp = import_node_fs6.default.mkdtempSync(import_node_path6.default.join(import_node_os.default.tmpdir(), "streamclips-"));
+  const polish = fx.some((e) => e.type === "polish");
+  const allSfx = fx.filter((e) => e.type === "sfx");
   try {
+    const hasAudio = allSfx.length ? (await probe(tools, input)).hasAudio : false;
     const parts = [];
     for (let i = 0; i < t.ranges.length; i++) {
       const r2 = t.ranges[i];
@@ -31981,7 +32121,9 @@ async function renderTimeline(tools, input, t, out) {
           vf,
           layout: t.layout,
           fadeIn: i === 0 && fadeIn ? clampFade(fadeIn.duration) : void 0,
-          fadeOut: i === t.ranges.length - 1 && fadeOut ? clampFade(fadeOut.duration) : void 0
+          fadeOut: i === t.ranges.length - 1 && fadeOut ? clampFade(fadeOut.duration) : void 0,
+          polish,
+          sfx: hasAudio ? allSfx.filter((e) => e.at >= r2.start && e.at <= r2.end).map((e) => ({ at: e.at - r2.start, sound: e.sound ?? "pop" })) : void 0
         },
         part
       );
@@ -32107,6 +32249,7 @@ async function extractFrame(tools, input, atSec, out, o = {}, isImage = false) {
 async function withSubtitles(env, vodId, style, ranges, kind, fn) {
   if (!style) return fn(void 0);
   if (!vodId) throw new Error("Este v\xEDdeo no guarda de qu\xE9 VOD sale, as\xED que no se pueden calcular los subt\xEDtulos.");
+  if (!env.words(vodId).length && env.ensure) await env.ensure(vodId);
   const all = env.words(vodId);
   if (!all.length) throw new Error("Este VOD no tiene transcripci\xF3n. Imp\xF3rtala o transcr\xEDbela antes de activar los subt\xEDtulos.");
   const words = wordsForOutput(all, ranges);
@@ -32203,6 +32346,9 @@ var ClipService = class {
       const vodDur = info.durationSec;
       const bound = validateClipSpec(clip, vodDur);
       if (bound) throw new Error(`Clip no v\xE1lido: ${bound}.`);
+      const cats = await this.d.categories?.ensure(vodId) ?? [];
+      const mixed = mixedCategories(cats, [{ start: clip.start, end: clip.end }]);
+      if (mixed) throw new Error(`Clip no v\xE1lido: ${mixed}.`);
       if (!clip.layout && clip.cropX === void 0 && info.width > 0 && info.height > 0) {
         clip.layout = layoutFromPreset(defaultPreset(2), info.width / info.height);
       }
@@ -32210,6 +32356,8 @@ var ClipService = class {
       const cropX = clip.cropX ?? 0.5;
       const ranges = keptRanges(clip.start, clip.end, clip.cuts);
       const extra = { start: clip.start, end: clip.end, cropX };
+      const category = categoryOf(cats, [{ start: clip.start, end: clip.end }]);
+      if (category) extra.category = category;
       if (clip.cuts) extra.cuts = clip.cuts;
       if (clip.effects) extra.effects = clip.effects;
       if (clip.subtitles) extra.subtitles = clip.subtitles;
@@ -32244,9 +32392,14 @@ var ClipService = class {
       const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
       const bound = validateLongSpec(long, vodDur);
       if (bound) throw new Error(`V\xEDdeo largo no v\xE1lido: ${bound}.`);
+      const cats = await this.d.categories?.ensure(vodId) ?? [];
+      const mixed = mixedCategories(cats, long.segments);
+      if (mixed) throw new Error(`V\xEDdeo largo no v\xE1lido: ${mixed}.`);
       const expected = long.segments.reduce((a, s) => a + (s.end - s.start), 0);
       const tolerance = 1.5 + long.segments.length * 0.2;
       const extra = { segments: long.segments };
+      const category = categoryOf(cats, long.segments);
+      if (category) extra.category = category;
       if (long.effects) extra.effects = long.effects;
       if (long.subtitles) extra.subtitles = long.subtitles;
       return this.build(vodId, "long", long.title, expected, tolerance, extra, [
@@ -32284,6 +32437,29 @@ var ClipService = class {
       }
     }
     return { created, errors };
+  }
+};
+
+// electron/domain/categories.ts
+var CategoryService = class {
+  constructor(d) {
+    this.d = d;
+  }
+  async ensure(vodId) {
+    const vod = this.d.store.data.vods.find((v) => v.id === vodId);
+    if (!vod) return [];
+    if (vod.chapters) return vod.chapters;
+    if (vod.origin === "clip" || !/^https?:\/\//i.test(vod.url ?? "")) return [];
+    try {
+      const chapters = await (this.d.fetch ?? ((u) => fetchChapters(this.d.tools(), u)))(vod.url);
+      vod.chapters = chapters;
+      this.d.store.save();
+      if (chapters.length > 1) this.d.log.info(`Categor\xEDas de "${vod.title}": ${[...new Set(chapters.map((c) => c.title))].join(", ")}`);
+      return chapters;
+    } catch (e) {
+      this.d.log.warn(`No se pudieron leer las categor\xEDas del VOD: ${e.message.split("\n")[0]}`);
+      return [];
+    }
   }
 };
 
@@ -33101,6 +33277,24 @@ var TranscriptService = class {
       modelInstalled: isKnownModel(name) && modelInstalled(this.modelsDir, name),
       modelApproxMb: isKnownModel(name) ? WHISPER_MODELS[name].approxMb : 0
     };
+  }
+  inflight = /* @__PURE__ */ new Map();
+  /**
+   * Garantiza que el VOD tiene transcripción: si no la tiene, la hace con Whisper (una sola vez aunque la pidan varios a la vez).
+   * Así los subtítulos y los títulos sugeridos no obligan a transcribir a mano. Falla con un motivo claro si no se puede.
+   */
+  ensure(vodId) {
+    if (this.words(vodId).length) return Promise.resolve();
+    const running = this.inflight.get(vodId);
+    if (running) return running;
+    const p = (async () => {
+      const vod = this.vod(vodId);
+      if (!this.d.whisperExe()) throw new Error("Este VOD no tiene transcripci\xF3n y no se encuentra Whisper para hacerla. Imp\xF3rtala o indica whisper-cli en Ajustes.");
+      if (vod.status !== "downloaded" || !vod.filePath || !import_node_fs11.default.existsSync(vod.filePath)) throw new Error("Este VOD no tiene transcripci\xF3n y su archivo no est\xE1 descargado, as\xED que no se puede transcribir.");
+      await this.transcribe(vodId);
+    })().finally(() => this.inflight.delete(vodId));
+    this.inflight.set(vodId, p);
+    return p;
   }
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
   async downloadModel() {
@@ -34397,6 +34591,70 @@ function friendly(e) {
 var import_node_fs18 = __toESM(require("node:fs"));
 var import_node_path12 = __toESM(require("node:path"));
 
+// shared/autoEdit.ts
+var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro)/i;
+function planEdit(words, seg, o = {}) {
+  const minGap = o.minGap ?? 1.2;
+  const keepBefore = o.keepBefore ?? 0.4;
+  const keepAfter = o.keepAfter ?? 0.3;
+  const spacing = o.punchSpacing ?? 7;
+  const inside = words.filter((w) => w.start >= seg.start && w.end <= seg.end + 0.25).sort((a, b) => a.start - b.start);
+  const dur = seg.end - seg.start;
+  const effects = [];
+  const cuts = [];
+  if (inside.length >= 6 && dur >= 8) {
+    const gaps = [];
+    for (let i = 0; i + 1 < inside.length; i++) {
+      const gap = inside[i + 1].start - inside[i].end;
+      if (gap > minGap) gaps.push({ start: inside[i].end + keepBefore, end: inside[i + 1].start - keepAfter });
+    }
+    gaps.filter((g) => g.end - g.start >= 0.3 && g.start >= seg.start && g.end <= seg.end).sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, o.maxCuts ?? 20).sort((a, b) => a.start - b.start).forEach((g) => cuts.push(g));
+  }
+  const kept = keptRanges(seg.start, seg.end, cuts);
+  const isKept = (t) => kept.some((r2) => t >= r2.start && t <= r2.end);
+  const maxPunch = Math.min(6, Math.floor(dur / 10));
+  const punches = [];
+  for (const w of inside) {
+    if (punches.length >= maxPunch) break;
+    const strong = /[!¡]/.test(w.text) || EMPHASIS.test(w.text);
+    if (!strong) continue;
+    const at = Math.max(seg.start, w.start - 0.1);
+    if (!isKept(at) || !isKept(Math.min(seg.end, at + 1))) continue;
+    if (punches.some((p) => Math.abs(p - at) < spacing)) continue;
+    if (at - seg.start < 1.5 || seg.end - at < 2) continue;
+    punches.push(at);
+  }
+  for (const at of punches) {
+    effects.push({ type: "punch", at, duration: 1, zoom: 1.12 });
+    effects.push({ type: "sfx", at, sound: "hit" });
+  }
+  for (const c of cuts.slice(0, 8)) {
+    const at = c.end + 0.02;
+    if (isKept(at) && at < seg.end - 0.5) effects.push({ type: "sfx", at, sound: "whoosh" });
+  }
+  const fadeBudget = dur > 3;
+  if (fadeBudget) {
+    effects.push({ type: "fadeIn", duration: 0.3 });
+    effects.push({ type: "fadeOut", duration: 0.5 });
+  }
+  effects.push({ type: "polish" });
+  return { cuts, effects: effects.slice(0, MAX_EFFECTS) };
+}
+function planLong(words, segs, o = {}) {
+  const segments = [];
+  const body = [];
+  for (const s of segs) {
+    const p = planEdit(words, s, o);
+    segments.push(...keptRanges(s.start, s.end, p.cuts));
+    body.push(...p.effects.filter((e) => e.type === "punch" || e.type === "sfx"));
+  }
+  const total = segments.reduce((a, r2) => a + (r2.end - r2.start), 0);
+  const effects = body.slice(0, MAX_EFFECTS - 3);
+  if (total > 3) effects.push({ type: "fadeIn", duration: 0.4 }, { type: "fadeOut", duration: 0.8 });
+  effects.push({ type: "polish" });
+  return { segments, effects };
+}
+
 // shared/highlights.ts
 var HYPE = /\b(no puede ser|increíble|brutal|joder|madre mía|vamos|por fin|qué|cómo|socorro|jajaja|ostia|wow|guau|no me lo creo|ayuda|nooo+|siii+)\b/i;
 var median = (xs) => {
@@ -35045,10 +35303,26 @@ var Autopilot = class {
       if (!chat && this.cfg.chatCapture) notes.push("Sin datos de chat de este directo.");
       const sig = { durationSec: duration, energyDb, chat, words: words.length ? words : void 0 };
       if (!energyDb && !chat && !words.length) throw new Error("No hay ninguna se\xF1al para analizar (ni audio, ni chat, ni transcripci\xF3n).");
-      const moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
-      const summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
-      const mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
+      let moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
+      let summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
+      let mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
       if (!this.cfg.maxVideos) summary.length = 0;
+      const cats = await this.d.categories.ensure(vod.id);
+      if (new Set(cats.map((c) => c.title)).size > 1) {
+        const before = moments.length + mains.length;
+        moments = moments.flatMap((m) => {
+          const f = fitToCategory(m, cats, 15);
+          return f ? [{ ...m, start: f.start, end: f.end }] : [];
+        });
+        mains = mains.flatMap((m) => {
+          const f = fitToCategory(m, cats, 90);
+          return f ? [f] : [];
+        });
+        const dom = dominantCategory(summary, cats, 8);
+        if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
+        summary = dom.segs;
+        if (before !== moments.length + mains.length) notes.push("Algunos momentos se recortaron o descartaron para no mezclar categor\xEDas.");
+      }
       if (!moments.length && !summary.length && !mains.length) {
         this.mark(vod, "skipped", ["No se encontraron momentos que destaquen en este directo.", ...notes].join(" "));
         task.done("Sin momentos destacados");
@@ -35074,7 +35348,7 @@ var Autopilot = class {
           item.auto = { role, review: "pending" };
           item.titleSource = "auto";
           item.visibility = this.cfg.visibility;
-          if (t.description) this.d.library.setAutoDescription(item.id, t.description);
+          if (t.description || item.category) this.d.library.setAutoDescription(item.id, withCategoryLine(t.description, item.category));
           this.d.store.save();
           created.push(item);
         } catch (e) {
@@ -35082,14 +35356,35 @@ var Autopilot = class {
         }
         task.update(55 + ++doneCount / total * 40, `Montando (${doneCount}/${total})\u2026`);
       };
-      if (summary.length) await step("summary", "resumen", () => this.d.clips.createLong(vod.id, { title: titles.summary.title, segments: summary, ...this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {} }), titles.summary);
+      const pro = this.cfg.proEdit !== false && words.length > 0;
+      if (this.cfg.proEdit !== false && !words.length) notes.push("Edici\xF3n profesional omitida: no hay transcripci\xF3n.");
+      const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
+      const safely = async (edited, withEdit, plain) => {
+        if (!edited) return plain();
+        try {
+          return await withEdit();
+        } catch (err) {
+          this.d.log.warn(`Edici\xF3n profesional fall\xF3, se monta sin ella: ${err.message.split("\n")[0]}`);
+          return plain();
+        }
+      };
+      const longMake = (title, segs) => {
+        const e = pro ? planLong(words, segs) : null;
+        return safely(
+          Boolean(e),
+          () => this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }),
+          () => this.d.clips.createLong(vod.id, { title, segments: segs, ...subs })
+        );
+      };
+      if (summary.length) await step("summary", "resumen", () => longMake(titles.summary.title, summary), titles.summary);
       for (const [i, m] of mains.entries()) {
         const t = titles.mains[i];
-        await step("main", `v\xEDdeo ${i + 1}`, () => this.d.clips.createLong(vod.id, { title: t.title, segments: [m], ...this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {} }), t);
+        await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
       }
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
-        await step("clip", `clip ${i + 1}`, () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {} }), t);
+        const e = pro ? planEdit(words, m) : null;
+        await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t);
       }
       if (!created.length) throw new Error(`No se pudo montar ning\xFAn v\xEDdeo. ${errors.join(" ")}`);
       let scheduled = 0;
@@ -35167,6 +35462,7 @@ ${JSON.stringify(items)}`,
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId, start, end) {
+    await this.d.transcripts.ensure(vodId).catch((e) => this.d.log.warn(`Sin transcripci\xF3n para sugerir t\xEDtulo: ${e.message.split("\n")[0]}`));
     const r2 = await this.nameFor(vodId, [{ start, end }]);
     return r2 && r2.title ? { title: r2.title, source: r2.source } : null;
   }
@@ -35212,8 +35508,14 @@ ${text}`,
     const used = new Set(outs.map((o) => o.title.toLowerCase()));
     for (const o of outs) {
       if (onlyVodId && o.vodId !== onlyVodId) continue;
+      if (o.vodId && !o.category) {
+        const segs2 = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
+        const cat = segs2.length ? categoryOf(await this.d.categories.ensure(o.vodId), segs2) : void 0;
+        if (cat) o.category = cat;
+      }
+      if (o.category && o.descSource === "auto" && o.description && !hasCategoryLine(o.description)) this.d.library.setAutoDescription(o.id, withCategoryLine(o.description, o.category));
       const wantTitle = o2.generic ? isGenericAutoTitle(o) : isAutoNameable(o);
-      const wantDesc = o.descSource !== "manual" && !o.description;
+      const wantDesc = o.descSource !== "manual" && !withCategoryLine(o.description, void 0);
       if (!wantTitle && !wantDesc) {
         res.kept++;
         continue;
@@ -35226,7 +35528,7 @@ ${text}`,
       }
       if (wantDesc && r2.description) {
         try {
-          this.d.library.setAutoDescription(o.id, r2.description);
+          this.d.library.setAutoDescription(o.id, withCategoryLine(r2.description, o.category));
           res.described++;
         } catch (e) {
           this.d.log.warn(`No se pudo poner descripci\xF3n a "${o.title}": ${e.message}`);
@@ -35260,9 +35562,10 @@ ${text}`,
    * y no son del usuario, les pone nombre y descripción según de qué se habla. Si el VOD no tiene transcripción y está
    * descargado, la hace antes con Whisper (una por VOD, una detrás de otra). Nunca lanza: lo que falle se anota en el registro.
    */
-  async refreshLibraryAtStart() {
+  async refreshLibraryAtStart(o3 = {}) {
+    const generic = o3.generic ?? true;
     try {
-      const need = this.d.store.data.outputs.filter((o) => o.vodId && (isGenericAutoTitle(o) || o.descSource !== "manual" && !o.description));
+      const need = this.d.store.data.outputs.filter((o) => o.vodId && ((generic ? isGenericAutoTitle(o) : isAutoNameable(o)) || o.descSource !== "manual" && !withCategoryLine(o.description, void 0)));
       if (!need.length) return null;
       const vodIds = [...new Set(need.map((o) => o.vodId))];
       for (const id of vodIds) {
@@ -35276,7 +35579,7 @@ ${text}`,
           this.d.log.warn(`Nombres autom\xE1ticos: no se pudo transcribir "${vod.title ?? id}": ${e.message.split("\n")[0]}`);
         }
       }
-      return await this.autoNameLibrary(void 0, { generic: true });
+      return await this.autoNameLibrary(void 0, { generic });
     } catch (e) {
       this.d.log.warn(`Nombres autom\xE1ticos al arrancar: ${e.message}`);
       return null;
@@ -36059,7 +36362,7 @@ var EngineService = class {
       twitch: t,
       llm: { provider: a.llm.provider, model: a.llm.model, apiKey: a.llm.provider === "none" ? "" : this.d.llmKey() },
       cloud: { repo: c.repo, token: this.d.secrets.decode(c.token) },
-      autopilot: { maxClips: a.maxClips, maxVideos: a.maxVideos, subtitles: a.subtitles, platforms: a.platforms, videoTimes: a.videoTimes, clipTimes: a.clipTimes, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, visibility: a.visibility, series: a.series },
+      autopilot: { maxClips: a.maxClips, maxVideos: a.maxVideos, subtitles: a.subtitles, platforms: a.platforms, videoTimes: a.videoTimes, clipTimes: a.clipTimes, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, visibility: a.visibility, series: a.series, proEdit: a.proEdit !== false },
       whisper: { model: s.whisperModel, language: s.whisperLanguage || "es" },
       since: this.st.since ?? new Date(this.now()).toISOString()
     };
@@ -36505,6 +36808,7 @@ var AppContext = class {
   twitch;
   vods;
   clips;
+  categories;
   library;
   transcripts;
   tasks;
@@ -36557,8 +36861,9 @@ var AppContext = class {
       whisperExe: () => this.whisperExe(),
       modelBaseUrl: o.modelBaseUrl
     });
-    const subtitles = { words: (vodId) => this.transcripts.words(vodId), fontsDir: o.fontsDir };
-    this.clips = new ClipService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
+    const subtitles = { words: (vodId) => this.transcripts.words(vodId), ensure: (vodId) => this.transcripts.ensure(vodId), fontsDir: o.fontsDir };
+    this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
+    this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
     this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });
     this.groups = new GroupService(this.store, o.notifier);
     this.pubs = new PublicationService(this.store, o.notifier);
@@ -36586,6 +36891,7 @@ var AppContext = class {
       tools,
       transcripts: this.transcripts,
       clips: this.clips,
+      categories: this.categories,
       library: this.library,
       pubs: this.pubs,
       chatDir: import_node_path14.default.join(o.userDataDir, "chat"),

@@ -1,4 +1,4 @@
-import type { ChannelStatus, OutputItem, TwitchClip, TwitchStream, VodJob } from '../../shared/types';
+import type { ChannelStatus, ClipsResult, OutputItem, TwitchClip, TwitchStream, VodJob } from '../../shared/types';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
 import type { TwitchClient, TwitchCreds } from '../services/twitch';
@@ -218,22 +218,66 @@ export class ChannelMonitor {
     this.d.store.save();
   }
 
-  /** Todos los clips del canal, más recientes primero. El historial se pide entero de vez en cuando; entre medias solo lo reciente. */
-  async clips(force = false): Promise<TwitchClip[]> {
+  private clipLoad: Promise<void> | null = null;
+  private clipWarning = '';
+
+  /** Lee todo el historial en segundo plano; la promesa devuelta se cumple en cuanto hay algo que enseñar (o falla si no hay nada). */
+  private startFull(): Promise<void> {
+    this.clipWarning = '';
+    let firstDone!: () => void;
+    let firstFail!: (e: unknown) => void;
+    const first = new Promise<void>((res, rej) => {
+      firstDone = res;
+      firstFail = rej;
+    });
+    first.catch(() => undefined);
+    const merge = (list: TwitchClip[], complete: boolean) => {
+      const byId = complete ? new Map<string, TwitchClip>() : (this.clipCache?.byId ?? new Map<string, TwitchClip>());
+      for (const c of list) byId.set(c.id, c);
+      this.clipCache = { fullAt: complete ? this.now : (this.clipCache?.fullAt ?? 0), byId };
+    };
+    this.clipLoad = this.d.twitch
+      .listClips(this.d.creds(), { onProgress: (list) => { merge(list, false); firstDone(); }, onWarning: (m) => { this.clipWarning = m; } })
+      .then((all) => {
+        merge(all, true);
+        firstDone();
+      })
+      .catch((e) => {
+        this.clipWarning = this.clipCache ? `No se pudo actualizar el historial: ${(e as Error).message}` : '';
+        firstFail(e);
+      })
+      .finally(() => {
+        this.clipLoad = null;
+      });
+    return first;
+  }
+
+  /**
+   * Clips del canal, más recientes primero. Lo reciente sale enseguida; el historial se sigue leyendo en segundo plano
+   * (`loading`). Se pide entero de vez en cuando; entre medias solo lo reciente.
+   */
+  async clips(force = false): Promise<ClipsResult> {
     const now = this.now;
-    const fresh = this.clipCache && now - this.clipCache.fullAt < CLIPS_FULL_MS;
-    if (force || !fresh) {
-      const all = await this.d.twitch.listClips(this.d.creds());
-      this.clipCache = { fullAt: now, byId: new Map(all.map((c) => [c.id, c])) };
-    } else {
-      const recent = await this.d.twitch.listClips(this.d.creds(), { sinceMs: now - CLIPS_RECENT_MS });
-      for (const c of recent) this.clipCache!.byId.set(c.id, c);
+    const fresh = this.clipCache !== undefined && this.clipCache.fullAt > 0 && now - this.clipCache.fullAt < CLIPS_FULL_MS;
+    if ((force || !fresh) && !this.clipLoad) {
+      const first = this.startFull();
+      if (!this.clipCache) await first;
+    } else if (fresh && !this.clipLoad) {
+      try {
+        const recent = await this.d.twitch.listClips(this.d.creds(), { sinceMs: now - CLIPS_RECENT_MS });
+        for (const c of recent) this.clipCache!.byId.set(c.id, c);
+      } catch (e) {
+        this.clipWarning = `No se pudieron buscar clips nuevos: ${(e as Error).message}`;
+      }
+    } else if (!this.clipCache && this.clipLoad) {
+      await this.clipLoad;
     }
-    return [...this.clipCache!.byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+    const list = [...(this.clipCache?.byId.values() ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+    return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning };
   }
 
   private async clipById(clipId: string): Promise<TwitchClip | undefined> {
-    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).find((c) => c.id === clipId);
+    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).clips.find((c) => c.id === clipId);
     return known;
   }
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bestStretch, bestStretches, buildSummary, dedupeTitles, fallbackTitle, shortTitle, findMoments, mergeSegments, robustZ, scoreSeconds, smooth, snapToSentences, textOf, type Signals } from '../shared/highlights';
+import { bestStretch, bestStretches, buildSummary, dedupeTitles, isAutoNameable, fallbackTitle, shortTitle, findMoments, mergeSegments, robustZ, scoreSeconds, smooth, snapToSentences, textOf, type Signals } from '../shared/highlights';
 import type { Word } from '../shared/subtitles';
 
 /** Directo de 1 hora con ruido bajo y dos explosiones (en 600 s y 2400 s). */
@@ -169,5 +169,13 @@ describe('highlights: nombres cortos', () => {
   });
   it('dedupeTitles distingue los repetidos', () => {
     assert.deepEqual(dedupeTitles(['Casa', 'Cueva', 'casa', 'Casa']), ['Casa', 'Cueva', 'casa 2', 'Casa 3']);
+  });
+  it('isAutoNameable: nunca lo escrito por el usuario; sí lo largo, lo genérico y lo puesto por el programa', () => {
+    assert.equal(isAutoNameable({ title: 'x'.repeat(60), titleSource: 'manual' }), false);
+    assert.equal(isAutoNameable({ title: 'Corto', titleSource: 'auto' }), true);
+    assert.equal(isAutoNameable({ title: 'x'.repeat(41) }), true);
+    assert.equal(isAutoNameable({ title: 'Clip de Twitch' }), true);
+    assert.equal(isAutoNameable({ title: 'Momento 4' }), true);
+    assert.equal(isAutoNameable({ title: 'Mi clip favorito' }), false);
   });
 });

@@ -57,6 +57,21 @@ export default function LibraryTab(props: {
   }, [requestedId, onOpened]);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'new' | 'old' | 'name'>('new');
+  const [naming, setNaming] = useState(false);
+  async function autoName() {
+    setNaming(true);
+    try {
+      const r = await window.api.autoNameLibrary();
+      await props.onChanged();
+      const parts = [`${r.renamed} renombrado(s)`];
+      if (r.noTranscript) parts.push(`${r.noTranscript} sin transcripción (transcribe el directo en «Clips y publicación» para nombrarlos)`);
+      notify(`Nombres cortos: ${parts.join(', ')}.`, r.renamed ? 'ok' : 'warn');
+    } catch (e) {
+      notify(errMsg(e), 'bad');
+    } finally {
+      setNaming(false);
+    }
+  }
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -225,6 +240,7 @@ export default function LibraryTab(props: {
         </select>
         <div className="row">
           {!selecting && items.length > 0 && <button className="btn ghost small" onClick={() => setSelecting(true)}><IconCheck /> Seleccionar</button>}
+          <button className="btn ghost small" disabled={naming} onClick={() => void autoName()} title="Pone un nombre corto, según lo que pasa en cada vídeo, a los que no tienen uno escrito por ti">{naming ? 'Poniendo nombres…' : 'Nombres cortos'}</button>
           <button className="btn ghost small" onClick={() => setDialog({ type: 'new-group', parentId: here, withItems: [] })}><IconPlus /> Nueva carpeta</button>
         </div>
       </div>

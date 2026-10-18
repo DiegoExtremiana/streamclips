@@ -31,6 +31,8 @@ export interface TranscriptDeps {
 /** Transcripciones por VOD: se importan (JSON, SRT, VTT) o se generan con Whisper si está configurado. */
 export class TranscriptService {
   private dir: string;
+  /** Lo llama al guardar una transcripción nueva (p. ej. para poner nombres cortos a lo ya creado). */
+  onSaved?: (vodId: string) => void;
 
   constructor(private d: TranscriptDeps) {
     this.dir = path.join(path.dirname(d.store.file), 'transcripts');
@@ -65,6 +67,11 @@ export class TranscriptService {
     vod.transcript = { words: words.length, source, at: new Date().toISOString() };
     this.d.store.save();
     this.d.notifier.changed();
+    try {
+      this.onSaved?.(vod.id);
+    } catch (e) {
+      this.d.log.warn(`Tras guardar la transcripción: ${(e as Error).message}`);
+    }
     return vod;
   }
 

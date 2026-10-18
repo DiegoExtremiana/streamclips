@@ -186,7 +186,15 @@ var init_twitch = __esm({
           let emptyDays = 0;
           for (let w = 0; w < CLIP_MAX_WINDOWS; w++) {
             const from = to - CLIP_WINDOW_MS;
-            const n = await page(from, to);
+            let n;
+            try {
+              n = await page(from, to);
+            } catch (e) {
+              if (w === 0) throw e;
+              o.onWarning?.(`Solo se han podido leer los clips hasta ${new Date(to).toLocaleDateString("es-ES")}: ${e.message}`);
+              break;
+            }
+            o.onProgress?.([...seen.values()]);
             emptyDays = n === 0 ? emptyDays + CLIP_WINDOW_MS : 0;
             if (emptyDays >= 365 * 864e5) break;
             to = from;
@@ -31762,8 +31770,8 @@ function validateLongSpec(l, vodDurationSec) {
   if (l.subtitles !== void 0 && !isSubtitleStyleId(l.subtitles)) return "el estilo de subt\xEDtulos no existe";
   return null;
 }
-function normalizeClip(c, fallbackTitle2) {
-  const out = { kind: c.kind ?? "both", start: c.start, end: c.end, title: cleanTitle(c.title, fallbackTitle2), cropX: c.cropX };
+function normalizeClip(c, fallbackTitle) {
+  const out = { kind: c.kind ?? "both", start: c.start, end: c.end, title: cleanTitle(c.title, fallbackTitle), cropX: c.cropX };
   if (c.cuts?.length) out.cuts = c.cuts.map((x) => ({ start: x.start, end: x.end })).sort((a, b) => a.start - b.start);
   if (c.effects?.length) out.effects = normalizeEffects(c.effects);
   if (c.subtitles) out.subtitles = c.subtitles;
@@ -32314,6 +32322,14 @@ var LibraryService = class {
     }
     return out;
   }
+  /** Nombre puesto por el programa: se puede volver a cambiar solo, a diferencia de uno escrito por el usuario. */
+  setAutoTitle(id, title) {
+    const o = this.find(id);
+    o.title = title;
+    o.titleSource = "auto";
+    this.changed();
+    return o;
+  }
   rename(id, title) {
     return this.setMeta(id, { title });
   }
@@ -32332,6 +32348,7 @@ var LibraryService = class {
       if (t.length > max) throw new Error(`El nombre no puede pasar de ${max} caracteres.`);
       if (o.kind === "long" && hasAngle(t)) throw new Error("El nombre no puede contener < ni > (YouTube no los admite).");
       next.title = t;
+      if (t !== o.title) next.titleSource = "manual";
     }
     if (meta.description !== void 0) {
       if (typeof meta.description !== "string") throw new Error("La descripci\xF3n no es v\xE1lida.");
@@ -32905,6 +32922,8 @@ var TranscriptService = class {
     this.dir = import_node_path10.default.join(import_node_path10.default.dirname(d.store.file), "transcripts");
   }
   dir;
+  /** Lo llama al guardar una transcripción nueva (p. ej. para poner nombres cortos a lo ya creado). */
+  onSaved;
   vod(vodId) {
     const v = this.d.store.data.vods.find((x) => x.id === vodId);
     if (!v) throw new Error("El VOD no existe.");
@@ -32931,6 +32950,11 @@ var TranscriptService = class {
     vod.transcript = { words: words.length, source, at: (/* @__PURE__ */ new Date()).toISOString() };
     this.d.store.save();
     this.d.notifier.changed();
+    try {
+      this.onSaved?.(vod.id);
+    } catch (e) {
+      this.d.log.warn(`Tras guardar la transcripci\xF3n: ${e.message}`);
+    }
     return vod;
   }
   /** Lee el archivo, lo valida entero y solo entonces sustituye la transcripción anterior. */
@@ -34443,12 +34467,66 @@ function textOf(words, start, end, maxChars = 700) {
   const t = words.filter((w) => w.start >= start && w.start < end).map((w) => w.text).join(" ");
   return t.length > maxChars ? `${t.slice(0, maxChars)}\u2026` : t;
 }
-function fallbackTitle(words, m, index) {
-  const ss = sentences(words.filter((w) => w.start >= m.start && w.end <= m.end + 0.5));
-  const withText = ss.map((s) => ({ s, t: textOf(words, s.start, s.end + 0.01, 120) })).filter((x) => x.t.length >= 12).sort((a, b) => (/[!?]/.test(b.t) ? 1 : 0) - (/[!?]/.test(a.t) ? 1 : 0) || b.t.length - a.t.length);
-  const base = withText[0]?.t.replace(/\s+/g, " ").replace(/[.…]+$/, "").trim();
-  if (!base) return `Momento ${index + 1}`;
-  return base.length > 70 ? `${base.slice(0, 67).trimEnd()}\u2026` : base;
+var STOP = new Set(
+  "a al algo ante aqu\xED as\xED aunque bien cada como con contra cosa cosas cual cuando de del desde donde dos el \xE9l ella ellas ellos en entre era eran es esa ese eso esos esta este esto est\xE1 est\xE1n estoy fue ha han hasta hay he hemos la las le les lo los me mi mis muy ni no nos o os otra otro para pero poco por porque pues que qu\xE9 quien se sea ser si s\xED sin sobre son soy su sus tambi\xE9n tan te tengo tiene tienes todo todos tu tus un una uno unos vale venga vamos va vas voy ya yo oye mira digo bueno entonces esto eso eh ah um jo pues claro vale as\xED luego ahora aqu\xED all\xED muy m\xE1s menos solo s\xF3lo t\xEDo t\xEDa chat chicos gente".split(" ")
+);
+var tokenOf = (t) => t.replace(/[^\p{L}\p{N}]/gu, "");
+var isStop = (t) => t.length < 3 || STOP.has(t.toLowerCase());
+function shortTitle(words, m, index, o = {}) {
+  const maxWords = o.maxWords ?? 5;
+  const maxChars = o.maxChars ?? 40;
+  const segs = Array.isArray(m) ? m : [m];
+  const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5));
+  const counts = /* @__PURE__ */ new Map();
+  for (const w of words) {
+    const k = tokenOf(w.text).toLowerCase();
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const weight = (raw) => {
+    const k = tokenOf(raw).toLowerCase();
+    if (!k || isStop(k)) return 0;
+    return (1 + Math.min(k.length, 10) / 10) / Math.log(2 + (counts.get(k) ?? 1));
+  };
+  let best = null;
+  for (const s of sentences(inside)) {
+    const sw = inside.filter((w) => w.start >= s.start && w.end <= s.end + 0.01);
+    const toks = sw.map((w) => w.text);
+    const ws = toks.map(weight);
+    const bonus = /[!?]/.test(toks.join(" ")) ? 1.5 : 0;
+    for (let i = 0; i < toks.length; i++) {
+      if (ws[i] === 0) continue;
+      for (let j = i; j < Math.min(toks.length, i + maxWords); j++) {
+        if (ws[j] === 0) continue;
+        const slice = toks.slice(i, j + 1).map(tokenOf);
+        if (slice.some((t2) => !t2)) continue;
+        let text = slice.join(" ");
+        while (text.length > maxChars && slice.length > 1) {
+          slice.pop();
+          text = slice.join(" ");
+        }
+        if (text.length > maxChars || ws.slice(i, j + 1).filter((x) => x > 0).length < Math.min(2, ws.filter((x) => x > 0).length)) continue;
+        const score = ws.slice(i, j + 1).reduce((a, b) => a + b, 0) + bonus - 0.05 * (j - i);
+        if (!best || score > best.score + 1e-9) best = { score, toks: slice };
+      }
+    }
+  }
+  if (!best) return `Momento ${index + 1}`;
+  const t = best.toks.join(" ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function dedupeTitles(titles) {
+  const seen = /* @__PURE__ */ new Map();
+  return titles.map((t) => {
+    const k = t.toLowerCase();
+    const n = (seen.get(k) ?? 0) + 1;
+    seen.set(k, n);
+    return n === 1 ? t : `${t} ${n}`;
+  });
+}
+function isAutoNameable(o) {
+  if (o.titleSource === "manual") return false;
+  if (o.titleSource === "auto") return true;
+  return o.title.length > 40 || /^(clip|momento|directo del|resumen del directo)\b/i.test(o.title.trim());
 }
 
 // shared/slots.ts
@@ -34798,6 +34876,7 @@ var Autopilot = class {
         try {
           const item = await fn();
           item.auto = { role, review: "pending" };
+          item.titleSource = "auto";
           item.visibility = this.cfg.visibility;
           if (item.kind === "long" && t.description) this.d.library.setMeta(item.id, { description: t.description });
           this.d.store.save();
@@ -34846,13 +34925,19 @@ var Autopilot = class {
   async titles(vod, words, moments, mains, notes) {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: "" },
-      mains: mains.map((m, i) => ({ title: clean(words.length ? fallbackTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: "" })),
-      clips: moments.map((m, i) => ({ title: clean(words.length ? fallbackTitle(words, m, i) : `Momento ${i + 1}`, 100), description: "" }))
+      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: "" })),
+      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: "" }))
+    };
+    const uniq = () => {
+      const u = dedupeTitles([...base.mains.map((t) => t.title), ...base.clips.map((t) => t.title)]);
+      base.mains.forEach((t, i) => t.title = u[i]);
+      base.clips.forEach((t, i) => t.title = u[base.mains.length + i]);
     };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === "none" || !key || !words.length) {
       if (llm.provider !== "none" && !words.length) notes.push("T\xEDtulos sin modelo de lenguaje: no hay transcripci\xF3n.");
+      uniq();
       return base;
     }
     const conf = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
@@ -34863,7 +34948,7 @@ var Autopilot = class {
     try {
       const raw = await askJson(
         conf,
-        "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a, sin latinismos ni modismos de otros pa\xEDses. Escribes t\xEDtulos cortos y atractivos (m\xE1ximo 70 caracteres, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.",
+        "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a, sin latinismos ni modismos de otros pa\xEDses. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que digan qu\xE9 pasa en \xE9l, distintos entre s\xED, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.",
         `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.
 "resumen" es el resumen de todo el directo (no tienes su texto: tit\xFAlalo a partir de los dem\xE1s fragmentos). Fragmentos:
 ${JSON.stringify(items)}`,
@@ -34878,6 +34963,7 @@ ${JSON.stringify(items)}`,
     } catch (e) {
       notes.push(`T\xEDtulos sin modelo de lenguaje: ${e.message}`);
     }
+    uniq();
     return base;
   }
   /**
@@ -34885,20 +34971,24 @@ ${JSON.stringify(items)}`,
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId, start, end) {
+    return this.nameFor(vodId, [{ start, end }]);
+  }
+  /** Nombre corto para uno o varios tramos de un VOD: con modelo de lenguaje lo redacta él; si no, sale de lo que se dice. */
+  async nameFor(vodId, segs) {
     const words = this.d.transcripts.words(vodId);
-    const seg = { start, end };
-    if (!words.some((w) => w.start >= start && w.end <= end + 0.5)) return null;
-    const fb = clean(fallbackTitle(words, seg, 0), 100);
+    if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
+    const fb = clean(shortTitle(words, segs, 0), 100);
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider !== "none" && key) {
       try {
         const conf = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+        const text = segs.map((g) => textOf(words, g.start, Math.min(g.end, g.start + 240), 900)).join(" / ").slice(0, 1400);
         const raw = await askJson(
           conf,
-          "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes t\xEDtulos cortos y atractivos (m\xE1ximo 70 caracteres, sin clickbait falso, sin emojis). Responde SOLO con JSON.",
+          "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes un nombre muy corto para el fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que diga qu\xE9 pasa en \xE9l, sin clickbait falso, sin emojis). Responde SOLO con JSON.",
           `Texto transcrito de un fragmento. Devuelve {"titulo":""}.
-${textOf(words, start, Math.min(end, start + 240), 900)}`,
+${text}`,
           { fetchFn: this.d.llmFetch }
         );
         const t = clean(raw.titulo, 100);
@@ -34906,7 +34996,46 @@ ${textOf(words, start, Math.min(end, start + 240), 900)}`,
       } catch {
       }
     }
-    return fb ? { title: fb, source: "transcript" } : null;
+    return fb && !/^Momento \d+$/.test(fb) ? { title: fb, source: "transcript" } : null;
+  }
+  /**
+   * Pone un nombre corto a los clips y vídeos de la Biblioteca (con `onlyVodId`, solo a los de ese VOD). No toca los que
+   * nombró el usuario ni los que ya son cortos. Evita repetir nombres entre todo lo que hay en la Biblioteca.
+   */
+  async autoNameLibrary(onlyVodId) {
+    const res = { renamed: 0, noTranscript: 0, kept: 0 };
+    const outs = this.d.store.data.outputs;
+    const used = new Set(outs.map((o) => o.title.toLowerCase()));
+    for (const o of outs) {
+      if (onlyVodId && o.vodId !== onlyVodId) continue;
+      if (!isAutoNameable(o)) {
+        res.kept++;
+        continue;
+      }
+      const segs = o.kind === "long" ? o.segments?.length ? o.segments.map((g) => ({ start: g.start, end: g.end })) : null : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : null;
+      const r2 = o.vodId && segs ? await this.nameFor(o.vodId, segs) : null;
+      if (!r2) {
+        res.noTranscript++;
+        continue;
+      }
+      let t = r2.title;
+      if (t.toLowerCase() === o.title.toLowerCase()) {
+        o.titleSource = "auto";
+        res.kept++;
+        continue;
+      }
+      for (let n = 2; used.has(t.toLowerCase()); n++) t = `${r2.title} ${n}`;
+      used.delete(o.title.toLowerCase());
+      used.add(t.toLowerCase());
+      try {
+        this.d.library.setAutoTitle(o.id, t);
+        res.renamed++;
+      } catch (e) {
+        this.d.log.warn(`No se pudo renombrar "${o.title}": ${e.message}`);
+      }
+    }
+    if (res.renamed) this.d.log.info(`Nombres cortos autom\xE1ticos: ${res.renamed} renombrado(s)`);
+    return res;
   }
   dateLabel(vod) {
     const d = new Date(vod.streamStartedAt ?? vod.createdAt);
@@ -35104,21 +35233,64 @@ var ChannelMonitor = class {
     if (st.seenVodIds.length > 500) st.seenVodIds.splice(0, st.seenVodIds.length - 500);
     this.d.store.save();
   }
-  /** Todos los clips del canal, más recientes primero. El historial se pide entero de vez en cuando; entre medias solo lo reciente. */
+  clipLoad = null;
+  clipWarning = "";
+  /** Lee todo el historial en segundo plano; la promesa devuelta se cumple en cuanto hay algo que enseñar (o falla si no hay nada). */
+  startFull() {
+    this.clipWarning = "";
+    let firstDone;
+    let firstFail;
+    const first = new Promise((res, rej) => {
+      firstDone = res;
+      firstFail = rej;
+    });
+    first.catch(() => void 0);
+    const merge = (list, complete) => {
+      const byId = complete ? /* @__PURE__ */ new Map() : this.clipCache?.byId ?? /* @__PURE__ */ new Map();
+      for (const c of list) byId.set(c.id, c);
+      this.clipCache = { fullAt: complete ? this.now : this.clipCache?.fullAt ?? 0, byId };
+    };
+    this.clipLoad = this.d.twitch.listClips(this.d.creds(), { onProgress: (list) => {
+      merge(list, false);
+      firstDone();
+    }, onWarning: (m) => {
+      this.clipWarning = m;
+    } }).then((all) => {
+      merge(all, true);
+      firstDone();
+    }).catch((e) => {
+      this.clipWarning = this.clipCache ? `No se pudo actualizar el historial: ${e.message}` : "";
+      firstFail(e);
+    }).finally(() => {
+      this.clipLoad = null;
+    });
+    return first;
+  }
+  /**
+   * Clips del canal, más recientes primero. Lo reciente sale enseguida; el historial se sigue leyendo en segundo plano
+   * (`loading`). Se pide entero de vez en cuando; entre medias solo lo reciente.
+   */
   async clips(force = false) {
     const now = this.now;
-    const fresh = this.clipCache && now - this.clipCache.fullAt < CLIPS_FULL_MS;
-    if (force || !fresh) {
-      const all = await this.d.twitch.listClips(this.d.creds());
-      this.clipCache = { fullAt: now, byId: new Map(all.map((c) => [c.id, c])) };
-    } else {
-      const recent = await this.d.twitch.listClips(this.d.creds(), { sinceMs: now - CLIPS_RECENT_MS });
-      for (const c of recent) this.clipCache.byId.set(c.id, c);
+    const fresh = this.clipCache !== void 0 && this.clipCache.fullAt > 0 && now - this.clipCache.fullAt < CLIPS_FULL_MS;
+    if ((force || !fresh) && !this.clipLoad) {
+      const first = this.startFull();
+      if (!this.clipCache) await first;
+    } else if (fresh && !this.clipLoad) {
+      try {
+        const recent = await this.d.twitch.listClips(this.d.creds(), { sinceMs: now - CLIPS_RECENT_MS });
+        for (const c of recent) this.clipCache.byId.set(c.id, c);
+      } catch (e) {
+        this.clipWarning = `No se pudieron buscar clips nuevos: ${e.message}`;
+      }
+    } else if (!this.clipCache && this.clipLoad) {
+      await this.clipLoad;
     }
-    return [...this.clipCache.byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+    const list = [...this.clipCache?.byId.values() ?? []].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+    return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning };
   }
   async clipById(clipId) {
-    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).find((c) => c.id === clipId);
+    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).clips.find((c) => c.id === clipId);
     return known;
   }
   /** Dirección directa para ver un clip en el programa sin descargarlo ni añadirlo a la Biblioteca. */
@@ -36178,6 +36350,7 @@ var AppContext = class {
       canTranscribe: o.canTranscribe
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
+    this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId).catch((e) => this.log.warn(`Nombres autom\xE1ticos: ${e.message}`));
     this.connections = new ConnectionService({
       store: this.store,
       secrets,

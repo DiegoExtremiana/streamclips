@@ -74,6 +74,7 @@ const api: Api = {
   transcribeVod: (vodId) => call(CHANNELS.transcriptRun, vodId),
   clipContext: (id) => call(CHANNELS.clipContext, id),
   suggestTitle: (vodId, start, end) => call(CHANNELS.suggestTitle, vodId, start, end),
+  autoNameLibrary: () => call(CHANNELS.autoName),
   claudePrompt: (vodId) => call(CHANNELS.transcriptPrompt, vodId),
   listGroups: () => call(CHANNELS.groupsList),
   createGroup: (name, kind, section, parentId) => call(CHANNELS.groupsCreate, name, kind, section, parentId),

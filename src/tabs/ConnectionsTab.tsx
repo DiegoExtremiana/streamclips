@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { MASKED_SECRET } from '../../shared/types';
 import { errMsg } from '../lib';
 import NetworksCard from './NetworksCard';
+import PanelTab from './PanelTab';
+import type { OutputItem, Publication, VodJob } from '../../shared/types';
+import type { TabId } from '../App';
 
-export default function ConnectionsTab() {
+export default function ConnectionsTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void }) {
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [login, setLogin] = useState('');
@@ -53,6 +56,8 @@ export default function ConnectionsTab() {
 
   return (
     <div className="grid">
+      <PanelTab vods={props.vods} outputs={props.outputs} pubs={props.pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="status" />
+      <PanelTab vods={props.vods} outputs={props.outputs} pubs={props.pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="guide" />
       <section className="card">
         <div className="row" style={{ gap: 10 }}>
           <h2>Twitch</h2>

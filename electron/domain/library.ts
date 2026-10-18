@@ -85,6 +85,15 @@ export class LibraryService {
     return out;
   }
 
+  /** Nombre puesto por el programa: se puede volver a cambiar solo, a diferencia de uno escrito por el usuario. */
+  setAutoTitle(id: string, title: string): OutputItem {
+    const o = this.find(id);
+    o.title = title;
+    o.titleSource = 'auto';
+    this.changed();
+    return o;
+  }
+
   rename(id: string, title: string): OutputItem {
     return this.setMeta(id, { title });
   }
@@ -104,6 +113,7 @@ export class LibraryService {
       if (t.length > max) throw new Error(`El nombre no puede pasar de ${max} caracteres.`);
       if (o.kind === 'long' && hasAngle(t)) throw new Error('El nombre no puede contener < ni > (YouTube no los admite).');
       next.title = t;
+      if (t !== o.title) next.titleSource = 'manual';
     }
     if (meta.description !== undefined) {
       if (typeof meta.description !== 'string') throw new Error('La descripción no es válida.');

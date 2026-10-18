@@ -3,17 +3,20 @@ import { MASKED_SECRET } from '../../shared/types';
 import type { EngineStatus } from '../../shared/types';
 import { fmtDate } from '../../shared/time';
 import { errMsg } from '../lib';
+import { DEFAULT_ENGINE_REPO, ENGINE_REPO_NAME, newRepoUrl, newTokenUrl } from '../../shared/github';
 
 /** Editar de noche con el PC apagado: el motor corre en GitHub Actions. */
 export default function EngineCard() {
   const [s, setS] = useState<EngineStatus | null>(null);
   const [repo, setRepo] = useState('');
   const [token, setToken] = useState('');
+  const [twitchOk, setTwitchOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    const load = () => window.api.engineStatus().then((x) => { setS(x); setRepo((r) => r || x.repo); if (x.hasToken) setToken((t) => t || MASKED_SECRET); }).catch(() => undefined);
+    const load = () => window.api.engineStatus().then((x) => { setS(x); setRepo((r) => r || x.repo || DEFAULT_ENGINE_REPO); if (x.hasToken) setToken((t) => t || MASKED_SECRET); }).catch(() => undefined);
+    window.api.getSettings().then((x) => setTwitchOk(Boolean(x.twitch.clientId && x.twitch.clientSecret && x.twitch.login))).catch(() => undefined);
     void load();
     return window.api.onDataChanged(() => void load());
   }, []);
@@ -43,9 +46,10 @@ export default function EngineCard() {
         <>
           {!s?.cloudReady && <div className="msg bad" role="note">Primero activa «Publicar con el PC apagado» (justo encima): ahí es donde el motor deja los vídeos listos.</div>}
           <ol className="small muted" style={{ paddingLeft: 18 }}>
-            <li>En github.com crea un repositorio <strong>público</strong> vacío (por ejemplo «streamclips-motor»). Es público para que los minutos de GitHub Actions sean gratis e ilimitados; solo contendrá código, tus vídeos y tus claves no.</li>
-            <li>Usa un token que también tenga acceso a ese repositorio (si es de los de «Fine-grained», añádelo; permisos: Contents, Workflows, Secrets y Actions en «Read and write»).</li>
-            <li>Pega aquí el nombre del repositorio y el token. Necesitas haber rellenado Twitch (id, secreto y canal) en Ajustes.</li>
+            <li>Twitch (id, secreto y canal) rellenado en Conexiones: {twitchOk === null ? 'comprobando…' : twitchOk ? 'hecho.' : <strong>falta.</strong>}</li>
+            <li>El repositorio <strong>público</strong> «{ENGINE_REPO_NAME}» (vacío). Es público para que los minutos de GitHub Actions sean gratis e ilimitados; solo contendrá código: tus vídeos y tus claves no. Si aún no lo has creado: <a href={newRepoUrl(ENGINE_REPO_NAME, 'public')} target="_blank" rel="noreferrer">crearlo en GitHub</a>.</li>
+            <li>Un token con acceso también a ese repositorio: <a href={newTokenUrl('StreamClips motor')} target="_blank" rel="noreferrer">crear uno nuevo</a> con los permisos ya marcados (marca «{ENGINE_REPO_NAME}» y «streamclips-nube» en «Only select repositories»), o añade este repositorio al token que ya usas en la nube.</li>
+            <li>Pega el token aquí abajo y pulsa «Activar». El nombre del repositorio ya está puesto.</li>
           </ol>
           <div className="field">
             <label htmlFor="en-repo">Repositorio público (usuario/nombre)</label>

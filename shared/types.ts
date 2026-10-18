@@ -213,6 +213,8 @@ export interface OutputItem {
   visibility?: Visibility;
   /** Vive solo en la nube (lo creó el motor nocturno): no hay archivos en este PC. */
   remote?: boolean;
+  /** Quién puso el nombre: el programa (se puede volver a poner solo) o el usuario (no se toca). */
+  titleSource?: 'auto' | 'manual';
   /** Creado por el piloto automático. */
   auto?: { role: AutoRole; review: 'pending' | 'approved' };
 }
@@ -352,6 +354,21 @@ export interface TwitchStream {
   startedAt?: string;
 }
 
+export interface AutoNameResult {
+  renamed: number;
+  /** No tienen transcripción: sin ella no hay de qué sacar el nombre. */
+  noTranscript: number;
+  /** Ya tenían un nombre corto, o lo escribiste tú. */
+  kept: number;
+}
+
+/** Clips del canal: `loading` es verdadero mientras sigue leyéndose el historial antiguo; `warning` avisa si no se pudo leer entero. */
+export interface ClipsResult {
+  clips: TwitchClip[];
+  loading: boolean;
+  warning: string;
+}
+
 export interface TwitchClip {
   id: string;
   title: string;
@@ -400,7 +417,7 @@ export interface Api {
   /** Comprueba ya el canal (sin esperar al siguiente turno). */
   channelRefresh(): Promise<ChannelStatus>;
   /** Todos los clips del canal, más recientes primero. `force` vuelve a pedir todo el historial a Twitch. */
-  channelClips(force?: boolean): Promise<TwitchClip[]>;
+  channelClips(force?: boolean): Promise<ClipsResult>;
   /** Descarga el clip de Twitch y lo deja en la Biblioteca (vertical y horizontal). */
   channelImportClip(clipId: string): Promise<VodJob>;
   /** Dirección directa para ver un clip de Twitch sin descargarlo. */
@@ -472,6 +489,8 @@ export interface Api {
   /** Duración del directo de origen de un clip (null si el archivo ya no está), para la línea de tiempo del recorte. */
   clipContext(id: string): Promise<{ vodDurationSec: number | null }>;
   suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null>;
+  /** Pone un nombre corto, según lo que se dice, a los clips y vídeos de la Biblioteca que no tienen uno escrito por ti. */
+  autoNameLibrary(): Promise<AutoNameResult>;
   /** Transcripción con marcas de tiempo + instrucciones para pedirle un plan de edición a Claude. */
   claudePrompt(vodId: string): Promise<string>;
   framingPreview(outputId: string): Promise<FramingPreview>;
@@ -552,6 +571,7 @@ export const CHANNELS = {
   transcriptImport: 'transcript:import',
   transcriptRun: 'transcript:run',
   suggestTitle: 'title:suggest',
+  autoName: 'title:auto',
   clipContext: 'outputs:clipContext',
   transcriptPrompt: 'transcript:prompt',
   shellOpen: 'shell:open',

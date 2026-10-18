@@ -141,7 +141,7 @@ export class TwitchClient {
    * por ventanas de fechas, así que se piden por tramos de fechas y con paginación hasta tenerlos todos.
    * Con `sinceMs` solo se piden los de desde esa fecha (para refrescar lo reciente sin repasar todo el historial).
    */
-  async listClips(c: TwitchCreds, o: { sinceMs?: number } = {}): Promise<TwitchClip[]> {
+  async listClips(c: TwitchCreds, o: { sinceMs?: number; onProgress?: (clips: TwitchClip[]) => void; onWarning?: (msg: string) => void } = {}): Promise<TwitchClip[]> {
     this.needCreds(c);
     const u = await this.userId(c);
     const seen = new Map<string, TwitchClip>();
@@ -172,7 +172,15 @@ export class TwitchClient {
       let emptyDays = 0;
       for (let w = 0; w < CLIP_MAX_WINDOWS; w++) {
         const from = to - CLIP_WINDOW_MS;
-        const n = await page(from, to);
+        let n: number;
+        try {
+          n = await page(from, to);
+        } catch (e) {
+          if (w === 0) throw e; // sin lo reciente no hay nada que enseñar
+          o.onWarning?.(`Solo se han podido leer los clips hasta ${new Date(to).toLocaleDateString('es-ES')}: ${(e as Error).message}`);
+          break;
+        }
+        o.onProgress?.([...seen.values()]);
         emptyDays = n === 0 ? emptyDays + CLIP_WINDOW_MS : 0;
         if (emptyDays >= 365 * 86_400_000) break;
         to = from;

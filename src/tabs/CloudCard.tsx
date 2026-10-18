@@ -3,6 +3,7 @@ import { MASKED_SECRET } from '../../shared/types';
 import type { CloudStatus } from '../../shared/types';
 import { fmtDate } from '../../shared/time';
 import { errMsg } from '../lib';
+import { CLOUD_REPO_NAME, DEFAULT_CLOUD_REPO, newRepoUrl, newTokenUrl } from '../../shared/github';
 
 export default function CloudCard() {
   const [s, setS] = useState<CloudStatus | null>(null);
@@ -12,7 +13,7 @@ export default function CloudCard() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    const load = () => window.api.cloudStatus().then((x) => { setS(x); setRepo((r) => r || x.repo); if (x.hasToken) setToken((t) => t || MASKED_SECRET); }).catch(() => undefined);
+    const load = () => window.api.cloudStatus().then((x) => { setS(x); setRepo((r) => r || x.repo || DEFAULT_CLOUD_REPO); if (x.hasToken) setToken((t) => t || MASKED_SECRET); }).catch(() => undefined);
     void load();
     const off = window.api.onDataChanged(() => void load());
     return off;
@@ -40,9 +41,9 @@ export default function CloudCard() {
       </div>
       {!s?.enabled && (
         <ol className="small muted" style={{ paddingLeft: 18 }}>
-          <li>En github.com crea un repositorio <strong>privado</strong> vacío (por ejemplo «streamclips-nube»).</li>
-          <li>Ajustes de GitHub &gt; Developer settings &gt; Fine-grained tokens &gt; nuevo token, solo para ese repositorio, con permisos: Contents, Workflows, Secrets y Actions en «Read and write».</li>
-          <li>Pega aquí el nombre del repositorio y el token.</li>
+          <li>El repositorio <strong>privado</strong> «{CLOUD_REPO_NAME}» (vacío). Si aún no lo has creado: <a href={newRepoUrl(CLOUD_REPO_NAME, 'private')} target="_blank" rel="noreferrer">crearlo en GitHub</a> (ya sale con el nombre y «Private» puestos; solo pulsa «Create repository»).</li>
+          <li><a href={newTokenUrl('StreamClips nube')} target="_blank" rel="noreferrer">Crear el token en GitHub</a> (sale con los permisos ya marcados: Contents, Workflows, Secrets y Actions en «Read and write»). En «Repository access» elige «Only select repositories» y marca solo «{CLOUD_REPO_NAME}»; pulsa «Generate token» y copia el token.</li>
+          <li>Pega el token aquí abajo y pulsa «Activar». El nombre del repositorio ya está puesto.</li>
         </ol>
       )}
       <div className="field">

@@ -252,7 +252,7 @@ details > summary:focus-visible { outline: 2px solid var(--accent-2); outline-of
 
 /* ---------- programación: línea de tiempo y calendario ---------- */
 .stack { display: flex; flex-direction: column; gap: 18px; }
-.sched { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; }
+.sched { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 18px; align-items: start; }
 @media (max-width: 1150px) { .sched { grid-template-columns: 1fr; } }
 body.dragging, body.dragging * { user-select: none !important; cursor: grabbing !important; }
 .ghostchip { position: fixed; z-index: 90; pointer-events: none; max-width: 240px; padding: 5px 11px; border-radius: 9px; background: var(--accent-grad); color: #fff; font-weight: 600; font-size: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

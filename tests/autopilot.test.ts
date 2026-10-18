@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { execFileSync } from 'node:child_process';
 import { nextFreeSlot, nextSlot } from '../shared/slots';
+import type { OutputItem } from '../shared/types';
 import { addDownloadedVod, makeEnv, rmDir, tmpDir, type TestEnv } from './helpers';
 
 const envs: TestEnv[] = [];
@@ -281,6 +282,39 @@ describe('piloto automático', () => {
     } finally {
       srv.close();
     }
+  });
+
+  it('nombres cortos en la Biblioteca: renombra lo largo o genérico, respeta lo escrito por el usuario y evita repetidos; al llegar la transcripción se hace solo', async () => {
+    const { e, vod } = setup();
+    const mk = (id: string, title: string, o: Partial<OutputItem> = {}) => {
+      e.ctx.store.data.outputs.push({ id, vodId: vod.id, kind: 'clip', title, files: {}, durationSec: 30, createdAt: '2026-10-10T10:00:00Z', start: 10, end: 40, ...o });
+    };
+    mk('a', 'Un título larguísimo que describe todo lo que pasa en este clip de Twitch');
+    mk('b', 'Mi clip favorito');
+    mk('c', 'Otro título larguísimo escrito por mí mismo que no se debe tocar nunca jamás', { titleSource: 'manual' });
+    mk('d', 'Clip 3', { start: 100, end: 130 });
+    const tr = path.join(root, 'tr-lib.json');
+    fs.writeFileSync(tr, JSON.stringify({ words: ['¡No', 'me', 'lo', 'puedo', 'creer,', 'un', 'creeper', 'a', 'mis', 'espaldas!'].map((text, i) => ({ text, start: 20 + i * 0.5, end: 20.5 + i * 0.5 })) }));
+    e.ctx.transcripts.importFile(vod.id, tr); // al guardarse la transcripción, lo ya creado se nombra solo
+    for (let i = 0; i < 50 && e.ctx.store.data.outputs[0].titleSource !== 'auto'; i++) await new Promise((r) => setTimeout(r, 20));
+    const by = (id: string) => e.ctx.store.data.outputs.find((o) => o.id === id)!;
+    assert.match(by('a').title, /creeper/i);
+    assert.ok(by('a').title.length <= 40 && by('a').titleSource === 'auto', by('a').title);
+    assert.equal(by('b').title, 'Mi clip favorito');
+    assert.match(by('c').title, /escrito por mí mismo/);
+    assert.equal(by('d').title, 'Clip 3', 'sin palabras en su tramo no hay de qué sacar el nombre');
+    const r = await e.ctx.autopilot.autoNameLibrary();
+    assert.deepEqual(r, { renamed: 0, noTranscript: 1, kept: 3 });
+    // dos elementos del mismo tramo no se llaman igual
+    mk('e', 'Otro título larguísimo del mismo tramo que se tiene que distinguir del anterior');
+    await e.ctx.autopilot.autoNameLibrary();
+    assert.notEqual(by('e').title.toLowerCase(), by('a').title.toLowerCase());
+    assert.match(by('e').title, /creeper/i);
+    // lo que el usuario escribe después queda como suyo
+    e.ctx.library.setMeta('a', { title: 'Mi nombre' });
+    assert.equal(by('a').titleSource, 'manual');
+    await e.ctx.autopilot.autoNameLibrary();
+    assert.equal(by('a').title, 'Mi nombre');
   });
 
   it('desactivado, no hace nada al terminar un directo; los ajustes se validan', () => {

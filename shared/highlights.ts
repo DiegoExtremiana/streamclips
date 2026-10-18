@@ -329,10 +329,11 @@ const isStop = (t: string) => t.length < 3 || STOP.has(t.toLowerCase());
  * contenido (las palabras raras en el resto del directo pesan más que las muletillas) y de ella el tramo de palabras más
  * significativo. Sin palabras da «Momento n».
  */
-export function shortTitle(words: Word[], m: Seg, index: number, o: { maxWords?: number; maxChars?: number } = {}): string {
+export function shortTitle(words: Word[], m: Seg | Seg[], index: number, o: { maxWords?: number; maxChars?: number } = {}): string {
   const maxWords = o.maxWords ?? 5;
   const maxChars = o.maxChars ?? 40;
-  const inside = words.filter((w) => w.start >= m.start && w.end <= m.end + 0.5);
+  const segs = Array.isArray(m) ? m : [m];
+  const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5));
   const counts = new Map<string, number>();
   for (const w of words) {
     const k = tokenOf(w.text).toLowerCase();
@@ -381,4 +382,14 @@ export function dedupeTitles(titles: string[]): string[] {
     seen.set(k, n);
     return n === 1 ? t : `${t} ${n}`;
   });
+}
+
+/**
+ * ¿Se le puede poner un nombre automático? Nunca si lo escribió el usuario. Si lo puso el programa, siempre; si viene de antes
+ * (sin marca), solo cuando es largo (más de 40 caracteres) o genérico («Clip…», «Momento…», «Directo del…»).
+ */
+export function isAutoNameable(o: { title: string; titleSource?: 'auto' | 'manual' }): boolean {
+  if (o.titleSource === 'manual') return false;
+  if (o.titleSource === 'auto') return true;
+  return o.title.length > 40 || /^(clip|momento|directo del|resumen del directo)\b/i.test(o.title.trim());
 }

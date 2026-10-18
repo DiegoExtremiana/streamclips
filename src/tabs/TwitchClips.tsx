@@ -8,6 +8,7 @@ import { IconPlus, IconSearch } from '../icons';
 import { Modal } from '../library/ui';
 
 const REFRESH_MS = 60_000;
+const LOADING_MS = 3_000; // mientras se lee el historial se vuelve a preguntar enseguida
 
 const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'No está en la Biblioteca' };
 
@@ -54,6 +55,8 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState(false);
+  const [warning, setWarning] = useState('');
   const [query, setQuery] = useState('');
   const [show, setShow] = useState<Show>('all');
   const [limit, setLimit] = useState(PAGE);
@@ -62,7 +65,10 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const load = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      setClips(await window.api.channelClips(force));
+      const r = await window.api.channelClips(force);
+      setClips(r.clips);
+      setHistory(r.loading);
+      setWarning(r.warning);
       setError('');
     } catch (e) {
       setError(`${errMsg(e)}`);
@@ -73,9 +79,9 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), REFRESH_MS);
+    const t = setInterval(() => void load(), history ? LOADING_MS : REFRESH_MS);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, history]);
 
   const stateOf = (c: TwitchClip) => clipLibraryState(c.id, vods, outputs);
   const counts = useMemo(() => {
@@ -122,6 +128,8 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           <button type="button" aria-pressed={show === 'library'} className={`segbtn ${show === 'library' ? 'active' : ''}`} onClick={() => { setShow('library'); setLimit(PAGE); }}>En la Biblioteca ({counts.library})</button>
         </div>
       </div>
+      {history && clips && <div className="muted small" role="status" style={{ marginTop: 6 }}>Leyendo el resto del historial de tu canal… ya puedes ver y usar los clips que han salido.</div>}
+      {warning && <div className="msg warn" role="status">{warning}</div>}
       {error && <div className="msg bad" role="alert">{error} (revisa la pestaña Conexiones)</div>}
       {!clips && !error && <div className="muted" role="status">Cargando los clips de tu canal (la primera vez puede tardar unos segundos)…</div>}
       {clips && clips.length === 0 && !error && <div className="muted" style={{ marginTop: 8 }}>Tu canal no tiene clips todavía.</div>}

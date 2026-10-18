@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { ALL_PLATFORMS, CHANNELS } from '../../shared/types';
-import type { ClipEdit, DeleteResult, OutputMeta, RenderKind, GroupKind, GroupPatch, Platform, Result, ScheduleEntry, Section, SettingsPatch } from '../../shared/types';
+import type { ClipEdit, DeleteResult, OutputItem, OutputMeta, RenderKind, GroupKind, GroupPatch, Platform, Result, ScheduleEntry, Section, SettingsPatch } from '../../shared/types';
 import type { AppContext } from '../app/context';
 import { checkTools } from '../services/tools';
 import { allFiles } from '../../shared/outputs';
@@ -130,13 +130,25 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   );
 
   handle(CHANNELS.outputsList, () => ctx.store.data.outputs);
+  // lo que se crea desde la interfaz lleva el nombre que puso (o aceptó) el usuario: no se vuelve a renombrar solo
+  const byUser = async (made: Promise<OutputItem>): Promise<OutputItem> => {
+    const o = await made;
+    o.titleSource = 'manual';
+    ctx.store.save();
+    return o;
+  };
   handle(CHANNELS.clipsCreate, (vodId, spec) =>
-    ctx.clips.createClip(str(vodId, 'vodId'), obj(spec, 'clip') as never),
+    byUser(ctx.clips.createClip(str(vodId, 'vodId'), obj(spec, 'clip') as never)),
   );
   handle(CHANNELS.clipsLong, (vodId, spec) =>
-    ctx.clips.createLong(str(vodId, 'vodId'), obj(spec, 'vídeo largo') as never),
+    byUser(ctx.clips.createLong(str(vodId, 'vodId'), obj(spec, 'vídeo largo') as never)),
   );
-  handle(CHANNELS.planApply, (vodId, planJson) => ctx.clips.applyPlan(str(vodId, 'vodId'), str(planJson, 'plan')));
+  handle(CHANNELS.planApply, async (vodId, planJson) => {
+    const r = await ctx.clips.applyPlan(str(vodId, 'vodId'), str(planJson, 'plan'));
+    for (const o of r.created) o.titleSource = 'manual'; // los nombres del plan los has puesto (o aceptado) tú
+    ctx.store.save();
+    return r;
+  });
 
   handle(CHANNELS.pubsList, () => ctx.pubs.list());
   handle(CHANNELS.pubsSchedule, (outputId, platforms, atIso) => {
@@ -188,6 +200,7 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
     return file ? ctx.transcripts.importFile(id, file) : null;
   });
   handle(CHANNELS.clipContext, (id) => ctx.library.clipContext(str(id, 'id')));
+  handle(CHANNELS.autoName, () => ctx.autopilot.autoNameLibrary());
   handle(CHANNELS.suggestTitle, (vodId, start, end) => ctx.autopilot.suggestTitle(str(vodId, 'vodId'), num(start, 'start'), num(end, 'end')));
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
   handle(CHANNELS.transcriptPrompt, async (vodId) => {

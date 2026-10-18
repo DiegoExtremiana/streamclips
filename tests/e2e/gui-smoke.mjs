@@ -82,7 +82,7 @@ try {
   log('el puente seguro (window.api) funciona y la página no tiene acceso a Node');
 
   // ── las cuatro pestañas ──
-  for (const [name, heading] of [['Programación', 'Tu canal'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
+  for (const [name, heading] of [['Programación', 'Próximas subidas'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
     await tab(page, name);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
   }
@@ -90,9 +90,19 @@ try {
   await page.getByRole('tab', { name: 'Vídeos', exact: true }).waitFor();
   log('las cinco pestañas se muestran');
 
-  // ── Programación: guía de inicio y teclado ──
+  // ── Programación: solo el calendario y lo sin programar (a su izquierda) ──
   await tab(page, 'Programación');
   await shot(page, '0-inicio');
+  const tray0 = await page.getByRole('complementary', { name: 'Sin programar' }).boundingBox();
+  const cal0 = await page.getByRole('region', { name: 'Próximas subidas' }).boundingBox();
+  assert.ok(tray0 && cal0 && tray0.x + tray0.width <= cal0.x + 1, '«Sin programar» queda a la izquierda del calendario');
+  assert.equal(await page.getByRole('region', { name: 'Tu canal' }).count(), 0, 'el estado del canal ya no está en Programación');
+  assert.equal(await page.getByRole('region', { name: 'Primeros pasos' }).count(), 0, 'los primeros pasos ya no están en Programación');
+  log('Programación: solo calendario y «Sin programar» a su izquierda');
+
+  // ── Conexiones: estado del canal y guía de inicio ──
+  await tab(page, 'Conexiones');
+  await page.getByRole('region', { name: 'Tu canal' }).waitFor();
   const guide = page.getByRole('region', { name: 'Primeros pasos' });
   await guide.waitFor();
   await guide.getByText('Descarga el modelo de Whisper').waitFor();
@@ -101,7 +111,7 @@ try {
   await page.keyboard.press('Control+1');
   await page.getByRole('heading', { name: 'Próximas subidas', exact: true }).waitFor();
   assert.equal(await page.getByRole('tab', { name: 'Programación' }).getAttribute('aria-selected'), 'true');
-  log('Programación: la guía de primeros pasos muestra lo que falta y lleva a Ajustes; Ctrl+1 vuelve a la primera pestaña');
+  log('Conexiones: el estado del canal y la guía de primeros pasos muestran lo que falta y llevan a Ajustes; Ctrl+1 vuelve a la primera pestaña');
 
   // ── Ajustes ──
   await tab(page, 'Ajustes');
@@ -156,10 +166,10 @@ try {
   await shot(page, '2-conexiones');
   log('Twitch: el canal se normaliza, el secreto se enmascara y no queda en claro en disco');
 
-  // ── Programación: URL inválida y descarga (en «Actividad y directos recogidos») ──
-  await tab(page, 'Programación');
-  await page.getByText('Actividad y directos recogidos').click();
-  await page.getByText('Añadir un VOD a mano').click();
+  // ── Clips y publicación › Directos y actividad: URL inválida y descarga ──
+  await tab(page, 'Clips y publicación');
+  await sub(page, 'Directos y actividad');
+  await page.getByText('Añadir un VOD a mano', { exact: true }).click();
   await page.getByLabel('URL del VOD').fill('--exec rm -rf /');
   await page.getByRole('button', { name: 'Descargar', exact: true }).click();
   await page.getByRole('alert').filter({ hasText: /URL no es válida/ }).waitFor();
@@ -175,6 +185,7 @@ try {
 
   // ── Clips ──
   await tab(page, 'Clips y publicación');
+  await sub(page, 'Clips de tu canal');
   // clips del canal de Twitch: orden, búsqueda, cuadrícula y vista previa sin descargar (la API de Twitch se simula en el proceso principal)
   await app.evaluate(() => {
     const real = globalThis.fetch;
@@ -862,7 +873,8 @@ try {
   // ── persistencia tras recargar y tras reiniciar ──
   await page.reload();
   await page.getByRole('tab', { name: 'Programación' }).waitFor();
-  await page.getByText('Actividad y directos recogidos').click();
+  await tab(page, 'Clips y publicación');
+  await sub(page, 'Directos y actividad');
   await page.getByText('Título del VOD').waitFor();
   log('al recargar la ventana los datos siguen ahí');
 
@@ -876,11 +888,16 @@ try {
 
   await app.close();
   ({ app, page, problems } = await launch());
-  await page.getByText('Actividad y directos recogidos').click();
+  await tab(page, 'Clips y publicación');
+  await sub(page, 'Directos y actividad');
   await page.getByText('Título del VOD').waitFor();
   await tab(page, 'Biblioteca');
   await page.getByTestId('group-Pokémon').waitFor();
   await page.getByTestId('item-Mi clip vertical').waitFor();
+  await page.getByRole('button', { name: 'Nombres cortos' }).click();
+  await page.getByText(/Nombres cortos: \d+ renombrado/).waitFor();
+  assert.ok(await page.getByTestId('item-Mi clip vertical').count(), 'un nombre escrito por el usuario no se toca');
+  log('Biblioteca: «Nombres cortos» responde y no toca los nombres escritos por el usuario');
   await tab(page, 'Clips y publicación');
   await sub(page, 'Crear desde un VOD');
   await page.getByText('Mi clip vertical', { exact: true }).waitFor();

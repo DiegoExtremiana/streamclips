@@ -235,6 +235,25 @@ describe('twitch: directo y clips', () => {
       assert.ok(urls.every((u) => u.includes('started_at=') && u.includes('ended_at=')), 'siempre con las dos fechas (si no, Twitch solo mira una semana)');
       assert.ok(urls.length >= 8 && urls.length <= 10, `se detiene tras un año sin clips (${urls.length} peticiones)`);
     });
+    it('si falla un tramo antiguo conserva lo ya leído y lo avisa; avisa del progreso por tramos', async () => {
+      const base = historia();
+      let n = 0;
+      const fn = (async (u: string, i?: RequestInit) => {
+        if (String(u).includes('/helix/clips') && ++n === 4) return new Response('{"message":"boom"}', { status: 500 });
+        return base.fn(u as never, i as never);
+      }) as typeof base.fn;
+      const progress: number[] = [];
+      const warns: string[] = [];
+      const clips = await new TwitchClient(fn, () => NOW).listClips(creds, { onProgress: (l) => progress.push(l.length), onWarning: (m) => warns.push(m) });
+      assert.ok(clips.length >= 130, `${clips.length}`);
+      assert.ok(progress.length >= 1 && progress[0] === 130, `primero sale lo reciente (${progress})`);
+      assert.equal(warns.length, 1);
+      assert.match(warns[0], /Solo se han podido leer los clips hasta/);
+    });
+    it('si falla ya el primer tramo (lo reciente), el error llega', async () => {
+      const fn = (async (u: string) => (String(u).includes('/helix/clips') ? new Response('{"message":"nope"}', { status: 500 }) : historia().fn(u as never))) as ReturnType<typeof historia>['fn'];
+      await assert.rejects(() => new TwitchClient(fn, () => NOW).listClips(creds));
+    });
     it('con sinceMs solo mira lo reciente', async () => {
       const m = historia();
       const clips = await new TwitchClient(m.fn, () => NOW).listClips(creds, { sinceMs: NOW - 3 * DAY });

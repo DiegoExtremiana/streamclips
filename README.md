@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.13
+
+- **Programación solo con lo esencial**: a la izquierda «Sin programar» (lo último, vídeos y clips, con «Aprobar» en lo que el piloto deja para tu visto bueno) y a la derecha el calendario; arrastras de uno a otro. El estado del canal y los primeros pasos pasan a **Conexiones**, y los directos recogidos y la actividad a **Clips y publicación › Directos y actividad**.
+- **Los clips de tu canal cargan enseguida**: salen primero los de los últimos 90 días y el resto del historial sigue leyéndose en segundo plano; si Twitch falla a medias se conserva lo ya leído y se avisa, y si falla del todo se ve el motivo.
+- **Nombres cortos también para lo que ya está en la Biblioteca**: botón «Nombres cortos» y, además, solo cuando llega una transcripción. No toca los nombres que escribes tú ni los que ya son cortos.
+- **Publicar y editar con el PC apagado, preparados**: los repositorios ya vienen con el nombre puesto (`streamclips-nube`, privado, y `streamclips-motor`, público) y hay enlaces para crear el repositorio y el token ya con los permisos marcados. Solo falta que pegues el token.
+
 ## Novedades de la v0.12
 
 - **Todos los clips de tu canal, en orden**: se piden a Twitch por tramos de 90 días con paginación (antes solo llegaban los más vistos de una semana) y se muestran del más reciente al más antiguo, con filtros «Todos / Sin añadir / En la Biblioteca» y búsqueda.
@@ -88,7 +95,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Qué se ha probado y cómo
 
-`npm run check` ejecuta tipos, ESLint y 470 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (74 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
+`npm run check` ejecuta tipos, ESLint y 476 pruebas (ffmpeg real, yt-dlp, Twitch, redes, GitHub y Whisper simulados). `npm run test:e2e` abre la aplicación Electron real y maneja la interfaz (76 comprobaciones: reproductor con salto de posición, las dos versiones de un clip, descargas, arrastrar y soltar, programación, reinicio de la app…). En Linux: `xvfb-run -a npm run test:e2e`. `E2E_PACKAGED=<ejecutable>` prueba el paquete final.
 
 **No se ha probado**: en Windows, ni contra Twitch real (yt-dlp real sí se ha probado con una URL local: acepta los parámetros que usa la app y devuelve el MP4), ni el instalador final `.exe` (aquí solo se pudo generar la carpeta de la aplicación para Windows; el instalador se genera en GitHub Actions).
 

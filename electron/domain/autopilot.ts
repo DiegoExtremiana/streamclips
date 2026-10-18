@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
+import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { bestStretches, buildSummary, dedupeTitles, findMoments, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
+import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
@@ -177,6 +177,7 @@ export class Autopilot {
         try {
           const item = await fn();
           item.auto = { role, review: 'pending' };
+          item.titleSource = 'auto';
           item.visibility = this.cfg.visibility;
           if (item.kind === 'long' && t.description) this.d.library.setMeta(item.id, { description: t.description });
           this.d.store.save();
@@ -273,28 +274,73 @@ export class Autopilot {
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
+    return this.nameFor(vodId, [{ start, end }]);
+  }
+
+  /** Nombre corto para uno o varios tramos de un VOD: con modelo de lenguaje lo redacta él; si no, sale de lo que se dice. */
+  private async nameFor(vodId: string, segs: Seg[]): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
     const words = this.d.transcripts.words(vodId);
-    const seg: Seg = { start, end };
-    if (!words.some((w) => w.start >= start && w.end <= end + 0.5)) return null;
-    const fb = clean(shortTitle(words, seg, 0), 100);
+    if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
+    const fb = clean(shortTitle(words, segs, 0), 100);
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider !== 'none' && key) {
       try {
         const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+        const text = segs.map((g) => textOf(words, g.start, Math.min(g.end, g.start + 240), 900)).join(' / ').slice(0, 1400);
         const raw = (await askJson(
           conf,
           'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes un nombre muy corto para el fragmento (2 a 5 palabras, máximo 40 caracteres, que diga qué pasa en él, sin clickbait falso, sin emojis). Responde SOLO con JSON.',
-          `Texto transcrito de un fragmento. Devuelve {"titulo":""}.\n${textOf(words, start, Math.min(end, start + 240), 900)}`,
+          `Texto transcrito de un fragmento. Devuelve {"titulo":""}.\n${text}`,
           { fetchFn: this.d.llmFetch },
         )) as { titulo?: unknown };
         const t = clean(raw.titulo, 100);
         if (t) return { title: t, source: 'llm' };
       } catch {
-        /* se usa el título local */
+        /* se usa el nombre local */
       }
     }
-    return fb ? { title: fb, source: 'transcript' } : null;
+    return fb && !/^Momento \d+$/.test(fb) ? { title: fb, source: 'transcript' } : null;
+  }
+
+  /**
+   * Pone un nombre corto a los clips y vídeos de la Biblioteca (con `onlyVodId`, solo a los de ese VOD). No toca los que
+   * nombró el usuario ni los que ya son cortos. Evita repetir nombres entre todo lo que hay en la Biblioteca.
+   */
+  async autoNameLibrary(onlyVodId?: string): Promise<AutoNameResult> {
+    const res: AutoNameResult = { renamed: 0, noTranscript: 0, kept: 0 };
+    const outs = this.d.store.data.outputs;
+    const used = new Set(outs.map((o) => o.title.toLowerCase()));
+    for (const o of outs) {
+      if (onlyVodId && o.vodId !== onlyVodId) continue;
+      if (!isAutoNameable(o)) {
+        res.kept++;
+        continue;
+      }
+      const segs: Seg[] | null = o.kind === 'long' ? (o.segments?.length ? o.segments.map((g) => ({ start: g.start, end: g.end })) : null) : o.start !== undefined && o.end !== undefined ? [{ start: o.start, end: o.end }] : null;
+      const r = o.vodId && segs ? await this.nameFor(o.vodId, segs) : null;
+      if (!r) {
+        res.noTranscript++;
+        continue;
+      }
+      let t = r.title;
+      if (t.toLowerCase() === o.title.toLowerCase()) {
+        o.titleSource = 'auto';
+        res.kept++;
+        continue;
+      }
+      for (let n = 2; used.has(t.toLowerCase()); n++) t = `${r.title} ${n}`;
+      used.delete(o.title.toLowerCase());
+      used.add(t.toLowerCase());
+      try {
+        this.d.library.setAutoTitle(o.id, t);
+        res.renamed++;
+      } catch (e) {
+        this.d.log.warn(`No se pudo renombrar "${o.title}": ${(e as Error).message}`);
+      }
+    }
+    if (res.renamed) this.d.log.info(`Nombres cortos automáticos: ${res.renamed} renombrado(s)`);
+    return res;
   }
 
   private dateLabel(vod: VodJob): string {

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ChannelStatus, OutputItem, Publication, TaskInfo, VodJob } from '../../shared/types';
-import { fmtDate, fmtTime } from '../../shared/time';
-import { mediaUrl } from '../../shared/media';
-import { primaryFile } from '../../shared/outputs';
+import { fmtDate } from '../../shared/time';
 import { errMsg } from '../lib';
 import type { TabId } from '../App';
 import GuideCard from './GuideCard';
@@ -22,15 +20,13 @@ const AUTO_STATUS: Record<NonNullable<VodJob['autopilot']>['status'], { label: s
   skipped: { label: 'Piloto: sin momentos', cls: 'warn' },
   error: { label: 'Piloto: error', cls: 'bad' },
 };
-const ROLE_LABEL = { summary: 'Resumen', main: 'Vídeo principal', clip: 'Clip' } as const;
 
-export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void; part: 'status' | 'attention' | 'bottom' }) {
-  const { vods, outputs, onChanged } = props;
+export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void; part: 'status' | 'guide' | 'bottom' }) {
+  const { vods, onChanged } = props;
   const [channel, setChannel] = useState<ChannelStatus | null>(null);
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [url, setUrl] = useState('');
 
   useEffect(() => {
@@ -57,13 +53,11 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
         setError(errMsg(e));
       } finally {
         setBusy(null);
-        setConfirmDel(null);
       }
     },
     [onChanged],
   );
 
-  const pending = outputs.filter((o) => o.auto?.review === 'pending');
   const visibleVods = vods.filter((v) => v.origin !== 'clip');
   const running = tasks.filter((t) => t.status === 'running');
   const recent = tasks.filter((t) => t.status !== 'running').slice(0, 5);
@@ -102,39 +96,7 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
       </section>
       )}
 
-      {props.part === 'attention' && pending.length > 0 && (
-      <section className="card" aria-label="Pendientes de tu visto bueno">
-        <h2>Pendientes de tu visto bueno</h2>
-        <div className="muted small">El programa ha preparado esto a partir de tu último directo. Apruébalo para que se programe, o recházalo.</div>
-        <div className="list">
-          {pending.map((o) => {
-            const file = primaryFile(o);
-            return (
-              <div key={o.id} className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
-                <div className="row" style={{ gap: 12, minWidth: 0 }}>
-                  {o.thumbnail && <img alt="" src={mediaUrl(o.id, 'thumb', o.thumbnail)} style={{ width: 96, height: 54, objectFit: 'cover', borderRadius: 6 }} />}
-                  <div style={{ minWidth: 0 }}>
-                    <div className="title-ellipsis">{o.title}</div>
-                    <div className="muted small">{ROLE_LABEL[o.auto!.role]} · {fmtTime(Math.round(o.durationSec))}</div>
-                  </div>
-                </div>
-                <div className="row" style={{ gap: 6 }}>
-                  {file && <button className="btn ghost small" onClick={() => void window.api.openPath(file).catch(() => undefined)}>Ver</button>}
-                  <button className="btn small" disabled={busy === o.id} onClick={() => void act(o.id, () => window.api.approveOutput(o.id))}>Aprobar y programar</button>
-                  {confirmDel === o.id ? (
-                    <button className="btn danger small" onClick={() => void act(o.id, () => window.api.deleteOutput(o.id))}>¿Seguro? Borrar</button>
-                  ) : (
-                    <button className="btn ghost small" onClick={() => setConfirmDel(o.id)}>Rechazar</button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-      )}
-
-      {props.part === 'attention' && <GuideCard onNavigate={props.onNavigate} refreshKey={outputs.length + props.pubs.length} />}
+      {props.part === 'guide' && <GuideCard onNavigate={props.onNavigate} refreshKey={props.outputs.length + props.pubs.length} />}
 
       {props.part === 'bottom' && (
       <section className="card" aria-label="Actividad">

@@ -13,10 +13,10 @@ import Toasts from './Toasts';
 export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'conexiones' | 'ajustes';
 
 const TABS: { id: TabId; label: string; hint: string; icon: ReactNode }[] = [
-  { id: 'programacion', label: 'Programación', hint: 'Cómo va tu canal, lo que espera tu visto bueno y tus próximas subidas: arrástralas para cambiar el día y la hora.', icon: <IconPanel /> },
+  { id: 'programacion', label: 'Programación', hint: 'Tus vídeos y clips sin programar, a la izquierda: arrástralos a un día del calendario para elegir cuándo se publican.', icon: <IconPanel /> },
   { id: 'biblioteca', label: 'Biblioteca', hint: 'Tus clips y vídeos: edítalos, ordénalos en carpetas y programa su publicación.', icon: <IconLibrary /> },
-  { id: 'clips', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, y las herramientas para crear los tuyos a partir de un directo.', icon: <IconScissors /> },
-  { id: 'conexiones', label: 'Conexiones', hint: 'Tu canal de Twitch y tus redes sociales.', icon: <IconLink /> },
+  { id: 'clips', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, las herramientas para crear los tuyos a partir de un directo y los directos recogidos.', icon: <IconScissors /> },
+  { id: 'conexiones', label: 'Conexiones', hint: 'Estado de tu canal de Twitch, primeros pasos y tus redes sociales.', icon: <IconLink /> },
   { id: 'ajustes', label: 'Ajustes', hint: 'Carpetas y herramientas, piloto automático y subtítulos, y publicar con el PC apagado.', icon: <IconSettings /> },
 ];
 
@@ -127,7 +127,7 @@ export default function App() {
           {tab === 'programacion' && <ScheduleTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} onOpenVideo={(id) => { setOpenOutput(id); setTab('biblioteca'); }} />}
           {tab === 'biblioteca' && <LibraryTab outputs={outputs} groups={groups} pubs={pubs} onChanged={refresh} openId={openOutput} onOpened={() => setOpenOutput(null)} />}
           {tab === 'clips' && <ClipsTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} />}
-          {tab === 'conexiones' && <ConnectionsTab />}
+          {tab === 'conexiones' && <ConnectionsTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} />}
           {tab === 'ajustes' && <SettingsTab />}
         </main>
       </div>

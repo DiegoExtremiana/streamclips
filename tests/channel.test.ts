@@ -19,8 +19,9 @@ class FakeTwitch extends TwitchClient {
   async listVods(): Promise<TwitchVod[]> {
     return this.vods;
   }
-  async listClips(): Promise<TwitchClip[]> {
-    return this.clipList;
+  clipImpl?: TwitchClient['listClips'];
+  async listClips(c: Parameters<TwitchClient['listClips']>[0], o: Parameters<TwitchClient['listClips']>[1] = {}): Promise<TwitchClip[]> {
+    return this.clipImpl ? this.clipImpl(c, o) : this.clipList;
   }
 }
 
@@ -179,9 +180,38 @@ describe('clips del canal', () => {
   it('lista los clips y marca los ya importados', async () => {
     const { e, twitch } = setup();
     twitch.clipList = [clip('a'), clip('b')];
-    assert.deepEqual((await e.ctx.channel.clips()).map((c) => c.imported), [false, false]);
+    assert.deepEqual((await e.ctx.channel.clips()).clips.map((c) => c.imported), [false, false]);
     await e.ctx.channel.importClip('a');
-    assert.deepEqual((await e.ctx.channel.clips()).map((c) => c.imported), [true, false]);
+    assert.deepEqual((await e.ctx.channel.clips()).clips.map((c) => c.imported), [true, false]);
+  });
+
+  it('lo reciente sale enseguida y el historial sigue en segundo plano; un fallo del historial no vacía la lista', async () => {
+    const { e, twitch } = setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    twitch.clipImpl = async (_c, o) => {
+      o?.onProgress?.([clip('nuevo')]);
+      await gate;
+      o?.onWarning?.('Solo se han podido leer los clips hasta ayer');
+      return [clip('nuevo'), clip('viejo')];
+    };
+    const a = await e.ctx.channel.clips();
+    assert.deepEqual(a.clips.map((c) => c.id), ['nuevo']);
+    assert.equal(a.loading, true);
+    release();
+    for (let i = 0; i < 50 && (await e.ctx.channel.clips()).loading; i++) await new Promise((r) => setTimeout(r, 20));
+    const b = await e.ctx.channel.clips();
+    assert.deepEqual(b.clips.map((c) => c.id).sort(), ['nuevo', 'viejo']);
+    assert.equal(b.loading, false);
+    assert.match(b.warning, /Solo se han podido leer/);
+  });
+
+  it('si Twitch falla y no hay nada en caché, el error se ve', async () => {
+    const { e, twitch } = setup();
+    twitch.clipImpl = async () => {
+      throw new Error('Twitch rechazó las credenciales');
+    };
+    await assert.rejects(() => e.ctx.channel.clips(), /rechazó las credenciales/);
   });
 
   it('importar descarga el clip y deja vertical y horizontal en la Biblioteca, sin repetirse', async () => {

@@ -221,6 +221,8 @@ export interface OutputItem {
   titleSource?: 'auto' | 'manual';
   /** Quién escribió la descripción: el programa (se puede rehacer) o el usuario (no se toca). */
   descSource?: 'auto' | 'manual';
+  /** Categoría de Twitch (juego o actividad) en el momento de este clip o vídeo. */
+  category?: string;
   /** Creado por el piloto automático. */
   auto?: { role: AutoRole; review: 'pending' | 'approved' };
 }

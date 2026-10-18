@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { categoriesOf, dominantCategory, fitToCategory, mixedCategories, parseChapters, type Chapter } from '../shared/categories';
+import { categoriesOf, categoryOf, hasCategoryLine, withCategoryLine, dominantCategory, fitToCategory, mixedCategories, parseChapters, type Chapter } from '../shared/categories';
 import { addDownloadedVod, makeEnv, makeVideo, tmpDir, type TestEnv } from './helpers';
 
 const CH: Chapter[] = [
@@ -41,6 +41,20 @@ describe('categorías de Twitch', () => {
   });
 });
 
+describe('línea «Categoría:»', () => {
+  it('categoryOf elige la que más tiempo ocupa', () => {
+    assert.equal(categoryOf(CH, [{ start: 80, end: 160 }]), 'Just Chatting');
+    assert.equal(categoryOf(CH, [{ start: 400, end: 410 }]), undefined);
+  });
+  it('se añade al final de la descripción, sin duplicarse, y funciona con descripción vacía', () => {
+    assert.equal(withCategoryLine('Un susto con un creeper.', 'Minecraft'), 'Un susto con un creeper.\n\nCategoría: Minecraft');
+    assert.equal(withCategoryLine('Un susto.\n\nCategoría: Minecraft', 'Pokémon Champions'), 'Un susto.\n\nCategoría: Pokémon Champions');
+    assert.equal(withCategoryLine('', 'Just Chatting'), 'Categoría: Just Chatting');
+    assert.equal(withCategoryLine('Texto\n\nCategoría: X', undefined), 'Texto');
+    assert.ok(hasCategoryLine('a\n\nCategoría: b') && !hasCategoryLine('a'));
+  });
+});
+
 describe('categorías: no se mezclan al crear clips y vídeos', () => {
   let e: TestEnv;
   let calls = 0;
@@ -56,6 +70,7 @@ describe('categorías: no se mezclan al crear clips y vídeos', () => {
   it('un clip dentro de una categoría se crea; uno que cruza el cambio se rechaza con el motivo', async () => {
     const ok = await e.ctx.clips.createClip(vodId, { kind: 'horizontal', start: 2, end: 10, title: 'Bien' });
     assert.equal(ok.kind, 'clip');
+    assert.equal(ok.category, 'Minecraft');
     await assert.rejects(e.ctx.clips.createClip(vodId, { kind: 'horizontal', start: 12, end: 30, title: 'Mezcla' }), /Minecraft.*Just Chatting/);
     assert.equal(e.ctx.store.data.outputs.length, 1);
   });

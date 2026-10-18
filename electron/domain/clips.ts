@@ -15,7 +15,7 @@ import { autoThumbnail } from '../services/thumbnails';
 import { probe, renderClip, renderLong, validateRender } from '../services/ffmpeg';
 import type { Notifier } from './notifier';
 import type { CategoryService } from './categories';
-import { mixedCategories } from '../../shared/categories';
+import { categoryOf, mixedCategories } from '../../shared/categories';
 
 export interface ClipDeps {
   store: Store;
@@ -112,7 +112,8 @@ export class ClipService {
       const vodDur = info.durationSec;
       const bound = validateClipSpec(clip, vodDur);
       if (bound) throw new Error(`Clip no válido: ${bound}.`);
-      const mixed = mixedCategories((await this.d.categories?.ensure(vodId)) ?? [], [{ start: clip.start, end: clip.end }]);
+      const cats = (await this.d.categories?.ensure(vodId)) ?? [];
+      const mixed = mixedCategories(cats, [{ start: clip.start, end: clip.end }]);
       if (mixed) throw new Error(`Clip no válido: ${mixed}.`);
       // Por defecto el clip vertical lleva dos ventanas: la cámara del streamer arriba y la pantalla (el juego) debajo.
       // Solo si quien lo pide fija un encuadre concreto (una columna con cropX o una composición propia) se respeta tal cual.
@@ -123,6 +124,8 @@ export class ClipService {
       const cropX = clip.cropX ?? 0.5;
       const ranges = keptRanges(clip.start, clip.end, clip.cuts);
       const extra: Partial<OutputItem> = { start: clip.start, end: clip.end, cropX };
+      const category = categoryOf(cats, [{ start: clip.start, end: clip.end }]);
+      if (category) extra.category = category;
       if (clip.cuts) extra.cuts = clip.cuts;
       if (clip.effects) extra.effects = clip.effects;
       if (clip.subtitles) extra.subtitles = clip.subtitles;
@@ -154,12 +157,15 @@ export class ClipService {
       const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
       const bound = validateLongSpec(long, vodDur);
       if (bound) throw new Error(`Vídeo largo no válido: ${bound}.`);
-      const mixed = mixedCategories((await this.d.categories?.ensure(vodId)) ?? [], long.segments);
+      const cats = (await this.d.categories?.ensure(vodId)) ?? [];
+      const mixed = mixedCategories(cats, long.segments);
       if (mixed) throw new Error(`Vídeo largo no válido: ${mixed}.`);
       const expected = long.segments.reduce((a, s) => a + (s.end - s.start), 0);
       // cada tramo puede desviarse unas décimas al cortar: la tolerancia crece con el número de tramos
       const tolerance = 1.5 + long.segments.length * 0.2;
       const extra: Partial<OutputItem> = { segments: long.segments };
+      const category = categoryOf(cats, long.segments);
+      if (category) extra.category = category;
       if (long.effects) extra.effects = long.effects;
       if (long.subtitles) extra.subtitles = long.subtitles;
       return this.build(vodId, 'long', long.title, expected, tolerance, extra, [

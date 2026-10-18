@@ -352,6 +352,7 @@ export default function LibraryTab(props: {
               <div className="tile-title title-ellipsis" title={o.title}>{o.title}</div>
               <div className="muted small row" style={{ gap: 4 }}>
                 <span className="badge">{KIND_LABEL[o.kind]}</span>
+                {o.category && <span className="badge" title={`Categoría de Twitch: ${o.category}`}>{o.category}</span>}
                 <PlatformDots platforms={itemPubs.filter((p) => p.status !== 'failed').map((p) => p.platform)} all={platformsFor(o.kind)} />
               </div>
               {selecting ? (

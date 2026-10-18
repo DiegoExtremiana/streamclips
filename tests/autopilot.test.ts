@@ -118,6 +118,8 @@ describe('piloto automático', () => {
     assert.ok(outs.length >= 2, 'hay resultados');
     const within = (a: number, b: number) => vod.chapters!.some((c) => a >= c.start - 0.01 && b <= c.end + 0.01);
     for (const o of outs) {
+      assert.ok(o.category === 'Minecraft' || o.category === 'Just Chatting', `categoría de ${o.title}`);
+      assert.match(o.description ?? '', new RegExp(`Categoría: ${o.category}$`), `la descripción termina con la categoría (${o.title})`);
       const segs = o.kind === 'long' ? o.segments! : [{ start: o.start!, end: o.end! }];
       assert.ok(segs.every((g) => within(g.start, g.end)) && new Set(segs.map((g) => vod.chapters!.find((c) => g.start >= c.start - 0.01 && g.start < c.end)?.title)).size === 1, `${o.title}: ${JSON.stringify(segs)}`);
     }

@@ -424,7 +424,7 @@ export default function ItemModal(props: {
             </>
           )}
           <div className="muted small">
-            <span className="badge">{isClip ? 'Clip' : 'Vídeo largo'}</span> {fmtTime(o.durationSec)} · {fmtDate(o.createdAt)}
+            <span className="badge">{isClip ? 'Clip' : 'Vídeo largo'}</span> {fmtTime(o.durationSec)} · {fmtDate(o.createdAt)}{o.category ? ` · Categoría: ${o.category}` : ''}
           </div>
           <Notice msg={dlMsg} />
           {o.kind === 'long' && (

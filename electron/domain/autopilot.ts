@@ -18,7 +18,7 @@ import type { TaskTracker } from './tasks';
 import type { TranscriptService } from './transcripts';
 import type { ClipService } from './clips';
 import type { CategoryService } from './categories';
-import { dominantCategory, fitToCategory } from '../../shared/categories';
+import { categoryOf, dominantCategory, fitToCategory, hasCategoryLine, withCategoryLine } from '../../shared/categories';
 import type { LibraryService } from './library';
 import type { PublicationService } from './publications';
 
@@ -200,7 +200,7 @@ export class Autopilot {
           item.auto = { role, review: 'pending' };
           item.titleSource = 'auto';
           item.visibility = this.cfg.visibility;
-          if (t.description) this.d.library.setAutoDescription(item.id, t.description);
+          if (t.description || item.category) this.d.library.setAutoDescription(item.id, withCategoryLine(t.description, item.category));
           this.d.store.save();
           created.push(item);
         } catch (e) {
@@ -365,8 +365,15 @@ export class Autopilot {
     const used = new Set(outs.map((o) => o.title.toLowerCase()));
     for (const o of outs) {
       if (onlyVodId && o.vodId !== onlyVodId) continue;
+      // categoría de Twitch del momento (también para lo que ya existía) y su línea en la descripción hecha por el programa
+      if (o.vodId && !o.category) {
+        const segs: Seg[] = o.kind === 'long' ? (o.segments ?? []) : o.start !== undefined && o.end !== undefined ? [{ start: o.start, end: o.end }] : [];
+        const cat = segs.length ? categoryOf(await this.d.categories.ensure(o.vodId), segs) : undefined;
+        if (cat) o.category = cat;
+      }
+      if (o.category && o.descSource === 'auto' && o.description && !hasCategoryLine(o.description)) this.d.library.setAutoDescription(o.id, withCategoryLine(o.description, o.category));
       const wantTitle = o2.generic ? isGenericAutoTitle(o) : isAutoNameable(o);
-      const wantDesc = o.descSource !== 'manual' && !o.description;
+      const wantDesc = o.descSource !== 'manual' && !withCategoryLine(o.description, undefined);
       if (!wantTitle && !wantDesc) {
         res.kept++;
         continue;
@@ -379,7 +386,7 @@ export class Autopilot {
       }
       if (wantDesc && r.description) {
         try {
-          this.d.library.setAutoDescription(o.id, r.description);
+          this.d.library.setAutoDescription(o.id, withCategoryLine(r.description, o.category));
           res.described++;
         } catch (e) {
           this.d.log.warn(`No se pudo poner descripción a "${o.title}": ${(e as Error).message}`);
@@ -417,7 +424,7 @@ export class Autopilot {
   async refreshLibraryAtStart(o3: { generic?: boolean } = {}): Promise<AutoNameResult | null> {
     const generic = o3.generic ?? true;
     try {
-      const need = this.d.store.data.outputs.filter((o) => o.vodId && ((generic ? isGenericAutoTitle(o) : isAutoNameable(o)) || (o.descSource !== 'manual' && !o.description)));
+      const need = this.d.store.data.outputs.filter((o) => o.vodId && ((generic ? isGenericAutoTitle(o) : isAutoNameable(o)) || (o.descSource !== 'manual' && !withCategoryLine(o.description, undefined))));
       if (!need.length) return null;
       const vodIds = [...new Set(need.map((o) => o.vodId as string))];
       for (const id of vodIds) {

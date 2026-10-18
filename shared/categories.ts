@@ -89,3 +89,22 @@ export function dominantCategory(segs: Seg[], chapters: Chapter[], minSec: numbe
   }
   return { segs: out.sort((a, b) => a.start - b.start), category: name };
 }
+
+/** Categoría en la que está un clip o vídeo (la que más tiempo ocupa de sus tramos); undefined si no se conoce. */
+export function categoryOf(chapters: Chapter[], segs: Seg[]): string | undefined {
+  const totals = new Map<string, number>();
+  for (const s of segs) for (const c of chapters) totals.set(c.title, (totals.get(c.title) ?? 0) + overlap(s, c));
+  const top = [...totals.entries()].filter(([, t]) => t > 0).sort((a, b) => b[1] - a[1])[0];
+  return top?.[0];
+}
+
+const CATEGORY_LINE = /\n*Categoría: .*$/;
+
+/** Descripción con la última línea «Categoría: …» (sustituye a la anterior si ya la había). */
+export function withCategoryLine(description: string | undefined, category: string | undefined): string {
+  const base = (description ?? '').replace(CATEGORY_LINE, '').replace(/\s+$/, '');
+  if (!category) return base;
+  return base ? `${base}\n\nCategoría: ${category}` : `Categoría: ${category}`;
+}
+
+export const hasCategoryLine = (description: string | undefined): boolean => CATEGORY_LINE.test(description ?? '');

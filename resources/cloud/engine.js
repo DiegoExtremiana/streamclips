@@ -33333,6 +33333,7 @@ var TranscriptService = class {
     };
   }
   inflight = /* @__PURE__ */ new Map();
+  useBasic = false;
   /**
    * Garantiza que hay transcripción de lo que se pide. Con `ranges` (los tramos de un clip o vídeo) se transcribe SOLO eso,
    * no el directo entero; sin ellos, el directo completo. Así los subtítulos y los títulos sugeridos no obligan a transcribir
@@ -33412,13 +33413,25 @@ var TranscriptService = class {
       await this.downloadModel();
       const task = this.d.tasks.start("transcribe", range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`);
       try {
-        const run2 = () => transcribeVideo(this.d.tools(), input, {
-          exe,
+        const runWith = (bin) => transcribeVideo(this.d.tools(), input, {
+          exe: bin,
           model: modelPath(this.modelsDir, s.whisperModel),
           language: s.whisperLanguage,
           range,
           onProgress: (pct, detail) => task.update(pct, detail)
         });
+        const basic = basicExe(exe);
+        const run2 = async () => {
+          if (this.useBasic && basic) return runWith(basic);
+          try {
+            return await runWith(exe);
+          } catch (e) {
+            if (!basic || !ILLEGAL_INSTRUCTION.test(e.message)) throw e;
+            this.d.log.warn("Whisper usa instrucciones que este procesador no soporta; se usa la versi\xF3n b\xE1sica (m\xE1s lenta).");
+            this.useBasic = true;
+            return runWith(basic);
+          }
+        };
         let words;
         try {
           words = await run2();
@@ -33477,6 +33490,12 @@ function mergeRanges(list, gap) {
     else out.push({ ...r2 });
   }
   return out;
+}
+var ILLEGAL_INSTRUCTION = /código (3221225501|132)\b|illegal instruction/i;
+function basicExe(exe) {
+  const ext = import_node_path10.default.extname(exe);
+  const p = import_node_path10.default.join(import_node_path10.default.dirname(exe), `${import_node_path10.default.basename(exe, ext)}-basic${ext}`);
+  return import_node_fs11.default.existsSync(p) ? p : void 0;
 }
 
 // electron/domain/groups.ts
@@ -35543,8 +35562,13 @@ ${JSON.stringify(items)}`,
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId, start, end) {
-    await this.d.transcripts.ensure(vodId, [{ start, end }]).catch((e) => this.d.log.warn(`Sin transcripci\xF3n para sugerir t\xEDtulo: ${e.message.split("\n")[0]}`));
+    let failure = null;
+    await this.d.transcripts.ensure(vodId, [{ start, end }]).catch((e) => {
+      failure = e;
+      this.d.log.warn(`Sin transcripci\xF3n para sugerir t\xEDtulo: ${failure.message.split("\n")[0]}`);
+    });
     const r2 = await this.nameFor(vodId, [{ start, end }]);
+    if (!r2 && failure) throw failure;
     return r2 && r2.title ? { title: r2.title, source: r2.source } : null;
   }
   /**

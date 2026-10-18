@@ -336,7 +336,8 @@ describe('piloto automático', () => {
     await new Promise((r) => setTimeout(r, 100)); // el guardado de la transcripción lanza su propio repaso
     for (const o of e.ctx.store.data.outputs) {
       if (o.id === 'keep' || o.id === 'mine') {
-        o.title = o.id === 'keep' ? o.title : 'Momento 9';
+        o.title = o.id === 'keep' ? 'Un título largo pero que no es genérico, así que el arranque no lo toca para nada' : 'Momento 9';
+        o.titleSource = o.id === 'keep' ? undefined : 'manual';
         delete o.description;
         delete o.descSource;
       }

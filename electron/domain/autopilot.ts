@@ -317,8 +317,13 @@ export class Autopilot {
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
-    await this.d.transcripts.ensure(vodId, [{ start, end }]).catch((e) => this.d.log.warn(`Sin transcripción para sugerir título: ${(e as Error).message.split('\n')[0]}`));
+    let failure: Error | null = null;
+    await this.d.transcripts.ensure(vodId, [{ start, end }]).catch((e) => {
+      failure = e as Error;
+      this.d.log.warn(`Sin transcripción para sugerir título: ${failure.message.split('\n')[0]}`);
+    });
     const r = await this.nameFor(vodId, [{ start, end }]);
+    if (!r && failure) throw failure; // el motivo real (Whisper, modelo, VOD sin descargar…) llega a la pantalla
     return r && r.title ? { title: r.title, source: r.source } : null;
   }
 

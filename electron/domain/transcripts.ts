@@ -155,6 +155,7 @@ export class TranscriptService {
   }
 
   private inflight = new Map<string, Promise<void>>();
+  private useBasic = false;
 
   /**
    * Garantiza que hay transcripción de lo que se pide. Con `ranges` (los tramos de un clip o vídeo) se transcribe SOLO eso,
@@ -241,14 +242,27 @@ export class TranscriptService {
       await this.downloadModel();
       const task = this.d.tasks.start('transcribe', range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`);
       try {
-        const run = () =>
+        const runWith = (bin: string) =>
           transcribeVideo(this.d.tools(), input, {
-            exe,
+            exe: bin,
             model: modelPath(this.modelsDir, s.whisperModel),
             language: s.whisperLanguage,
             range,
             onProgress: (pct, detail) => task.update(pct, detail),
           });
+        // Si el whisper-cli principal usa instrucciones que este procesador no tiene (código 0xC000001D), se usa el alternativo, sin extensiones.
+        const basic = basicExe(exe);
+        const run = async () => {
+          if (this.useBasic && basic) return runWith(basic);
+          try {
+            return await runWith(exe);
+          } catch (e) {
+            if (!basic || !ILLEGAL_INSTRUCTION.test((e as Error).message)) throw e;
+            this.d.log.warn('Whisper usa instrucciones que este procesador no soporta; se usa la versión básica (más lenta).');
+            this.useBasic = true;
+            return runWith(basic);
+          }
+        };
         let words;
         try {
           words = await run();
@@ -312,4 +326,14 @@ export function mergeRanges(list: Range[], gap: number): Range[] {
     else out.push({ ...r });
   }
   return out;
+}
+
+/** Salida de whisper-cli cuando el procesador no soporta sus instrucciones (Windows 0xC000001D; en Linux SIGILL). */
+export const ILLEGAL_INSTRUCTION = /código (3221225501|132)\b|illegal instruction/i;
+
+/** whisper-cli sin extensiones de CPU, junto al principal (`whisper-cli-basic`); undefined si no existe. */
+export function basicExe(exe: string): string | undefined {
+  const ext = path.extname(exe);
+  const p = path.join(path.dirname(exe), `${path.basename(exe, ext)}-basic${ext}`);
+  return fs.existsSync(p) ? p : undefined;
 }

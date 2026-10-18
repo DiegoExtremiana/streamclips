@@ -169,6 +169,35 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     assert.equal(e.ctx.store.data.vods[0].transcript?.partial, true, 'no se transcribió el directo entero');
   });
 
+  it('si el whisper-cli principal usa instrucciones que el procesador no tiene, usa el básico y lo recuerda', async () => {
+    const { e, vod, log } = withWhisper('sigill');
+    const bin = path.join(e.root, 'wbin');
+    fs.mkdirSync(bin, { recursive: true });
+    for (const n of ['whisper-cli', 'whisper-cli-basic']) {
+      fs.copyFileSync(fakeWhisper(), path.join(bin, n));
+      fs.chmodSync(path.join(bin, n), 0o755);
+    }
+    e.ctx.settings.set({ whisperPath: path.join(bin, 'whisper-cli') });
+    const v = await e.ctx.transcripts.transcribe(vod.id);
+    assert.equal(v.transcript?.source, 'whisper');
+    assert.ok(e.ctx.transcripts.words(vod.id).length > 0);
+    const calls = () => fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length;
+    const first = calls();
+    assert.equal(first, 2, 'intento con el principal (falla) y después con el básico');
+    await e.ctx.transcripts.transcribe(vod.id);
+    assert.equal(calls(), first + 1, 'la segunda vez va directo al básico');
+  });
+
+  it('sin versión básica, un fallo de instrucción ilegal llega como error', async () => {
+    const { e, vod } = withWhisper('sigill');
+    const bin = path.join(e.root, 'wbin2');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.copyFileSync(fakeWhisper(), path.join(bin, 'whisper-cli'));
+    fs.chmodSync(path.join(bin, 'whisper-cli'), 0o755);
+    e.ctx.settings.set({ whisperPath: path.join(bin, 'whisper-cli') });
+    await assert.rejects(() => e.ctx.transcripts.transcribe(vod.id), /Illegal instruction|132/i);
+  });
+
   it('guarda la transcripción en el VOD y avisa del avance', async () => {
     const { e, vod } = withWhisper();
     const v = await e.ctx.transcripts.transcribe(vod.id);

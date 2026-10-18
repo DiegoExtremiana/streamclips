@@ -84,7 +84,7 @@ export default function ItemModal(props: {
     try {
       const r = await window.api.suggestTitle(o.vodId, o.start, o.end);
       if (r) setTitle(r.title.slice(0, YT_TITLE_MAX));
-      else setYtMsg({ ok: false, text: 'No se ha podido transcribir este tramo (hace falta Whisper y el VOD descargado), así que no se sabe de qué se habla.' });
+      else setYtMsg({ ok: false, text: 'Este tramo no tiene palabras que permitan sacar un título (¿es solo música o silencio?).' });
     } catch (e) {
       setYtMsg({ ok: false, text: errMsg(e) });
     } finally {

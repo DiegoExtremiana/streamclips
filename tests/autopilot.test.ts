@@ -286,7 +286,7 @@ describe('piloto automático', () => {
     const srv = await llmServer(() => ({ status: 200, body: { choices: [{ message: { content: '{"titulo":"El susto del creeper"}' } }], candidates: [{ content: { parts: [{ text: '{"titulo":"El susto del creeper"}' }] } }] } }));
     try {
       const { e, vod } = setup({ llmBaseUrl: srv.url });
-      assert.equal(await e.ctx.autopilot.suggestTitle(vod.id, 10, 40), null, 'sin transcripción no hay de qué sacarlo');
+      await assert.rejects(() => e.ctx.autopilot.suggestTitle(vod.id, 10, 40), /Whisper/, 'sin transcripción ni Whisper, el motivo llega al usuario');
       const tr = path.join(root, 'tr-sug.json');
       fs.writeFileSync(tr, JSON.stringify({ words: ['¡No', 'me', 'lo', 'puedo', 'creer,', 'un', 'creeper', 'a', 'mis', 'espaldas!'].map((text, i) => ({ text, start: 20 + i * 0.5, end: 20.5 + i * 0.5 })) }));
       e.ctx.transcripts.importFile(vod.id, tr);

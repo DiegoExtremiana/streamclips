@@ -4,7 +4,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Novedades de la v0.14
 
-(v0.14.1: la transcripción bajo demanda es solo del tramo del clip o vídeo.)
+(v0.14.1: la transcripción bajo demanda es solo del tramo del clip o vídeo. v0.14.2: Whisper se compila con instrucciones de CPU fijas (AVX2) y con una versión básica de reserva, porque la anterior fallaba con «instrucción ilegal» en procesadores sin AVX-512; los errores de transcripción se muestran con su motivo real.)
 
 - **Vista previa de los clips de Twitch**: ya no se queda cargando; la política de seguridad de la ventana no dejaba reproducir el vídeo que sirve Twitch desde su CDN (CloudFront).
 - **Clips verticales con dos ventanas por defecto**: la cámara del streamer arriba y la pantalla debajo. Solo si mueves la barra «Recorte vertical» se usa una sola columna. Se retoca después en la Biblioteca.

@@ -14,6 +14,11 @@ const get = (name) => {
 const wav = get('-f');
 const model = get('-m');
 const of = get('-of');
+// procesador "sin AVX": solo funciona el ejecutable cuyo nombre acaba en -basic
+if (mode === 'sigill' && !/-basic/.test(require('node:path').basename(process.argv[1]))) {
+  console.error('Illegal instruction');
+  process.exit(132);
+}
 if (mode === 'fail') {
   console.error('error: failed to load model');
   process.exit(1);

@@ -941,9 +941,8 @@ try {
   const hhmmOf = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
   // 1) cambiar la hora: del 18:00 al 20:00 del mismo día (arrastre horizontal)
-  let tb = await trackBox(2);
+  await trackBox(2);
   await page.locator(`[data-track-day="${day(2)}"]`).scrollIntoViewIfNeeded();
-  tb = await trackBox(2);
   let h = await dragChip(chip(/Mi clip vertical, 18:00/), 2, 20 / 24);
   await page.locator('.tl-marker').getByText('20:00').waitFor();
   await h.release();
@@ -953,7 +952,6 @@ try {
   log('línea de tiempo: arrastrar un bloque a la derecha cambia su hora (18:00 → 20:00) y se guarda; mientras arrastras se ve la hora destino');
 
   // 2) cambiar el día: arrastre vertical a otra franja, misma hora
-  tb = await trackBox(3);
   h = await dragChip(chip(/Mi clip vertical, 20:00/), 3, 20 / 24);
   await h.release();
   await poll(() => localDayKeyOf(ytPub().scheduledAt) === day(3));
@@ -964,7 +962,6 @@ try {
   const pubBefore = ytPub().scheduledAt;
   if (new Date().getHours() >= 1) {
     // (de 00:00 a 01:00 «las 00:15 de hoy» aún es futuro, así que esta comprobación solo tiene sentido después)
-    tb = await trackBox(0);
     h = await dragChip(chip(/Mi clip vertical, 20:00/), 0, 0, 4);
     await h.release();
     await page.getByText(/Esa hora ya ha pasado/).first().waitFor();
@@ -975,7 +972,6 @@ try {
   }
 
   // 4) Escape cancela un arrastre
-  tb = await trackBox(5);
   h = await dragChip(chip(/Mi clip vertical, 20:00/), 5, 0.5);
   await page.keyboard.press('Escape');
   await h.release();

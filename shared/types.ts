@@ -80,6 +80,8 @@ export interface TranscriptInfo {
   words: number;
   source: 'import' | 'whisper';
   at: string;
+  /** Solo están transcritos algunos tramos (los de los clips y vídeos que lo han pedido), no todo el directo. */
+  partial?: boolean;
 }
 
 export type TaskKind = 'model' | 'transcribe' | 'analyze' | 'render' | 'download' | 'cloud' | 'publish';

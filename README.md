@@ -4,6 +4,8 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Novedades de la v0.14
 
+(v0.14.1: la transcripción bajo demanda es solo del tramo del clip o vídeo.)
+
 - **Vista previa de los clips de Twitch**: ya no se queda cargando; la política de seguridad de la ventana no dejaba reproducir el vídeo que sirve Twitch desde su CDN (CloudFront).
 - **Clips verticales con dos ventanas por defecto**: la cámara del streamer arriba y la pantalla debajo. Solo si mueves la barra «Recorte vertical» se usa una sola columna. Se retoca después en la Biblioteca.
 - **Al abrir el programa** se revisa la Biblioteca: lo que sigue llamándose «Momento n», «Directo del…» o «Resumen del directo…» y no tiene nombre puesto por ti se transcribe (si hace falta) y se renombra según de qué se habla, incluidos los que ya existían.
@@ -11,7 +13,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Modelos de Whisper a prueba de archivos dañados**: se comprueba la estructura del modelo al descargarlo y antes de usarlo; si está roto se borra y se baja de nuevo, y si aun así falla se usa el modelo «base» para esa transcripción.
 - **Edición profesional automática** (Ajustes › Piloto automático, activada por defecto; también la usa el motor nocturno): corta pausas y tiempos muertos, acerca la imagen en las frases con énfasis con un golpe de sonido, pone un «whoosh» en cada salto de corte, fundidos y volumen parejo. Los sonidos se sintetizan con ffmpeg (sin archivos ni derechos de autor). Si algo falla, el vídeo se monta igualmente sin ella.
 - **«Categoría: …» en cada clip y vídeo**: se guarda la categoría de Twitch del momento (Just Chatting, Pokémon Champions…), se ve en la Biblioteca y, en las descripciones que escribe el programa, va como última línea. También se rellena en lo que ya existía.
-- **Todo se transcribe cuando hace falta**: al pedir subtítulos o un título sugerido, si el VOD no tiene transcripción se hace sola con Whisper.
+- **Se transcribe solo lo que hace falta**: al pedir subtítulos o un título sugerido, o al nombrar y describir lo que ya está en la Biblioteca, se transcribe únicamente el tramo de ese clip o vídeo (no el directo entero) y se guarda; lo ya transcrito no se repite.
 - **Portafolio**: StreamClips y sus repositorios tampoco salen desde GitHub en vivo ni desde la caché del navegador.
 
 ## Novedades de la v0.13

@@ -116,7 +116,7 @@ export class Autopilot {
     try {
       // 1) transcripción (si se puede)
       let words = this.d.transcripts.words(vod.id);
-      if (!words.length) {
+      if (!this.d.transcripts.isFull(vod.id)) {
         const st = this.d.transcripts.status();
         const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? (await this.d.clips.vodDuration(vod.id))) : null;
         if (skip) notes.push(`Sin transcripción: ${skip}.`);
@@ -317,7 +317,7 @@ export class Autopilot {
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
-    await this.d.transcripts.ensure(vodId).catch((e) => this.d.log.warn(`Sin transcripción para sugerir título: ${(e as Error).message.split('\n')[0]}`));
+    await this.d.transcripts.ensure(vodId, [{ start, end }]).catch((e) => this.d.log.warn(`Sin transcripción para sugerir título: ${(e as Error).message.split('\n')[0]}`));
     const r = await this.nameFor(vodId, [{ start, end }]);
     return r && r.title ? { title: r.title, source: r.source } : null;
   }
@@ -426,16 +426,21 @@ export class Autopilot {
     try {
       const need = this.d.store.data.outputs.filter((o) => o.vodId && ((generic ? isGenericAutoTitle(o) : isAutoNameable(o)) || (o.descSource !== 'manual' && !withCategoryLine(o.description, undefined))));
       if (!need.length) return null;
-      const vodIds = [...new Set(need.map((o) => o.vodId as string))];
-      for (const id of vodIds) {
+      // se transcribe solo lo de cada clip o vídeo (sus tramos), no el directo entero
+      const failed = new Set<string>();
+      for (const o of need) {
+        const id = o.vodId as string;
+        if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || this.d.transcripts.words(id).length) continue;
-        if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break; // sin Whisper no se puede transcribir
+        const segs: Seg[] = o.kind === 'long' ? (o.segments ?? []) : o.start !== undefined && o.end !== undefined ? [{ start: o.start, end: o.end }] : [];
+        if (!segs.length) continue;
         try {
-          await this.d.transcripts.transcribe(id);
+          await this.d.transcripts.ensure(id, segs);
         } catch (e) {
-          this.d.log.warn(`Nombres automáticos: no se pudo transcribir "${vod.title ?? id}": ${(e as Error).message.split('\n')[0]}`);
+          failed.add(id);
+          this.d.log.warn(`Nombres automáticos: no se pudo transcribir "${o.title}": ${(e as Error).message.split('\n')[0]}`);
         }
       }
       return await this.autoNameLibrary(undefined, { generic });

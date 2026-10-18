@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { TranscriptInfo, VodJob, WhisperStatus } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
+import type { Range } from '../../shared/timeline';
 import { parseTranscript } from '../../shared/transcript';
 import { buildClaudePrompt } from '../../shared/claudePrompt';
 import type { Store } from '../services/store';
@@ -50,12 +51,66 @@ export class TranscriptService {
 
   /** Palabras guardadas; vacío si no hay transcripción o el archivo no se puede leer. */
   words(vodId: string): Word[] {
+    return this.raw(vodId).words;
+  }
+
+  private raw(vodId: string): { words: Word[]; covered?: Range[] } {
     try {
-      const raw = JSON.parse(fs.readFileSync(this.file(vodId), 'utf8')) as { words?: Word[] };
-      return Array.isArray(raw.words) ? raw.words : [];
+      const j = JSON.parse(fs.readFileSync(this.file(vodId), 'utf8')) as { words?: Word[]; covered?: Range[] };
+      return { words: Array.isArray(j.words) ? j.words : [], covered: Array.isArray(j.covered) ? j.covered : undefined };
     } catch {
-      return [];
+      return { words: [] };
     }
+  }
+
+  /** ¿Está transcrito el directo entero (no solo algunos tramos)? */
+  isFull(vodId: string): boolean {
+    const r = this.raw(vodId);
+    return r.words.length > 0 && !r.covered;
+  }
+
+  /** Partes de `ranges` que todavía no están transcritas (con un pequeño margen). */
+  missing(vodId: string, ranges: Range[]): Range[] {
+    const r = this.raw(vodId);
+    if (r.words.length && !r.covered) return [];
+    const cov = r.covered ?? [];
+    const out: Range[] = [];
+    for (const g of ranges) {
+      let pending: Range[] = [{ start: Math.max(0, g.start - 1.5), end: g.end + 1.5 }];
+      for (const c of cov) {
+        pending = pending.flatMap((p) => {
+          if (c.end <= p.start || c.start >= p.end) return [p];
+          const parts: Range[] = [];
+          if (c.start > p.start) parts.push({ start: p.start, end: c.start });
+          if (c.end < p.end) parts.push({ start: c.end, end: p.end });
+          return parts;
+        });
+      }
+      out.push(...pending.filter((p) => p.end - p.start > 0.5));
+    }
+    return mergeRanges(out, 20);
+  }
+
+  /** Añade las palabras de un tramo recién transcrito a lo que ya había, sin tocar lo demás. */
+  private savePartial(vod: VodJob, words: Word[], range: Range): VodJob {
+    const cur = this.raw(vod.id);
+    if (cur.words.length && !cur.covered) return vod; // mientras tanto llegó la transcripción completa
+    const keep = cur.words.filter((w) => w.end <= range.start || w.start >= range.end);
+    const merged = [...keep, ...words.filter((w) => w.start >= range.start && w.start < range.end)].sort((a, b) => a.start - b.start);
+    const covered = mergeRanges([...(cur.covered ?? []), range], 0.5);
+    fs.mkdirSync(this.dir, { recursive: true });
+    const file = this.file(vod.id);
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ words: merged, covered }));
+    fs.renameSync(`${file}.tmp`, file);
+    vod.transcript = { words: merged.length, source: 'whisper', at: new Date().toISOString(), partial: true };
+    this.d.store.save();
+    this.d.notifier.changed();
+    try {
+      this.onSaved?.(vod.id);
+    } catch (e) {
+      this.d.log.warn(`Tras guardar la transcripción: ${(e as Error).message}`);
+    }
+    return vod;
   }
 
   private save(vod: VodJob, words: Word[], source: TranscriptInfo['source']): VodJob {
@@ -102,21 +157,40 @@ export class TranscriptService {
   private inflight = new Map<string, Promise<void>>();
 
   /**
-   * Garantiza que el VOD tiene transcripción: si no la tiene, la hace con Whisper (una sola vez aunque la pidan varios a la vez).
-   * Así los subtítulos y los títulos sugeridos no obligan a transcribir a mano. Falla con un motivo claro si no se puede.
+   * Garantiza que hay transcripción de lo que se pide. Con `ranges` (los tramos de un clip o vídeo) se transcribe SOLO eso,
+   * no el directo entero; sin ellos, el directo completo. Así los subtítulos y los títulos sugeridos no obligan a transcribir
+   * a mano ni a esperar a todo el directo. Falla con un motivo claro si no se puede (sin Whisper o sin el VOD descargado).
    */
-  ensure(vodId: string): Promise<void> {
-    if (this.words(vodId).length) return Promise.resolve();
-    const running = this.inflight.get(vodId);
+  async ensure(vodId: string, ranges?: Range[]): Promise<void> {
+    if (!ranges?.length) {
+      if (this.words(vodId).length && this.isFull(vodId)) return;
+      return this.once(`${vodId}:full`, async () => {
+        this.requirements(vodId);
+        await this.transcribe(vodId);
+      });
+    }
+    for (const m of this.missing(vodId, ranges)) {
+      await this.once(`${vodId}:${Math.round(m.start)}-${Math.round(m.end)}`, async () => {
+        this.requirements(vodId);
+        // otro tramo pudo cubrirlo mientras esperaba
+        const still = this.missing(vodId, [{ start: m.start + 1.5, end: m.end - 1.5 }]);
+        for (const s of still) await this.transcribe(vodId, s);
+      });
+    }
+  }
+
+  private once(key: string, fn: () => Promise<void>): Promise<void> {
+    const running = this.inflight.get(key);
     if (running) return running;
-    const p = (async () => {
-      const vod = this.vod(vodId);
-      if (!this.d.whisperExe()) throw new Error('Este VOD no tiene transcripción y no se encuentra Whisper para hacerla. Impórtala o indica whisper-cli en Ajustes.');
-      if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) throw new Error('Este VOD no tiene transcripción y su archivo no está descargado, así que no se puede transcribir.');
-      await this.transcribe(vodId);
-    })().finally(() => this.inflight.delete(vodId));
-    this.inflight.set(vodId, p);
+    const p = fn().finally(() => this.inflight.delete(key));
+    this.inflight.set(key, p);
     return p;
+  }
+
+  private requirements(vodId: string): void {
+    const vod = this.vod(vodId);
+    if (!this.d.whisperExe()) throw new Error('No hay transcripción de este tramo y no se encuentra Whisper para hacerla. Impórtala o indica whisper-cli en Ajustes.');
+    if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) throw new Error('No hay transcripción de este tramo y el archivo del VOD no está descargado, así que no se puede transcribir.');
   }
 
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
@@ -152,7 +226,7 @@ export class TranscriptService {
   }
 
   /** Audio del VOD -> whisper.cpp -> palabras con tiempos. Descarga el modelo la primera vez. */
-  transcribe(vodId: string): Promise<VodJob> {
+  transcribe(vodId: string, range?: Range): Promise<VodJob> {
     const exe = this.d.whisperExe();
     if (!exe) {
       throw new Error('No se encuentra Whisper. El instalador lo incluye; si lo has compilado tú, indica la ruta de whisper-cli en Ajustes, o importa una transcripción ya hecha.');
@@ -165,13 +239,14 @@ export class TranscriptService {
     const s = this.d.store.data.settings;
     return this.d.queue.run(async () => {
       await this.downloadModel();
-      const task = this.d.tasks.start('transcribe', `Transcribiendo "${vod.title || vod.url}"`);
+      const task = this.d.tasks.start('transcribe', range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`);
       try {
         const run = () =>
           transcribeVideo(this.d.tools(), input, {
             exe,
             model: modelPath(this.modelsDir, s.whisperModel),
             language: s.whisperLanguage,
+            range,
             onProgress: (pct, detail) => task.update(pct, detail),
           });
         let words;
@@ -197,6 +272,7 @@ export class TranscriptService {
                   exe,
                   model: modelPath(this.modelsDir, alt),
                   language: s.whisperLanguage,
+                  range,
                   onProgress: (pct, detail) => task.update(pct, detail),
                 });
               } catch {
@@ -207,7 +283,7 @@ export class TranscriptService {
           }
         }
         this.d.log.info(`Transcripción con Whisper (${words.length} palabras) para "${vod.title}"`);
-        const v = this.save(vod, words, 'whisper');
+        const v = range ? this.savePartial(vod, words, range) : this.save(vod, words, 'whisper');
         task.done(`${words.length} palabras`);
         return v;
       } catch (e) {
@@ -225,4 +301,15 @@ export class TranscriptService {
     if (!words.length) throw new Error('Este VOD no tiene transcripción. Impórtala o transcríbela primero.');
     return buildClaudePrompt(vod.title || vod.url, durationSec, words);
   }
+}
+
+/** Une tramos que se tocan o están a menos de `gap` segundos. */
+export function mergeRanges(list: Range[], gap: number): Range[] {
+  const out: Range[] = [];
+  for (const r of [...list].sort((a, b) => a.start - b.start)) {
+    const last = out[out.length - 1];
+    if (last && r.start <= last.end + gap) last.end = Math.max(last.end, r.end);
+    else out.push({ ...r });
+  }
+  return out;
 }

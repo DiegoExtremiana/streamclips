@@ -126,6 +126,49 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     assert.equal(words[4].start, 6);
     assert.equal(words[8].start, 11);
   });
+  it('transcribeVideo con tramo: solo ese trozo del audio, con los tiempos del vídeo completo', async () => {
+    const { e, vod, log } = withWhisper();
+    const words = await (await import('../electron/services/whisper')).transcribeVideo(e.ctx.tools(), vod.filePath!, {
+      exe: fakeWhisper(), model: path.join(e.userData, 'models', 'ggml-tiny.bin'), language: 'es', chunkSec: 20, range: { start: 4, end: 9 },
+    });
+    assert.equal(fs.readFileSync(log, 'utf8').trim().split('\n').length, 1, 'un solo trozo');
+    assert.equal(words[0].text, 'Hola');
+    assert.equal(words[0].start, 5, '4 s del tramo + 1 s dentro del trozo');
+  });
+
+  it('ensure con tramos: transcribe SOLO esos tramos (parcial), no repite lo ya hecho y deja claro que no es el directo entero', async () => {
+    const { e, vod, log } = withWhisper();
+    const calls = () => fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length;
+    await e.ctx.transcripts.ensure(vod.id, [{ start: 2, end: 6 }]);
+    assert.equal(calls(), 1);
+    assert.equal(e.ctx.store.data.vods[0].transcript?.partial, true);
+    assert.equal(e.ctx.transcripts.isFull(vod.id), false);
+    const w = e.ctx.transcripts.words(vod.id);
+    assert.ok(w.length > 0 && w.every((x) => x.start >= 0.5 && x.start < 7.5), JSON.stringify(w));
+    await e.ctx.transcripts.ensure(vod.id, [{ start: 2.5, end: 5 }]);
+    assert.equal(calls(), 1, 'un tramo ya transcrito no se repite');
+    await e.ctx.transcripts.ensure(vod.id, [{ start: 9, end: 12 }]);
+    assert.equal(calls(), 2, 'otro tramo se añade');
+    assert.ok(e.ctx.transcripts.words(vod.id).some((x) => x.start >= 9), 'las palabras nuevas se suman a las anteriores');
+    assert.ok(e.ctx.transcripts.words(vod.id).some((x) => x.start < 7), 'y no se pierden las anteriores');
+    // la transcripción completa sustituye a la parcial y desde entonces no hace falta nada más
+    await e.ctx.transcripts.transcribe(vod.id);
+    assert.equal(e.ctx.transcripts.isFull(vod.id), true);
+    assert.equal(e.ctx.store.data.vods[0].transcript?.partial, undefined);
+    const before = calls();
+    await e.ctx.transcripts.ensure(vod.id, [{ start: 1, end: 13 }]);
+    assert.equal(calls(), before);
+  });
+
+  it('un clip con subtítulos en un VOD sin transcripción transcribe solo el propio clip', async () => {
+    const { e, vod, log } = withWhisper();
+    const clip = await e.ctx.clips.createClip(vod.id, { kind: 'horizontal', start: 2, end: 8, title: 'Con subs', subtitles: 'clasico' });
+    assert.equal(clip.kind, 'clip');
+    const lines = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean);
+    assert.equal(lines.length, 1);
+    assert.equal(e.ctx.store.data.vods[0].transcript?.partial, true, 'no se transcribió el directo entero');
+  });
+
   it('guarda la transcripción en el VOD y avisa del avance', async () => {
     const { e, vod } = withWhisper();
     const v = await e.ctx.transcripts.transcribe(vod.id);
@@ -243,7 +286,7 @@ describe('prompt para Claude', () => {
   });
   it('sin transcripción da un error útil', () => {
     const { e, vod } = env();
-    assert.throws(() => e.ctx.transcripts.claudePrompt(vod.id), /no tiene transcripción/);
+    assert.throws(() => e.ctx.transcripts.claudePrompt(vod.id), /no hay transcripción de este tramo|no tiene transcripción/i);
     importTo(e, vod.id);
     assert.match(e.ctx.transcripts.claudePrompt(vod.id, 14), /Hola a todos/);
   });
@@ -269,7 +312,7 @@ describe('clips con cortes, efectos y subtítulos', () => {
   });
   it('pedir subtítulos sin transcripción falla sin dejar archivos ni registros', async () => {
     const { e, vod } = env();
-    await assert.rejects(() => e.ctx.clips.createClip(vod.id, { start: 0, end: 4, title: 'x', subtitles: 'karaoke' }), /no tiene transcripción/);
+    await assert.rejects(() => e.ctx.clips.createClip(vod.id, { start: 0, end: 4, title: 'x', subtitles: 'karaoke' }), /no hay transcripción de este tramo|no tiene transcripción/i);
     assert.equal(e.ctx.store.data.outputs.length, 0);
     const left = fs.existsSync(path.join(e.outputDir, 'horizontal')) ? fs.readdirSync(path.join(e.outputDir, 'horizontal')) : [];
     assert.deepEqual(left, []);
@@ -351,7 +394,7 @@ describe('reedición: activar, cambiar y quitar subtítulos', () => {
     const { e, vod } = env();
     const clip = await e.ctx.clips.createClip(vod.id, { start: 0, end: 4, title: 'Intacto' });
     const files = { ...clip.files };
-    await assert.rejects(() => e.ctx.library.reeditClip(clip.id, { subtitles: 'clasico' }), /no tiene transcripción/);
+    await assert.rejects(() => e.ctx.library.reeditClip(clip.id, { subtitles: 'clasico' }), /no hay transcripción de este tramo|no tiene transcripción/i);
     assert.deepEqual(e.ctx.store.data.outputs[0].files, files);
     assert.ok(Object.values(files).every((f) => fs.existsSync(f!)));
     assert.equal(e.ctx.store.data.outputs[0].subtitles, undefined);
@@ -392,7 +435,7 @@ describe('reedición de vídeos largos: subtítulos', () => {
     const long = await e.ctx.clips.createLong(vod.id, { title: 'Largo', segments: [{ start: 0, end: 4 }] });
     await assert.rejects(() => e.ctx.library.reeditClip(long.id, { start: 1 }), /solo se pueden cambiar los subtítulos/);
     const file = long.files.long!;
-    await assert.rejects(() => e.ctx.library.reeditClip(long.id, { subtitles: 'pop' }), /no tiene transcripción/);
+    await assert.rejects(() => e.ctx.library.reeditClip(long.id, { subtitles: 'pop' }), /no hay transcripción de este tramo|no tiene transcripción/i);
     assert.equal(e.ctx.store.data.outputs[0].files.long, file);
     assert.ok(fs.existsSync(file));
   });

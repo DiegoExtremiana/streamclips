@@ -9,7 +9,7 @@ import { EXPECTED_SIZE, type BurnSubs } from '../services/ffmpeg';
 export interface SubtitleEnv {
   words: (vodId: string) => Word[];
   /** Hace la transcripción si falta (los subtítulos la piden solos). */
-  ensure?: (vodId: string) => Promise<void>;
+  ensure?: (vodId: string, ranges?: Range[]) => Promise<void>;
   fontsDir?: string;
 }
 
@@ -27,7 +27,8 @@ export async function withSubtitles<T>(
 ): Promise<T> {
   if (!style) return fn(undefined);
   if (!vodId) throw new Error('Este vídeo no guarda de qué VOD sale, así que no se pueden calcular los subtítulos.');
-  if (!env.words(vodId).length && env.ensure) await env.ensure(vodId);
+  // solo se transcribe lo que hace falta: los tramos de este clip o vídeo, no el directo entero
+  if (env.ensure) await env.ensure(vodId, ranges);
   const all = env.words(vodId);
   if (!all.length) throw new Error('Este VOD no tiene transcripción. Impórtala o transcríbela antes de activar los subtítulos.');
   const words = wordsForOutput(all, ranges);

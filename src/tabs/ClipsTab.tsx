@@ -223,7 +223,7 @@ function TranscriptBlock({ vod, onChanged }: { vod?: VodJob; onChanged: () => Pr
   return (
     <div data-testid="transcript-block">
       <div className="muted small" data-testid="transcript-status">
-        {t ? `Transcripción: ${t.words} palabras (${t.source === 'whisper' ? 'hecha con Whisper' : 'importada'}).` : 'Este VOD aún no tiene transcripción.'}
+        {t ? `Transcripción: ${t.words} palabras (${t.source === 'whisper' ? 'hecha con Whisper' : 'importada'}${t.partial ? ', solo de los tramos de tus clips y vídeos' : ''}).` : 'Este VOD aún no tiene transcripción.'}
       </div>
       <div className="row">
         <button

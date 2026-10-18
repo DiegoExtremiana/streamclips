@@ -144,7 +144,7 @@ export class AppContext {
       whisperExe: () => this.whisperExe(),
       modelBaseUrl: o.modelBaseUrl,
     });
-    const subtitles = { words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string) => this.transcripts.ensure(vodId), fontsDir: o.fontsDir };
+    const subtitles = { words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string, ranges?: { start: number; end: number }[]) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
     this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
     this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });

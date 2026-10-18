@@ -223,6 +223,8 @@ export interface TranscribeOpts {
   language: string; // '' = detectar
   threads?: number;
   chunkSec?: number;
+  /** Solo este tramo del vídeo (segundos); las palabras salen con su tiempo en el vídeo completo. */
+  range?: { start: number; end: number };
   onProgress?: (pct: number, detail: string) => void;
 }
 
@@ -246,16 +248,20 @@ function runCli(exe: string, args: string[], onPct: (pct: number) => void): Prom
 /** Transcribe el audio de un vídeo por trozos y devuelve las palabras con su tiempo en el vídeo. */
 export async function transcribeVideo(tools: ToolPaths, input: string, o: TranscribeOpts): Promise<Word[]> {
   if (!fs.existsSync(o.model)) throw new Error('Falta el modelo de Whisper.');
-  const dur = (await probe(tools, input)).durationSec;
+  const total = (await probe(tools, input)).durationSec;
+  const from = Math.max(0, o.range?.start ?? 0);
+  const to = Math.min(total || Infinity, o.range?.end ?? total);
+  const dur = Math.max(0, to - from);
   const chunk = o.chunkSec ?? CHUNK_SEC;
   const n = Math.max(1, Math.ceil(dur / chunk));
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-whisper-'));
   const words: Word[] = [];
   try {
     for (let i = 0; i < n; i++) {
-      const offset = i * chunk;
+      const offset = from + i * chunk;
+      const len = Math.min(chunk, Math.max(0.5, to - offset));
       const wav = path.join(tmp, `c${i}.wav`);
-      await run(tools.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(offset), '-t', String(chunk), '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
+      await run(tools.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(offset), '-t', String(len), '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
       if (!fs.existsSync(wav) || fs.statSync(wav).size < 2000) continue; // trozo sin audio
       const base = path.join(tmp, `c${i}`);
       const args = ['-m', o.model, '-f', wav, '-l', o.language || 'auto', '-oj', '-ml', '1', '-sow', '-pp', '-t', String(o.threads ?? Math.max(1, os.cpus().length - 1)), '-of', base];
@@ -269,6 +275,6 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-  if (!words.length) throw new Error('Whisper no encontró ninguna palabra en el audio.');
+  if (!words.length && !o.range) throw new Error('Whisper no encontró ninguna palabra en el audio.');
   return words;
 }

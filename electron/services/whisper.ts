@@ -134,6 +134,17 @@ export async function downloadModel(dir: string, name: string, onProgress: (pct:
     } catch {
       /* sin huella */
     }
+    // Segunda fuente de la huella: el listado oficial del repositorio (solo con la URL oficial).
+    if (!expected && !o.baseUrl) {
+      try {
+        const r = await (o.fetchFn ?? fetch)('https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/main');
+        const list = (await r.json()) as { path?: string; lfs?: { oid?: string } }[];
+        const oid = list.find((x) => x.path === WHISPER_MODELS[name].file)?.lfs?.oid?.toLowerCase() ?? '';
+        if (/^[0-9a-f]{64}$/.test(oid)) expected = oid;
+      } catch {
+        /* sin huella */
+      }
+    }
     const hash = crypto.createHash('sha256');
     let res: Response;
     try {
@@ -145,22 +156,34 @@ export async function downloadModel(dir: string, name: string, onProgress: (pct:
     const total = Number(res.headers.get('content-length') ?? 0);
     let got = 0;
     let last = -1;
-    const body = Readable.fromWeb(res.body as never);
-    body.on('data', (c: Buffer) => {
-      got += c.length;
-      hash.update(c);
-      if (total) {
-        const pct = Math.floor((got / total) * 100);
-        if (pct !== last) {
-          last = pct;
-          onProgress(pct);
+    // Cada trozo se copia antes de escribirlo: así lo que se guarda no depende de memoria que la red pueda reutilizar.
+    const fd = fs.openSync(part, 'w');
+    try {
+      for await (const raw of Readable.fromWeb(res.body as never) as AsyncIterable<Uint8Array>) {
+        const c = Buffer.from(raw);
+        hash.update(c);
+        let off = 0;
+        while (off < c.length) off += fs.writeSync(fd, c, off, c.length - off);
+        got += c.length;
+        if (total) {
+          const pct = Math.floor((got / total) * 100);
+          if (pct !== last) {
+            last = pct;
+            onProgress(pct);
+          }
         }
       }
-    });
-    await pipeline(body, fs.createWriteStream(part));
+    } finally {
+      fs.closeSync(fd);
+    }
     if (total && got !== total) throw new Error('La descarga del modelo se cortó. Vuelve a intentarlo.');
     if (got < WHISPER_MODELS[name].minBytes) throw new Error('El archivo descargado es demasiado pequeño para ser el modelo. Vuelve a intentarlo.');
-    if (expected && hash.digest('hex') !== expected) throw new Error('El modelo de Whisper se descargó dañado (su huella no coincide). Vuelve a intentarlo.');
+    const streamed = hash.digest('hex');
+    if (expected && streamed !== expected) throw new Error('El modelo de Whisper se descargó dañado (su huella no coincide). Vuelve a intentarlo.');
+    // Lo que quedó en el disco tiene que ser idéntico a lo que llegó por la red.
+    const onDisk = crypto.createHash('sha256');
+    await pipeline(fs.createReadStream(part), onDisk);
+    if (onDisk.digest('hex') !== streamed) throw new Error('El modelo de Whisper se descargó dañado (lo guardado en el disco no coincide con lo recibido; revisa el disco o el antivirus).');
     const bad = ggmlProblem(part);
     if (bad) throw new Error(`El modelo de Whisper se descargó dañado (${bad}). Vuelve a intentarlo.`);
     fs.renameSync(part, dest);
@@ -209,14 +232,14 @@ function runCli(exe: string, args: string[], onPct: (pct: number) => void): Prom
     let tail = '';
     const feed = (d: Buffer) => {
       const t = d.toString();
-      tail = (tail + t).slice(-1500);
+      tail = (tail + t).slice(-4000);
       // varias líneas pueden llegar juntas: se informa de todas, en orden
       for (const m of t.matchAll(/progress\s*=\s*(\d+)%/g)) onPct(Math.min(100, Number(m[1])));
     };
     p.stdout.on('data', feed);
     p.stderr.on('data', feed);
     p.on('error', (e) => reject(new Error(`No se pudo ejecutar Whisper (${exe}): ${e.message}`)));
-    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Whisper terminó con código ${code}\n${tail.trim().split('\n').slice(-4).join('\n')}`))));
+    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Whisper terminó con código ${code}\n${tail.trim().split('\n').slice(-10).join('\n')}`))));
   });
 }
 

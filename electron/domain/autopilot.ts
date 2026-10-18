@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
+import { planEdit, planLong } from '../../shared/autoEdit';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
@@ -187,14 +188,36 @@ export class Autopilot {
         }
         task.update(55 + (++doneCount / total) * 40, `Montando (${doneCount}/${total})…`);
       };
-      if (summary.length) await step('summary', 'resumen', () => this.d.clips.createLong(vod.id, { title: titles.summary.title, segments: summary, ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), titles.summary);
+      const pro = this.cfg.proEdit !== false && words.length > 0;
+      if (this.cfg.proEdit !== false && !words.length) notes.push('Edición profesional omitida: no hay transcripción.');
+      const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
+      // si la edición profesional falla (efecto no válido, ffmpeg…), el vídeo se monta igualmente sin ella
+      const safely = async <T>(edited: boolean, withEdit: () => Promise<T>, plain: () => Promise<T>): Promise<T> => {
+        if (!edited) return plain();
+        try {
+          return await withEdit();
+        } catch (err) {
+          this.d.log.warn(`Edición profesional falló, se monta sin ella: ${(err as Error).message.split('\n')[0]}`);
+          return plain();
+        }
+      };
+      const longMake = (title: string, segs: Seg[]) => {
+        const e = pro ? planLong(words, segs) : null;
+        return safely(
+          Boolean(e),
+          () => this.d.clips.createLong(vod.id, { title, segments: e!.segments, effects: e!.effects, ...subs }),
+          () => this.d.clips.createLong(vod.id, { title, segments: segs, ...subs }),
+        );
+      };
+      if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary), titles.summary);
       for (const [i, m] of mains.entries()) {
         const t = titles.mains[i];
-        await step('main', `vídeo ${i + 1}`, () => this.d.clips.createLong(vod.id, { title: t.title, segments: [m], ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), t);
+        await step('main', `vídeo ${i + 1}`, () => longMake(t.title, [m]), t);
       }
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
-        await step('clip', `clip ${i + 1}`, () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...(this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {}) }), t);
+        const e = pro ? planEdit(words, m) : null;
+        await step('clip', `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e!.cuts, effects: e!.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t);
       }
       if (!created.length) throw new Error(`No se pudo montar ningún vídeo. ${errors.join(' ')}`);
 
@@ -274,6 +297,7 @@ export class Autopilot {
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null> {
+    await this.d.transcripts.ensure(vodId).catch((e) => this.d.log.warn(`Sin transcripción para sugerir título: ${(e as Error).message.split('\n')[0]}`));
     const r = await this.nameFor(vodId, [{ start, end }]);
     return r && r.title ? { title: r.title, source: r.source } : null;
   }
@@ -370,9 +394,10 @@ export class Autopilot {
    * y no son del usuario, les pone nombre y descripción según de qué se habla. Si el VOD no tiene transcripción y está
    * descargado, la hace antes con Whisper (una por VOD, una detrás de otra). Nunca lanza: lo que falle se anota en el registro.
    */
-  async refreshLibraryAtStart(): Promise<AutoNameResult | null> {
+  async refreshLibraryAtStart(o3: { generic?: boolean } = {}): Promise<AutoNameResult | null> {
+    const generic = o3.generic ?? true;
     try {
-      const need = this.d.store.data.outputs.filter((o) => o.vodId && (isGenericAutoTitle(o) || (o.descSource !== 'manual' && !o.description)));
+      const need = this.d.store.data.outputs.filter((o) => o.vodId && ((generic ? isGenericAutoTitle(o) : isAutoNameable(o)) || (o.descSource !== 'manual' && !o.description)));
       if (!need.length) return null;
       const vodIds = [...new Set(need.map((o) => o.vodId as string))];
       for (const id of vodIds) {
@@ -386,7 +411,7 @@ export class Autopilot {
           this.d.log.warn(`Nombres automáticos: no se pudo transcribir "${vod.title ?? id}": ${(e as Error).message.split('\n')[0]}`);
         }
       }
-      return await this.autoNameLibrary(undefined, { generic: true });
+      return await this.autoNameLibrary(undefined, { generic });
     } catch (e) {
       this.d.log.warn(`Nombres automáticos al arrancar: ${(e as Error).message}`);
       return null;

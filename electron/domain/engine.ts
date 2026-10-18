@@ -98,7 +98,7 @@ export class EngineService {
       twitch: t,
       llm: { provider: a.llm.provider, model: a.llm.model, apiKey: a.llm.provider === 'none' ? '' : this.d.llmKey() },
       cloud: { repo: c.repo, token: this.d.secrets.decode(c.token) },
-      autopilot: { maxClips: a.maxClips, maxVideos: a.maxVideos, subtitles: a.subtitles, platforms: a.platforms, videoTimes: a.videoTimes, clipTimes: a.clipTimes, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, visibility: a.visibility, series: a.series },
+      autopilot: { maxClips: a.maxClips, maxVideos: a.maxVideos, subtitles: a.subtitles, platforms: a.platforms, videoTimes: a.videoTimes, clipTimes: a.clipTimes, summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, visibility: a.visibility, series: a.series, proEdit: a.proEdit !== false },
       whisper: { model: s.whisperModel, language: s.whisperLanguage || 'es' },
       since: this.st.since ?? new Date(this.now()).toISOString(),
     };

@@ -7,7 +7,7 @@ export interface EnginePayload {
   llm: { provider: LlmChoice; model: string; apiKey: string };
   /** Repositorio PRIVADO donde se dejan los vídeos listos para publicar (la cola del modo nube). */
   cloud: { repo: string; token: string };
-  autopilot: Pick<AutopilotSettings, 'maxClips' | 'maxVideos' | 'subtitles' | 'platforms' | 'videoTimes' | 'clipTimes' | 'summaryMinutes' | 'mainMinutes' | 'visibility' | 'series'>;
+  autopilot: Pick<AutopilotSettings, 'maxClips' | 'maxVideos' | 'subtitles' | 'platforms' | 'videoTimes' | 'clipTimes' | 'summaryMinutes' | 'mainMinutes' | 'visibility' | 'series' | 'proEdit'>;
   whisper: { model: string; language: string };
   /** Los directos anteriores a esta fecha no se tocan. */
   since: string;

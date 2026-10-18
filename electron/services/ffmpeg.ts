@@ -113,6 +113,16 @@ export function punchFilter(w: number, h: number, punches: { a: number; dur: num
   return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=${w}:${h}`;
 }
 
+/** Efectos de sonido sintetizados con ffmpeg (sin archivos ni derechos de autor): fuente lavfi, duración y volumen. */
+export const SFX: Record<'whoosh' | 'pop' | 'hit', { src: string; dur: number; vol: number }> = {
+  whoosh: { src: 'anoisesrc=d=0.45:c=pink:r=48000:a=0.8,highpass=f=300,lowpass=f=5500,afade=t=in:d=0.2,afade=t=out:st=0.2:d=0.25', dur: 0.45, vol: 0.55 },
+  pop: { src: 'sine=f=980:d=0.14:r=48000,afade=t=out:d=0.14', dur: 0.14, vol: 0.45 },
+  hit: { src: 'sine=f=70:d=0.32:r=48000,afade=t=out:d=0.32', dur: 0.32, vol: 0.9 },
+};
+
+/** Volumen parejo de todo el vídeo (objetivo habitual de YouTube: -14 LUFS; aquí -16 para no saturar). */
+export const POLISH_AF = 'loudnorm=I=-16:TP=-1.5:LRA=11';
+
 interface SegmentOpts {
   vf: string;
   /** Composición vertical con varias ventanas: usa el grafo en lugar de `vf` como base (`vf` pasa a ser lo que va después). */
@@ -120,12 +130,16 @@ interface SegmentOpts {
   /** Fundidos de este tramo (vídeo y audio). */
   fadeIn?: number;
   fadeOut?: number;
+  /** Efectos de sonido, con su instante dentro del tramo. */
+  sfx?: { at: number; sound: 'whoosh' | 'pop' | 'hit' }[];
+  polish?: boolean;
 }
 
 async function cutSegment(tools: ToolPaths, input: string, start: number, end: number, o: SegmentOpts, out: string): Promise<void> {
   const dur = end - start;
   const vf = o.vf ? [o.vf] : [];
   const af: string[] = [];
+  if (o.polish) af.push(POLISH_AF);
   if (o.fadeIn) {
     vf.push(`fade=t=in:st=0:d=${o.fadeIn}`);
     af.push(`afade=t=in:st=0:d=${o.fadeIn}`);
@@ -133,6 +147,23 @@ async function cutSegment(tools: ToolPaths, input: string, start: number, end: n
   if (o.fadeOut) {
     vf.push(`fade=t=out:st=${Math.max(0, dur - o.fadeOut).toFixed(3)}:d=${o.fadeOut}`);
     af.push(`afade=t=out:st=${Math.max(0, dur - o.fadeOut).toFixed(3)}:d=${o.fadeOut}`);
+  }
+  const sfx = o.sfx ?? [];
+  if (sfx.length) {
+    // vídeo y audio en un solo grafo: el audio original más cada efecto retrasado a su instante
+    const inputs = sfx.flatMap((x) => ['-f', 'lavfi', '-i', SFX[x.sound].src]);
+    const vchain = o.layout ? `${composeGraph(o.layout)};[base]${vf.length ? vf.join(',') : 'null'}[vout]` : `[0:v]${vf.length ? vf.join(',') : 'null'}[vout]`;
+    const mix = sfx.map((x, i) => `[${i + 1}:a]adelay=${Math.round(Math.max(0, x.at) * 1000)}:all=1,volume=${SFX[x.sound].vol}[s${i}]`).join(';');
+    const graph = `${vchain};[0:a]${af.length ? af.join(',') : 'anull'}[a0];${mix};[a0]${sfx.map((_, i) => `[s${i}]`).join('')}amix=inputs=${sfx.length + 1}:duration=first:dropout_transition=0:normalize=0[aout]`;
+    await run(tools.ffmpeg, [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-ss', String(start), '-i', input, '-t', String(dur),
+      ...inputs,
+      '-filter_complex', graph, '-map', '[vout]', '-map', '[aout]',
+      ...ENCODE_CODEC,
+      out,
+    ]);
+    return;
   }
   const video = o.layout
     ? ['-filter_complex', `${composeGraph(o.layout)};[base]${vf.length ? vf.join(',') : 'null'}[vout]`, '-map', '[vout]', '-map', '0:a:0?', ...ENCODE_CODEC]
@@ -180,7 +211,11 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
   const total = totalDuration(t.ranges);
   const clampFade = (d: number | undefined) => Math.min(d ?? FADE.default, total / 2);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-'));
+  const polish = fx.some((e) => e.type === 'polish');
+  const allSfx = fx.filter((e): e is Extract<Effect, { type: 'sfx' }> => e.type === 'sfx');
   try {
+    // los efectos de sonido necesitan una pista de audio a la que sumarse
+    const hasAudio = allSfx.length ? (await probe(tools, input)).hasAudio : false;
     const parts: string[] = [];
     for (let i = 0; i < t.ranges.length; i++) {
       const r = t.ranges[i];
@@ -201,6 +236,8 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
           layout: t.layout,
           fadeIn: i === 0 && fadeIn ? clampFade(fadeIn.duration) : undefined,
           fadeOut: i === t.ranges.length - 1 && fadeOut ? clampFade(fadeOut.duration) : undefined,
+          polish,
+          sfx: hasAudio ? allSfx.filter((e) => e.at >= r.start && e.at <= r.end).map((e) => ({ at: e.at - r.start, sound: e.sound ?? 'pop' })) : undefined,
         },
         part,
       );

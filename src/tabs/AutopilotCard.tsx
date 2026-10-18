@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -62,6 +62,9 @@ export default function AutopilotCard() {
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.requireApproval} onChange={(e) => up({ requireApproval: e.target.checked })} /> Pedir mi visto bueno antes de programar (si no, se programa solo)
+      </label>
+      <label className="row" style={{ gap: 8 }}>
+        <input type="checkbox" checked={a.proEdit !== false} onChange={(e) => up({ proEdit: e.target.checked })} /> Edición profesional: quita silencios y tiempos muertos, acerca la imagen en los momentos fuertes, añade efectos de sonido y fundidos y iguala el volumen
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.chatCapture} onChange={(e) => up({ chatCapture: e.target.checked })} /> Guardar la actividad del chat durante el directo (anónimo, solo cuenta mensajes)

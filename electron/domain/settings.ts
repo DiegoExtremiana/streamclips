@@ -50,6 +50,7 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   };
   if (p.enabled !== undefined) n.enabled = bool(p.enabled, 'El interruptor del piloto automático');
   if (p.requireApproval !== undefined) n.requireApproval = bool(p.requireApproval, 'La aprobación previa');
+  if (p.proEdit !== undefined) n.proEdit = bool(p.proEdit, 'La edición profesional');
   if (p.chatCapture !== undefined) n.chatCapture = bool(p.chatCapture, 'La captura del chat');
   if (p.maxClips !== undefined) {
     if (!Number.isInteger(p.maxClips) || p.maxClips < 0 || p.maxClips > 20) throw new Error('Los clips por directo deben ser un número entre 0 y 20.');

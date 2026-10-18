@@ -99,6 +99,26 @@ export class TranscriptService {
     };
   }
 
+  private inflight = new Map<string, Promise<void>>();
+
+  /**
+   * Garantiza que el VOD tiene transcripción: si no la tiene, la hace con Whisper (una sola vez aunque la pidan varios a la vez).
+   * Así los subtítulos y los títulos sugeridos no obligan a transcribir a mano. Falla con un motivo claro si no se puede.
+   */
+  ensure(vodId: string): Promise<void> {
+    if (this.words(vodId).length) return Promise.resolve();
+    const running = this.inflight.get(vodId);
+    if (running) return running;
+    const p = (async () => {
+      const vod = this.vod(vodId);
+      if (!this.d.whisperExe()) throw new Error('Este VOD no tiene transcripción y no se encuentra Whisper para hacerla. Impórtala o indica whisper-cli en Ajustes.');
+      if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) throw new Error('Este VOD no tiene transcripción y su archivo no está descargado, así que no se puede transcribir.');
+      await this.transcribe(vodId);
+    })().finally(() => this.inflight.delete(vodId));
+    this.inflight.set(vodId, p);
+    return p;
+  }
+
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
   async downloadModel(): Promise<WhisperStatus> {
     const name = this.d.store.data.settings.whisperModel;
@@ -111,7 +131,17 @@ export class TranscriptService {
     }
     const task = this.d.tasks.start('model', `Descargando el modelo de Whisper (${name}, ~${WHISPER_MODELS[name].approxMb} MB)`);
     try {
-      await downloadModel(this.modelsDir, name, (pct) => task.update(pct), { baseUrl: this.d.modelBaseUrl });
+      // una descarga alterada por el camino se repite (hasta 3 veces); un fallo de conexión no
+      for (let intento = 1; ; intento++) {
+        try {
+          await downloadModel(this.modelsDir, name, (pct) => task.update(pct), { baseUrl: this.d.modelBaseUrl });
+          break;
+        } catch (e) {
+          if (intento >= 3 || !/dañado/.test((e as Error).message)) throw e;
+          this.d.log.warn(`Descarga del modelo dañada (intento ${intento}); se repite.`);
+          task.update(0, `Descarga dañada, repitiendo (${intento + 1}/3)…`);
+        }
+      }
       task.done();
     } catch (e) {
       task.fail((e as Error).message);

@@ -31587,16 +31587,6 @@ function allFiles(o) {
   return ORDER.map((k) => o.files[k]).filter((f) => Boolean(f));
 }
 
-// electron/domain/subtitleJob.ts
-var import_node_fs7 = __toESM(require("node:fs"));
-var import_node_os2 = __toESM(require("node:os"));
-var import_node_path7 = __toESM(require("node:path"));
-
-// electron/services/ffmpeg.ts
-var import_node_fs6 = __toESM(require("node:fs"));
-var import_node_os = __toESM(require("node:os"));
-var import_node_path6 = __toESM(require("node:path"));
-
 // shared/layout.ts
 var OUT_W = 1080;
 var OUT_H = 1920;
@@ -31614,7 +31604,33 @@ var PRESETS = [
   { id: "tres-dos-arriba", label: "Dos arriba y juego", count: 3, focus: ["cam", "chat", "game"], dst: [r(0, 0, 0.5, 0.3), r(0.5, 0, 0.5, 0.3), r(0, 0.3, 1, 0.7)] },
   { id: "tres-dos-abajo", label: "Juego y dos abajo", count: 3, focus: ["game", "cam", "chat"], dst: [r(0, 0, 1, 0.6), r(0, 0.6, 0.5, 0.4), r(0.5, 0.6, 0.5, 0.4)] }
 ];
+var presetsFor = (count) => PRESETS.filter((p) => p.count === count);
+var defaultPreset = (count) => presetsFor(count)[0] ?? PRESETS[0];
+var FOCUS = {
+  cam: { cx: 0.14, cy: 0.2, h: 0.36 },
+  game: { cx: 0.5, cy: 0.5, h: 1 },
+  chat: { cx: 0.1, cy: 0.72, h: 0.5 }
+};
+function srcWidthFor(dst, h, frameAspect) {
+  const dstAspect = dst.w * OUT_W / (dst.h * OUT_H);
+  return h * dstAspect / frameAspect;
+}
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function fitSrc(dst, cx, cy, h, frameAspect) {
+  const maxH = Math.min(1, 1 / (srcWidthFor(dst, 1, frameAspect) || 1));
+  const hh = clamp(h, MIN_SRC, maxH);
+  const ww = srcWidthFor(dst, hh, frameAspect);
+  return { x: clamp(cx - ww / 2, 0, 1 - ww), y: clamp(cy - hh / 2, 0, 1 - hh), w: ww, h: hh };
+}
+function layoutFromPreset(preset, frameAspect) {
+  return {
+    preset: preset.id,
+    windows: preset.dst.map((dst, i) => {
+      const f = FOCUS[preset.focus[i]];
+      return { dst: { ...dst }, src: fitSrc(dst, f.cx, f.cy, f.h, frameAspect) };
+    })
+  };
+}
 var isNum = (n) => typeof n === "number" && Number.isFinite(n);
 function rectReason(rc, min, what) {
   if (!rc || typeof rc !== "object") return `${what} no es un rect\xE1ngulo`;
@@ -31649,6 +31665,16 @@ function dstPixels(dst) {
   const y1 = ev((dst.y + dst.h) * OUT_H);
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
+
+// electron/domain/subtitleJob.ts
+var import_node_fs7 = __toESM(require("node:fs"));
+var import_node_os2 = __toESM(require("node:os"));
+var import_node_path7 = __toESM(require("node:path"));
+
+// electron/services/ffmpeg.ts
+var import_node_fs6 = __toESM(require("node:fs"));
+var import_node_os = __toESM(require("node:os"));
+var import_node_path6 = __toESM(require("node:path"));
 
 // shared/plan.ts
 var MIN_CLIP_SEC = 1;
@@ -32173,9 +32199,13 @@ var ClipService = class {
     if (reason) throw new Error(`Clip no v\xE1lido: ${reason}.`);
     const clip = normalizeClip(spec, "Clip");
     return this.d.queue.run(async () => {
-      const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
+      const info = await probe(this.d.tools(), this.vodFile(vodId));
+      const vodDur = info.durationSec;
       const bound = validateClipSpec(clip, vodDur);
       if (bound) throw new Error(`Clip no v\xE1lido: ${bound}.`);
+      if (!clip.layout && clip.cropX === void 0 && info.width > 0 && info.height > 0) {
+        clip.layout = layoutFromPreset(defaultPreset(2), info.width / info.height);
+      }
       const kinds = clip.kind === "both" ? ["horizontal", "vertical"] : [clip.kind];
       const cropX = clip.cropX ?? 0.5;
       const ranges = keptRanges(clip.start, clip.end, clip.cuts);
@@ -32330,6 +32360,14 @@ var LibraryService = class {
     this.changed();
     return o;
   }
+  /** Descripción escrita por el programa: se puede rehacer sola, a diferencia de una escrita por el usuario. */
+  setAutoDescription(id, description) {
+    const o = this.find(id);
+    o.description = description.replace(/\s+$/, "").slice(0, YT_DESC_MAX) || void 0;
+    o.descSource = o.description ? "auto" : void 0;
+    this.changed();
+    return o;
+  }
   rename(id, title) {
     return this.setMeta(id, { title });
   }
@@ -32356,6 +32394,7 @@ var LibraryService = class {
       if (d.length > YT_DESC_MAX) throw new Error(`La descripci\xF3n no puede pasar de ${YT_DESC_MAX} caracteres.`);
       if (hasAngle(d)) throw new Error("La descripci\xF3n no puede contener < ni > (YouTube no los admite).");
       next.description = d || void 0;
+      if (d !== (o.description ?? "")) next.descSource = d ? "manual" : void 0;
     }
     if (meta.playlist !== void 0) {
       if (typeof meta.playlist !== "string") throw new Error("La lista no es v\xE1lida.");
@@ -32802,6 +32841,70 @@ function modelInstalled(dir, name) {
     return false;
   }
 }
+var GGML_TYPES = {
+  0: { block: 1, bytes: 4 },
+  1: { block: 1, bytes: 2 },
+  2: { block: 32, bytes: 18 },
+  3: { block: 32, bytes: 20 },
+  6: { block: 32, bytes: 22 },
+  7: { block: 32, bytes: 24 },
+  8: { block: 32, bytes: 34 }
+};
+function ggmlProblem(file) {
+  let fd = -1;
+  try {
+    fd = import_node_fs10.default.openSync(file, "r");
+    const size = import_node_fs10.default.fstatSync(fd).size;
+    const buf = Buffer.alloc(4096);
+    let pos = 0;
+    const read = (n) => {
+      if (pos + n > size) throw new Error("el archivo termina antes de tiempo");
+      const b = n <= buf.length ? buf : Buffer.alloc(n);
+      import_node_fs10.default.readSync(fd, b, 0, n, pos);
+      pos += n;
+      return b;
+    };
+    const i32 = () => read(4).readInt32LE(0);
+    if (size < 4 || read(4).readUInt32LE(0) !== 1734831468) return null;
+    for (let i = 0; i < 11; i++) i32();
+    const melRows = i32();
+    const melCols = i32();
+    if (melRows < 0 || melCols < 0 || melRows * melCols > 1e6) throw new Error("filtros mel con tama\xF1o absurdo");
+    pos += melRows * melCols * 4;
+    const nVocab = i32();
+    if (nVocab < 0 || nVocab > 2e5) throw new Error("vocabulario con tama\xF1o absurdo");
+    for (let i = 0; i < nVocab; i++) {
+      const len = read(4).readUInt32LE(0);
+      if (len > 1e3) throw new Error("palabra de vocabulario con tama\xF1o absurdo");
+      pos += len;
+    }
+    let tensors = 0;
+    while (pos < size) {
+      const at = pos;
+      const nd = i32();
+      const nameLen = i32();
+      const ft = i32();
+      if (nd < 1 || nd > 4 || nameLen < 1 || nameLen > 200 || !GGML_TYPES[ft]) throw new Error(`cabecera de tensor ${tensors} da\xF1ada (byte ${at})`);
+      let n = 1;
+      for (let d = 0; d < nd; d++) {
+        const v = i32();
+        if (v < 1 || v > 1e6) throw new Error(`dimensi\xF3n absurda en el tensor ${tensors} (byte ${at})`);
+        n *= v;
+      }
+      const name = read(nameLen).toString("latin1", 0, nameLen);
+      if (!/^[A-Za-z0-9_.]+$/.test(name)) throw new Error(`nombre de tensor ilegible en el byte ${at}`);
+      const t = GGML_TYPES[ft];
+      pos += Math.ceil(n / t.block) * t.bytes;
+      tensors++;
+    }
+    if (pos !== size) throw new Error("los datos no terminan donde deber\xEDan");
+    return tensors > 0 ? null : "no contiene tensores";
+  } catch (e) {
+    return e.message;
+  } finally {
+    if (fd >= 0) import_node_fs10.default.closeSync(fd);
+  }
+}
 async function downloadModel(dir, name, onProgress, o = {}) {
   const dest = modelPath(dir, name);
   if (modelInstalled(dir, name)) return dest;
@@ -32816,6 +32919,15 @@ async function downloadModel(dir, name, onProgress, o = {}) {
       if (/^[0-9a-f]{64}$/.test(tag)) expected = tag;
     } catch {
     }
+    if (!expected && !o.baseUrl) {
+      try {
+        const r2 = await (o.fetchFn ?? fetch)("https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/main");
+        const list = await r2.json();
+        const oid = list.find((x) => x.path === WHISPER_MODELS[name].file)?.lfs?.oid?.toLowerCase() ?? "";
+        if (/^[0-9a-f]{64}$/.test(oid)) expected = oid;
+      } catch {
+      }
+    }
     const hash = import_node_crypto4.default.createHash("sha256");
     let res;
     try {
@@ -32827,22 +32939,34 @@ async function downloadModel(dir, name, onProgress, o = {}) {
     const total = Number(res.headers.get("content-length") ?? 0);
     let got = 0;
     let last = -1;
-    const body = import_node_stream.Readable.fromWeb(res.body);
-    body.on("data", (c) => {
-      got += c.length;
-      hash.update(c);
-      if (total) {
-        const pct = Math.floor(got / total * 100);
-        if (pct !== last) {
-          last = pct;
-          onProgress(pct);
+    const fd = import_node_fs10.default.openSync(part, "w");
+    try {
+      for await (const raw of import_node_stream.Readable.fromWeb(res.body)) {
+        const c = Buffer.from(raw);
+        hash.update(c);
+        let off = 0;
+        while (off < c.length) off += import_node_fs10.default.writeSync(fd, c, off, c.length - off);
+        got += c.length;
+        if (total) {
+          const pct = Math.floor(got / total * 100);
+          if (pct !== last) {
+            last = pct;
+            onProgress(pct);
+          }
         }
       }
-    });
-    await (0, import_promises.pipeline)(body, import_node_fs10.default.createWriteStream(part));
+    } finally {
+      import_node_fs10.default.closeSync(fd);
+    }
     if (total && got !== total) throw new Error("La descarga del modelo se cort\xF3. Vuelve a intentarlo.");
     if (got < WHISPER_MODELS[name].minBytes) throw new Error("El archivo descargado es demasiado peque\xF1o para ser el modelo. Vuelve a intentarlo.");
-    if (expected && hash.digest("hex") !== expected) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (su huella no coincide). Vuelve a intentarlo.");
+    const streamed = hash.digest("hex");
+    if (expected && streamed !== expected) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (su huella no coincide). Vuelve a intentarlo.");
+    const onDisk = import_node_crypto4.default.createHash("sha256");
+    await (0, import_promises.pipeline)(import_node_fs10.default.createReadStream(part), onDisk);
+    if (onDisk.digest("hex") !== streamed) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (lo guardado en el disco no coincide con lo recibido; revisa el disco o el antivirus).");
+    const bad = ggmlProblem(part);
+    if (bad) throw new Error(`El modelo de Whisper se descarg\xF3 da\xF1ado (${bad}). Vuelve a intentarlo.`);
     import_node_fs10.default.renameSync(part, dest);
     onProgress(100);
     return dest;
@@ -32875,14 +32999,14 @@ function runCli(exe, args, onPct) {
     let tail = "";
     const feed = (d) => {
       const t = d.toString();
-      tail = (tail + t).slice(-1500);
+      tail = (tail + t).slice(-4e3);
       for (const m of t.matchAll(/progress\s*=\s*(\d+)%/g)) onPct(Math.min(100, Number(m[1])));
     };
     p.stdout.on("data", feed);
     p.stderr.on("data", feed);
     p.on("error", (e) => reject(new Error(`No se pudo ejecutar Whisper (${exe}): ${e.message}`)));
     p.on("close", (code) => code === 0 ? resolve() : reject(new Error(`Whisper termin\xF3 con c\xF3digo ${code}
-${tail.trim().split("\n").slice(-4).join("\n")}`)));
+${tail.trim().split("\n").slice(-10).join("\n")}`)));
   });
 }
 async function transcribeVideo(tools, input, o) {
@@ -32982,10 +33106,24 @@ var TranscriptService = class {
   async downloadModel() {
     const name = this.d.store.data.settings.whisperModel;
     if (!isKnownModel(name)) throw new Error(`Modelo de Whisper desconocido: ${name} (usa tiny, base, small o medium).`);
-    if (modelInstalled(this.modelsDir, name)) return this.status();
+    if (modelInstalled(this.modelsDir, name)) {
+      const bad = ggmlProblem(modelPath(this.modelsDir, name));
+      if (!bad) return this.status();
+      this.d.log.warn(`El modelo de Whisper \xAB${name}\xBB est\xE1 da\xF1ado (${bad}); se descarga otra vez.`);
+      import_node_fs11.default.rmSync(modelPath(this.modelsDir, name), { force: true });
+    }
     const task = this.d.tasks.start("model", `Descargando el modelo de Whisper (${name}, ~${WHISPER_MODELS[name].approxMb} MB)`);
     try {
-      await downloadModel(this.modelsDir, name, (pct) => task.update(pct), { baseUrl: this.d.modelBaseUrl });
+      for (let intento = 1; ; intento++) {
+        try {
+          await downloadModel(this.modelsDir, name, (pct) => task.update(pct), { baseUrl: this.d.modelBaseUrl });
+          break;
+        } catch (e) {
+          if (intento >= 3 || !/dañado/.test(e.message)) throw e;
+          this.d.log.warn(`Descarga del modelo da\xF1ada (intento ${intento}); se repite.`);
+          task.update(0, `Descarga da\xF1ada, repitiendo (${intento + 1}/3)\u2026`);
+        }
+      }
       task.done();
     } catch (e) {
       task.fail(e.message);
@@ -33028,7 +33166,21 @@ var TranscriptService = class {
           try {
             words = await run2();
           } catch (e2) {
-            throw new Error(`Whisper no puede cargar el modelo \xAB${s.whisperModel}\xBB ni tras descargarlo de nuevo. Prueba con otro modelo en Ajustes (por ejemplo \xABbase\xBB).
+            const alt = s.whisperModel === "base" || s.whisperModel === "tiny" ? "" : "base";
+            if (alt) {
+              try {
+                await downloadModel(this.modelsDir, alt, (pct) => task.update(pct, `Descargando el modelo ${alt}\u2026`), { baseUrl: this.d.modelBaseUrl });
+                this.d.log.warn(`Whisper no pudo con \xAB${s.whisperModel}\xBB; se usa \xAB${alt}\xBB en esta transcripci\xF3n.`);
+                words = await transcribeVideo(this.d.tools(), input, {
+                  exe,
+                  model: modelPath(this.modelsDir, alt),
+                  language: s.whisperLanguage,
+                  onProgress: (pct, detail) => task.update(pct, detail)
+                });
+              } catch {
+              }
+            }
+            if (!words) throw new Error(`Whisper no puede cargar el modelo \xAB${s.whisperModel}\xBB ni tras descargarlo de nuevo. Prueba con otro modelo en Ajustes (por ejemplo \xABbase\xBB).
 ${e2.message}`);
           }
         }
@@ -34514,6 +34666,48 @@ function shortTitle(words, m, index, o = {}) {
   const t = best.toks.join(" ");
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
+function shortDescription(words, m, o = {}) {
+  const maxChars = o.maxChars ?? 280;
+  const maxSentences = o.maxSentences ?? 3;
+  const segs = Array.isArray(m) ? m : [m];
+  const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5));
+  const counts = /* @__PURE__ */ new Map();
+  for (const w of words) {
+    const k = tokenOf(w.text).toLowerCase();
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const weight = (raw) => {
+    const k = tokenOf(raw).toLowerCase();
+    if (!k || isStop(k)) return 0;
+    return (1 + Math.min(k.length, 10) / 10) / Math.log(2 + (counts.get(k) ?? 1));
+  };
+  const cands = sentences(inside).map((s, order) => {
+    const toks = inside.filter((w) => w.start >= s.start && w.end <= s.end + 0.01).map((w) => w.text);
+    const text = toks.join(" ").replace(/\s+/g, " ").trim();
+    const useful = toks.filter((t) => weight(t) > 0).length;
+    const score = toks.reduce((a, t) => a + weight(t), 0) / Math.sqrt(Math.max(toks.length, 1)) + (/[!?]/.test(text) ? 0.5 : 0);
+    return { order, text, useful, score };
+  }).filter((c) => c.useful >= 3 && c.text.length >= 25);
+  if (!cands.length) return "";
+  const chosen = [];
+  let len = 0;
+  for (const c of [...cands].sort((a, b) => b.score - a.score)) {
+    if (chosen.length >= maxSentences) break;
+    if (len + c.text.length + 1 > maxChars) continue;
+    chosen.push(c);
+    len += c.text.length + 1;
+  }
+  if (!chosen.length) {
+    const c = cands.sort((a, b) => b.score - a.score)[0];
+    const cut = c.text.slice(0, maxChars - 1);
+    return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 20)).replace(/[,;:\s]+$/, "")}\u2026`;
+  }
+  const out = chosen.sort((a, b) => a.order - b.order).map((c) => {
+    const t = c.text.charAt(0).toUpperCase() + c.text.slice(1);
+    return /[.!?…]$/.test(t) ? t : `${t}.`;
+  }).join(" ");
+  return out;
+}
 function dedupeTitles(titles) {
   const seen = /* @__PURE__ */ new Map();
   return titles.map((t) => {
@@ -34528,6 +34722,8 @@ function isAutoNameable(o) {
   if (o.titleSource === "auto") return true;
   return o.title.length > 40 || /^(clip|momento|directo del|resumen del directo)\b/i.test(o.title.trim());
 }
+var GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
+var isGenericAutoTitle = (o) => o.titleSource !== "manual" && GENERIC_TITLE.test(o.title.trim());
 
 // shared/slots.ts
 function nextSlot(after, hhmm2, taken = /* @__PURE__ */ new Set()) {
@@ -34878,7 +35074,7 @@ var Autopilot = class {
           item.auto = { role, review: "pending" };
           item.titleSource = "auto";
           item.visibility = this.cfg.visibility;
-          if (item.kind === "long" && t.description) this.d.library.setMeta(item.id, { description: t.description });
+          if (t.description) this.d.library.setAutoDescription(item.id, t.description);
           this.d.store.save();
           created.push(item);
         } catch (e) {
@@ -34925,8 +35121,8 @@ var Autopilot = class {
   async titles(vod, words, moments, mains, notes) {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: "" },
-      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: "" })),
-      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: "" }))
+      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean(shortDescription(words, m), 500) })),
+      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean(shortDescription(words, m), 500) }))
     };
     const uniq = () => {
       const u = dedupeTitles([...base.mains.map((t) => t.title), ...base.clips.map((t) => t.title)]);
@@ -34948,7 +35144,7 @@ var Autopilot = class {
     try {
       const raw = await askJson(
         conf,
-        "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a, sin latinismos ni modismos de otros pa\xEDses. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que digan qu\xE9 pasa en \xE9l, distintos entre s\xED, sin clickbait falso, sin emojis) y descripciones de 1-2 frases. Responde SOLO con JSON.",
+        "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a, sin latinismos ni modismos de otros pa\xEDses. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que digan qu\xE9 pasa en \xE9l, distintos entre s\xED, sin clickbait falso, sin emojis) y descripciones para YouTube de 1-3 frases (60 a 280 caracteres) que cuenten de qu\xE9 trata y qu\xE9 pasa, sin hashtags ni emojis ni enlaces. Responde SOLO con JSON.",
         `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.
 "resumen" es el resumen de todo el directo (no tienes su texto: tit\xFAlalo a partir de los dem\xE1s fragmentos). Fragmentos:
 ${JSON.stringify(items)}`,
@@ -34971,13 +35167,19 @@ ${JSON.stringify(items)}`,
    * lo redacta él; si no, sale de la frase más llamativa. Sin transcripción no hay de qué sacarlo y devuelve null.
    */
   async suggestTitle(vodId, start, end) {
-    return this.nameFor(vodId, [{ start, end }]);
+    const r2 = await this.nameFor(vodId, [{ start, end }]);
+    return r2 && r2.title ? { title: r2.title, source: r2.source } : null;
   }
-  /** Nombre corto para uno o varios tramos de un VOD: con modelo de lenguaje lo redacta él; si no, sale de lo que se dice. */
+  /**
+   * Nombre corto y descripción de YouTube para uno o varios tramos de un VOD: con modelo de lenguaje los redacta él; si no,
+   * salen de lo que se dice. Sin transcripción de esos tramos devuelve null.
+   */
   async nameFor(vodId, segs) {
     const words = this.d.transcripts.words(vodId);
     if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
-    const fb = clean(shortTitle(words, segs, 0), 100);
+    const fbTitle = clean(shortTitle(words, segs, 0), 100);
+    const fbDesc = clean(shortDescription(words, segs), 500);
+    const local = { title: /^Momento \d+$/.test(fbTitle) ? "" : fbTitle, description: fbDesc, source: "transcript" };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider !== "none" && key) {
@@ -34986,29 +35188,33 @@ ${JSON.stringify(items)}`,
         const text = segs.map((g) => textOf(words, g.start, Math.min(g.end, g.start + 240), 900)).join(" / ").slice(0, 1400);
         const raw = await askJson(
           conf,
-          "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes un nombre muy corto para el fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que diga qu\xE9 pasa en \xE9l, sin clickbait falso, sin emojis). Responde SOLO con JSON.",
-          `Texto transcrito de un fragmento. Devuelve {"titulo":""}.
+          "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a. Para el fragmento escribes un nombre muy corto (2 a 5 palabras, m\xE1ximo 40 caracteres, que diga qu\xE9 pasa en \xE9l, sin clickbait falso, sin emojis) y una descripci\xF3n para YouTube de 1 a 3 frases (60 a 280 caracteres) que cuente de qu\xE9 trata y qu\xE9 ocurre, sin hashtags, sin emojis y sin enlaces. Responde SOLO con JSON.",
+          `Texto transcrito de un fragmento. Devuelve {"titulo":"","descripcion":""}.
 ${text}`,
           { fetchFn: this.d.llmFetch }
         );
         const t = clean(raw.titulo, 100);
-        if (t) return { title: t, source: "llm" };
+        const d = clean(raw.descripcion, 500);
+        if (t || d) return { title: t || local.title, description: d || local.description, source: "llm" };
       } catch {
       }
     }
-    return fb && !/^Momento \d+$/.test(fb) ? { title: fb, source: "transcript" } : null;
+    return local.title || local.description ? local : null;
   }
   /**
-   * Pone un nombre corto a los clips y vídeos de la Biblioteca (con `onlyVodId`, solo a los de ese VOD). No toca los que
-   * nombró el usuario ni los que ya son cortos. Evita repetir nombres entre todo lo que hay en la Biblioteca.
+   * Pone un nombre corto y, si no la tiene, una descripción de YouTube a los clips y vídeos de la Biblioteca (con `onlyVodId`,
+   * solo a los de ese VOD). No toca lo que escribió el usuario ni los nombres que ya son cortos. Evita repetir nombres.
+   * `generic`: regla del arranque, solo se renombran los nombres genéricos («Momento 3», «Directo del…», «Resumen del directo…»).
    */
-  async autoNameLibrary(onlyVodId) {
-    const res = { renamed: 0, noTranscript: 0, kept: 0 };
+  async autoNameLibrary(onlyVodId, o2 = {}) {
+    const res = { renamed: 0, described: 0, noTranscript: 0, kept: 0 };
     const outs = this.d.store.data.outputs;
     const used = new Set(outs.map((o) => o.title.toLowerCase()));
     for (const o of outs) {
       if (onlyVodId && o.vodId !== onlyVodId) continue;
-      if (!isAutoNameable(o)) {
+      const wantTitle = o2.generic ? isGenericAutoTitle(o) : isAutoNameable(o);
+      const wantDesc = o.descSource !== "manual" && !o.description;
+      if (!wantTitle && !wantDesc) {
         res.kept++;
         continue;
       }
@@ -35016,6 +35222,18 @@ ${text}`,
       const r2 = o.vodId && segs ? await this.nameFor(o.vodId, segs) : null;
       if (!r2) {
         res.noTranscript++;
+        continue;
+      }
+      if (wantDesc && r2.description) {
+        try {
+          this.d.library.setAutoDescription(o.id, r2.description);
+          res.described++;
+        } catch (e) {
+          this.d.log.warn(`No se pudo poner descripci\xF3n a "${o.title}": ${e.message}`);
+        }
+      }
+      if (!wantTitle || !r2.title) {
+        res.kept++;
         continue;
       }
       let t = r2.title;
@@ -35034,8 +35252,35 @@ ${text}`,
         this.d.log.warn(`No se pudo renombrar "${o.title}": ${e.message}`);
       }
     }
-    if (res.renamed) this.d.log.info(`Nombres cortos autom\xE1ticos: ${res.renamed} renombrado(s)`);
+    if (res.renamed || res.described) this.d.log.info(`Nombres y descripciones autom\xE1ticos: ${res.renamed} nombre(s), ${res.described} descripci\xF3n(es)`);
     return res;
+  }
+  /**
+   * Al abrir el programa: revisa la Biblioteca y, a los clips y vídeos que siguen con un nombre genérico (o sin descripción)
+   * y no son del usuario, les pone nombre y descripción según de qué se habla. Si el VOD no tiene transcripción y está
+   * descargado, la hace antes con Whisper (una por VOD, una detrás de otra). Nunca lanza: lo que falle se anota en el registro.
+   */
+  async refreshLibraryAtStart() {
+    try {
+      const need = this.d.store.data.outputs.filter((o) => o.vodId && (isGenericAutoTitle(o) || o.descSource !== "manual" && !o.description));
+      if (!need.length) return null;
+      const vodIds = [...new Set(need.map((o) => o.vodId))];
+      for (const id of vodIds) {
+        const vod = this.d.store.data.vods.find((v) => v.id === id);
+        if (!vod || this.d.transcripts.words(id).length) continue;
+        if (vod.status !== "downloaded" || !vod.filePath || !import_node_fs18.default.existsSync(vod.filePath)) continue;
+        if (!this.d.transcripts.status().engine) break;
+        try {
+          await this.d.transcripts.transcribe(id);
+        } catch (e) {
+          this.d.log.warn(`Nombres autom\xE1ticos: no se pudo transcribir "${vod.title ?? id}": ${e.message.split("\n")[0]}`);
+        }
+      }
+      return await this.autoNameLibrary(void 0, { generic: true });
+    } catch (e) {
+      this.d.log.warn(`Nombres autom\xE1ticos al arrancar: ${e.message}`);
+      return null;
+    }
   }
   dateLabel(vod) {
     const d = new Date(vod.streamStartedAt ?? vod.createdAt);
@@ -36350,7 +36595,7 @@ var AppContext = class {
       canTranscribe: o.canTranscribe
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
-    this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId).catch((e) => this.log.warn(`Nombres autom\xE1ticos: ${e.message}`));
+    this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId, { generic: false }).catch((e) => this.log.warn(`Nombres autom\xE1ticos: ${e.message}`));
     this.connections = new ConnectionService({
       store: this.store,
       secrets,
@@ -36431,6 +36676,7 @@ var AppContext = class {
     this.cloud.start();
     this.engine.start();
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${e.message}`));
+    void this.autopilot.refreshLibraryAtStart();
     this.log.info("Aplicaci\xF3n iniciada.");
   }
   stop() {

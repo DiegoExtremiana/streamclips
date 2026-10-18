@@ -82,6 +82,7 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
   if (!Array.isArray(effects)) return '"effects" debe ser una lista';
   if (effects.length > MAX_EFFECTS) return `tiene más de ${MAX_EFFECTS} efectos`;
   const fades = new Set<string>();
+  let polish = false;
   const total = totalDuration(ranges);
   for (let i = 0; i < effects.length; i++) {
     const e: unknown = effects[i];
@@ -103,8 +104,16 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
         return `el efecto ${i + 1}: duration debe estar entre ${FADE.min} y ${FADE.max} s`;
       }
       if ((e.duration ?? FADE.default) * 2 > total) return `el efecto ${i + 1}: el fundido es más largo que el vídeo`;
+    } else if (e.type === 'sfx') {
+      const at = e.at;
+      if (!isNum(at)) return `el efecto ${i + 1} (sfx) necesita "at" numérico`;
+      if (!ranges.some((r) => at >= r.start && at <= r.end)) return `el efecto ${i + 1} (sfx) cae en una parte cortada o fuera del clip`;
+      if (e.sound !== undefined && e.sound !== 'whoosh' && e.sound !== 'pop' && e.sound !== 'hit') return `el efecto ${i + 1}: sound debe ser whoosh, pop o hit`;
+    } else if (e.type === 'polish') {
+      if (polish) return 'solo puede haber un polish';
+      polish = true;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn o fadeOut)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx o polish)`;
     }
   }
   return null;
@@ -146,6 +155,8 @@ export function normalizeClip(c: ClipSpec, fallbackTitle: string): ClipSpec {
 export function normalizeEffects(list: Effect[]): Effect[] {
   return list.map((e): Effect => {
     if (e.type === 'punch') return { type: 'punch', at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
+    if (e.type === 'sfx') return { type: 'sfx', at: e.at, sound: e.sound ?? 'pop' };
+    if (e.type === 'polish') return { type: 'polish' };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });
 }

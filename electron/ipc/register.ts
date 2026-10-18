@@ -200,7 +200,7 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
     return file ? ctx.transcripts.importFile(id, file) : null;
   });
   handle(CHANNELS.clipContext, (id) => ctx.library.clipContext(str(id, 'id')));
-  handle(CHANNELS.autoName, () => ctx.autopilot.autoNameLibrary());
+  handle(CHANNELS.autoName, async () => (await ctx.autopilot.refreshLibraryAtStart({ generic: false })) ?? { renamed: 0, described: 0, noTranscript: 0, kept: 0 });
   handle(CHANNELS.suggestTitle, (vodId, start, end) => ctx.autopilot.suggestTitle(str(vodId, 'vodId'), num(start, 'start'), num(end, 'end')));
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
   handle(CHANNELS.transcriptPrompt, async (vodId) => {

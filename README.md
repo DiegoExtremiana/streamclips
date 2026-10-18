@@ -9,6 +9,8 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Al abrir el programa** se revisa la Biblioteca: lo que sigue llamándose «Momento n», «Directo del…» o «Resumen del directo…» y no tiene nombre puesto por ti se transcribe (si hace falta) y se renombra según de qué se habla, incluidos los que ya existían.
 - **Descripción de YouTube automática** (1 a 3 frases, unos 280 caracteres como máximo) para clips y vídeos, a partir de lo que pasa; con modelo de lenguaje la redacta él. No se pisa una descripción escrita por ti.
 - **Modelos de Whisper a prueba de archivos dañados**: se comprueba la estructura del modelo al descargarlo y antes de usarlo; si está roto se borra y se baja de nuevo, y si aun así falla se usa el modelo «base» para esa transcripción.
+- **Edición profesional automática** (Ajustes › Piloto automático, activada por defecto; también la usa el motor nocturno): corta pausas y tiempos muertos, acerca la imagen en las frases con énfasis con un golpe de sonido, pone un «whoosh» en cada salto de corte, fundidos y volumen parejo. Los sonidos se sintetizan con ffmpeg (sin archivos ni derechos de autor). Si algo falla, el vídeo se monta igualmente sin ella.
+- **Todo se transcribe cuando hace falta**: al pedir subtítulos o un título sugerido, si el VOD no tiene transcripción se hace sola con Whisper.
 - **Portafolio**: StreamClips y sus repositorios tampoco salen desde GitHub en vivo ni desde la caché del navegador.
 
 ## Novedades de la v0.13

@@ -250,7 +250,7 @@ describe('ClipService', () => {
     fs.writeFileSync(path.join(bin, 'ffmpeg'), '#!/bin/sh\ncase "$*" in *"ih*9/16"*) echo "fallo simulado" >&2; exit 1;; esac\nexec ffmpeg "$@"\n', { mode: 0o755 });
     fs.symlinkSync(execFileSync('which', ['ffprobe']).toString().trim(), path.join(bin, 'ffprobe'));
     e.ctx.settings.set({ ffmpegPath: path.join(bin, 'ffmpeg') });
-    await assert.rejects(e.ctx.clips.createClip(vod.id, { start: 1, end: 5, title: 'Roto' }), /fallo simulado/);
+    await assert.rejects(e.ctx.clips.createClip(vod.id, { start: 1, end: 5, title: 'Roto', cropX: 0.5 }), /fallo simulado/);
     assert.equal(e.ctx.store.data.outputs.length, 0);
     for (const d of ['horizontal', 'vertical']) {
       const dir = path.join(e.outputDir, d);
@@ -259,6 +259,16 @@ describe('ClipService', () => {
     // con la herramienta arreglada el mismo clip se crea sin problema
     e.ctx.settings.set({ ffmpegPath: '' });
     assert.equal((await e.ctx.clips.createClip(vod.id, { start: 1, end: 5, title: 'Roto' })).kind, 'clip');
+  });
+
+  it('por defecto el clip vertical lleva dos ventanas (cámara arriba, pantalla debajo); con cropX explícito, una sola columna', async () => {
+    const { e, vod } = withVod();
+    const dflt = await e.ctx.clips.createClip(vod.id, { start: 1, end: 5, title: 'Dos ventanas' });
+    assert.equal(dflt.layout?.windows.length, 2);
+    assert.equal(dflt.layout?.preset, 'dos-camara-arriba');
+    assert.ok(dflt.layout!.windows[0].dst.y < dflt.layout!.windows[1].dst.y, 'la cámara va arriba');
+    const crop = await e.ctx.clips.createClip(vod.id, { start: 1, end: 5, title: 'Columna', cropX: 0.2 });
+    assert.equal(crop.layout, undefined);
   });
 
   it('rechaza clips no válidos sin renderizar ni registrar nada', async () => {

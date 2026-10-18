@@ -55,6 +55,8 @@ export interface AutopilotSettings {
   visibility: Visibility;
   /** Guardar la actividad del chat del directo (anónimo, solo lectura) para detectar momentos. */
   chatCapture: boolean;
+  /** Edición profesional automática: cortes de silencios, acercamientos, efectos de sonido, fundidos y volumen parejo. */
+  proEdit?: boolean;
   llm: { provider: LlmChoice; model: string; apiKey: string };
 }
 
@@ -288,7 +290,9 @@ export interface DeleteResult {
 export type Effect =
   | { type: 'punch'; at: number; duration?: number; zoom?: number }
   | { type: 'fadeIn'; duration?: number }
-  | { type: 'fadeOut'; duration?: number };
+  | { type: 'fadeOut'; duration?: number }
+  | { type: 'sfx'; at: number; sound?: 'whoosh' | 'pop' | 'hit' }
+  | { type: 'polish' };
 
 export interface ClipSpec {
   kind?: ClipFormat; // por defecto: las dos versiones

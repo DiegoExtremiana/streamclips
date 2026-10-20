@@ -77,6 +77,17 @@ describe('twitch: TwitchClient', () => {
     assert.match(videos.url, /user_id=42&type=archive/);
   });
 
+  it('las miniaturas y visualizaciones de los directos salen con su tamaño ya puesto', async () => {
+    const m = mockFetch((url) => {
+      if (url.includes('oauth2/token')) return json({ access_token: 't', expires_in: 3600 });
+      if (url.includes('/helix/users')) return json({ data: [{ id: '42', display_name: 'X' }] });
+      return json({ data: [{ id: '1', title: 'A', url: 'https://www.twitch.tv/videos/1', duration: '1h', created_at: '2026-10-14T18:00:00Z', thumbnail_url: 'https://cdn.example/t-%{width}x%{height}.jpg', view_count: 7 }] });
+    });
+    const [v] = await new TwitchClient(m.fn).listVods(creds);
+    assert.equal(v.thumbnail, 'https://cdn.example/t-320x180.jpg');
+    assert.equal(v.views, 7);
+  });
+
   it('reutiliza el token mientras no caduca y pide otro cuando caduca', async () => {
     let t = 1_000_000;
     const m = happy();

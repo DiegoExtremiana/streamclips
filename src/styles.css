@@ -474,3 +474,8 @@ button.btn.danger-text { color: var(--bad); }
   .sched.home { grid-template-columns: 1fr; }
   .pane { max-height: 60vh; }
 }
+
+/* ── Comprobador de directos ── */
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.bcard { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.bcard .btn { margin-top: auto; align-self: flex-start; }

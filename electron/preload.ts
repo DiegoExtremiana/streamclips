@@ -18,6 +18,7 @@ const api: Api = {
   twitchVods: () => call(CHANNELS.twitchVods),
   channelStatus: () => call(CHANNELS.channelStatus),
   channelRefresh: () => call(CHANNELS.channelRefresh),
+  channelAnalyze: (id) => call(CHANNELS.channelAnalyze, id),
   channelClips: (force) => call(CHANNELS.channelClips, force),
   channelImportClip: (id) => call(CHANNELS.channelImportClip, id),
   channelClipStream: (id) => call(CHANNELS.channelClipStream, id),

@@ -110,7 +110,7 @@ export class TwitchClient {
     if (!c.clientId || !c.clientSecret) throw new Error('Faltan las credenciales de Twitch (pestaña Conexiones).');
     const u = await this.userId(c);
     const v = await this.helix<{
-      data: { id: string; title: string; url: string; duration: string; created_at: string }[];
+      data: { id: string; title: string; url: string; duration: string; created_at: string; thumbnail_url?: string; view_count?: number }[];
     }>(`videos?user_id=${u.id}&type=archive&first=50`, c);
     return v.data.map((x) => ({
       id: x.id,
@@ -118,6 +118,8 @@ export class TwitchClient {
       url: x.url,
       durationSec: parseTwitchDuration(x.duration),
       createdAt: x.created_at,
+      ...(x.thumbnail_url ? { thumbnail: x.thumbnail_url.replace('%{width}', '320').replace('%{height}', '180') } : {}),
+      ...(typeof x.view_count === 'number' ? { views: x.view_count } : {}),
     }));
   }
 

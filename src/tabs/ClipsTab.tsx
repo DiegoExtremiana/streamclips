@@ -8,6 +8,7 @@ import ScheduleDialog from '../library/ScheduleDialog';
 import { IconCalendar } from '../icons';
 import TwitchClips from './TwitchClips';
 import PanelTab from './PanelTab';
+import BroadcastsCard from './BroadcastsCard';
 import { SubTabs, useSubTab } from '../SubTabs';
 
 const KIND_LABEL = { clip: 'Clip', long: 'Vídeo largo' } as const;
@@ -91,9 +92,10 @@ export default function ClipsTab(props: {
         tabs={[
           { id: 'canal', label: 'Clips de tu canal', hint: 'Los clips que la gente (o tú) ha creado en Twitch: míralos y elige cuáles llevar a la Biblioteca.' },
           { id: 'crear', label: 'Crear desde un VOD', hint: 'Corta tus propios clips y vídeos de un directo ya descargado. Los que se creen aparecen en la Biblioteca.' },
-          { id: 'directos', label: 'Directos y actividad', hint: 'Los directos que el programa ha recogido, lo que está haciendo ahora y cómo añadir un VOD a mano.' },
+          { id: 'directos', label: 'Directos y actividad', hint: 'Comprobador de directos: tus emisiones de Twitch en directo, para analizarlas cuando quieras; además, lo que el programa ha recogido, lo que está haciendo ahora y cómo añadir un VOD a mano.' },
         ]}
       />
+      {sub === 'directos' && <BroadcastsCard vods={props.vods} onChanged={props.onChanged} />}
       {sub === 'directos' && <PanelTab vods={props.vods} outputs={props.outputs} pubs={props.pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="bottom" />}
       {sub === 'canal' && <TwitchClips vods={props.vods} outputs={props.outputs} onChanged={props.onChanged} />}
       {sub === 'crear' && (

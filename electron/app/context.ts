@@ -184,6 +184,7 @@ export class AppContext {
       canTranscribe: o.canTranscribe,
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
+    this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error('Piloto automático', e)));
     this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId, { generic: false }).catch((e) => this.log.warn(`Nombres automáticos: ${(e as Error).message}`));
     this.connections = new ConnectionService({
       store: this.store,

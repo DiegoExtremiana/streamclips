@@ -200,6 +200,8 @@ try {
       const u = String(url);
       if (u.startsWith('https://id.twitch.tv/')) return Response.json({ access_token: 't', expires_in: 3600 });
       if (u.includes('/helix/users')) return Response.json({ data: [{ id: '1', display_name: 'Don_Diegons' }] });
+      if (u.includes('/helix/streams')) return Response.json({ data: [] });
+      if (u.includes('/helix/videos')) return Response.json({ data: [{ id: '777', title: 'Directo de prueba A', url: 'https://www.twitch.tv/videos/777', duration: '2h3m5s', created_at: '2026-10-19T18:00:00Z', thumbnail_url: png, view_count: 12 }, { id: '778', title: 'Directo de prueba B', url: 'https://www.twitch.tv/videos/778', duration: '45m', created_at: '2026-10-17T18:00:00Z', thumbnail_url: png, view_count: 3 }] });
       if (u.includes('/helix/clips')) return Response.json({ data: [clip('c-old', 'Pentakill increíble', '2026-10-10T10:00:00Z'), clip('c-new', 'Fallo épico', '2026-10-14T10:00:00Z'), clip('c-mid', 'Susto en la cueva', '2026-10-12T10:00:00Z')] });
       return real(url, init);
     };
@@ -234,6 +236,17 @@ try {
   await page.keyboard.press('Escape');
   await prev.waitFor({ state: 'detached' });
   log('clips de Twitch: más recientes arriba, cuadrícula con miniaturas, lupa que busca por nombre, filtros por estado y vista previa sin descargar ni añadir a la Biblioteca');
+
+  // comprobador de directos: cuadrícula leída de Twitch y «Analizar» cuando quieras
+  await sub(page, 'Directos y actividad');
+  const bro = page.getByRole('region', { name: 'Comprobador de directos' });
+  await bro.getByTestId('bc-777').waitFor({ timeout: 20000 });
+  assert.equal(await bro.locator('[data-testid^=bc-]').count(), 2, 'un recuadro por directo de Twitch');
+  assert.deepEqual(await bro.locator('[data-testid^=bc-] .tiletitle').allInnerTexts(), ['Directo de prueba A', 'Directo de prueba B'], 'más reciente primero');
+  assert.equal(await bro.locator('img').count(), 2, 'cada directo enseña su miniatura (la política de seguridad la permite)');
+  await bro.getByTestId('bc-777').getByText('Sin analizar').waitFor();
+  await shot(page, '3c-comprobador-directos');
+  log('comprobador de directos: cuadrícula leída de Twitch con miniaturas y estado de cada directo');
   await sub(page, 'Crear desde un VOD');
   await page.getByLabel('Inicio', { exact: true }).fill('abc');
   await page.getByLabel('Fin', { exact: true }).fill('4');
@@ -1101,6 +1114,31 @@ try {
   log('plan del día: al pulsar un vídeo o clip se abren todas sus características (nombre, descripción, redes, hora…) y se pueden cambiar');
   await dv.getByRole('button', { name: /Calendario/ }).click();
   await progr.getByRole('group', { name: 'Calendario' }).waitFor();
+
+  // «Analizar» al final: lanza el piloto automático y crea vídeos y subidas que no deben alterar el resto de comprobaciones
+  await app.evaluate(() => {
+    // la aplicación se reabrió antes: el Twitch simulado hay que ponerlo otra vez en el nuevo proceso principal
+    const real = globalThis.fetch;
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+    const video = (id, title, created) => ({ id, title, url: `https://www.twitch.tv/videos/${id}`, duration: '1h', created_at: created, thumbnail_url: png, view_count: 1 });
+    globalThis.fetch = async (url, init) => {
+      const u = String(url);
+      if (u.startsWith('https://id.twitch.tv/')) return Response.json({ access_token: 't', expires_in: 3600 });
+      if (u.includes('/helix/users')) return Response.json({ data: [{ id: '1', display_name: 'Don_Diegons' }] });
+      if (u.includes('/helix/streams')) return Response.json({ data: [] });
+      if (u.includes('/helix/videos')) return Response.json({ data: [video('777', 'Directo de prueba A', '2026-10-19T18:00:00Z'), video('778', 'Directo de prueba B', '2026-10-17T18:00:00Z')] });
+      return real(url, init);
+    };
+  });
+  await tab(page, 'Clips y publicación');
+  await sub(page, 'Directos y actividad');
+  const bro2 = page.getByRole('region', { name: 'Comprobador de directos' });
+  await bro2.getByTestId('bc-777').waitFor({ timeout: 20000 });
+  await bro2.getByTestId('bc-777').getByRole('button', { name: 'Analizar', exact: true }).click();
+  await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).vods.some((v) => v.twitchId === '777'));
+  await bro2.getByTestId('bc-777').getByText('Sin analizar').waitFor({ state: 'detached' });
+  assert.equal(await bro2.getByTestId('bc-778').getByText('Sin analizar').count(), 1, 'el otro directo sigue sin analizar');
+  log('comprobador de directos: «Analizar» descarga ese directo y lo marca; el otro sigue sin analizar');
 
   assert.deepEqual(problems, []);
   log('tras cerrar y reabrir la aplicación se conservan VODs, vídeos y publicaciones programadas');

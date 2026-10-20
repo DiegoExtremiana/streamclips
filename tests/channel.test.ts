@@ -174,6 +174,55 @@ describe('vigilante del canal', () => {
   });
 });
 
+describe('analizar un directo cuando quieras', () => {
+  it('descarga el directo pedido y avisa para analizarlo, aunque el piloto automático esté apagado y la recogida automática también', async () => {
+    const { e, twitch, downloads } = setup();
+    e.ctx.channel.setAutoImport(false);
+    twitch.vods = [vod('5', '2026-10-01T18:00:00Z'), vod('6', '2026-10-02T18:00:00Z')];
+    const ready: string[] = [];
+    e.ctx.channel.onAnalyzeReady((j) => ready.push(j.twitchId ?? ''));
+    const job = await e.ctx.channel.analyze('6');
+    assert.equal(job.twitchId, '6');
+    assert.equal(job.origin, 'live');
+    assert.equal(job.streamStartedAt, '2026-10-02T18:00:00Z');
+    await e.ctx.downloadQueue.idle();
+    assert.deepEqual(downloads, ['https://www.twitch.tv/videos/6']);
+    assert.deepEqual(ready, ['6'], 'al terminar la descarga se pide el análisis una sola vez');
+    // ya descargado: analizar otra vez lo lanza al momento y no descarga de nuevo
+    await e.ctx.channel.analyze('6');
+    assert.deepEqual(ready, ['6', '6']);
+    assert.equal(downloads.length, 1);
+  });
+
+  it('un directo que sigue en curso no se puede analizar; uno que Twitch ya no tiene da un error claro', async () => {
+    const { e, twitch } = setup();
+    const start = new Date().toISOString();
+    twitch.stream = { live: true, startedAt: start };
+    twitch.vods = [vod('9', start, 120)];
+    await e.ctx.channel.poll();
+    await assert.rejects(() => e.ctx.channel.analyze('9'), /sigue en curso/);
+    await assert.rejects(() => e.ctx.channel.analyze('404'), /ya no tiene ese directo/);
+  });
+
+  it('tras un error de descarga se puede volver a pedir y crea una descarga nueva', async () => {
+    const { e, twitch, downloads } = setup();
+    twitch.vods = [vod('5', '2026-10-01T18:00:00Z')];
+    const first = await e.ctx.channel.analyze('5');
+    await e.ctx.downloadQueue.idle();
+    first.status = 'error';
+    const second = await e.ctx.channel.analyze('5');
+    await e.ctx.downloadQueue.idle();
+    assert.notEqual(second.id, first.id);
+    assert.equal(downloads.length, 2);
+  });
+
+  it('sin credenciales de Twitch lo explica', async () => {
+    const e = makeEnv();
+    envs.push(e);
+    await assert.rejects(() => e.ctx.channel.analyze('1'), /conectar tu canal/);
+  });
+});
+
 describe('clips del canal', () => {
   const clip = (id: string, durationSec = 5): TwitchClip => ({ id, title: `Clip ${id}`, url: `https://clips.twitch.tv/${id}`, durationSec, createdAt: T0, creator: 'x', views: 1, thumbnail: '' });
 

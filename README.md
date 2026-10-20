@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.16
+
+- **Comprobador de directos** (Clips y publicación › Directos y actividad): tus emisiones de Twitch leídas en directo (se actualiza solo cada minuto y con «Comprobar ahora») en una cuadrícula con miniatura, fecha, duración y visualizaciones. Cada una muestra su estado en el programa (sin analizar, descargando, analizando, analizado…) y tiene un botón **Analizar**: descarga ese directo si hace falta y lanza el piloto automático **cuando tú quieras**, aunque lo tengas desactivado o no se recogiera solo. Un directo que aún está en curso se marca y se podrá analizar al terminar. *Probado con Twitch simulado; no contra tu canal real.*
+
 ## Novedades de la v0.15
 
 - **Nuevo Inicio** (antes «Programación»): una sola pantalla, sin scroll general, con tres paneles alineados en horizontal: **cuadrícula de los últimos clips**, **cuadrícula de los últimos vídeos** (los que aún no tienen subida) y el **calendario**. Agarras una miniatura y la sueltas en un día —o en una hora exacta, con la vista «Línea de tiempo»— y se abre «Añadir subida» con ese día y esa hora para configurarla (redes, título, visibilidad…). Cada panel hace scroll por dentro si hay muchos.

@@ -356,6 +356,9 @@ export interface TwitchVod {
   url: string;
   durationSec: number;
   createdAt: string;
+  /** Miniatura (ya con tamaño) y visualizaciones, si Twitch las da. */
+  thumbnail?: string;
+  views?: number;
 }
 
 export interface TwitchStream {
@@ -430,6 +433,8 @@ export interface Api {
   channelStatus(): Promise<ChannelStatus>;
   /** Comprueba ya el canal (sin esperar al siguiente turno). */
   channelRefresh(): Promise<ChannelStatus>;
+  /** Analiza ya un directo de Twitch (id del VOD): lo descarga si hace falta y lanza el piloto automático, aunque esté desactivado. */
+  channelAnalyze(twitchId: string): Promise<VodJob>;
   /** Todos los clips del canal, más recientes primero. `force` vuelve a pedir todo el historial a Twitch. */
   channelClips(force?: boolean): Promise<ClipsResult>;
   /** Descarga el clip de Twitch y lo deja en la Biblioteca (vertical y horizontal). */
@@ -531,6 +536,7 @@ export const CHANNELS = {
   twitchVods: 'twitch:vods',
   channelStatus: 'channel:status',
   channelRefresh: 'channel:refresh',
+  channelAnalyze: 'channel:analyze',
   channelClips: 'channel:clips',
   channelImportClip: 'channel:import-clip',
   channelClipStream: 'channel:clip-stream',

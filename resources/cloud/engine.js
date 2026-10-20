@@ -137,7 +137,9 @@ var init_twitch = __esm({
           title: x.title,
           url: x.url,
           durationSec: parseTwitchDuration(x.duration),
-          createdAt: x.created_at
+          createdAt: x.created_at,
+          ...x.thumbnail_url ? { thumbnail: x.thumbnail_url.replace("%{width}", "320").replace("%{height}", "180") } : {},
+          ...typeof x.view_count === "number" ? { views: x.view_count } : {}
         }));
       }
       /** ¿Está en directo ahora mismo? */
@@ -35740,6 +35742,9 @@ var ChannelMonitor = class {
   offlineStreak = 0;
   lastImported;
   liveListeners = [];
+  analyzeListeners = [];
+  /** VODs que el usuario ha pedido analizar y aún se están descargando. */
+  analyzeAfter = /* @__PURE__ */ new Set();
   chatLogger = null;
   chatBins = new ChatBins();
   chatStart = null;
@@ -35755,6 +35760,42 @@ var ChannelMonitor = class {
   /** Se avisa cuando el VOD de un directo recién terminado ya está descargado (aquí engancha el piloto automático). */
   onLiveVodReady(cb) {
     this.liveListeners.push(cb);
+  }
+  /** Se avisa cuando un directo que pediste analizar ya está descargado (se analiza aunque el piloto automático esté apagado). */
+  onAnalyzeReady(cb) {
+    this.analyzeListeners.push(cb);
+  }
+  /**
+   * «Analizar» un directo de Twitch cuando quieras: si no está en la aplicación lo descarga, y en cuanto está listo
+   * lanza el piloto automático. Si ya estaba descargado, lo analiza ya. Un directo aún en curso no se puede.
+   */
+  async analyze(twitchId) {
+    const creds = this.d.creds();
+    const mine = () => this.d.store.data.vods.find((v) => v.twitchId === twitchId && v.status !== "error");
+    let job = mine();
+    if (!job) {
+      if (!creds.clientId || !creds.clientSecret || !creds.login) throw new Error("Falta conectar tu canal de Twitch (pesta\xF1a Conexiones).");
+      const v = (await this.d.twitch.listVods(creds)).find((x) => x.id === twitchId);
+      if (!v) throw new Error("Twitch ya no tiene ese directo (los directos guardados se borran pasado un tiempo).");
+      if (this.stream?.live && this.stream.startedAt && Date.parse(v.createdAt) >= Date.parse(this.stream.startedAt) - LIVE_VOD_SLACK_MS) {
+        throw new Error("Ese directo sigue en curso. Podr\xE1s analizarlo en cuanto termine.");
+      }
+      if (!this.state.seenVodIds.includes(v.id)) this.state.seenVodIds.push(v.id);
+      job = this.d.vods.add(v.url, v.title, { origin: "live", twitchId: v.id, streamStartedAt: v.createdAt, durationSec: v.durationSec });
+      this.d.log.info(`An\xE1lisis pedido del directo "${v.title}" (${v.url}).`);
+    }
+    if (job.status === "downloaded") this.fireAnalyze(job);
+    else this.analyzeAfter.add(job.id);
+    return job;
+  }
+  fireAnalyze(job) {
+    for (const cb of this.analyzeListeners) {
+      try {
+        cb(job);
+      } catch (e) {
+        this.d.log.error("No se pudo analizar el directo", e);
+      }
+    }
   }
   status() {
     const c = this.d.creds();
@@ -35975,6 +36016,8 @@ var ChannelMonitor = class {
   afterDownload(job) {
     if (job.origin === "clip") {
       void this.renderClip(job).catch((e) => this.d.log.error(`No se pudo preparar el clip "${job.title}"`, e));
+    } else if (this.analyzeAfter.delete(job.id)) {
+      this.fireAnalyze(job);
     } else if (job.origin === "live") {
       for (const cb of this.liveListeners) {
         try {
@@ -37010,6 +37053,7 @@ var AppContext = class {
       canTranscribe: o.canTranscribe
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
+    this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error("Piloto autom\xE1tico", e)));
     this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId, { generic: false }).catch((e) => this.log.warn(`Nombres autom\xE1ticos: ${e.message}`));
     this.connections = new ConnectionService({
       store: this.store,

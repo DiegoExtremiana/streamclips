@@ -1,3 +1,4 @@
+import { isCancelled } from '../services/abort';
 import fs from 'node:fs';
 import { ALL_PLATFORMS, CHANNELS } from '../../shared/types';
 import type { ClipEdit, DeleteResult, OutputItem, OutputMeta, RenderKind, GroupKind, GroupPatch, Platform, Result, ScheduleEntry, Section, SettingsPatch } from '../../shared/types';
@@ -121,9 +122,14 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
     const vod = ctx.store.data.vods.find((v) => v.id === vodId);
     if (!vod) throw new Error('El VOD no existe.');
     if (vod.status !== 'downloaded') throw new Error('El VOD todavía no está descargado.');
-    void ctx.autopilot.run(vodId).catch((e) => ctx.log.error('Piloto automático', e));
+    // siempre se puede volver a analizar: si había un análisis en marcha (o colgado) se cancela y se empieza de nuevo
+    void ctx.autopilot.run(vodId, { restart: true }).catch((e) => {
+      if (!isCancelled(e)) ctx.log.error('Piloto automático', e);
+    });
     return vod;
   });
+  handle(CHANNELS.autopilotCancel, (id) => ctx.autopilot.cancel(str(id, 'id')));
+  handle(CHANNELS.vodsDiscard, (id) => ctx.autopilot.discard(str(id, 'id')));
 
   handle(CHANNELS.vodsList, () => ctx.store.data.vods);
   handle(CHANNELS.vodsAdd, (url, title) =>

@@ -113,18 +113,39 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     const words = await (await import('../electron/services/whisper')).transcribeVideo(
       e.ctx.tools(),
       vod.filePath!,
-      { exe: fakeWhisper(), model: path.join(e.userData, 'models', 'ggml-tiny.bin'), language: 'es', chunkSec: 5, threads: 2 },
+      { exe: fakeWhisper(), model: path.join(e.userData, 'models', 'ggml-tiny.bin'), language: 'es', chunkSec: 5, threads: 2, jobs: 1 },
     );
     const lines = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]);
     assert.equal(lines.length, 3);
     assert.match(lines[0][lines[0].indexOf('-f') + 1], /c0\.wav$/);
     assert.deepEqual([lines[0][lines[0].indexOf('-l') + 1], lines[0][lines[0].indexOf('-t') + 1]], ['es', '2']);
     for (const f of ['-oj', '-ml', '-sow', '-pp']) assert.ok(lines[0].includes(f), `falta ${f}`);
+    assert.deepEqual([lines[0][lines[0].indexOf('-bs') + 1], lines[0][lines[0].indexOf('-bo') + 1]], ['1', '1'], 'decodificación voraz (mucho más rápida que el haz de 5 por defecto)');
     // sin [BLANK_AUDIO] ni (música), con el desfase de cada trozo
     assert.deepEqual(words.map((w) => w.text), ['Hola', 'a', 'todos.', 'trozo0', 'Hola', 'a', 'todos.', 'trozo1', 'Hola', 'a', 'todos.', 'trozo2']);
     assert.equal(words[0].start, 1);
     assert.equal(words[4].start, 6);
     assert.equal(words[8].start, 11);
+  });
+  it('varios trozos a la vez: mismo resultado y mismo orden que de uno en uno', async () => {
+    const { e, vod, log } = withWhisper();
+    const { transcribeVideo } = await import('../electron/services/whisper');
+    const o = { exe: fakeWhisper(), model: path.join(e.userData, 'models', 'ggml-tiny.bin'), language: 'es', chunkSec: 5 };
+    const par = await transcribeVideo(e.ctx.tools(), vod.filePath!, { ...o, jobs: 3, threads: 1 });
+    assert.equal(fs.readFileSync(log, 'utf8').trim().split('\n').length, 3);
+    fs.rmSync(log);
+    const seq = await transcribeVideo(e.ctx.tools(), vod.filePath!, { ...o, jobs: 1, threads: 1 });
+    assert.deepEqual(par, seq);
+    assert.deepEqual(par.map((w) => w.text).filter((t) => t.startsWith('trozo')), ['trozo0', 'trozo1', 'trozo2']);
+  });
+  it('cancelar a media transcripción detiene Whisper y no deja procesos ni trozos', async () => {
+    const { e, vod } = withWhisper();
+    const { transcribeVideo } = await import('../electron/services/whisper');
+    const { withAbort, isCancelled } = await import('../electron/services/abort');
+    const ctrl = new AbortController();
+    const p = withAbort(ctrl.signal, () => transcribeVideo(e.ctx.tools(), vod.filePath!, { exe: fakeWhisper(), model: path.join(e.userData, 'models', 'ggml-tiny.bin'), language: 'es', chunkSec: 5, jobs: 2, threads: 1 }));
+    ctrl.abort();
+    await assert.rejects(p, (err) => isCancelled(err));
   });
   it('transcribeVideo con tramo: solo ese trozo del audio, con los tiempos del vídeo completo', async () => {
     const { e, vod, log } = withWhisper();

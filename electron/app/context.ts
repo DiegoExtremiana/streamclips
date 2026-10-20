@@ -143,11 +143,12 @@ export class AppContext {
       tasks: this.tasks,
       whisperExe: () => this.whisperExe(),
       modelBaseUrl: o.modelBaseUrl,
+      source: (id) => this.vods.ensureFile(id),
     });
     const subtitles = { words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string, ranges?: { start: number; end: number }[]) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
-    this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
-    this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });
+    this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes, source: (id) => this.vods.ensureFile(id) });
+    this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, source: (id) => this.vods.ensureFile(id) });
     this.groups = new GroupService(this.store, o.notifier);
     this.pubs = new PublicationService(this.store, o.notifier);
     this.channel = new ChannelMonitor({
@@ -182,6 +183,8 @@ export class AppContext {
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
       canTranscribe: o.canTranscribe,
+      restore: (id) => this.vods.ensureFile(id),
+      discardSource: (id) => this.vods.discardSource(id),
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
     this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error('Piloto automático', e)));
@@ -265,6 +268,8 @@ export class AppContext {
   start(): void {
     const n = this.vods.recoverInterrupted();
     if (n) this.log.warn(`${n} descarga(s) interrumpida(s) marcadas como error.`);
+    const ap = this.autopilot.recoverInterrupted();
+    if (ap) this.log.warn(`${ap} análisis interrumpido(s) marcados como error: se pueden relanzar.`);
     this.scheduler.start();
     this.channel.start();
     this.updates.start();

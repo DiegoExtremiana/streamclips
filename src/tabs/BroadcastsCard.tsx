@@ -23,7 +23,7 @@ export function broadcastPhase(v: TwitchVod, job: VodJob | undefined, live: Chan
   const a = job.autopilot;
   if (!a) return { phase: 'ready', label: 'Descargado', cls: 'ok' };
   if (WORKING.includes(a.status)) return { phase: 'working', label: a.status === 'transcribing' ? 'Transcribiendo' : a.status === 'analyzing' ? 'Analizando' : a.status === 'rendering' ? 'Montando' : 'En cola', cls: 'warn' };
-  if (a.status === 'done') return { phase: 'done', label: 'Analizado', cls: 'ok' };
+  if (a.status === 'done') return { phase: 'done', label: job.cleaned ? 'Analizado · directo borrado' : 'Analizado', cls: 'ok' };
   if (a.status === 'skipped') return { phase: 'skipped', label: 'Sin momentos', cls: 'warn' };
   return { phase: 'failed', label: 'Error al analizar', cls: 'bad' };
 }
@@ -127,14 +127,17 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
                 {job?.chapters && job.chapters.length > 1 && <span className="muted small">{new Set(job.chapters.map((c) => c.title)).size} categorías</span>}
               </div>
               {(p.phase === 'failed') && (job?.error || job?.autopilot?.note) && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{(job.error ?? job.autopilot?.note ?? '').slice(0, 160)}</div>}
-              <button
-                className={`btn small ${again ? 'ghost' : ''}`}
-                disabled={p.phase === 'live' || working || busy === v.id}
-                title={p.phase === 'live' ? 'Todavía está en directo' : undefined}
-                onClick={() => void analyze(v)}
-              >
-                {p.phase === 'live' ? 'En directo…' : working ? 'En marcha…' : again ? 'Volver a analizar' : 'Analizar'}
-              </button>
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  className={`btn small ${again ? 'ghost' : ''}`}
+                  disabled={p.phase === 'live' || busy === v.id || p.phase === 'queued' || p.phase === 'downloading'}
+                  title={p.phase === 'live' ? 'Todavía está en directo' : working ? 'Cancela el análisis en marcha y empieza de nuevo' : again ? 'Vuelve a analizarlo; sustituye los vídeos pendientes de revisión que sacó antes' : undefined}
+                  onClick={() => void analyze(v)}
+                >
+                  {p.phase === 'live' ? 'En directo…' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
+                </button>
+                {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.cancelAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Cancelar</button>}
+              </div>
             </div>
           );
         })}

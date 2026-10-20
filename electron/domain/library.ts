@@ -24,6 +24,8 @@ export interface LibraryDeps {
   queue: SerialQueue;
   tools: () => ToolPaths;
   subtitles: SubtitleEnv;
+  /** Ruta del archivo del directo, volviéndolo a descargar si se borró para liberar espacio. */
+  source?: (vodId: string) => Promise<string>;
 }
 
 /** Tamaño de las miniaturas elegidas a mano para vídeos largos (formato de YouTube). */
@@ -191,7 +193,10 @@ export class LibraryService {
    * (también sirve para recuperar la versión que faltara). Los archivos nuevos se validan antes de
    * sustituir a los anteriores; si algo falla no cambia nada.
    */
-  reeditClip(id: string, edit: ClipEdit): Promise<OutputItem> {
+  async reeditClip(id: string, edit: ClipEdit): Promise<OutputItem> {
+    // si el directo se borró para liberar espacio, se vuelve a descargar ANTES de ocupar la cola de montaje
+    const src = this.find(id).vodId;
+    if (src) await this.d.source?.(src);
     return this.d.queue.run(async () => {
       const o = this.find(id);
       if (o.kind === 'long') return this.reeditLong(o, edit);

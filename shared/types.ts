@@ -57,6 +57,8 @@ export interface AutopilotSettings {
   chatCapture: boolean;
   /** Edición profesional automática: cortes de silencios, acercamientos, efectos de sonido, fundidos y volumen parejo. */
   proEdit?: boolean;
+  /** Al terminar de sacar vídeos y clips, borrar el directo completo y los datos que ya no sirven. Por defecto sí. */
+  cleanup?: boolean;
   llm: { provider: LlmChoice; model: string; apiKey: string };
 }
 
@@ -182,6 +184,8 @@ export interface VodJob {
   status: VodStatus;
   progress: number; // 0-100
   filePath?: string;
+  /** El directo completo ya se borró del disco (se conservan los vídeos, los clips y sus transcripciones); se vuelve a descargar si hace falta. */
+  cleaned?: { at: string; freedBytes: number };
   error?: string;
   createdAt: string;
 }
@@ -473,7 +477,12 @@ export interface Api {
   deleteOutput(outputId: string): Promise<DeleteResult>;
   deleteOutputs(outputIds: string[]): Promise<DeleteResult>;
   /** Vuelve a lanzar el piloto automático sobre un VOD ya descargado. */
+  /** Analiza (o vuelve a analizar) un VOD; si había un análisis en marcha, lo cancela y empieza de nuevo. */
   runAutopilot(vodId: string): Promise<VodJob>;
+  /** Detiene el análisis en marcha de un VOD. Devuelve si había algo que detener. */
+  cancelAutopilot(vodId: string): Promise<boolean>;
+  /** Borra del disco el directo completo (se conservan vídeos, clips y sus transcripciones). */
+  discardVod(vodId: string): Promise<{ freedBytes: number; kept: number }>;
   onChannelUpdate(cb: (s: ChannelStatus) => void): () => void;
   listVods(): Promise<VodJob[]>;
   addVod(url: string, title?: string): Promise<VodJob>;
@@ -537,6 +546,8 @@ export const CHANNELS = {
   channelStatus: 'channel:status',
   channelRefresh: 'channel:refresh',
   channelAnalyze: 'channel:analyze',
+  autopilotCancel: 'autopilot:cancel',
+  vodsDiscard: 'vods:discard',
   channelClips: 'channel:clips',
   channelImportClip: 'channel:import-clip',
   channelClipStream: 'channel:clip-stream',

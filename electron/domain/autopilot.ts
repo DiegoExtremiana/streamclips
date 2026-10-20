@@ -7,6 +7,8 @@ import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable,
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
+import { CancelledError, isCancelled, withAbort } from '../services/abort';
+import type { Range } from '../../shared/timeline';
 import { audioEnergy } from '../services/audioEnergy';
 import { LLM_PROVIDERS, askJson, type LlmConfig } from '../services/llm';
 import type { Store } from '../services/store';
@@ -41,6 +43,10 @@ export interface AutopilotDeps {
   llmFetch?: typeof fetch;
   energy?: typeof audioEnergy;
   now?: () => number;
+  /** Vuelve a descargar el directo si se borró para liberar espacio. */
+  restore?: (vodId: string) => Promise<string>;
+  /** Borra del disco el directo completo; devuelve los bytes liberados. */
+  discardSource?: (vodId: string) => number;
   /** Motor nocturno: devuelve el motivo si no hay tiempo para transcribir un directo de esta duración. */
   canTranscribe?: (durationSec: number) => string | null;
 }
@@ -81,33 +87,119 @@ export class Autopilot {
     void this.run(vod.id).catch((e) => this.d.log.error('Piloto automático', e));
   }
 
-  /** Ejecuta todo el proceso sobre un VOD descargado. Una vez por VOD a la vez. */
-  run(vodId: string): Promise<VodJob> {
+  /**
+   * Ejecuta todo el proceso sobre un VOD descargado. Una vez por VOD a la vez; con `restart` cancela el que esté en marcha
+   * y empieza de nuevo (así nunca se queda bloqueado un análisis que se colgó).
+   */
+  async run(vodId: string, o: { restart?: boolean } = {}): Promise<VodJob> {
     const vod = this.d.store.data.vods.find((v) => v.id === vodId);
-    if (!vod) return Promise.reject(new Error('El VOD no existe.'));
-    if (vod.status !== 'downloaded' || !vod.filePath) return Promise.reject(new Error('El VOD todavía no está descargado.'));
-    if (vod.autopilot && ['transcribing', 'analyzing', 'rendering'].includes(vod.autopilot.status) && this.running.has(vodId)) {
-      return Promise.reject(new Error('El piloto automático ya está trabajando en este VOD.'));
+    if (!vod) throw new Error('El VOD no existe.');
+    const prev = this.running.get(vodId);
+    if (prev) {
+      if (!o.restart) throw new Error('El piloto automático ya está trabajando en este VOD.');
+      prev.ctrl.abort();
+      await prev.done.catch(() => undefined);
     }
-    this.running.add(vodId);
-    this.mark(vod, 'waiting', 'En cola para analizarse.');
-    return this.d.queue.run(() => this.process(vod)).finally(() => this.running.delete(vodId));
+    if (vod.status !== 'downloaded') throw new Error('El VOD todavía no está descargado.');
+    const missing = !vod.filePath || !fs.existsSync(vod.filePath);
+    if (missing && !(this.d.restore && vod.url && vod.origin !== 'clip')) throw new Error('El archivo del VOD ya no está en su sitio (¿lo has movido o borrado?).');
+    const ctrl = new AbortController();
+    this.mark(vod, 'waiting', missing ? 'Volviendo a descargar el directo para analizarlo…' : 'En cola para analizarse.');
+    const done = this.d.queue.run(() =>
+      withAbort(ctrl.signal, async () => {
+        if (ctrl.signal.aborted) throw new CancelledError();
+        if (missing) await this.d.restore!(vodId);
+        return this.process(vod);
+      }),
+    );
+    const entry = { ctrl, done };
+    this.running.set(vodId, entry);
+    // al terminar (bien, mal o cancelado) se libera, salvo que otra ejecución ya haya ocupado su sitio
+    void done.then(
+      () => undefined,
+      () => undefined,
+    ).finally(() => {
+      if (this.running.get(vodId) === entry) this.running.delete(vodId);
+    });
+    return done;
   }
-  private running = new Set<string>();
+  private running = new Map<string, { ctrl: AbortController; done: Promise<VodJob> }>();
 
-  private chatFor(vod: VodJob): number[] | undefined {
+  /** ¿Se está analizando este VOD ahora mismo (no solo marcado como tal)? */
+  isRunning(vodId: string): boolean {
+    return this.running.has(vodId);
+  }
+
+  /** Detiene el análisis en marcha de un VOD (ffmpeg y Whisper incluidos). */
+  cancel(vodId: string): boolean {
+    const r = this.running.get(vodId);
+    if (!r) return false;
+    r.ctrl.abort();
+    return true;
+  }
+
+  /** Al arrancar: un análisis que estaba a medias cuando se cerró el programa no sigue «en marcha»: se puede relanzar. */
+  recoverInterrupted(): number {
+    let n = 0;
+    for (const v of this.d.store.data.vods) {
+      const st = v.autopilot?.status;
+      if (st && ['waiting', 'transcribing', 'analyzing', 'rendering'].includes(st) && !this.running.has(v.id)) {
+        this.mark(v, 'error', 'El análisis se interrumpió (se cerró el programa o se quedó colgado). Pulsa «Volver a analizar».');
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /**
+   * Borra el directo completo del disco y los datos que ya no sirven, dejando los vídeos y clips creados con sus
+   * transcripciones (solo los tramos que usan). Si el directo hace falta más tarde se vuelve a descargar solo.
+   */
+  discard(vodId: string, o: { fromRun?: boolean } = {}): { freedBytes: number; kept: number } {
+    const vod = this.d.store.data.vods.find((v) => v.id === vodId);
+    if (!vod) throw new Error('El VOD no existe.');
+    if (!this.d.discardSource) throw new Error('No se puede borrar el directo en este momento.');
+    if (!o.fromRun && this.running.has(vodId)) throw new Error('Se está analizando este directo; espera a que termine o cancélalo.');
+    const outs = this.d.store.data.outputs.filter((x) => x.vodId === vodId);
+    const spans: Range[] = [];
+    let known = outs.length > 0;
+    for (const x of outs) {
+      if (x.kind === 'long' && x.segments?.length) spans.push(...x.segments);
+      else if (x.start !== undefined && x.end !== undefined) spans.push({ start: x.start, end: x.end });
+      else known = false; // un vídeo antiguo sin tramos guardados: no se sabe qué transcripción necesita
+    }
+    if (known) this.d.transcripts.prune(vodId, spans);
+    const chat = this.chatFileFor(vod);
+    if (chat) fs.rmSync(chat, { force: true });
+    const freedBytes = this.d.discardSource(vodId);
+    return { freedBytes, kept: outs.length };
+  }
+
+  /** Archivo con la actividad del chat de este directo, si se guardó. */
+  private chatFileFor(vod: VodJob): string | undefined {
     if (!vod.streamStartedAt || !fs.existsSync(this.d.chatDir)) return undefined;
     const start = Date.parse(vod.streamStartedAt);
     for (const f of fs.readdirSync(this.d.chatDir)) {
       try {
-        const j = JSON.parse(fs.readFileSync(path.join(this.d.chatDir, f), 'utf8')) as { startedAt: string; bins: number[] };
+        const full = path.join(this.d.chatDir, f);
+        const j = JSON.parse(fs.readFileSync(full, 'utf8')) as { startedAt: string; bins: number[] };
         // el VOD de Twitch empieza con el directo: unos segundos de diferencia como mucho
-        if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 60_000 && Array.isArray(j.bins)) return ChatBins.fromArray(j.bins).toArray();
+        if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 60_000 && Array.isArray(j.bins)) return full;
       } catch {
         /* archivo de otro directo o dañado: se ignora */
       }
     }
     return undefined;
+  }
+
+  private chatFor(vod: VodJob): number[] | undefined {
+    const f = this.chatFileFor(vod);
+    if (!f) return undefined;
+    try {
+      return ChatBins.fromArray((JSON.parse(fs.readFileSync(f, 'utf8')) as { bins: number[] }).bins).toArray();
+    } catch {
+      return undefined;
+    }
   }
 
   private async process(vod: VodJob): Promise<VodJob> {
@@ -241,6 +333,15 @@ export class Autopilot {
       }
       if (!created.length) throw new Error(`No se pudo montar ningún vídeo. ${errors.join(' ')}`);
 
+      // un análisis repetido sustituye a los vídeos del anterior que seguían pendientes de revisión (sin publicar ni tocar por ti)
+      const prior = this.d.store.data.outputs.filter(
+        (x) => x.vodId === vod.id && x.auto?.review === 'pending' && !created.includes(x) && x.titleSource !== 'manual' && x.descSource !== 'manual' && !this.d.store.data.publications.some((p) => p.outputId === x.id),
+      );
+      if (prior.length) {
+        const r = this.d.library.removeMany(prior.map((x) => x.id));
+        if (r.removed) notes.push(`Se sustituyeron ${r.removed} vídeo(s) pendientes de revisión de un análisis anterior.`);
+      }
+
       // 6) visto bueno o programación
       let scheduled = 0;
       if (!this.cfg.requireApproval) {
@@ -257,11 +358,26 @@ export class Autopilot {
         this.cfg.series.nextDay = ser.day + 1; // el siguiente directo de la serie es el día siguiente
         this.d.store.save();
       }
+      // ya están los vídeos y los clips: el directo completo y lo que solo servía para sacarlos se borra
+      if (this.cfg.cleanup !== false && this.d.discardSource) {
+        try {
+          const r = this.discard(vod.id, { fromRun: true });
+          notes.push(`Directo completo borrado del disco (${(r.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r.kept} vídeo(s) y clip(s) con sus transcripciones.`);
+        } catch (e) {
+          notes.push(`No se pudo borrar el directo completo: ${(e as Error).message}`);
+        }
+      }
       const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ` (${scheduled} programados)`}.`;
       this.mark(vod, 'done', [msg, ...errors, ...notes].join(' '));
       task.done(msg);
       return vod;
     } catch (e) {
+      if (isCancelled(e)) {
+        this.mark(vod, 'error', 'Análisis cancelado.');
+        task.fail('Cancelado');
+        this.d.log.info(`Análisis cancelado: "${vod.title}".`);
+        throw e;
+      }
       this.mark(vod, 'error', (e as Error).message);
       task.fail((e as Error).message);
       this.d.log.error('Piloto automático fallido', e);

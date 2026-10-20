@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises';
 import type { Word } from '../../shared/subtitles';
 import { spreadWords } from '../../shared/transcript';
 import { probe } from './ffmpeg';
+import { CancelledError, currentAbort } from './abort';
 import { run, type ToolPaths } from './tools';
 
 /** Modelos de whisper.cpp (ggml). `minBytes` sirve para descartar descargas cortadas o páginas de error. */
@@ -222,6 +223,8 @@ export interface TranscribeOpts {
   model: string; // ruta al .bin
   language: string; // '' = detectar
   threads?: number;
+  /** Trozos que se transcriben a la vez (por defecto según los núcleos). */
+  jobs?: number;
   chunkSec?: number;
   /** Solo este tramo del vídeo (segundos); las palabras salen con su tiempo en el vídeo completo. */
   range?: { start: number; end: number };
@@ -230,7 +233,9 @@ export interface TranscribeOpts {
 
 function runCli(exe: string, args: string[], onPct: (pct: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn(exe, args, { windowsHide: true });
+    const signal = currentAbort();
+    if (signal?.aborted) return reject(new CancelledError());
+    const p = spawn(exe, args, { windowsHide: true, ...(signal ? { signal } : {}) });
     let tail = '';
     const feed = (d: Buffer) => {
       const t = d.toString();
@@ -240,8 +245,8 @@ function runCli(exe: string, args: string[], onPct: (pct: number) => void): Prom
     };
     p.stdout.on('data', feed);
     p.stderr.on('data', feed);
-    p.on('error', (e) => reject(new Error(`No se pudo ejecutar Whisper (${exe}): ${e.message}`)));
-    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Whisper terminó con código ${code}\n${tail.trim().split('\n').slice(-10).join('\n')}`))));
+    p.on('error', (e) => reject(signal?.aborted ? new CancelledError() : new Error(`No se pudo ejecutar Whisper (${exe}): ${e.message}`)));
+    p.on('close', (code) => (signal?.aborted ? reject(new CancelledError()) : code === 0 ? resolve() : reject(new Error(`Whisper terminó con código ${code}\n${tail.trim().split('\n').slice(-10).join('\n')}`))));
   });
 }
 
@@ -255,26 +260,44 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
   const chunk = o.chunkSec ?? CHUNK_SEC;
   const n = Math.max(1, Math.ceil(dur / chunk));
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-whisper-'));
-  const words: Word[] = [];
+  const parts: Word[][] = Array.from({ length: n }, () => []);
+  // Varios trozos a la vez: un solo Whisper no aprovecha todos los núcleos (por encima de ~4-6 hilos apenas gana).
+  const cpus = os.cpus().length;
+  const jobs = Math.max(1, Math.min(n, o.jobs ?? (cpus >= 12 ? 3 : cpus >= 6 ? 2 : 1)));
+  const threads = o.threads ?? (jobs === 1 ? Math.max(1, cpus - 1) : Math.max(2, Math.round(cpus / 2 / jobs)));
+  const pct = new Array<number>(n).fill(0);
+  const report = () => o.onProgress?.((pct.reduce((a, b) => a + b, 0) / n), `${n} trozo${n > 1 ? 's' : ''}`);
+  const abort = currentAbort();
+  let next = 0;
+  let failed: unknown;
   try {
-    for (let i = 0; i < n; i++) {
-      const offset = from + i * chunk;
-      const len = Math.min(chunk, Math.max(0.5, to - offset));
-      const wav = path.join(tmp, `c${i}.wav`);
-      await run(tools.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(offset), '-t', String(len), '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
-      if (!fs.existsSync(wav) || fs.statSync(wav).size < 2000) continue; // trozo sin audio
-      const base = path.join(tmp, `c${i}`);
-      const args = ['-m', o.model, '-f', wav, '-l', o.language || 'auto', '-oj', '-ml', '1', '-sow', '-pp', '-t', String(o.threads ?? Math.max(1, os.cpus().length - 1)), '-of', base];
-      await runCli(o.exe, args, (pct) => o.onProgress?.(((i + pct / 100) / n) * 100, `trozo ${i + 1} de ${n}`));
-      const json = `${base}.json`;
-      if (!fs.existsSync(json)) throw new Error('Whisper terminó pero no generó la transcripción.');
-      words.push(...parseWhisperCppJson(fs.readFileSync(json, 'utf8'), offset));
-      fs.rmSync(wav, { force: true });
-      o.onProgress?.(((i + 1) / n) * 100, `trozo ${i + 1} de ${n}`);
-    }
+    const worker = async () => {
+      while (failed === undefined) {
+        if (abort?.aborted) throw new CancelledError();
+        const i = next++;
+        if (i >= n) return;
+        const offset = from + i * chunk;
+        const len = Math.min(chunk, Math.max(0.5, to - offset));
+        const wav = path.join(tmp, `c${i}.wav`);
+        await run(tools.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(offset), '-t', String(len), '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
+        if (!fs.existsSync(wav) || fs.statSync(wav).size < 2000) { pct[i] = 100; report(); continue; } // trozo sin audio
+        const base = path.join(tmp, `c${i}`);
+        // -bs 1 -bo 1: decodificación voraz. Por defecto whisper.cpp usa búsqueda en haz de 5 (bastante más lenta y casi igual de precisa en voz clara).
+        const args = ['-m', o.model, '-f', wav, '-l', o.language || 'auto', '-oj', '-ml', '1', '-sow', '-pp', '-bs', '1', '-bo', '1', '-t', String(threads), '-of', base];
+        await runCli(o.exe, args, (p) => { pct[i] = Math.min(99, p); report(); });
+        const json = `${base}.json`;
+        if (!fs.existsSync(json)) throw new Error('Whisper terminó pero no generó la transcripción.');
+        parts[i] = parseWhisperCppJson(fs.readFileSync(json, 'utf8'), offset);
+        fs.rmSync(wav, { force: true });
+        pct[i] = 100;
+        report();
+      }
+    };
+    await Promise.all(Array.from({ length: jobs }, () => worker().catch((e) => { failed ??= e; throw e; })));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+  const words: Word[] = parts.flat();
   if (!words.length && !o.range) throw new Error('Whisper no encontró ninguna palabra en el audio.');
   return words;
 }

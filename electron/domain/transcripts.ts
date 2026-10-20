@@ -27,6 +27,8 @@ export interface TranscriptDeps {
   whisperExe: () => string | null;
   /** Solo para pruebas: servidor desde el que se descargan los modelos. */
   modelBaseUrl?: string;
+  /** Ruta del archivo del directo, volviéndolo a descargar si se borró para liberar espacio. */
+  source?: (vodId: string) => Promise<string>;
 }
 
 /** Transcripciones por VOD: se importan (JSON, SRT, VTT) o se generan con Whisper si está configurado. */
@@ -89,6 +91,27 @@ export class TranscriptService {
       out.push(...pending.filter((p) => p.end - p.start > 0.5));
     }
     return mergeRanges(out, 20);
+  }
+
+  /**
+   * Deja solo la transcripción de los tramos indicados (lo que usan los vídeos y clips ya creados), con un pequeño margen.
+   * Devuelve cuántas palabras se quitaron. Lo demás del directo ya no hace falta y ocupa espacio.
+   */
+  prune(vodId: string, ranges: Range[]): number {
+    const vod = this.vod(vodId);
+    const cur = this.raw(vodId);
+    if (!cur.words.length || !ranges.length) return 0;
+    const keep = mergeRanges(ranges.map((r) => ({ start: Math.max(0, r.start - 1.5), end: r.end + 1.5 })), 0.5);
+    const words = cur.words.filter((w) => keep.some((r) => w.start >= r.start && w.start < r.end));
+    const covered = cur.covered ? keep.flatMap((k) => cur.covered!.flatMap((c) => (Math.min(k.end, c.end) > Math.max(k.start, c.start) ? [{ start: Math.max(k.start, c.start), end: Math.min(k.end, c.end) }] : []))) : keep;
+    fs.mkdirSync(this.dir, { recursive: true });
+    const file = this.file(vodId);
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ words, covered: mergeRanges(covered, 0.5) }));
+    fs.renameSync(`${file}.tmp`, file);
+    vod.transcript = { words: words.length, source: vod.transcript?.source ?? 'whisper', at: new Date().toISOString(), partial: true };
+    this.d.store.save();
+    this.d.notifier.changed();
+    return cur.words.length - words.length;
   }
 
   /** Añade las palabras de un tramo recién transcrito a lo que ya había, sin tocar lo demás. */
@@ -191,7 +214,8 @@ export class TranscriptService {
   private requirements(vodId: string): void {
     const vod = this.vod(vodId);
     if (!this.d.whisperExe()) throw new Error('No hay transcripción de este tramo y no se encuentra Whisper para hacerla. Impórtala o indica whisper-cli en Ajustes.');
-    if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) throw new Error('No hay transcripción de este tramo y el archivo del VOD no está descargado, así que no se puede transcribir.');
+    const restorable = Boolean(this.d.source) && vod.status === 'downloaded' && vod.origin !== 'clip' && Boolean(vod.url);
+    if (!restorable && (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath))) throw new Error('No hay transcripción de este tramo y el archivo del VOD no está descargado, así que no se puede transcribir.');
   }
 
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
@@ -227,12 +251,14 @@ export class TranscriptService {
   }
 
   /** Audio del VOD -> whisper.cpp -> palabras con tiempos. Descarga el modelo la primera vez. */
-  transcribe(vodId: string, range?: Range): Promise<VodJob> {
+  async transcribe(vodId: string, range?: Range): Promise<VodJob> {
     const exe = this.d.whisperExe();
     if (!exe) {
       throw new Error('No se encuentra Whisper. El instalador lo incluye; si lo has compilado tú, indica la ruta de whisper-cli en Ajustes, o importa una transcripción ya hecha.');
     }
     const vod = this.vod(vodId);
+    // si el directo se borró para liberar espacio, se vuelve a descargar antes de ocupar la cola de transcripción
+    if (vod.status === 'downloaded' && (!vod.filePath || !fs.existsSync(vod.filePath)) && this.d.source) await this.d.source(vodId);
     if (vod.status !== 'downloaded' || !vod.filePath || !fs.existsSync(vod.filePath)) {
       throw new Error('El VOD todavía no está descargado o su archivo ya no está en su sitio.');
     }

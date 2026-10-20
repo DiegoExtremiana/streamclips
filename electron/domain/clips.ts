@@ -28,6 +28,8 @@ export interface ClipDeps {
   categories?: CategoryService;
   /** Para las pruebas: espacio libre del disco. */
   freeBytes?: (dir: string) => number | null;
+  /** Ruta del archivo del directo, volviéndolo a descargar si se borró para liberar espacio. */
+  source?: (vodId: string) => Promise<string>;
 }
 
 export class ClipService {
@@ -99,7 +101,8 @@ export class ClipService {
   }
 
   /** Duración real del VOD descargado. */
-  vodDuration(vodId: string): Promise<number> {
+  async vodDuration(vodId: string): Promise<number> {
+    await this.d.source?.(vodId);
     return this.d.queue.run(async () => (await probe(this.d.tools(), this.vodFile(vodId))).durationSec);
   }
 
@@ -107,6 +110,7 @@ export class ClipService {
     const reason = validateClipSpec(spec);
     if (reason) throw new Error(`Clip no válido: ${reason}.`);
     const clip = normalizeClip(spec, 'Clip');
+    await this.d.source?.(vodId);
     return this.d.queue.run(async () => {
       const info = await probe(this.d.tools(), this.vodFile(vodId));
       const vodDur = info.durationSec;
@@ -153,6 +157,7 @@ export class ClipService {
     const reason = validateLongSpec(spec);
     if (reason) throw new Error(`Vídeo largo no válido: ${reason}.`);
     const long = normalizeLong(spec);
+    await this.d.source?.(vodId);
     return this.d.queue.run(async () => {
       const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
       const bound = validateLongSpec(long, vodDur);
@@ -182,6 +187,7 @@ export class ClipService {
 
   /** Aplica un plan completo. Lo que falla no impide que se creen los demás vídeos. */
   async applyPlan(vodId: string, planJson: string): Promise<{ created: OutputItem[]; errors: string[] }> {
+    await this.d.source?.(vodId);
     const vodDur = await this.d.queue.run(async () => (await probe(this.d.tools(), this.vodFile(vodId))).durationSec);
     const { plan, errors } = parsePlan(planJson, vodDur);
     const created: OutputItem[] = [];

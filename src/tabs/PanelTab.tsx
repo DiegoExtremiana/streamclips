@@ -147,15 +147,23 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
               {v.status === 'error' && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{v.error}</div>}
               {v.autopilot?.note && v.autopilot.status !== 'waiting' && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{v.autopilot.note}</div>}
               {v.status === 'downloaded' && (
-                <div className="row" style={{ gap: 6, marginTop: 6 }}>
+                <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  {['waiting', 'transcribing', 'analyzing', 'rendering'].includes(v.autopilot?.status ?? '') && (
+                    <button className="btn ghost small" disabled={busy === `cx${v.id}`} onClick={() => void act(`cx${v.id}`, () => window.api.cancelAutopilot(v.id))}>Cancelar análisis</button>
+                  )}
                   <button
                     className="btn ghost small"
-                    disabled={busy === `ap${v.id}` || ['waiting', 'transcribing', 'analyzing', 'rendering'].includes(v.autopilot?.status ?? '')}
+                    disabled={busy === `ap${v.id}`}
+                    title={v.autopilot ? 'Vuelve a analizar el directo (si había un análisis en marcha, se cancela). Sustituye los vídeos pendientes de revisión que sacó antes.' : undefined}
                     onClick={() => void act(`ap${v.id}`, () => window.api.runAutopilot(v.id))}
                   >
                     {v.autopilot ? 'Volver a analizar' : 'Analizar ahora'}
                   </button>
                   {v.filePath && <button className="btn ghost small" onClick={() => void window.api.openPath(v.filePath!).catch(() => undefined)}>Mostrar en carpeta</button>}
+                  {v.filePath && v.origin !== 'clip' && v.autopilot?.status === 'done' && (
+                    <button className="btn ghost small" title="Borra el directo completo del disco; se conservan los vídeos, los clips y sus transcripciones." disabled={busy === `dc${v.id}`} onClick={() => void act(`dc${v.id}`, () => window.api.discardVod(v.id))}>Liberar espacio</button>
+                  )}
+                  {v.cleaned && <span className="badge ok" title="Se vuelve a descargar solo si hace falta (por ejemplo, para recortar un clip).">Directo borrado · {(v.cleaned.freedBytes / 1024 ** 3).toFixed(1)} GB liberados</span>}
                 </div>
               )}
             </div>

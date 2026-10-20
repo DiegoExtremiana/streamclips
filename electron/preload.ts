@@ -48,6 +48,8 @@ const api: Api = {
   deleteOutput: (id) => call(CHANNELS.outputsDelete, id),
   deleteOutputs: (ids) => call(CHANNELS.outputsDeleteMany, ids),
   runAutopilot: (id) => call(CHANNELS.autopilotRun, id),
+  cancelAutopilot: (id) => call(CHANNELS.autopilotCancel, id),
+  discardVod: (id) => call(CHANNELS.vodsDiscard, id),
   setAutoImport: (on) => call(CHANNELS.channelAuto, on),
   onChannelUpdate: (cb) => {
     const h = (_e: unknown, s: Parameters<typeof cb>[0]) => cb(s);

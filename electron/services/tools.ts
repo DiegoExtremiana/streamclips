@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { ToolStatus } from '../../shared/types';
+import { CancelledError, currentAbort } from './abort';
 
 export interface RunResult {
   stdout: string;
@@ -9,12 +10,15 @@ export interface RunResult {
 /** Ejecuta un programa SIN shell (los argumentos nunca se interpretan como comandos). */
 export function run(cmd: string, args: string[], timeoutMs = 0): Promise<RunResult> {
   return new Promise((resolve, reject) => {
+    const signal = currentAbort();
+    if (signal?.aborted) return reject(new CancelledError());
     execFile(
       cmd,
       args,
-      { maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs, windowsHide: true },
+      { maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs, windowsHide: true, ...(signal ? { signal } : {}) },
       (err, stdout, stderr) => {
         if (err) {
+          if (signal?.aborted) return reject(new CancelledError());
           const tail = String(stderr || '').trim().split('\n').slice(-6).join('\n');
           const base = (err as NodeJS.ErrnoException).code === 'ENOENT' ? `No se encuentra "${cmd}"` : `${cmd} falló`;
           reject(new Error(tail ? `${base}: ${tail}` : `${base}: ${err.message}`));

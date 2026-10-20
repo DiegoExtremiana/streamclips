@@ -86,6 +86,17 @@ describe('edición profesional: render real', () => {
     assert.ok(info.hasAudio && info.durationSec > 15);
   });
 
+  it('con efectos de sonido el montaje dura solo lo pedido, no hasta el final del directo (antes se codificaba todo el resto)', async () => {
+    const out = path.join(root, 'tramo-sfx.mp4');
+    await renderClip(tools, src, { kind: 'horizontal', start: 5, end: 11, effects: [{ type: 'sfx', at: 2, sound: 'whoosh' }, { type: 'polish' }] }, out);
+    const info = await probe(tools, out);
+    assert.ok(Math.abs(info.durationSec - 6) < 1, `dura ${info.durationSec} s, debería durar 6`);
+    const out2 = path.join(root, 'largo-tramos-sfx.mp4');
+    await renderLong(tools, src, { title: 't', segments: [{ start: 2, end: 8 }, { start: 12, end: 16 }], effects: [{ type: 'sfx', at: 3, sound: 'pop' }, { type: 'sfx', at: 13, sound: 'hit' }] }, out2);
+    const i2 = await probe(tools, out2);
+    assert.ok(Math.abs(i2.durationSec - 10) < 1.2, `dura ${i2.durationSec} s, debería durar 10`);
+  });
+
   it('un efecto de sonido de verdad se oye (el audio con sfx no es idéntico al original)', async () => {
     const plain = path.join(root, 'plain.mp4');
     const withFx = path.join(root, 'withfx.mp4');

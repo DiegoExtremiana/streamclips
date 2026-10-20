@@ -157,7 +157,8 @@ async function cutSegment(tools: ToolPaths, input: string, start: number, end: n
     const graph = `${vchain};[0:a]${af.length ? af.join(',') : 'anull'}[a0];${mix};[a0]${sfx.map((_, i) => `[s${i}]`).join('')}amix=inputs=${sfx.length + 1}:duration=first:dropout_transition=0:normalize=0[aout]`;
     await run(tools.ffmpeg, [
       '-y', '-hide_banner', '-loglevel', 'error',
-      '-ss', String(start), '-i', input, '-t', String(dur),
+      // la duración va ANTES de la entrada: después de ella se aplicaría a la siguiente (los efectos) y el montaje seguiría hasta el final del directo
+      '-ss', String(start), '-t', String(dur), '-i', input,
       ...inputs,
       '-filter_complex', graph, '-map', '[vout]', '-map', '[aout]',
       ...ENCODE_CODEC,
@@ -170,7 +171,7 @@ async function cutSegment(tools: ToolPaths, input: string, start: number, end: n
     : ['-vf', vf.join(','), ...ENCODE];
   await run(tools.ffmpeg, [
     '-y', '-hide_banner', '-loglevel', 'error',
-    '-ss', String(start), '-i', input, '-t', String(dur),
+    '-ss', String(start), '-t', String(dur), '-i', input,
     ...video,
     ...(af.length ? ['-af', af.join(',')] : []),
     out,

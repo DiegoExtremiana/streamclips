@@ -4,6 +4,8 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Novedades de la v0.16
 
+(v0.16.2, **importante**: corregido el montaje con edición profesional, que con efectos de sonido seguía codificando todo el resto del directo en lugar de solo el vídeo pedido: por eso algunos análisis se quedaban «montando» durante horas sin crear nada. Ahora tarda lo que dura el vídeo.)
+
 (v0.16.1: si compruebas actualizaciones justo al publicarse una versión, el programa explica que su instalador aún se está compilando en vez de decir que no hay versiones.)
 
 - **Comprobador de directos** (Clips y publicación › Directos y actividad): tus emisiones de Twitch leídas en directo (se actualiza solo cada minuto y con «Comprobar ahora») en una cuadrícula con miniatura, fecha, duración y visualizaciones. Cada una muestra su estado en el programa (sin analizar, descargando, analizando, analizado…) y tiene un botón **Analizar**: descarga ese directo si hace falta y lanza el piloto automático **cuando tú quieras**, aunque lo tengas desactivado o no se recogiera solo. Un directo que aún está en curso se marca y se podrá analizar al terminar. *Probado con Twitch simulado; no contra tu canal real.*

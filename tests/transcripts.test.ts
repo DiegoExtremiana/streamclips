@@ -236,9 +236,9 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     const args = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0]) as string[];
     assert.equal(args[args.indexOf('-l') + 1], 'auto');
   });
-  it('sin whisper-cli explica qué hacer', () => {
+  it('sin whisper-cli explica qué hacer', async () => {
     const { e, vod } = env();
-    assert.throws(() => e.ctx.transcripts.transcribe(vod.id), /No se encuentra Whisper/);
+    await assert.rejects(() => e.ctx.transcripts.transcribe(vod.id), /No se encuentra Whisper/);
   });
   it('si whisper-cli falla, el error llega, la tarea queda en error y no se guarda nada', async () => {
     const { e, vod } = withWhisper('fail');

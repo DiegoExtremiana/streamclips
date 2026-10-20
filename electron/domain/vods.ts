@@ -77,7 +77,7 @@ export class VodService {
     const running = this.restores.get(vodId);
     if (running) return running;
     if (job.origin === 'clip' || !job.url) return Promise.reject(new Error('El archivo del VOD ya no está en su sitio (¿lo has movido o borrado?).'));
-    if (job.status === 'queued' || job.status === 'downloading') return Promise.reject(new Error('El VOD todavía se está descargando.'));
+    if (job.status === 'queued' || job.status === 'downloading') return Promise.reject(new Error('El VOD todavía no está descargado (se está descargando).'));
     if (job.status === 'error' && !job.cleaned && !job.filePath) return Promise.reject(new Error(`El VOD no se pudo descargar: ${job.error ?? 'error desconocido'}`));
     this.d.log.info(`Volviendo a descargar el directo "${job.title}" (${job.url}).`);
     job.status = 'queued';
@@ -102,7 +102,7 @@ export class VodService {
     const job = this.d.store.data.vods.find((v) => v.id === vodId);
     if (!job) throw new Error('El VOD no existe.');
     if (job.origin === 'clip') throw new Error('Los clips de Twitch descargados no se borran: son el origen de su vídeo.');
-    if (job.status === 'queued' || job.status === 'downloading') throw new Error('El VOD todavía se está descargando.');
+    if (job.status === 'queued' || job.status === 'downloading') throw new Error('El VOD todavía no está descargado (se está descargando).');
     let freed = 0;
     if (job.filePath) {
       const dir = path.dirname(job.filePath);

@@ -222,7 +222,7 @@ describe('Biblioteca: recorte y encuadre de un clip', () => {
     env.ctx.store.data.publications.length = 0;
     fs.renameSync(split, `${split}.bak`);
     try {
-      await assert.rejects(env.ctx.library.reeditClip(clip.id, { cropX: 1 }), /VOD de origen/);
+      await assert.rejects(env.ctx.library.reeditClip(clip.id, { cropX: 1 }), /VOD de origen|No se pudo volver a descargar/); // el directo borrado se intenta recuperar solo (aquí no hay yt-dlp)
     } finally {
       fs.renameSync(`${split}.bak`, split);
     }

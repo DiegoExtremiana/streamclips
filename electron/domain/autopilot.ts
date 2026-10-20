@@ -7,7 +7,7 @@ import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable,
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
-import { CancelledError, isCancelled, withAbort } from '../services/abort';
+import { CancelledError, isCancelled, throwIfCancelled, withAbort } from '../services/abort';
 import type { Range } from '../../shared/timeline';
 import { audioEnergy } from '../services/audioEnergy';
 import { LLM_PROVIDERS, askJson, type LlmConfig } from '../services/llm';
@@ -219,6 +219,7 @@ export class Autopilot {
             await this.d.transcripts.transcribe(vod.id);
             words = this.d.transcripts.words(vod.id);
           } catch (e) {
+            if (isCancelled(e)) throw e;
             notes.push(`Sin transcripción: ${(e as Error).message}`);
           }
         } else notes.push('Sin transcripción: Whisper no está disponible.');
@@ -232,8 +233,10 @@ export class Autopilot {
       try {
         energyDb = await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath!, (s) => task.update(30 + Math.min(20, (s / duration) * 20)));
       } catch (e) {
+        if (isCancelled(e)) throw e;
         notes.push(`Sin análisis de volumen: ${(e as Error).message}`);
       }
+      throwIfCancelled();
       const chat = this.chatFor(vod);
       if (!chat && this.cfg.chatCapture) notes.push('Sin datos de chat de este directo.');
       const sig: Signals = { durationSec: duration, energyDb, chat, words: words.length ? words : undefined };
@@ -296,6 +299,7 @@ export class Autopilot {
           this.d.store.save();
           created.push(item);
         } catch (e) {
+          if (isCancelled(e)) throw e;
           errors.push(`${label}: ${(e as Error).message}`);
         }
         task.update(55 + (++doneCount / total) * 40, `Montando (${doneCount}/${total})…`);
@@ -309,6 +313,7 @@ export class Autopilot {
         try {
           return await withEdit();
         } catch (err) {
+          if (isCancelled(err)) throw err;
           this.d.log.warn(`Edición profesional falló, se monta sin ella: ${(err as Error).message.split('\n')[0]}`);
           return plain();
         }

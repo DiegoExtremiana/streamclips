@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.17
+
+- **Volver a analizar siempre**: un análisis en marcha se puede cancelar («Cancelar») o reiniciar («Volver a analizar»), y si se cerró el programa a medias queda marcado como interrumpido y se puede repetir. Lo pendiente de revisión que sacó un análisis anterior se sustituye, no se duplica.
+- **Limpieza al terminar**: cuando ya están los vídeos y los clips, el directo completo se borra del disco, junto con el chat y los datos que ya no sirven; se conservan los vídeos, los clips y sus transcripciones (solo los tramos que usan). Se desactiva en Piloto automático; «Liberar espacio» lo hace a mano. Si hace falta el directo más adelante, se vuelve a descargar solo.
+- **Transcripción más rápida**: decodificación voraz (en lugar de la búsqueda en haz de 5 de whisper.cpp) y varios trozos a la vez. La ganancia real depende del equipo.
+
 ## Novedades de la v0.16
 
 (v0.16.2, **importante**: corregido el montaje con edición profesional, que con efectos de sonido seguía codificando todo el resto del directo en lugar de solo el vídeo pedido: por eso algunos análisis se quedaban «montando» durante horas sin crear nada. Ahora tarda lo que dura el vídeo.)

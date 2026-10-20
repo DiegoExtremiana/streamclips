@@ -99,6 +99,8 @@ describe('actualizaciones automáticas', () => {
     u.failWith = new Error('getaddrinfo ENOTFOUND github.com');
     assert.match((await svc.check()).error!, /Sin conexión con GitHub/);
     u.failWith = new Error('Cannot find latest.yml in the latest release artifacts (404)');
+    assert.match((await svc.check()).error!, /aún no tiene su instalador adjunto/);
+    u.failWith = new Error('No published versions on GitHub');
     assert.match((await svc.check()).error!, /Todavía no hay versiones/);
     u.failWith = null;
     u.emit('error', new Error('HttpError: 403 rate limit exceeded'));

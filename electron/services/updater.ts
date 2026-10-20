@@ -118,7 +118,8 @@ export class UpdateService {
 function friendly(e: Error): string {
   const m = e.message ?? '';
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|net::ERR/i.test(m)) return 'Sin conexión con GitHub. Se reintentará en una hora.';
-  if (/404|Cannot find latest|No published versions/i.test(m)) return 'Todavía no hay versiones publicadas en GitHub.';
+  if (/latest\.yml|Cannot find latest/i.test(m)) return 'La última versión de GitHub aún no tiene su instalador adjunto (se está compilando; suele tardar unos 5 minutos). Se volverá a comprobar sola.';
+  if (/404|No published versions/i.test(m)) return 'Todavía no hay versiones publicadas en GitHub.';
   if (/403|rate limit/i.test(m)) return 'GitHub limitó las consultas. Se reintentará en una hora.';
   return m.split('\n')[0].slice(0, 200);
 }

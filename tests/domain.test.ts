@@ -289,6 +289,7 @@ describe('ClipService', () => {
     e.ctx.store.data.vods.unshift({ id: 'pend', url: 'u', title: '', status: 'downloading', progress: 5, createdAt: 'x' });
     await assert.rejects(e.ctx.clips.createClip('pend', spec), /todavía no está descargado/);
     fs.rmSync(src);
+    vod.origin = 'clip'; // un clip de Twitch no se puede volver a descargar como un directo
     await assert.rejects(e.ctx.clips.createClip(vod.id, spec), /ya no está en su sitio/);
     assert.equal(e.ctx.store.data.outputs.length, 0);
   });

@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs22 = require("fs");
+                var fs23 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs22.readFileSync(filename);
+                  var ret = fs23.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs22.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs23.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs21 = require("fs");
+            var fs22 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs21.readFileSync(filename);
+              var ret = fs22.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs21.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs22.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -30686,7 +30686,7 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs20 = __toESM(require("node:fs"));
+var import_node_fs21 = __toESM(require("node:fs"));
 var import_node_os4 = __toESM(require("node:os"));
 var import_node_path15 = __toESM(require("node:path"));
 
@@ -30935,14 +30935,35 @@ var SerialQueue = class {
 
 // electron/services/tools.ts
 var import_node_child_process = require("node:child_process");
+
+// electron/services/abort.ts
+var import_node_async_hooks = require("node:async_hooks");
+var scope = new import_node_async_hooks.AsyncLocalStorage();
+var withAbort = (signal, fn) => scope.run(signal, fn);
+var currentAbort = () => scope.getStore();
+var CancelledError = class extends Error {
+  constructor(message = "Cancelado.") {
+    super(message);
+    this.name = "CancelledError";
+  }
+};
+var isCancelled = (e) => e instanceof CancelledError || e?.name === "AbortError";
+function throwIfCancelled() {
+  if (currentAbort()?.aborted) throw new CancelledError();
+}
+
+// electron/services/tools.ts
 function run(cmd, args, timeoutMs = 0) {
   return new Promise((resolve, reject) => {
+    const signal = currentAbort();
+    if (signal?.aborted) return reject(new CancelledError());
     (0, import_node_child_process.execFile)(
       cmd,
       args,
-      { maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs, windowsHide: true },
+      { maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs, windowsHide: true, ...signal ? { signal } : {} },
       (err, stdout, stderr) => {
         if (err) {
+          if (signal?.aborted) return reject(new CancelledError());
           const tail = String(stderr || "").trim().split("\n").slice(-6).join("\n");
           const base = err.code === "ENOENT" ? `No se encuentra "${cmd}"` : `${cmd} fall\xF3`;
           reject(new Error(tail ? `${base}: ${tail}` : `${base}: ${err.message}`));
@@ -31283,6 +31304,7 @@ function validateAutopilot(cur, p, enc) {
   if (p.enabled !== void 0) n.enabled = bool(p.enabled, "El interruptor del piloto autom\xE1tico");
   if (p.requireApproval !== void 0) n.requireApproval = bool(p.requireApproval, "La aprobaci\xF3n previa");
   if (p.proEdit !== void 0) n.proEdit = bool(p.proEdit, "La edici\xF3n profesional");
+  if (p.cleanup !== void 0) n.cleanup = bool(p.cleanup, "La limpieza del directo");
   if (p.chatCapture !== void 0) n.chatCapture = bool(p.chatCapture, "La captura del chat");
   if (p.maxClips !== void 0) {
     if (!Number.isInteger(p.maxClips) || p.maxClips < 0 || p.maxClips > 20) throw new Error("Los clips por directo deben ser un n\xFAmero entre 0 y 20.");
@@ -31400,6 +31422,7 @@ var SettingsService = class {
 
 // electron/domain/vods.ts
 var import_node_crypto2 = __toESM(require("node:crypto"));
+var import_node_fs6 = __toESM(require("node:fs"));
 var import_node_path5 = __toESM(require("node:path"));
 
 // electron/services/downloader.ts
@@ -31609,6 +31632,63 @@ var VodService = class {
     void this.d.queue.run(() => this.runDownload(job));
     return job;
   }
+  restores = /* @__PURE__ */ new Map();
+  /**
+   * Ruta del archivo del directo. Si se borró para liberar espacio (o ya no está en su sitio) y se conoce su dirección,
+   * se vuelve a descargar. Quien lo necesite lo pide antes de ocupar su cola de trabajo.
+   */
+  ensureFile(vodId) {
+    const job = this.d.store.data.vods.find((v) => v.id === vodId);
+    if (!job) return Promise.reject(new Error("El VOD no existe."));
+    if (job.status === "downloaded" && job.filePath && import_node_fs6.default.existsSync(job.filePath)) return Promise.resolve(job.filePath);
+    const running = this.restores.get(vodId);
+    if (running) return running;
+    if (job.origin === "clip" || !job.url) return Promise.reject(new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?)."));
+    if (job.status === "queued" || job.status === "downloading") return Promise.reject(new Error("El VOD todav\xEDa no est\xE1 descargado (se est\xE1 descargando)."));
+    if (job.status === "error" && !job.cleaned && !job.filePath) return Promise.reject(new Error(`El VOD no se pudo descargar: ${job.error ?? "error desconocido"}`));
+    this.d.log.info(`Volviendo a descargar el directo "${job.title}" (${job.url}).`);
+    job.status = "queued";
+    job.progress = 0;
+    job.error = void 0;
+    job.filePath = void 0;
+    this.d.store.save();
+    this.d.notifier.vod(job);
+    const p = this.d.queue.run(() => this.runDownload(job, true)).then(() => {
+      if (job.status !== "downloaded" || !job.filePath) throw new Error(`No se pudo volver a descargar el directo: ${job.error ?? "error desconocido"}`);
+      return job.filePath;
+    }).finally(() => this.restores.delete(vodId));
+    this.restores.set(vodId, p);
+    return p;
+  }
+  /** Borra del disco el directo completo (y lo que dejó la descarga junto a él). Devuelve los bytes liberados. */
+  discardSource(vodId) {
+    const job = this.d.store.data.vods.find((v) => v.id === vodId);
+    if (!job) throw new Error("El VOD no existe.");
+    if (job.origin === "clip") throw new Error("Los clips de Twitch descargados no se borran: son el origen de su v\xEDdeo.");
+    if (job.status === "queued" || job.status === "downloading") throw new Error("El VOD todav\xEDa no est\xE1 descargado (se est\xE1 descargando).");
+    let freed = 0;
+    if (job.filePath) {
+      const dir = import_node_path5.default.dirname(job.filePath);
+      const stem = import_node_path5.default.basename(job.filePath, import_node_path5.default.extname(job.filePath));
+      const files = import_node_fs6.default.existsSync(dir) ? import_node_fs6.default.readdirSync(dir).filter((f) => f === import_node_path5.default.basename(job.filePath) || f.startsWith(`${stem}.`)) : [];
+      for (const f of files) {
+        const full = import_node_path5.default.join(dir, f);
+        try {
+          freed += import_node_fs6.default.statSync(full).size;
+          import_node_fs6.default.rmSync(full, { force: true });
+        } catch (e) {
+          this.d.log.warn(`No se pudo borrar ${full}: ${e.message}`);
+        }
+      }
+    }
+    job.filePath = void 0;
+    job.status = "downloaded";
+    job.cleaned = { at: (/* @__PURE__ */ new Date()).toISOString(), freedBytes: freed };
+    this.d.store.save();
+    this.d.notifier.vod(job);
+    this.d.notifier.changed();
+    return freed;
+  }
   /** Al arrancar: lo que estaba descargándose cuando se cerró la app no se puede dar por bueno. */
   recoverInterrupted() {
     let n = 0;
@@ -31622,7 +31702,7 @@ var VodService = class {
     if (n) this.d.store.save();
     return n;
   }
-  async runDownload(job) {
+  async runDownload(job, silent = false) {
     try {
       ensureFreeSpace(this.d.store.data.settings.outputDir, vodBytesEstimate(job.durationSec), "descargar el VOD", this.d.freeBytes ?? freeBytes);
       job.status = "downloading";
@@ -31639,6 +31719,7 @@ var VodService = class {
       });
       job.title = res.title || job.title;
       job.filePath = res.filePath;
+      job.cleaned = void 0;
       job.status = "downloaded";
       job.progress = 100;
       this.d.log.info(`Descarga completada: ${res.filePath}`);
@@ -31650,7 +31731,7 @@ var VodService = class {
     this.d.store.save();
     this.d.notifier.vod(job);
     this.d.notifier.changed();
-    if (job.status === "downloaded") {
+    if (job.status === "downloaded" && !silent) {
       for (const cb of this.listeners) {
         try {
           cb(job);
@@ -31664,7 +31745,7 @@ var VodService = class {
 
 // electron/domain/clips.ts
 var import_node_crypto3 = __toESM(require("node:crypto"));
-var import_node_fs8 = __toESM(require("node:fs"));
+var import_node_fs9 = __toESM(require("node:fs"));
 
 // shared/outputs.ts
 var ORDER = ["horizontal", "vertical", "long"];
@@ -31759,12 +31840,12 @@ function dstPixels(dst) {
 }
 
 // electron/domain/subtitleJob.ts
-var import_node_fs7 = __toESM(require("node:fs"));
+var import_node_fs8 = __toESM(require("node:fs"));
 var import_node_os2 = __toESM(require("node:os"));
 var import_node_path7 = __toESM(require("node:path"));
 
 // electron/services/ffmpeg.ts
-var import_node_fs6 = __toESM(require("node:fs"));
+var import_node_fs7 = __toESM(require("node:fs"));
 var import_node_os = __toESM(require("node:os"));
 var import_node_path6 = __toESM(require("node:path"));
 
@@ -32060,12 +32141,13 @@ async function cutSegment(tools, input, start, end, o, out) {
       "-hide_banner",
       "-loglevel",
       "error",
+      // la duración va ANTES de la entrada: después de ella se aplicaría a la siguiente (los efectos) y el montaje seguiría hasta el final del directo
       "-ss",
       String(start),
-      "-i",
-      input,
       "-t",
       String(dur),
+      "-i",
+      input,
       ...inputs,
       "-filter_complex",
       graph,
@@ -32086,23 +32168,23 @@ async function cutSegment(tools, input, start, end, o, out) {
     "error",
     "-ss",
     String(start),
-    "-i",
-    input,
     "-t",
     String(dur),
+    "-i",
+    input,
     ...video,
     ...af.length ? ["-af", af.join(",")] : [],
     out
   ]);
 }
 async function renderTimeline(tools, input, t, out) {
-  import_node_fs6.default.mkdirSync(import_node_path6.default.dirname(out), { recursive: true });
+  import_node_fs7.default.mkdirSync(import_node_path6.default.dirname(out), { recursive: true });
   const fx = t.effects ?? [];
   const fadeIn = fx.find((e) => e.type === "fadeIn");
   const fadeOut = fx.find((e) => e.type === "fadeOut");
   const total = totalDuration(t.ranges);
   const clampFade = (d) => Math.min(d ?? FADE.default, total / 2);
-  const tmp = import_node_fs6.default.mkdtempSync(import_node_path6.default.join(import_node_os.default.tmpdir(), "streamclips-"));
+  const tmp = import_node_fs7.default.mkdtempSync(import_node_path6.default.join(import_node_os.default.tmpdir(), "streamclips-"));
   const polish = fx.some((e) => e.type === "polish");
   const allSfx = fx.filter((e) => e.type === "sfx");
   try {
@@ -32132,11 +32214,11 @@ async function renderTimeline(tools, input, t, out) {
       parts.push(part);
     }
     if (parts.length === 1 && !t.subs) {
-      import_node_fs6.default.copyFileSync(parts[0], out);
+      import_node_fs7.default.copyFileSync(parts[0], out);
       return;
     }
     const list = import_node_path6.default.join(tmp, "list.txt");
-    import_node_fs6.default.writeFileSync(list, parts.map(concatLine).join("\n"));
+    import_node_fs7.default.writeFileSync(list, parts.map(concatLine).join("\n"));
     const joined = t.subs ? import_node_path6.default.join(tmp, "joined.mp4") : out;
     await run(tools.ffmpeg, [
       "-y",
@@ -32185,7 +32267,7 @@ async function renderTimeline(tools, input, t, out) {
       ]);
     }
   } finally {
-    import_node_fs6.default.rmSync(tmp, { recursive: true, force: true });
+    import_node_fs7.default.rmSync(tmp, { recursive: true, force: true });
   }
 }
 async function renderClip(tools, input, spec, out) {
@@ -32221,7 +32303,7 @@ var EXPECTED_SIZE = {
   long: { w: 1920, h: 1080 }
 };
 async function validateRender(tools, file, kind, expectedSec, toleranceSec = 1.5) {
-  if (!import_node_fs6.default.existsSync(file)) throw new Error("El archivo renderizado no existe");
+  if (!import_node_fs7.default.existsSync(file)) throw new Error("El archivo renderizado no existe");
   const info = await probe(tools, file);
   const exp = EXPECTED_SIZE[kind];
   if (info.width !== exp.w || info.height !== exp.h) {
@@ -32233,16 +32315,16 @@ async function validateRender(tools, file, kind, expectedSec, toleranceSec = 1.5
   return info;
 }
 async function extractFrame(tools, input, atSec, out, o = {}, isImage = false) {
-  import_node_fs6.default.mkdirSync(import_node_path6.default.dirname(out), { recursive: true });
+  import_node_fs7.default.mkdirSync(import_node_path6.default.dirname(out), { recursive: true });
   const vf = o.width && o.height ? `scale=${o.width}:${o.height}:force_original_aspect_ratio=increase,crop=${o.width}:${o.height},setsar=1` : `scale='min(${o.maxWidth ?? 640},iw)':-2`;
   const args = ["-y", "-hide_banner", "-loglevel", "error"];
   if (!isImage) args.push("-ss", String(Math.max(0, atSec)));
   args.push("-i", input, "-frames:v", "1", "-vf", vf, "-q:v", "3", out);
   try {
     await run(tools.ffmpeg, args);
-    if (!import_node_fs6.default.existsSync(out) || import_node_fs6.default.statSync(out).size === 0) throw new Error("no se gener\xF3 la imagen");
+    if (!import_node_fs7.default.existsSync(out) || import_node_fs7.default.statSync(out).size === 0) throw new Error("no se gener\xF3 la imagen");
   } catch (e) {
-    import_node_fs6.default.rmSync(out, { force: true });
+    import_node_fs7.default.rmSync(out, { force: true });
     throw new Error(`No se pudo generar la imagen: ${e.message}`);
   }
 }
@@ -32257,13 +32339,13 @@ async function withSubtitles(env, vodId, style, ranges, kind, fn) {
   const words = wordsForOutput(all, ranges);
   if (!words.length) throw new Error("La transcripci\xF3n no tiene ninguna palabra en este tramo: quita los subt\xEDtulos o revisa la transcripci\xF3n.");
   const { w, h } = EXPECTED_SIZE[kind];
-  const dir = import_node_fs7.default.mkdtempSync(import_node_path7.default.join(import_node_os2.default.tmpdir(), "streamclips-ass-"));
+  const dir = import_node_fs8.default.mkdtempSync(import_node_path7.default.join(import_node_os2.default.tmpdir(), "streamclips-ass-"));
   try {
     const ass = import_node_path7.default.join(dir, "subs.ass");
-    import_node_fs7.default.writeFileSync(ass, buildAss(words, SUBTITLE_STYLES[style], w, h));
+    import_node_fs8.default.writeFileSync(ass, buildAss(words, SUBTITLE_STYLES[style], w, h));
     return await fn({ ass, fontsDir: env.fontsDir });
   } finally {
-    import_node_fs7.default.rmSync(dir, { recursive: true, force: true });
+    import_node_fs8.default.rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -32285,7 +32367,7 @@ var ClipService = class {
     const vod = this.d.store.data.vods.find((v) => v.id === vodId);
     if (!vod) throw new Error("El VOD no existe.");
     if (vod.status !== "downloaded" || !vod.filePath) throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    if (!import_node_fs8.default.existsSync(vod.filePath)) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
+    if (!import_node_fs9.default.existsSync(vod.filePath)) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     return vod.filePath;
   }
   /**
@@ -32330,19 +32412,21 @@ var ClipService = class {
       this.d.log.info(`Render validado (${renders.map((r2) => r2.render).join("+")}): "${title}"`);
       return item;
     } catch (e) {
-      for (const f of written) import_node_fs8.default.rmSync(f, { force: true });
+      for (const f of written) import_node_fs9.default.rmSync(f, { force: true });
       this.d.log.error(`Render fallido ("${title}")`, e);
       throw e;
     }
   }
   /** Duración real del VOD descargado. */
-  vodDuration(vodId) {
+  async vodDuration(vodId) {
+    await this.d.source?.(vodId);
     return this.d.queue.run(async () => (await probe(this.d.tools(), this.vodFile(vodId))).durationSec);
   }
   async createClip(vodId, spec) {
     const reason = validateClipSpec(spec);
     if (reason) throw new Error(`Clip no v\xE1lido: ${reason}.`);
     const clip = normalizeClip(spec, "Clip");
+    await this.d.source?.(vodId);
     return this.d.queue.run(async () => {
       const info = await probe(this.d.tools(), this.vodFile(vodId));
       const vodDur = info.durationSec;
@@ -32390,6 +32474,7 @@ var ClipService = class {
     const reason = validateLongSpec(spec);
     if (reason) throw new Error(`V\xEDdeo largo no v\xE1lido: ${reason}.`);
     const long = normalizeLong(spec);
+    await this.d.source?.(vodId);
     return this.d.queue.run(async () => {
       const vodDur = (await probe(this.d.tools(), this.vodFile(vodId))).durationSec;
       const bound = validateLongSpec(long, vodDur);
@@ -32421,6 +32506,7 @@ var ClipService = class {
   }
   /** Aplica un plan completo. Lo que falla no impide que se creen los demás vídeos. */
   async applyPlan(vodId, planJson) {
+    await this.d.source?.(vodId);
     const vodDur = await this.d.queue.run(async () => (await probe(this.d.tools(), this.vodFile(vodId))).durationSec);
     const { plan, errors } = parsePlan(planJson, vodDur);
     const created = [];
@@ -32466,7 +32552,7 @@ var CategoryService = class {
 };
 
 // electron/domain/library.ts
-var import_node_fs9 = __toESM(require("node:fs"));
+var import_node_fs10 = __toESM(require("node:fs"));
 var import_node_path8 = __toESM(require("node:path"));
 
 // shared/youtube.ts
@@ -32507,7 +32593,7 @@ var LibraryService = class {
     for (const f of [...Object.values(o.files), o.thumbnail]) {
       if (!f) continue;
       try {
-        import_node_fs9.default.rmSync(f, { force: true, maxRetries: 4, retryDelay: 150 });
+        import_node_fs10.default.rmSync(f, { force: true, maxRetries: 4, retryDelay: 150 });
       } catch (e) {
         filesLeft.push(f);
         this.d.log.warn(`No se pudo borrar ${f}: ${e.message}`);
@@ -32594,14 +32680,14 @@ var LibraryService = class {
     const old = o.thumbnail;
     o.thumbnail = next;
     this.changed();
-    if (old && old !== next) import_node_fs9.default.rmSync(old, { force: true });
+    if (old && old !== next) import_node_fs10.default.rmSync(old, { force: true });
   }
   setThumbnailFromFrame(id, atSec) {
     if (typeof atSec !== "number" || !Number.isFinite(atSec) || atSec < 0) throw new Error("Instante no v\xE1lido.");
     return this.d.queue.run(async () => {
       const o = this.find(id);
       const src = primaryFile(o);
-      if (!src || !import_node_fs9.default.existsSync(src)) throw new Error("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+      if (!src || !import_node_fs10.default.existsSync(src)) throw new Error("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
       const at = Math.min(atSec, Math.max(0, o.durationSec - 0.2));
       const out = thumbnailPath(this.d.store.data.settings.outputDir, o.id);
       await extractFrame(this.d.tools(), src, at, out, o.kind === "long" ? LONG_THUMB : { maxWidth: primaryRender(o) === "vertical" ? 360 : 640 });
@@ -32613,7 +32699,7 @@ var LibraryService = class {
   setThumbnailFromImage(id, imagePath) {
     return this.d.queue.run(async () => {
       const o = this.find(id);
-      if (!import_node_fs9.default.existsSync(imagePath) || !import_node_fs9.default.statSync(imagePath).isFile()) throw new Error("La imagen no existe.");
+      if (!import_node_fs10.default.existsSync(imagePath) || !import_node_fs10.default.statSync(imagePath).isFile()) throw new Error("La imagen no existe.");
       const out = thumbnailPath(this.d.store.data.settings.outputDir, o.id);
       try {
         await extractFrame(this.d.tools(), imagePath, 0, out, LONG_THUMB, true);
@@ -32629,7 +32715,9 @@ var LibraryService = class {
    * (también sirve para recuperar la versión que faltara). Los archivos nuevos se validan antes de
    * sustituir a los anteriores; si algo falla no cambia nada.
    */
-  reeditClip(id, edit) {
+  async reeditClip(id, edit) {
+    const src = this.find(id).vodId;
+    if (src) await this.d.source?.(src);
     return this.d.queue.run(async () => {
       const o = this.find(id);
       if (o.kind === "long") return this.reeditLong(o, edit);
@@ -32640,7 +32728,7 @@ var LibraryService = class {
         throw new Error("Se est\xE1 publicando ahora mismo; espera a que termine.");
       }
       const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-      if (!vod?.filePath || !import_node_fs9.default.existsSync(vod.filePath)) {
+      if (!vod?.filePath || !import_node_fs10.default.existsSync(vod.filePath)) {
         throw new Error("El VOD de origen ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
       }
       const start = edit.start ?? o.start;
@@ -32703,13 +32791,13 @@ var LibraryService = class {
         o.subtitles = subtitles;
         o.thumbnail = thumb;
         this.changed();
-        for (const f of oldFiles) import_node_fs9.default.rmSync(f, { force: true });
-        if (oldThumb) import_node_fs9.default.rmSync(oldThumb, { force: true });
+        for (const f of oldFiles) import_node_fs10.default.rmSync(f, { force: true });
+        if (oldThumb) import_node_fs10.default.rmSync(oldThumb, { force: true });
         this.d.log.info(`Clip reeditado: "${o.title}"`);
         return o;
       } catch (e) {
-        for (const f of written) import_node_fs9.default.rmSync(f, { force: true });
-        if (thumb) import_node_fs9.default.rmSync(thumb, { force: true });
+        for (const f of written) import_node_fs10.default.rmSync(f, { force: true });
+        if (thumb) import_node_fs10.default.rmSync(thumb, { force: true });
         this.d.log.error(`Reedici\xF3n fallida ("${o.title}")`, e);
         throw e;
       }
@@ -32726,7 +32814,7 @@ var LibraryService = class {
       throw new Error("Se est\xE1 publicando ahora mismo; espera a que termine.");
     }
     const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-    if (!vod?.filePath || !import_node_fs9.default.existsSync(vod.filePath)) throw new Error("El VOD de origen ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
+    if (!vod?.filePath || !import_node_fs10.default.existsSync(vod.filePath)) throw new Error("El VOD de origen ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const subtitles = edit.subtitles === void 0 ? o.subtitles : edit.subtitles ?? void 0;
     const spec = { title: o.title, segments: o.segments, effects: o.effects, subtitles };
     const vodDur = (await probe(this.d.tools(), vod.filePath)).durationSec;
@@ -32749,11 +32837,11 @@ var LibraryService = class {
       o.durationSec = info.durationSec;
       o.subtitles = subtitles;
       this.changed();
-      for (const f of old) import_node_fs9.default.rmSync(f, { force: true });
+      for (const f of old) import_node_fs10.default.rmSync(f, { force: true });
       this.d.log.info(`V\xEDdeo largo montado de nuevo: "${o.title}"`);
       return o;
     } catch (e) {
-      import_node_fs9.default.rmSync(out, { force: true });
+      import_node_fs10.default.rmSync(out, { force: true });
       this.d.log.error(`Reedici\xF3n fallida ("${o.title}")`, e);
       throw e;
     }
@@ -32762,7 +32850,7 @@ var LibraryService = class {
   exportName(id, version) {
     const o = this.find(id);
     const f = o.files[version];
-    if (!f || !import_node_fs9.default.existsSync(f)) {
+    if (!f || !import_node_fs10.default.existsSync(f)) {
       throw new Error(version === "long" ? "El archivo del v\xEDdeo ya no est\xE1 en su sitio." : `Este clip no tiene versi\xF3n ${version === "vertical" ? "vertical" : "horizontal"} disponible.`);
     }
     return `${slug(o.title)}${o.kind === "long" ? "" : `-${version}`}.mp4`;
@@ -32775,13 +32863,13 @@ var LibraryService = class {
     if (!import_node_path8.default.isAbsolute(dest)) throw new Error("La ruta de destino no es v\xE1lida.");
     const target = /\.mp4$/i.test(dest) ? dest : `${dest}.mp4`;
     if (import_node_path8.default.resolve(target) === import_node_path8.default.resolve(src)) throw new Error("El destino es el propio archivo.");
-    if (!import_node_fs9.default.existsSync(import_node_path8.default.dirname(target))) throw new Error("La carpeta de destino no existe.");
+    if (!import_node_fs10.default.existsSync(import_node_path8.default.dirname(target))) throw new Error("La carpeta de destino no existe.");
     const tmp = `${target}.parte`;
     try {
-      await import_node_fs9.default.promises.copyFile(src, tmp);
-      await import_node_fs9.default.promises.rename(tmp, target);
+      await import_node_fs10.default.promises.copyFile(src, tmp);
+      await import_node_fs10.default.promises.rename(tmp, target);
     } catch (e) {
-      import_node_fs9.default.rmSync(tmp, { force: true });
+      import_node_fs10.default.rmSync(tmp, { force: true });
       throw new Error(`No se pudo guardar el archivo: ${e.message}`);
     }
     return target;
@@ -32791,7 +32879,7 @@ var LibraryService = class {
   async clipContext(id) {
     const o = this.find(id);
     const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-    if (!vod?.filePath || !import_node_fs9.default.existsSync(vod.filePath)) return { vodDurationSec: null };
+    if (!vod?.filePath || !import_node_fs10.default.existsSync(vod.filePath)) return { vodDurationSec: null };
     if (vod.durationSec) return { vodDurationSec: vod.durationSec };
     try {
       return { vodDurationSec: (await probe(this.d.tools(), vod.filePath)).durationSec };
@@ -32804,28 +32892,28 @@ var LibraryService = class {
       const o = this.find(id);
       if (o.kind !== "clip") throw new Error("Solo los clips tienen encuadre.");
       const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-      if (o.start === void 0 || o.end === void 0 || !vod?.filePath || !import_node_fs9.default.existsSync(vod.filePath)) {
+      if (o.start === void 0 || o.end === void 0 || !vod?.filePath || !import_node_fs10.default.existsSync(vod.filePath)) {
         throw new Error("No hay VOD de origen para mostrar el encuadre.");
       }
       const tmp = thumbnailPath(this.d.store.data.settings.outputDir, `preview-${o.id}`);
       try {
         await extractFrame(this.d.tools(), vod.filePath, (o.start + o.end) / 2, tmp, { maxWidth: 640 });
         const info = await probe(this.d.tools(), tmp);
-        return { dataUrl: `data:image/jpeg;base64,${import_node_fs9.default.readFileSync(tmp).toString("base64")}`, width: info.width, height: info.height };
+        return { dataUrl: `data:image/jpeg;base64,${import_node_fs10.default.readFileSync(tmp).toString("base64")}`, width: info.width, height: info.height };
       } finally {
-        import_node_fs9.default.rmSync(tmp, { force: true });
+        import_node_fs10.default.rmSync(tmp, { force: true });
       }
     });
   }
   /** Genera la miniatura de los vídeos que no la tienen (anteriores a la Biblioteca o con un fallo previo). */
   async backfillThumbnails() {
-    const missing = this.d.store.data.outputs.filter((o) => !o.thumbnail || !import_node_fs9.default.existsSync(o.thumbnail));
+    const missing = this.d.store.data.outputs.filter((o) => !o.thumbnail || !import_node_fs10.default.existsSync(o.thumbnail));
     let n = 0;
     for (const o of missing) {
       await this.d.queue.run(async () => {
         const k = primaryRender(o);
         const f = primaryFile(o);
-        if (!k || !f || !import_node_fs9.default.existsSync(f)) return;
+        if (!k || !f || !import_node_fs10.default.existsSync(f)) return;
         try {
           const t = await autoThumbnail(this.d.tools(), this.d.store.data.settings.outputDir, o.id, k, f, o.durationSec);
           o.thumbnail = t;
@@ -32841,7 +32929,7 @@ var LibraryService = class {
 };
 
 // electron/domain/transcripts.ts
-var import_node_fs11 = __toESM(require("node:fs"));
+var import_node_fs12 = __toESM(require("node:fs"));
 var import_node_path10 = __toESM(require("node:path"));
 
 // shared/transcript.ts
@@ -32992,7 +33080,7 @@ ${transcriptForClaude(words)}
 // electron/services/whisper.ts
 var import_node_child_process3 = require("node:child_process");
 var import_node_crypto4 = __toESM(require("node:crypto"));
-var import_node_fs10 = __toESM(require("node:fs"));
+var import_node_fs11 = __toESM(require("node:fs"));
 var import_node_os3 = __toESM(require("node:os"));
 var import_node_path9 = __toESM(require("node:path"));
 var import_node_stream = require("node:stream");
@@ -33014,7 +33102,7 @@ function modelPath(dir, name) {
 }
 function modelInstalled(dir, name) {
   try {
-    return import_node_fs10.default.statSync(modelPath(dir, name)).size >= WHISPER_MODELS[name].minBytes;
+    return import_node_fs11.default.statSync(modelPath(dir, name)).size >= WHISPER_MODELS[name].minBytes;
   } catch {
     return false;
   }
@@ -33031,14 +33119,14 @@ var GGML_TYPES = {
 function ggmlProblem(file) {
   let fd = -1;
   try {
-    fd = import_node_fs10.default.openSync(file, "r");
-    const size = import_node_fs10.default.fstatSync(fd).size;
+    fd = import_node_fs11.default.openSync(file, "r");
+    const size = import_node_fs11.default.fstatSync(fd).size;
     const buf = Buffer.alloc(4096);
     let pos = 0;
     const read = (n) => {
       if (pos + n > size) throw new Error("el archivo termina antes de tiempo");
       const b = n <= buf.length ? buf : Buffer.alloc(n);
-      import_node_fs10.default.readSync(fd, b, 0, n, pos);
+      import_node_fs11.default.readSync(fd, b, 0, n, pos);
       pos += n;
       return b;
     };
@@ -33080,13 +33168,13 @@ function ggmlProblem(file) {
   } catch (e) {
     return e.message;
   } finally {
-    if (fd >= 0) import_node_fs10.default.closeSync(fd);
+    if (fd >= 0) import_node_fs11.default.closeSync(fd);
   }
 }
 async function downloadModel(dir, name, onProgress, o = {}) {
   const dest = modelPath(dir, name);
   if (modelInstalled(dir, name)) return dest;
-  import_node_fs10.default.mkdirSync(dir, { recursive: true });
+  import_node_fs11.default.mkdirSync(dir, { recursive: true });
   const part = `${dest}.part`;
   const url = `${o.baseUrl ?? MODEL_BASE_URL}/${WHISPER_MODELS[name].file}`;
   try {
@@ -33117,13 +33205,13 @@ async function downloadModel(dir, name, onProgress, o = {}) {
     const total = Number(res.headers.get("content-length") ?? 0);
     let got = 0;
     let last = -1;
-    const fd = import_node_fs10.default.openSync(part, "w");
+    const fd = import_node_fs11.default.openSync(part, "w");
     try {
       for await (const raw of import_node_stream.Readable.fromWeb(res.body)) {
         const c = Buffer.from(raw);
         hash.update(c);
         let off = 0;
-        while (off < c.length) off += import_node_fs10.default.writeSync(fd, c, off, c.length - off);
+        while (off < c.length) off += import_node_fs11.default.writeSync(fd, c, off, c.length - off);
         got += c.length;
         if (total) {
           const pct = Math.floor(got / total * 100);
@@ -33134,22 +33222,22 @@ async function downloadModel(dir, name, onProgress, o = {}) {
         }
       }
     } finally {
-      import_node_fs10.default.closeSync(fd);
+      import_node_fs11.default.closeSync(fd);
     }
     if (total && got !== total) throw new Error("La descarga del modelo se cort\xF3. Vuelve a intentarlo.");
     if (got < WHISPER_MODELS[name].minBytes) throw new Error("El archivo descargado es demasiado peque\xF1o para ser el modelo. Vuelve a intentarlo.");
     const streamed = hash.digest("hex");
     if (expected && streamed !== expected) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (su huella no coincide). Vuelve a intentarlo.");
     const onDisk = import_node_crypto4.default.createHash("sha256");
-    await (0, import_promises.pipeline)(import_node_fs10.default.createReadStream(part), onDisk);
+    await (0, import_promises.pipeline)(import_node_fs11.default.createReadStream(part), onDisk);
     if (onDisk.digest("hex") !== streamed) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (lo guardado en el disco no coincide con lo recibido; revisa el disco o el antivirus).");
     const bad = ggmlProblem(part);
     if (bad) throw new Error(`El modelo de Whisper se descarg\xF3 da\xF1ado (${bad}). Vuelve a intentarlo.`);
-    import_node_fs10.default.renameSync(part, dest);
+    import_node_fs11.default.renameSync(part, dest);
     onProgress(100);
     return dest;
   } finally {
-    import_node_fs10.default.rmSync(part, { force: true });
+    import_node_fs11.default.rmSync(part, { force: true });
   }
 }
 var NON_SPEECH = /^[\s[(♪*].*[\])♪*\s]$|^\s*$/;
@@ -33173,7 +33261,9 @@ function parseWhisperCppJson(text, offsetSec = 0) {
 }
 function runCli(exe, args, onPct) {
   return new Promise((resolve, reject) => {
-    const p = (0, import_node_child_process3.spawn)(exe, args, { windowsHide: true });
+    const signal = currentAbort();
+    if (signal?.aborted) return reject(new CancelledError());
+    const p = (0, import_node_child_process3.spawn)(exe, args, { windowsHide: true, ...signal ? { signal } : {} });
     let tail = "";
     const feed = (d) => {
       const t = d.toString();
@@ -33182,40 +33272,66 @@ function runCli(exe, args, onPct) {
     };
     p.stdout.on("data", feed);
     p.stderr.on("data", feed);
-    p.on("error", (e) => reject(new Error(`No se pudo ejecutar Whisper (${exe}): ${e.message}`)));
-    p.on("close", (code) => code === 0 ? resolve() : reject(new Error(`Whisper termin\xF3 con c\xF3digo ${code}
+    p.on("error", (e) => reject(signal?.aborted ? new CancelledError() : new Error(`No se pudo ejecutar Whisper (${exe}): ${e.message}`)));
+    p.on("close", (code) => signal?.aborted ? reject(new CancelledError()) : code === 0 ? resolve() : reject(new Error(`Whisper termin\xF3 con c\xF3digo ${code}
 ${tail.trim().split("\n").slice(-10).join("\n")}`)));
   });
 }
 async function transcribeVideo(tools, input, o) {
-  if (!import_node_fs10.default.existsSync(o.model)) throw new Error("Falta el modelo de Whisper.");
+  if (!import_node_fs11.default.existsSync(o.model)) throw new Error("Falta el modelo de Whisper.");
   const total = (await probe(tools, input)).durationSec;
   const from = Math.max(0, o.range?.start ?? 0);
   const to = Math.min(total || Infinity, o.range?.end ?? total);
   const dur = Math.max(0, to - from);
   const chunk = o.chunkSec ?? CHUNK_SEC;
   const n = Math.max(1, Math.ceil(dur / chunk));
-  const tmp = import_node_fs10.default.mkdtempSync(import_node_path9.default.join(import_node_os3.default.tmpdir(), "streamclips-whisper-"));
-  const words = [];
+  const tmp = import_node_fs11.default.mkdtempSync(import_node_path9.default.join(import_node_os3.default.tmpdir(), "streamclips-whisper-"));
+  const parts = Array.from({ length: n }, () => []);
+  const cpus = import_node_os3.default.cpus().length;
+  const jobs = Math.max(1, Math.min(n, o.jobs ?? (cpus >= 12 ? 3 : cpus >= 6 ? 2 : 1)));
+  const threads = o.threads ?? (jobs === 1 ? Math.max(1, cpus - 1) : Math.max(2, Math.round(cpus / 2 / jobs)));
+  const pct = new Array(n).fill(0);
+  const report = () => o.onProgress?.(pct.reduce((a, b) => a + b, 0) / n, `${n} trozo${n > 1 ? "s" : ""}`);
+  const abort = currentAbort();
+  let next = 0;
+  let failed;
   try {
-    for (let i = 0; i < n; i++) {
-      const offset = from + i * chunk;
-      const len = Math.min(chunk, Math.max(0.5, to - offset));
-      const wav = import_node_path9.default.join(tmp, `c${i}.wav`);
-      await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(offset), "-t", String(len), "-i", input, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]);
-      if (!import_node_fs10.default.existsSync(wav) || import_node_fs10.default.statSync(wav).size < 2e3) continue;
-      const base = import_node_path9.default.join(tmp, `c${i}`);
-      const args = ["-m", o.model, "-f", wav, "-l", o.language || "auto", "-oj", "-ml", "1", "-sow", "-pp", "-t", String(o.threads ?? Math.max(1, import_node_os3.default.cpus().length - 1)), "-of", base];
-      await runCli(o.exe, args, (pct) => o.onProgress?.((i + pct / 100) / n * 100, `trozo ${i + 1} de ${n}`));
-      const json = `${base}.json`;
-      if (!import_node_fs10.default.existsSync(json)) throw new Error("Whisper termin\xF3 pero no gener\xF3 la transcripci\xF3n.");
-      words.push(...parseWhisperCppJson(import_node_fs10.default.readFileSync(json, "utf8"), offset));
-      import_node_fs10.default.rmSync(wav, { force: true });
-      o.onProgress?.((i + 1) / n * 100, `trozo ${i + 1} de ${n}`);
-    }
+    const worker = async () => {
+      while (failed === void 0) {
+        if (abort?.aborted) throw new CancelledError();
+        const i = next++;
+        if (i >= n) return;
+        const offset = from + i * chunk;
+        const len = Math.min(chunk, Math.max(0.5, to - offset));
+        const wav = import_node_path9.default.join(tmp, `c${i}.wav`);
+        await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(offset), "-t", String(len), "-i", input, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]);
+        if (!import_node_fs11.default.existsSync(wav) || import_node_fs11.default.statSync(wav).size < 2e3) {
+          pct[i] = 100;
+          report();
+          continue;
+        }
+        const base = import_node_path9.default.join(tmp, `c${i}`);
+        const args = ["-m", o.model, "-f", wav, "-l", o.language || "auto", "-oj", "-ml", "1", "-sow", "-pp", "-bs", "1", "-bo", "1", "-t", String(threads), "-of", base];
+        await runCli(o.exe, args, (p) => {
+          pct[i] = Math.min(99, p);
+          report();
+        });
+        const json = `${base}.json`;
+        if (!import_node_fs11.default.existsSync(json)) throw new Error("Whisper termin\xF3 pero no gener\xF3 la transcripci\xF3n.");
+        parts[i] = parseWhisperCppJson(import_node_fs11.default.readFileSync(json, "utf8"), offset);
+        import_node_fs11.default.rmSync(wav, { force: true });
+        pct[i] = 100;
+        report();
+      }
+    };
+    await Promise.all(Array.from({ length: jobs }, () => worker().catch((e) => {
+      failed ??= e;
+      throw e;
+    })));
   } finally {
-    import_node_fs10.default.rmSync(tmp, { recursive: true, force: true });
+    import_node_fs11.default.rmSync(tmp, { recursive: true, force: true });
   }
+  const words = parts.flat();
   if (!words.length && !o.range) throw new Error("Whisper no encontr\xF3 ninguna palabra en el audio.");
   return words;
 }
@@ -33244,7 +33360,7 @@ var TranscriptService = class {
   }
   raw(vodId) {
     try {
-      const j = JSON.parse(import_node_fs11.default.readFileSync(this.file(vodId), "utf8"));
+      const j = JSON.parse(import_node_fs12.default.readFileSync(this.file(vodId), "utf8"));
       return { words: Array.isArray(j.words) ? j.words : [], covered: Array.isArray(j.covered) ? j.covered : void 0 };
     } catch {
       return { words: [] };
@@ -33276,6 +33392,26 @@ var TranscriptService = class {
     }
     return mergeRanges(out, 20);
   }
+  /**
+   * Deja solo la transcripción de los tramos indicados (lo que usan los vídeos y clips ya creados), con un pequeño margen.
+   * Devuelve cuántas palabras se quitaron. Lo demás del directo ya no hace falta y ocupa espacio.
+   */
+  prune(vodId, ranges) {
+    const vod = this.vod(vodId);
+    const cur = this.raw(vodId);
+    if (!cur.words.length || !ranges.length) return 0;
+    const keep = mergeRanges(ranges.map((r2) => ({ start: Math.max(0, r2.start - 1.5), end: r2.end + 1.5 })), 0.5);
+    const words = cur.words.filter((w) => keep.some((r2) => w.start >= r2.start && w.start < r2.end));
+    const covered = cur.covered ? keep.flatMap((k) => cur.covered.flatMap((c) => Math.min(k.end, c.end) > Math.max(k.start, c.start) ? [{ start: Math.max(k.start, c.start), end: Math.min(k.end, c.end) }] : [])) : keep;
+    import_node_fs12.default.mkdirSync(this.dir, { recursive: true });
+    const file = this.file(vodId);
+    import_node_fs12.default.writeFileSync(`${file}.tmp`, JSON.stringify({ words, covered: mergeRanges(covered, 0.5) }));
+    import_node_fs12.default.renameSync(`${file}.tmp`, file);
+    vod.transcript = { words: words.length, source: vod.transcript?.source ?? "whisper", at: (/* @__PURE__ */ new Date()).toISOString(), partial: true };
+    this.d.store.save();
+    this.d.notifier.changed();
+    return cur.words.length - words.length;
+  }
   /** Añade las palabras de un tramo recién transcrito a lo que ya había, sin tocar lo demás. */
   savePartial(vod, words, range) {
     const cur = this.raw(vod.id);
@@ -33283,10 +33419,10 @@ var TranscriptService = class {
     const keep = cur.words.filter((w) => w.end <= range.start || w.start >= range.end);
     const merged = [...keep, ...words.filter((w) => w.start >= range.start && w.start < range.end)].sort((a, b) => a.start - b.start);
     const covered = mergeRanges([...cur.covered ?? [], range], 0.5);
-    import_node_fs11.default.mkdirSync(this.dir, { recursive: true });
+    import_node_fs12.default.mkdirSync(this.dir, { recursive: true });
     const file = this.file(vod.id);
-    import_node_fs11.default.writeFileSync(`${file}.tmp`, JSON.stringify({ words: merged, covered }));
-    import_node_fs11.default.renameSync(`${file}.tmp`, file);
+    import_node_fs12.default.writeFileSync(`${file}.tmp`, JSON.stringify({ words: merged, covered }));
+    import_node_fs12.default.renameSync(`${file}.tmp`, file);
     vod.transcript = { words: merged.length, source: "whisper", at: (/* @__PURE__ */ new Date()).toISOString(), partial: true };
     this.d.store.save();
     this.d.notifier.changed();
@@ -33298,11 +33434,11 @@ var TranscriptService = class {
     return vod;
   }
   save(vod, words, source) {
-    import_node_fs11.default.mkdirSync(this.dir, { recursive: true });
+    import_node_fs12.default.mkdirSync(this.dir, { recursive: true });
     const file = this.file(vod.id);
     const tmp = `${file}.tmp`;
-    import_node_fs11.default.writeFileSync(tmp, JSON.stringify({ words }));
-    import_node_fs11.default.renameSync(tmp, file);
+    import_node_fs12.default.writeFileSync(tmp, JSON.stringify({ words }));
+    import_node_fs12.default.renameSync(tmp, file);
     vod.transcript = { words: words.length, source, at: (/* @__PURE__ */ new Date()).toISOString() };
     this.d.store.save();
     this.d.notifier.changed();
@@ -33316,9 +33452,9 @@ var TranscriptService = class {
   /** Lee el archivo, lo valida entero y solo entonces sustituye la transcripción anterior. */
   importFile(vodId, filePath) {
     const vod = this.vod(vodId);
-    if (!import_node_fs11.default.existsSync(filePath) || !import_node_fs11.default.statSync(filePath).isFile()) throw new Error("El archivo no existe.");
-    if (import_node_fs11.default.statSync(filePath).size > MAX_IMPORT_BYTES) throw new Error("El archivo es demasiado grande para ser una transcripci\xF3n.");
-    const words = parseTranscript(import_node_fs11.default.readFileSync(filePath, "utf8"));
+    if (!import_node_fs12.default.existsSync(filePath) || !import_node_fs12.default.statSync(filePath).isFile()) throw new Error("El archivo no existe.");
+    if (import_node_fs12.default.statSync(filePath).size > MAX_IMPORT_BYTES) throw new Error("El archivo es demasiado grande para ser una transcripci\xF3n.");
+    const words = parseTranscript(import_node_fs12.default.readFileSync(filePath, "utf8"));
     this.d.log.info(`Transcripci\xF3n importada (${words.length} palabras) para "${vod.title}"`);
     return this.save(vod, words, "import");
   }
@@ -33367,7 +33503,8 @@ var TranscriptService = class {
   requirements(vodId) {
     const vod = this.vod(vodId);
     if (!this.d.whisperExe()) throw new Error("No hay transcripci\xF3n de este tramo y no se encuentra Whisper para hacerla. Imp\xF3rtala o indica whisper-cli en Ajustes.");
-    if (vod.status !== "downloaded" || !vod.filePath || !import_node_fs11.default.existsSync(vod.filePath)) throw new Error("No hay transcripci\xF3n de este tramo y el archivo del VOD no est\xE1 descargado, as\xED que no se puede transcribir.");
+    const restorable = Boolean(this.d.source) && vod.status === "downloaded" && vod.origin !== "clip" && Boolean(vod.url);
+    if (!restorable && (vod.status !== "downloaded" || !vod.filePath || !import_node_fs12.default.existsSync(vod.filePath))) throw new Error("No hay transcripci\xF3n de este tramo y el archivo del VOD no est\xE1 descargado, as\xED que no se puede transcribir.");
   }
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
   async downloadModel() {
@@ -33377,7 +33514,7 @@ var TranscriptService = class {
       const bad = ggmlProblem(modelPath(this.modelsDir, name));
       if (!bad) return this.status();
       this.d.log.warn(`El modelo de Whisper \xAB${name}\xBB est\xE1 da\xF1ado (${bad}); se descarga otra vez.`);
-      import_node_fs11.default.rmSync(modelPath(this.modelsDir, name), { force: true });
+      import_node_fs12.default.rmSync(modelPath(this.modelsDir, name), { force: true });
     }
     const task = this.d.tasks.start("model", `Descargando el modelo de Whisper (${name}, ~${WHISPER_MODELS[name].approxMb} MB)`);
     try {
@@ -33400,13 +33537,14 @@ var TranscriptService = class {
     return this.status();
   }
   /** Audio del VOD -> whisper.cpp -> palabras con tiempos. Descarga el modelo la primera vez. */
-  transcribe(vodId, range) {
+  async transcribe(vodId, range) {
     const exe = this.d.whisperExe();
     if (!exe) {
       throw new Error("No se encuentra Whisper. El instalador lo incluye; si lo has compilado t\xFA, indica la ruta de whisper-cli en Ajustes, o importa una transcripci\xF3n ya hecha.");
     }
     const vod = this.vod(vodId);
-    if (vod.status !== "downloaded" || !vod.filePath || !import_node_fs11.default.existsSync(vod.filePath)) {
+    if (vod.status === "downloaded" && (!vod.filePath || !import_node_fs12.default.existsSync(vod.filePath)) && this.d.source) await this.d.source(vodId);
+    if (vod.status !== "downloaded" || !vod.filePath || !import_node_fs12.default.existsSync(vod.filePath)) {
       throw new Error("El VOD todav\xEDa no est\xE1 descargado o su archivo ya no est\xE1 en su sitio.");
     }
     const input = vod.filePath;
@@ -33441,7 +33579,7 @@ var TranscriptService = class {
           if (!/unknown tensor|bad magic|invalid model|has wrong size|unexpected end|failed to read/i.test(e.message)) throw e;
           this.d.log.warn(`El modelo de Whisper parece da\xF1ado; se vuelve a descargar. ${e.message.split("\n")[0]}`);
           task.update(0, "El modelo estaba da\xF1ado: descarg\xE1ndolo otra vez\u2026");
-          import_node_fs11.default.rmSync(modelPath(this.modelsDir, s.whisperModel), { force: true });
+          import_node_fs12.default.rmSync(modelPath(this.modelsDir, s.whisperModel), { force: true });
           await this.downloadModel();
           try {
             words = await run2();
@@ -33497,7 +33635,7 @@ var ILLEGAL_INSTRUCTION = /código (3221225501|132)\b|illegal instruction/i;
 function basicExe(exe) {
   const ext = import_node_path10.default.extname(exe);
   const p = import_node_path10.default.join(import_node_path10.default.dirname(exe), `${import_node_path10.default.basename(exe, ext)}-basic${ext}`);
-  return import_node_fs11.default.existsSync(p) ? p : void 0;
+  return import_node_fs12.default.existsSync(p) ? p : void 0;
 }
 
 // electron/domain/groups.ts
@@ -33664,20 +33802,20 @@ var TaskTracker = class {
 };
 
 // electron/domain/cloud.ts
-var import_node_fs17 = __toESM(require("node:fs"));
+var import_node_fs18 = __toESM(require("node:fs"));
 var import_node_path11 = __toESM(require("node:path"));
 var import_libsodium_wrappers = __toESM(require_libsodium_wrappers());
 
 // electron/services/cloud/github.ts
-var import_node_fs13 = __toESM(require("node:fs"));
+var import_node_fs14 = __toESM(require("node:fs"));
 
 // electron/services/social/common.ts
-var import_node_fs12 = __toESM(require("node:fs"));
+var import_node_fs13 = __toESM(require("node:fs"));
 var defaultSleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
 var PublishError = class extends Error {
 };
 async function readChunk(file, start, endExclusive) {
-  const fh = await import_node_fs12.default.promises.open(file, "r");
+  const fh = await import_node_fs13.default.promises.open(file, "r");
   try {
     const len = endExclusive - start;
     const buf = Buffer.alloc(len);
@@ -33800,10 +33938,10 @@ var Github = class {
     return { id: (await r2.json()).id };
   }
   async uploadAsset(releaseId, name, file, contentType) {
-    const size = import_node_fs13.default.statSync(file).size;
+    const size = import_node_fs14.default.statSync(file).size;
     const r2 = await this.req("POST", `${this.uploads}/repos/${this.o.repo}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`, {
       headers: { "Content-Type": contentType, "Content-Length": String(size) },
-      body: import_node_fs13.default.createReadStream(file),
+      body: import_node_fs14.default.createReadStream(file),
       duplex: true,
       timeout: 60 * 6e4
     });
@@ -33818,7 +33956,7 @@ var Github = class {
     if (!r2.ok || !r2.body) await this.fail(r2, "descargar el v\xEDdeo");
     const { Readable: Readable2 } = await import("node:stream");
     const { pipeline: pipeline2 } = await import("node:stream/promises");
-    await pipeline2(Readable2.fromWeb(r2.body), import_node_fs13.default.createWriteStream(dest));
+    await pipeline2(Readable2.fromWeb(r2.body), import_node_fs14.default.createWriteStream(dest));
   }
   /** Borra la versión y su etiqueta (y con ella los archivos). */
   async deleteRelease(releaseId, tag) {
@@ -33908,7 +34046,7 @@ jobs:
 }
 
 // electron/services/social/youtube.ts
-var import_node_fs14 = __toESM(require("node:fs"));
+var import_node_fs15 = __toESM(require("node:fs"));
 var YT_ENDPOINTS = {
   upload: "https://www.googleapis.com/upload/youtube/v3",
   api: "https://www.googleapis.com/youtube/v3"
@@ -33937,8 +34075,8 @@ async function publishYoutube(d, o) {
   const sleep = d.sleep ?? defaultSleep;
   const chunk = d.chunkSize ?? YT_CHUNK;
   const { file, short } = youtubeFile(o);
-  if (!import_node_fs14.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs14.default.statSync(file).size;
+  if (!import_node_fs15.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs15.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const token = await d.token();
   const auth = { Authorization: `Bearer ${token}` };
@@ -33998,9 +34136,9 @@ async function publishYoutube(d, o) {
     }
   }
   const warn = d.warn ?? (() => void 0);
-  if (o.kind === "long" && o.thumbnail && import_node_fs14.default.existsSync(o.thumbnail)) {
+  if (o.kind === "long" && o.thumbnail && import_node_fs15.default.existsSync(o.thumbnail)) {
     try {
-      const img = import_node_fs14.default.readFileSync(o.thumbnail);
+      const img = import_node_fs15.default.readFileSync(o.thumbnail);
       const r2 = await timedFetch(f, `${ep.upload}/thumbnails/set?videoId=${encodeURIComponent(videoId)}`, { method: "POST", headers: { ...auth, "Content-Type": "image/jpeg" }, body: new Uint8Array(img) });
       if (!r2.ok) warn(`Miniatura no aceptada por YouTube: ${await apiMessage(r2)}`);
     } catch (e) {
@@ -34059,7 +34197,7 @@ async function ensurePlaylist(d, name) {
 }
 
 // electron/services/social/tiktok.ts
-var import_node_fs15 = __toESM(require("node:fs"));
+var import_node_fs16 = __toESM(require("node:fs"));
 var TT_API = "https://open.tiktokapis.com/v2";
 var CHUNK = 10 * 1024 * 1024;
 var POLL_MS = 5e3;
@@ -34090,8 +34228,8 @@ async function publishTiktok(d, o) {
   const f = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? defaultSleep;
   const file = tiktokFile(o);
-  if (!import_node_fs15.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs15.default.statSync(file).size;
+  if (!import_node_fs16.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs16.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const info = await call(d, "/post/publish/creator_info/query/", {});
   const options = info.privacy_level_options ?? [];
@@ -34128,7 +34266,7 @@ async function publishTiktok(d, o) {
 }
 
 // electron/services/social/instagram.ts
-var import_node_fs16 = __toESM(require("node:fs"));
+var import_node_fs17 = __toESM(require("node:fs"));
 var IG_GRAPH = "https://graph.facebook.com/v21.0";
 var POLL_MS2 = 5e3;
 var POLL_MAX2 = 120;
@@ -34152,8 +34290,8 @@ async function publishInstagram(d, o) {
   const sleep = d.sleep ?? defaultSleep;
   const graph = d.graph ?? IG_GRAPH;
   const file = instagramFile(o);
-  if (!import_node_fs16.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs16.default.statSync(file).size;
+  if (!import_node_fs17.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs17.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const { accessToken, igUserId } = await d.token();
   if (!igUserId) throw new PublishError("No hay una cuenta de Instagram profesional enlazada. Vuelve a conectar la cuenta en Conexiones.");
@@ -34172,7 +34310,7 @@ async function publishInstagram(d, o) {
     {
       method: "POST",
       headers: { Authorization: `OAuth ${accessToken}`, offset: "0", file_size: String(size) },
-      body: import_node_fs16.default.createReadStream(file),
+      body: import_node_fs17.default.createReadStream(file),
       // @ts-expect-error opción de Node necesaria para enviar un flujo
       duplex: "half"
     },
@@ -34331,7 +34469,7 @@ var CloudService = class {
   }
   filesFor(o, platform) {
     const video = platform === "youtube" ? youtubeFile(o).file : platform === "tiktok" ? tiktokFile(o) : instagramFile(o);
-    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs17.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
+    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs18.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
   }
   /** Una pasada: sube lo nuevo, trae el estado de lo ya subido y limpia lo cancelado. Nunca lanza. */
   sync() {
@@ -34487,7 +34625,7 @@ var CloudService = class {
         pub.note = e.message;
         continue;
       }
-      if (!import_node_fs17.default.existsSync(files.video)) {
+      if (!import_node_fs18.default.existsSync(files.video)) {
         pub.status = "failed";
         pub.note = "El archivo del v\xEDdeo ya no est\xE1 en su sitio.";
         continue;
@@ -34506,7 +34644,7 @@ var CloudService = class {
           if (e.status !== 422) throw e;
           throw new GithubError(`Hay una subida anterior a medias de \xAB${o.title}\xBB. Pulsa \xABSincronizar\xBB para reintentar.`, 422);
         });
-        const size = import_node_fs17.default.statSync(files.video).size;
+        const size = import_node_fs18.default.statSync(files.video).size;
         const asset = await gh.uploadAsset(rel.id, import_node_path11.default.basename(files.video), files.video, "video/mp4");
         task.update(90);
         const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path11.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
@@ -34684,13 +34822,14 @@ var UpdateService = class {
 function friendly(e) {
   const m = e.message ?? "";
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|net::ERR/i.test(m)) return "Sin conexi\xF3n con GitHub. Se reintentar\xE1 en una hora.";
-  if (/404|Cannot find latest|No published versions/i.test(m)) return "Todav\xEDa no hay versiones publicadas en GitHub.";
+  if (/latest\.yml|Cannot find latest/i.test(m)) return "La \xFAltima versi\xF3n de GitHub a\xFAn no tiene su instalador adjunto (se est\xE1 compilando; suele tardar unos 5 minutos). Se volver\xE1 a comprobar sola.";
+  if (/404|No published versions/i.test(m)) return "Todav\xEDa no hay versiones publicadas en GitHub.";
   if (/403|rate limit/i.test(m)) return "GitHub limit\xF3 las consultas. Se reintentar\xE1 en una hora.";
   return m.split("\n")[0].slice(0, 200);
 }
 
 // electron/domain/autopilot.ts
-var import_node_fs18 = __toESM(require("node:fs"));
+var import_node_fs19 = __toESM(require("node:fs"));
 var import_node_path12 = __toESM(require("node:path"));
 
 // shared/autoEdit.ts
@@ -35214,6 +35353,8 @@ var import_node_child_process4 = require("node:child_process");
 var import_node_readline = __toESM(require("node:readline"));
 function audioEnergy(tools, input, onProgress) {
   return new Promise((resolve, reject) => {
+    const signal = currentAbort();
+    if (signal?.aborted) return reject(new CancelledError());
     const args = [
       "-v",
       "error",
@@ -35231,7 +35372,7 @@ function audioEnergy(tools, input, onProgress) {
       "null",
       "-"
     ];
-    const p = (0, import_node_child_process4.spawn)(tools.ffmpeg, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const p = (0, import_node_child_process4.spawn)(tools.ffmpeg, args, { stdio: ["ignore", "pipe", "pipe"], ...signal ? { signal } : {} });
     const out = [];
     let err = "";
     p.stderr.on("data", (c) => {
@@ -35249,8 +35390,9 @@ function audioEnergy(tools, input, onProgress) {
         if (sec % 60 === 0) onProgress?.(sec);
       }
     });
-    p.on("error", (e) => reject(new Error(`No se pudo ejecutar ffmpeg: ${e.message}`)));
+    p.on("error", (e) => reject(signal?.aborted ? new CancelledError() : new Error(`No se pudo ejecutar ffmpeg: ${e.message}`)));
     p.on("close", (code) => {
+      if (signal?.aborted) return reject(new CancelledError());
       if (code !== 0) return reject(new Error(`ffmpeg no pudo analizar el audio (c\xF3digo ${code}). ${err.trim().slice(0, 300)}`));
       for (let i = 0; i < out.length; i++) if (out[i] === void 0) out[i] = -91;
       resolve(out);
@@ -35347,30 +35489,110 @@ var Autopilot = class {
     this.mark(vod, "waiting", "En cola para analizarse.");
     void this.run(vod.id).catch((e) => this.d.log.error("Piloto autom\xE1tico", e));
   }
-  /** Ejecuta todo el proceso sobre un VOD descargado. Una vez por VOD a la vez. */
-  run(vodId) {
+  /**
+   * Ejecuta todo el proceso sobre un VOD descargado. Una vez por VOD a la vez; con `restart` cancela el que esté en marcha
+   * y empieza de nuevo (así nunca se queda bloqueado un análisis que se colgó).
+   */
+  async run(vodId, o = {}) {
     const vod = this.d.store.data.vods.find((v) => v.id === vodId);
-    if (!vod) return Promise.reject(new Error("El VOD no existe."));
-    if (vod.status !== "downloaded" || !vod.filePath) return Promise.reject(new Error("El VOD todav\xEDa no est\xE1 descargado."));
-    if (vod.autopilot && ["transcribing", "analyzing", "rendering"].includes(vod.autopilot.status) && this.running.has(vodId)) {
-      return Promise.reject(new Error("El piloto autom\xE1tico ya est\xE1 trabajando en este VOD."));
+    if (!vod) throw new Error("El VOD no existe.");
+    const prev = this.running.get(vodId);
+    if (prev) {
+      if (!o.restart) throw new Error("El piloto autom\xE1tico ya est\xE1 trabajando en este VOD.");
+      prev.ctrl.abort();
+      await prev.done.catch(() => void 0);
     }
-    this.running.add(vodId);
-    this.mark(vod, "waiting", "En cola para analizarse.");
-    return this.d.queue.run(() => this.process(vod)).finally(() => this.running.delete(vodId));
+    if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
+    const missing = !vod.filePath || !import_node_fs19.default.existsSync(vod.filePath);
+    if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
+    const ctrl = new AbortController();
+    this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
+    const done = this.d.queue.run(
+      () => withAbort(ctrl.signal, async () => {
+        if (ctrl.signal.aborted) throw new CancelledError();
+        if (missing) await this.d.restore(vodId);
+        return this.process(vod);
+      })
+    );
+    const entry = { ctrl, done };
+    this.running.set(vodId, entry);
+    void done.then(
+      () => void 0,
+      () => void 0
+    ).finally(() => {
+      if (this.running.get(vodId) === entry) this.running.delete(vodId);
+    });
+    return done;
   }
-  running = /* @__PURE__ */ new Set();
-  chatFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs18.default.existsSync(this.d.chatDir)) return void 0;
+  running = /* @__PURE__ */ new Map();
+  /** ¿Se está analizando este VOD ahora mismo (no solo marcado como tal)? */
+  isRunning(vodId) {
+    return this.running.has(vodId);
+  }
+  /** Detiene el análisis en marcha de un VOD (ffmpeg y Whisper incluidos). */
+  cancel(vodId) {
+    const r2 = this.running.get(vodId);
+    if (!r2) return false;
+    r2.ctrl.abort();
+    return true;
+  }
+  /** Al arrancar: un análisis que estaba a medias cuando se cerró el programa no sigue «en marcha»: se puede relanzar. */
+  recoverInterrupted() {
+    let n = 0;
+    for (const v of this.d.store.data.vods) {
+      const st = v.autopilot?.status;
+      if (st && ["waiting", "transcribing", "analyzing", "rendering"].includes(st) && !this.running.has(v.id)) {
+        this.mark(v, "error", "El an\xE1lisis se interrumpi\xF3 (se cerr\xF3 el programa o se qued\xF3 colgado). Pulsa \xABVolver a analizar\xBB.");
+        n++;
+      }
+    }
+    return n;
+  }
+  /**
+   * Borra el directo completo del disco y los datos que ya no sirven, dejando los vídeos y clips creados con sus
+   * transcripciones (solo los tramos que usan). Si el directo hace falta más tarde se vuelve a descargar solo.
+   */
+  discard(vodId, o = {}) {
+    const vod = this.d.store.data.vods.find((v) => v.id === vodId);
+    if (!vod) throw new Error("El VOD no existe.");
+    if (!this.d.discardSource) throw new Error("No se puede borrar el directo en este momento.");
+    if (!o.fromRun && this.running.has(vodId)) throw new Error("Se est\xE1 analizando este directo; espera a que termine o canc\xE9lalo.");
+    const outs = this.d.store.data.outputs.filter((x) => x.vodId === vodId);
+    const spans = [];
+    let known = outs.length > 0;
+    for (const x of outs) {
+      if (x.kind === "long" && x.segments?.length) spans.push(...x.segments);
+      else if (x.start !== void 0 && x.end !== void 0) spans.push({ start: x.start, end: x.end });
+      else known = false;
+    }
+    if (known) this.d.transcripts.prune(vodId, spans);
+    const chat = this.chatFileFor(vod);
+    if (chat) import_node_fs19.default.rmSync(chat, { force: true });
+    const freedBytes = this.d.discardSource(vodId);
+    return { freedBytes, kept: outs.length };
+  }
+  /** Archivo con la actividad del chat de este directo, si se guardó. */
+  chatFileFor(vod) {
+    if (!vod.streamStartedAt || !import_node_fs19.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs18.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs19.default.readdirSync(this.d.chatDir)) {
       try {
-        const j = JSON.parse(import_node_fs18.default.readFileSync(import_node_path12.default.join(this.d.chatDir, f), "utf8"));
-        if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return ChatBins.fromArray(j.bins).toArray();
+        const full = import_node_path12.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs19.default.readFileSync(full, "utf8"));
+        if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
     }
     return void 0;
+  }
+  chatFor(vod) {
+    const f = this.chatFileFor(vod);
+    if (!f) return void 0;
+    try {
+      return ChatBins.fromArray(JSON.parse(import_node_fs19.default.readFileSync(f, "utf8")).bins).toArray();
+    } catch {
+      return void 0;
+    }
   }
   async process(vod) {
     const task = this.d.tasks.start("analyze", `Piloto autom\xE1tico: ${vod.title || "directo"}`);
@@ -35388,6 +35610,7 @@ var Autopilot = class {
             await this.d.transcripts.transcribe(vod.id);
             words = this.d.transcripts.words(vod.id);
           } catch (e) {
+            if (isCancelled(e)) throw e;
             notes.push(`Sin transcripci\xF3n: ${e.message}`);
           }
         } else notes.push("Sin transcripci\xF3n: Whisper no est\xE1 disponible.");
@@ -35399,8 +35622,10 @@ var Autopilot = class {
       try {
         energyDb = await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath, (s) => task.update(30 + Math.min(20, s / duration * 20)));
       } catch (e) {
+        if (isCancelled(e)) throw e;
         notes.push(`Sin an\xE1lisis de volumen: ${e.message}`);
       }
+      throwIfCancelled();
       const chat = this.chatFor(vod);
       if (!chat && this.cfg.chatCapture) notes.push("Sin datos de chat de este directo.");
       const sig = { durationSec: duration, energyDb, chat, words: words.length ? words : void 0 };
@@ -35454,6 +35679,7 @@ var Autopilot = class {
           this.d.store.save();
           created.push(item);
         } catch (e) {
+          if (isCancelled(e)) throw e;
           errors.push(`${label}: ${e.message}`);
         }
         task.update(55 + ++doneCount / total * 40, `Montando (${doneCount}/${total})\u2026`);
@@ -35466,6 +35692,7 @@ var Autopilot = class {
         try {
           return await withEdit();
         } catch (err) {
+          if (isCancelled(err)) throw err;
           this.d.log.warn(`Edici\xF3n profesional fall\xF3, se monta sin ella: ${err.message.split("\n")[0]}`);
           return plain();
         }
@@ -35489,6 +35716,13 @@ var Autopilot = class {
         await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t);
       }
       if (!created.length) throw new Error(`No se pudo montar ning\xFAn v\xEDdeo. ${errors.join(" ")}`);
+      const prior = this.d.store.data.outputs.filter(
+        (x) => x.vodId === vod.id && x.auto?.review === "pending" && !created.includes(x) && x.titleSource !== "manual" && x.descSource !== "manual" && !this.d.store.data.publications.some((p) => p.outputId === x.id)
+      );
+      if (prior.length) {
+        const r2 = this.d.library.removeMany(prior.map((x) => x.id));
+        if (r2.removed) notes.push(`Se sustituyeron ${r2.removed} v\xEDdeo(s) pendientes de revisi\xF3n de un an\xE1lisis anterior.`);
+      }
       let scheduled = 0;
       if (!this.cfg.requireApproval) {
         for (const o of created) {
@@ -35504,11 +35738,25 @@ var Autopilot = class {
         this.cfg.series.nextDay = ser.day + 1;
         this.d.store.save();
       }
+      if (this.cfg.cleanup !== false && this.d.discardSource) {
+        try {
+          const r2 = this.discard(vod.id, { fromRun: true });
+          notes.push(`Directo completo borrado del disco (${(r2.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r2.kept} v\xEDdeo(s) y clip(s) con sus transcripciones.`);
+        } catch (e) {
+          notes.push(`No se pudo borrar el directo completo: ${e.message}`);
+        }
+      }
       const msg = `${created.length} v\xEDdeo(s) listos${this.cfg.requireApproval ? " para revisar" : ` (${scheduled} programados)`}.`;
       this.mark(vod, "done", [msg, ...errors, ...notes].join(" "));
       task.done(msg);
       return vod;
     } catch (e) {
+      if (isCancelled(e)) {
+        this.mark(vod, "error", "An\xE1lisis cancelado.");
+        task.fail("Cancelado");
+        this.d.log.info(`An\xE1lisis cancelado: "${vod.title}".`);
+        throw e;
+      }
       this.mark(vod, "error", e.message);
       task.fail(e.message);
       this.d.log.error("Piloto autom\xE1tico fallido", e);
@@ -35679,7 +35927,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs18.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs19.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -35721,7 +35969,7 @@ ${text}`,
 };
 
 // electron/domain/channel.ts
-var import_node_fs19 = __toESM(require("node:fs"));
+var import_node_fs20 = __toESM(require("node:fs"));
 var import_node_path13 = __toESM(require("node:path"));
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
 var OFFLINE_CONFIRMATIONS = 2;
@@ -35882,10 +36130,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs19.default.mkdirSync(c.dir, { recursive: true });
+      import_node_fs20.default.mkdirSync(c.dir, { recursive: true });
       const file = import_node_path13.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs19.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs19.default.renameSync(`${file}.tmp`, file);
+      import_node_fs20.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs20.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -37011,12 +37259,13 @@ var AppContext = class {
       tools,
       tasks: this.tasks,
       whisperExe: () => this.whisperExe(),
-      modelBaseUrl: o.modelBaseUrl
+      modelBaseUrl: o.modelBaseUrl,
+      source: (id) => this.vods.ensureFile(id)
     });
     const subtitles = { words: (vodId) => this.transcripts.words(vodId), ensure: (vodId, ranges) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
-    this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes });
-    this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles });
+    this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes, source: (id) => this.vods.ensureFile(id) });
+    this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, source: (id) => this.vods.ensureFile(id) });
     this.groups = new GroupService(this.store, o.notifier);
     this.pubs = new PublicationService(this.store, o.notifier);
     this.channel = new ChannelMonitor({
@@ -37050,7 +37299,9 @@ var AppContext = class {
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
-      canTranscribe: o.canTranscribe
+      canTranscribe: o.canTranscribe,
+      restore: (id) => this.vods.ensureFile(id),
+      discardSource: (id) => this.vods.discardSource(id)
     });
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
     this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error("Piloto autom\xE1tico", e)));
@@ -37129,6 +37380,8 @@ var AppContext = class {
   start() {
     const n = this.vods.recoverInterrupted();
     if (n) this.log.warn(`${n} descarga(s) interrumpida(s) marcadas como error.`);
+    const ap = this.autopilot.recoverInterrupted();
+    if (ap) this.log.warn(`${ap} an\xE1lisis interrumpido(s) marcados como error: se pueden relanzar.`);
     this.scheduler.start();
     this.channel.start();
     this.updates.start();
@@ -37208,7 +37461,7 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs20.default.mkdtempSync(import_node_path15.default.join(import_node_os4.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs21.default.mkdtempSync(import_node_path15.default.join(import_node_os4.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
     userDataDir: import_node_path15.default.join(work, "data"),
     defaultOutputDir: import_node_path15.default.join(work, "out"),
@@ -37277,7 +37530,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs20.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs21.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -37285,7 +37538,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs20.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs21.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -37319,7 +37572,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs20.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs21.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {

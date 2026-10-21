@@ -157,7 +157,8 @@ export class VodService {
           this.d.notifier.vod(job);
         }
       });
-      job.title = res.title || job.title;
+      // si yt-dlp devolvió un título con caracteres rotos, se conserva el que ya teníamos (el de Twitch)
+      job.title = res.title && !(res.title.includes('\uFFFD') && job.title && !job.title.includes('\uFFFD')) ? res.title : job.title;
       job.filePath = res.filePath;
       job.cleaned = undefined;
       job.status = 'downloaded';

@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -68,6 +68,9 @@ export default function AutopilotCard() {
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.cleanup !== false} onChange={(e) => up({ cleanup: e.target.checked })} /> Al terminar, borrar el directo completo y los datos que ya no sirven (se conservan los vídeos, los clips y sus transcripciones; si hace falta el directo más adelante, se vuelve a descargar solo)
+      </label>
+      <label className="row" style={{ gap: 8 }}>
+        <input type="checkbox" checked={a.purgePublished !== false} onChange={(e) => up({ purgePublished: e.target.checked })} /> Borrar cada vídeo o clip (sus archivos) cuando ya está publicado en todas sus redes; en Inicio queda el registro de lo publicado
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.chatCapture} onChange={(e) => up({ chatCapture: e.target.checked })} /> Guardar la actividad del chat durante el directo (anónimo, solo cuenta mensajes)

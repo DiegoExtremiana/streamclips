@@ -59,6 +59,8 @@ export interface AutopilotSettings {
   proEdit?: boolean;
   /** Al terminar de sacar vídeos y clips, borrar el directo completo y los datos que ya no sirven. Por defecto sí. */
   cleanup?: boolean;
+  /** Borrar un vídeo o clip (archivos incluidos) cuando ya se ha publicado en todas sus redes. Por defecto sí. */
+  purgePublished?: boolean;
   llm: { provider: LlmChoice; model: string; apiKey: string };
 }
 

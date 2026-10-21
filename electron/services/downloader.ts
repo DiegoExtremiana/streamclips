@@ -29,6 +29,10 @@ function safeId(id: string): string {
   return clean && clean !== '.' && clean !== '..' ? clean : 'video';
 }
 
+// yt-dlp en Windows escribe en la página de códigos del sistema (cp1252) y los acentos llegaban rotos («D�A»). Se le pide UTF-8.
+process.env.PYTHONUTF8 = '1';
+process.env.PYTHONIOENCODING = 'utf-8';
+
 /** Categorías de Twitch a lo largo de un VOD (capítulos de yt-dlp). Vacío si no hay o no se pueden leer. */
 export async function fetchChapters(tools: ToolPaths, url: string): Promise<Chapter[]> {
   const r = await run(tools.ytdlp, ['--no-warnings', '--no-playlist', '--skip-download', '--print', '%(chapters)j', '--', url], 90_000);

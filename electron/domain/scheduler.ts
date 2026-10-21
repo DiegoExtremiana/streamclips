@@ -22,6 +22,7 @@ export class Scheduler {
     private publishers: Publishers = defaultPublishers,
     private intervalMs = 30_000,
     private now: () => number = Date.now,
+    private onPublished?: (outputId: string) => void,
   ) {}
 
   /** Marca como fallidas las publicaciones que se quedaron "publishing" al cerrar la app. */
@@ -87,6 +88,13 @@ export class Scheduler {
           }
         }
         this.store.save();
+        if (pub.status === 'published') {
+          try {
+            this.onPublished?.(pub.outputId);
+          } catch (e) {
+            this.log.warn(`Tras publicar: ${(e as Error).message}`);
+          }
+        }
         // si sigue en espera por el mismo motivo no hace falta refrescar la interfaz en cada pasada
         if (pub.status !== 'scheduled' || pub.note !== previousNote) this.notifier.changed();
       }

@@ -51,6 +51,7 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.enabled !== undefined) n.enabled = bool(p.enabled, 'El interruptor del piloto automático');
   if (p.requireApproval !== undefined) n.requireApproval = bool(p.requireApproval, 'La aprobación previa');
   if (p.proEdit !== undefined) n.proEdit = bool(p.proEdit, 'La edición profesional');
+  if (p.purgePublished !== undefined) n.purgePublished = bool(p.purgePublished, 'El borrado tras publicar');
   if (p.cleanup !== undefined) n.cleanup = bool(p.cleanup, 'La limpieza del directo');
   if (p.chatCapture !== undefined) n.chatCapture = bool(p.chatCapture, 'La captura del chat');
   if (p.maxClips !== undefined) {

@@ -72,6 +72,26 @@ export class LibraryService {
     return { filesLeft };
   }
 
+  /**
+   * Cuando un vídeo o clip ya está publicado en todas las redes en las que se programó, se borra (archivos incluidos):
+   * lo publicado queda como registro. Se desactiva en el piloto automático. Devuelve si se borró.
+   */
+  purgeIfPublished(id: string): boolean {
+    if (this.d.store.data.settings.autopilot.purgePublished === false) return false;
+    const o = this.d.store.data.outputs.find((x) => x.id === id);
+    if (!o) return false;
+    const pubs = this.d.store.data.publications.filter((p) => p.outputId === id);
+    if (!pubs.length || pubs.some((p) => p.status !== 'published')) return false;
+    try {
+      this.remove(id);
+      this.d.log.info(`Publicado en todas sus redes: "${o.title}" se borra del disco.`);
+      return true;
+    } catch (e) {
+      this.d.log.warn(`No se pudo borrar "${o.title}" tras publicarlo: ${(e as Error).message}`);
+      return false;
+    }
+  }
+
   /** Borra varios. Cada uno es independiente: si uno falla, los demás se borran igualmente. */
   removeMany(ids: string[]): { removed: number; errors: { id: string; title: string; reason: string }[]; filesLeft: string[] } {
     const out = { removed: 0, errors: [] as { id: string; title: string; reason: string }[], filesLeft: [] as string[] };

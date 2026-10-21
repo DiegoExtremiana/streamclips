@@ -218,6 +218,7 @@ export class AppContext {
       github: o.github,
       intervalMs: o.cloudIntervalMs,
       headless: o.headless,
+      onPublished: (id) => this.library.purgeIfPublished(id),
     });
     this.engine = new EngineService({
       store: this.store,
@@ -236,6 +237,8 @@ export class AppContext {
       this.log,
       o.publishers ?? realPublishers(this.connections, this.log, o.socialEnv),
       o.schedulerIntervalMs ?? 30_000,
+      undefined,
+      (id) => this.library.purgeIfPublished(id),
     );
   }
 

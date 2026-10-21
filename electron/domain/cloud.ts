@@ -30,6 +30,8 @@ export interface CloudDeps {
   runnerSource: () => string;
   github?: Partial<GithubOpts>;
   intervalMs?: number;
+  /** Se avisa cuando la nube termina de publicar algo (para borrar lo ya publicado). */
+  onPublished?: (outputId: string) => void;
   now?: () => number;
   /** Motor nocturno (sin tus redes conectadas): no toca el secreto con las claves de tus redes. */
   headless?: boolean;
@@ -221,6 +223,7 @@ export class CloudService {
 
   /** Trae el estado de lo ya subido. */
   private async pull(gh: Github): Promise<void> {
+    const publishedNow: string[] = [];
     for (const pub of this.d.store.data.publications.filter((p) => p.cloud && (p.cloud.state === 'queued' || p.cloud.state === 'publishing'))) {
       const c = await gh.getContent(jobPath(pub.key));
       const job = c && parseJob(c.text);
@@ -233,6 +236,7 @@ export class CloudService {
         pub.cloud = { state: 'published' };
         pub.note = undefined;
         this.d.log.info(`Publicado desde la nube: ${pub.key}`);
+        publishedNow.push(pub.outputId);
       } else if (job.status === 'failed') {
         pub.status = 'failed';
         pub.cloud = { state: 'failed' };
@@ -262,6 +266,13 @@ export class CloudService {
       }
     }
     this.d.store.save();
+    for (const id of new Set(publishedNow)) {
+      try {
+        this.d.onPublished?.(id);
+      } catch (e) {
+        this.d.log.warn(`Tras publicar desde la nube: ${(e as Error).message}`);
+      }
+    }
     this.d.notifier.changed();
   }
 

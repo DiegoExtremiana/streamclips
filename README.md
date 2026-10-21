@@ -6,6 +6,8 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 - **Volver a analizar siempre**: un análisis en marcha se puede cancelar («Cancelar») o reiniciar («Volver a analizar»), y si se cerró el programa a medias queda marcado como interrumpido y se puede repetir. Lo pendiente de revisión que sacó un análisis anterior se sustituye, no se duplica.
 - **Limpieza al terminar**: cuando ya están los vídeos y los clips, el directo completo se borra del disco, junto con el chat y los datos que ya no sirven; se conservan los vídeos, los clips y sus transcripciones (solo los tramos que usan). Se desactiva en Piloto automático; «Liberar espacio» lo hace a mano. Si hace falta el directo más adelante, se vuelve a descargar solo.
+- **Borrado tras publicar**: cuando un vídeo o clip ya está publicado en todas las redes en las que se programó (desde el PC o desde la nube), se borran sus archivos y el vídeo; queda el registro de lo publicado. Se desactiva en Piloto automático. Ojo: si lo programas solo a una red y luego quieres otra, ya no estará.
+- **Acentos rotos** («D�A») en los títulos de directos descargados: yt-dlp se ejecuta ahora en UTF-8 y, si aun así llega un título roto, se conserva el de Twitch.
 - **Transcripción más rápida**: decodificación voraz (en lugar de la búsqueda en haz de 5 de whisper.cpp) y varios trozos a la vez. La ganancia real depende del equipo.
 
 ## Novedades de la v0.16

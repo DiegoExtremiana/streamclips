@@ -31304,6 +31304,7 @@ function validateAutopilot(cur, p, enc) {
   if (p.enabled !== void 0) n.enabled = bool(p.enabled, "El interruptor del piloto autom\xE1tico");
   if (p.requireApproval !== void 0) n.requireApproval = bool(p.requireApproval, "La aprobaci\xF3n previa");
   if (p.proEdit !== void 0) n.proEdit = bool(p.proEdit, "La edici\xF3n profesional");
+  if (p.purgePublished !== void 0) n.purgePublished = bool(p.purgePublished, "El borrado tras publicar");
   if (p.cleanup !== void 0) n.cleanup = bool(p.cleanup, "La limpieza del directo");
   if (p.chatCapture !== void 0) n.chatCapture = bool(p.chatCapture, "La captura del chat");
   if (p.maxClips !== void 0) {
@@ -31530,6 +31531,8 @@ function safeId(id) {
   const clean2 = id.replace(/[^A-Za-z0-9._-]/g, "_");
   return clean2 && clean2 !== "." && clean2 !== ".." ? clean2 : "video";
 }
+process.env.PYTHONUTF8 = "1";
+process.env.PYTHONIOENCODING = "utf-8";
 async function fetchChapters(tools, url) {
   const r2 = await run(tools.ytdlp, ["--no-warnings", "--no-playlist", "--skip-download", "--print", "%(chapters)j", "--", url], 9e4);
   return parseChapters(r2.stdout);
@@ -31717,7 +31720,7 @@ var VodService = class {
           this.d.notifier.vod(job);
         }
       });
-      job.title = res.title || job.title;
+      job.title = res.title && !(res.title.includes("\uFFFD") && job.title && !job.title.includes("\uFFFD")) ? res.title : job.title;
       job.filePath = res.filePath;
       job.cleaned = void 0;
       job.status = "downloaded";
@@ -32601,6 +32604,25 @@ var LibraryService = class {
     }
     this.d.log.info(`V\xEDdeo borrado: "${o.title}"${filesLeft.length ? ` (quedan ${filesLeft.length} archivo(s) sin borrar)` : ""}`);
     return { filesLeft };
+  }
+  /**
+   * Cuando un vídeo o clip ya está publicado en todas las redes en las que se programó, se borra (archivos incluidos):
+   * lo publicado queda como registro. Se desactiva en el piloto automático. Devuelve si se borró.
+   */
+  purgeIfPublished(id) {
+    if (this.d.store.data.settings.autopilot.purgePublished === false) return false;
+    const o = this.d.store.data.outputs.find((x) => x.id === id);
+    if (!o) return false;
+    const pubs = this.d.store.data.publications.filter((p) => p.outputId === id);
+    if (!pubs.length || pubs.some((p) => p.status !== "published")) return false;
+    try {
+      this.remove(id);
+      this.d.log.info(`Publicado en todas sus redes: "${o.title}" se borra del disco.`);
+      return true;
+    } catch (e) {
+      this.d.log.warn(`No se pudo borrar "${o.title}" tras publicarlo: ${e.message}`);
+      return false;
+    }
   }
   /** Borra varios. Cada uno es independiente: si uno falla, los demás se borran igualmente. */
   removeMany(ids) {
@@ -34502,6 +34524,7 @@ var CloudService = class {
   }
   /** Trae el estado de lo ya subido. */
   async pull(gh) {
+    const publishedNow = [];
     for (const pub of this.d.store.data.publications.filter((p) => p.cloud && (p.cloud.state === "queued" || p.cloud.state === "publishing"))) {
       const c = await gh.getContent(jobPath(pub.key));
       const job = c && parseJob(c.text);
@@ -34514,6 +34537,7 @@ var CloudService = class {
         pub.cloud = { state: "published" };
         pub.note = void 0;
         this.d.log.info(`Publicado desde la nube: ${pub.key}`);
+        publishedNow.push(pub.outputId);
       } else if (job.status === "failed") {
         pub.status = "failed";
         pub.cloud = { state: "failed" };
@@ -34554,6 +34578,13 @@ var CloudService = class {
       }
     }
     this.d.store.save();
+    for (const id of new Set(publishedNow)) {
+      try {
+        this.d.onPublished?.(id);
+      } catch (e) {
+        this.d.log.warn(`Tras publicar desde la nube: ${e.message}`);
+      }
+    }
     this.d.notifier.changed();
   }
   /**
@@ -36513,13 +36544,14 @@ async function youtubePlaylists(conn, env = {}) {
 
 // electron/domain/scheduler.ts
 var Scheduler = class {
-  constructor(store, notifier, log, publishers = defaultPublishers, intervalMs = 3e4, now = Date.now) {
+  constructor(store, notifier, log, publishers = defaultPublishers, intervalMs = 3e4, now = Date.now, onPublished) {
     this.store = store;
     this.notifier = notifier;
     this.log = log;
     this.publishers = publishers;
     this.intervalMs = intervalMs;
     this.now = now;
+    this.onPublished = onPublished;
   }
   timer = null;
   busy = false;
@@ -36583,6 +36615,13 @@ var Scheduler = class {
           }
         }
         this.store.save();
+        if (pub.status === "published") {
+          try {
+            this.onPublished?.(pub.outputId);
+          } catch (e) {
+            this.log.warn(`Tras publicar: ${e.message}`);
+          }
+        }
         if (pub.status !== "scheduled" || pub.note !== previousNote) this.notifier.changed();
       }
     } finally {
@@ -37338,7 +37377,8 @@ var AppContext = class {
       }),
       github: o.github,
       intervalMs: o.cloudIntervalMs,
-      headless: o.headless
+      headless: o.headless,
+      onPublished: (id) => this.library.purgeIfPublished(id)
     });
     this.engine = new EngineService({
       store: this.store,
@@ -37358,7 +37398,9 @@ var AppContext = class {
       o.notifier,
       this.log,
       o.publishers ?? realPublishers(this.connections, this.log, o.socialEnv),
-      o.schedulerIntervalMs ?? 3e4
+      o.schedulerIntervalMs ?? 3e4,
+      void 0,
+      (id) => this.library.purgeIfPublished(id)
     );
   }
   /** whisper-cli: la ruta de Ajustes, si no la incluida con el programa. */

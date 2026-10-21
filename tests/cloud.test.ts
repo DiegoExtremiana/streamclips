@@ -138,7 +138,7 @@ describe('nube: de punta a punta', () => {
     assert.equal(e2.ctx.cloud.status().enabled, false);
   });
 
-  it('lo programado sube a la cola; el PC deja de publicarlo; la nube lo publica, borra su copia y el PC lo da por publicado conservando el archivo local', async () => {
+  it('lo programado sube a la cola; el PC deja de publicarlo; la nube lo publica, borra su copia y el PC lo da por publicado y borra la copia local', async () => {
     const gh = await fakeGithub();
     const yt = await fakeYoutube();
     created.push(gh.close, yt.close);
@@ -178,10 +178,11 @@ describe('nube: de punta a punta', () => {
     assert.equal(gh.releases.size, 0, 'la copia de la nube se borra al publicar');
     assert.equal(parseJob(gh.files.get('queue/o1__youtube.json')!)!.status, 'published');
 
-    // el programa se entera, marca publicado y conserva su copia local
+    // el programa se entera, marca publicado y, ya publicado en todas sus redes, borra su copia local
     await e.ctx.cloud.sync();
     assert.equal(e.ctx.store.data.publications[0].status, 'published');
-    assert.ok(fs.existsSync(longFile), 'la copia local se conserva');
+    assert.equal(fs.existsSync(longFile), false, 'la copia local se borra al estar publicado');
+    assert.equal(e.ctx.store.data.outputs.some((o) => o.id === 'o1'), false);
     assert.equal(e.ctx.cloud.status().queued, 0);
     // y el registro de la cola se limpia en la siguiente pasada sin tocar nada local
     await e.ctx.cloud.sync();

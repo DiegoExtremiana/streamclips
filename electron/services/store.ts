@@ -29,6 +29,15 @@ export function normalizeOutput(raw: unknown): OutputItem | null {
   return { ...(rest as unknown as OutputItem), kind, files };
 }
 
+/** Velocidades medidas (segundos de audio por segundo de reloj), solo números válidos. */
+function ratios(x: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (typeof x === 'object' && x !== null && !Array.isArray(x)) {
+    for (const [k, v] of Object.entries(x as Record<string, unknown>)) if (typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 1000) out[k] = v;
+  }
+  return out;
+}
+
 export interface DataShape {
   schemaVersion: number;
   settings: Settings;
@@ -40,6 +49,8 @@ export interface DataShape {
   connections: Partial<Record<Platform, StoredConnection>>;
   cloud: CloudState;
   engine: EngineState;
+  /** Medidas de este equipo (p. ej. la velocidad de Whisper por modelo) para estimar cuánto tarda cada cosa. */
+  stats: { transcribeRatio: Record<string, number> };
 }
 
 /** Motor nocturno (repositorio público con GitHub Actions). */
@@ -114,6 +125,7 @@ function defaults(defaultOutputDir: string): DataShape {
         llm: { provider: 'none', model: '', apiKey: '' },
       },
     },
+    stats: { transcribeRatio: {} },
     vods: [],
     outputs: [],
     groups: [],
@@ -197,6 +209,7 @@ export class Store {
           clipTimes: times(saved.settings?.autopilot?.clipTimes, base.settings.autopilot.clipTimes),
         },
       },
+      stats: { transcribeRatio: ratios(saved.stats?.transcribeRatio) },
       vods: arr<VodJob>(saved.vods),
       outputs: arr<unknown>(saved.outputs).map(normalizeOutput).filter((x): x is OutputItem => x !== null),
       groups: arr<Group>(saved.groups),

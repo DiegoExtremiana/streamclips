@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ChannelStatus, OutputItem, Publication, TaskInfo, VodJob } from '../../shared/types';
+import type { ChannelStatus, OutputItem, Publication, VodJob } from '../../shared/types';
 import { fmtDate } from '../../shared/time';
+import { analysisTask, fmtEta, remainingSec, useNow, useTasks } from '../useTasks';
+import AnalysisProgress from '../AnalysisProgress';
 import { errMsg } from '../lib';
 import type { TabId } from '../App';
 import GuideCard from './GuideCard';
@@ -25,21 +27,16 @@ const AUTO_STATUS: Record<NonNullable<VodJob['autopilot']>['status'], { label: s
 export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void; part: 'status' | 'guide' | 'bottom' }) {
   const { vods, onChanged } = props;
   const [channel, setChannel] = useState<ChannelStatus | null>(null);
-  const [tasks, setTasks] = useState<TaskInfo[]>([]);
+  const tasks = useTasks();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [url, setUrl] = useState('');
 
   useEffect(() => {
     window.api.channelStatus().then(setChannel).catch((e) => setError(errMsg(e)));
-    window.api.listTasks().then(setTasks).catch(() => undefined);
     const offC = window.api.onChannelUpdate(setChannel);
-    const offT = window.api.onTaskUpdate((t) =>
-      setTasks((prev) => [t, ...prev.filter((x) => x.id !== t.id)].slice(0, 12)),
-    );
     return () => {
       offC();
-      offT();
     };
   }, []);
 
@@ -61,6 +58,7 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
 
   const visibleVods = vods.filter((v) => v.origin !== 'clip');
   const running = tasks.filter((t) => t.status === 'running');
+  const now = useNow(running.length > 0);
   const recent = tasks.filter((t) => t.status !== 'running').slice(0, 5);
 
   return (
@@ -108,7 +106,7 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
             <div key={t.id}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <div className="title-ellipsis">{t.label}</div>
-                <span className="muted small">{t.progress}%</span>
+                <span className="muted small">{remainingSec(t, now) !== null ? `Tiempo estimado: ${fmtEta(remainingSec(t, now)!)} · ` : ''}{t.progress}%</span>
               </div>
               <div className="progress" role="progressbar" aria-valuenow={t.progress} aria-valuemin={0} aria-valuemax={100}>
                 <div style={{ width: `${t.progress}%` }} />
@@ -146,6 +144,7 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
                 </div>
               )}
               {v.status === 'error' && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{v.error}</div>}
+              {['transcribing', 'analyzing', 'rendering'].includes(v.autopilot?.status ?? '') && analysisTask(tasks, v.id) && <AnalysisProgress task={analysisTask(tasks, v.id)!} now={now} />}
               {v.autopilot?.note && v.autopilot.status !== 'waiting' && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{v.autopilot.note}</div>}
               {v.status === 'downloaded' && (
                 <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>

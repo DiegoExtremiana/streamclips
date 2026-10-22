@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChannelStatus, TwitchVod, VodJob } from '../../shared/types';
 import { fmtDate, fmtTime } from '../../shared/time';
 import { errMsg, notify } from '../lib';
+import { analysisTask, useNow, useTasks } from '../useTasks';
+import AnalysisProgress from '../AnalysisProgress';
 import { IconFilm } from '../icons';
 
 const REFRESH_MS = 60_000;
@@ -41,6 +43,8 @@ export function jobFor(v: TwitchVod, vods: VodJob[]): VodJob | undefined {
  */
 export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () => Promise<void> }) {
   const { vods, onChanged } = props;
+  const tasks = useTasks();
+  const now = useNow(tasks.some((t) => t.kind === 'analyze' && t.status === 'running'));
   const [list, setList] = useState<TwitchVod[] | null>(null);
   const [channel, setChannel] = useState<ChannelStatus | null>(null);
   const [error, setError] = useState('');
@@ -127,6 +131,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
                 <span className={`badge ${p.cls}`} title={job?.error ?? job?.autopilot?.note}>{p.label}</span>
                 {job?.chapters && job.chapters.length > 1 && <span className="muted small">{new Set(job.chapters.map((c) => c.title)).size} categorías</span>}
               </div>
+              {p.phase === 'working' && job && analysisTask(tasks, job.id) && <AnalysisProgress task={analysisTask(tasks, job.id)!} now={now} />}
               {(p.phase === 'failed') && (job?.error || job?.autopilot?.note) && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{(job.error ?? job.autopilot?.note ?? '').slice(0, 160)}</div>}
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
                 <button

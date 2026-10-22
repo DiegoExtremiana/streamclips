@@ -158,6 +158,15 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     await transcribeVideo(e.ctx.tools(), vod.filePath!, { ...o, language: 'en' });
     assert.equal(fs.readFileSync(log, 'utf8').trim().split('\n').length, 3);
   });
+  it('mide la velocidad de Whisper en este equipo para estimar tiempos (por modelo)', async () => {
+    const { e, vod } = withWhisper();
+    assert.equal(e.ctx.store.data.stats.transcribeRatio.tiny, undefined);
+    assert.ok(e.ctx.transcripts.ratio('tiny') > 0, 'antes de medir hay una estimación gruesa');
+    await e.ctx.transcripts.transcribe(vod.id);
+    const r = e.ctx.store.data.stats.transcribeRatio.tiny;
+    assert.ok(r > 0 && r < 1000, `ratio ${r}`);
+    assert.equal(e.ctx.transcripts.ratio('tiny'), r);
+  });
   it('al terminar la transcripción completa no queda la carpeta de trozos', async () => {
     const { e, vod } = withWhisper();
     await e.ctx.transcripts.transcribe(vod.id);

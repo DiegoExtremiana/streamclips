@@ -103,6 +103,10 @@ export interface TaskInfo {
   error?: string;
   startedAt: string;
   endedAt?: string;
+  /** Cuándo se calcula que terminará (ISO); ausente mientras no hay datos para estimarlo. */
+  etaAt?: string;
+  /** Id del VOD al que pertenece (análisis y transcripciones). */
+  ref?: string;
 }
 
 export interface AutopilotState {

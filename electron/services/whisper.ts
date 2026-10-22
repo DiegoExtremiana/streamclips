@@ -227,6 +227,8 @@ export interface TranscribeOpts {
   jobs?: number;
   /** Carpeta donde se guarda cada trozo terminado: si se cancela o se apaga el equipo, al repetir solo se hacen los que faltan. */
   checkpointDir?: string;
+  /** Se llama al empezar, ya sabida la duración y cuánto estaba hecho de un intento anterior (0 a 1). */
+  onInfo?: (i: { durationSec: number; skippedFraction: number }) => void;
   chunkSec?: number;
   /** Solo este tramo del vídeo (segundos); las palabras salen con su tiempo en el vídeo completo. */
   range?: { start: number; end: number };
@@ -301,6 +303,7 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
     }
   }
   const report = () => o.onProgress?.((pct.reduce((a, b) => a + b, 0) / n), `${n} trozo${n > 1 ? 's' : ''}`);
+  o.onInfo?.({ durationSec: dur, skippedFraction: n ? done.size / n : 0 });
   const abort = currentAbort();
   let next = 0;
   let failed: unknown;

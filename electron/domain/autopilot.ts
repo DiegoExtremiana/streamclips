@@ -219,7 +219,7 @@ export class Autopilot {
   }
 
   private async process(vod: VodJob): Promise<VodJob> {
-    const task = this.d.tasks.start('analyze', `Piloto automático: ${vod.title || 'directo'}`);
+    const task = this.d.tasks.start('analyze', `Piloto automático: ${vod.title || 'directo'}`, vod.id);
     const notes: string[] = [];
     try {
       const t0 = Date.now();
@@ -247,7 +247,11 @@ export class Autopilot {
           task.update(2, 'Transcribiendo el directo (puede tardar)…');
           try {
             const ts = Date.now();
-            await this.d.transcripts.transcribe(vod.id);
+            // la transcripción ocupa del 2 % al 30 % de la barra del análisis (y es casi todo el tiempo)
+            await this.d.transcripts.transcribe(vod.id, undefined, {
+              onProgress: (pct, detail) => task.update(2 + pct * 0.28, detail ? `Transcribiendo (${detail})…` : undefined),
+              onEstimate: (sec) => task.estimate(sec / 0.28),
+            });
             words = this.d.transcripts.words(vod.id);
             tTranscribe = lap(ts);
             const mins = (vod.durationSec ?? 0) / 60;

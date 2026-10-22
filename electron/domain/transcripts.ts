@@ -224,6 +224,19 @@ export class TranscriptService {
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
   private modelJob?: Promise<WhisperStatus>;
 
+  /** Segundos de audio que se transcriben por segundo de reloj con este modelo: lo medido en este equipo o, si aún no hay, una estimación gruesa. */
+  ratio(model: string): number {
+    const guess: Record<string, number> = { tiny: 10, base: 5, small: 1.3, medium: 0.45 };
+    return this.d.store.data.stats.transcribeRatio[model] ?? guess[model] ?? 1;
+  }
+
+  private learnRatio(model: string, measured: number): void {
+    if (!Number.isFinite(measured) || measured <= 0 || measured >= 1000) return;
+    const r = this.d.store.data.stats.transcribeRatio;
+    r[model] = r[model] ? Math.round((r[model] * 0.5 + measured * 0.5) * 1000) / 1000 : Math.round(measured * 1000) / 1000;
+    this.d.store.save();
+  }
+
   /** Una sola descarga del modelo a la vez, aunque haya varias transcripciones esperándolo. */
   downloadModel(): Promise<WhisperStatus> {
     if (this.modelJob) return this.modelJob;
@@ -266,7 +279,7 @@ export class TranscriptService {
   }
 
   /** Audio del VOD -> whisper.cpp -> palabras con tiempos. Descarga el modelo la primera vez. */
-  async transcribe(vodId: string, range?: Range): Promise<VodJob> {
+  async transcribe(vodId: string, range?: Range, opts: { onProgress?: (pct: number, detail?: string) => void; onEstimate?: (totalSec: number) => void } = {}): Promise<VodJob> {
     const exe = this.d.whisperExe();
     if (!exe) {
       throw new Error('No se encuentra Whisper. El instalador lo incluye; si lo has compilado tú, indica la ruta de whisper-cli en Ajustes, o importa una transcripción ya hecha.');
@@ -281,8 +294,10 @@ export class TranscriptService {
     const s = this.d.store.data.settings;
     return this.d.queue.run(async () => {
       await this.downloadModel();
-      const task = this.d.tasks.start('transcribe', range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`);
+      const task = this.d.tasks.start('transcribe', range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`, vodId);
       try {
+        let info: { durationSec: number; skippedFraction: number } | undefined;
+        const t0 = Date.now();
         const runWith = (bin: string) =>
           transcribeVideo(this.d.tools(), input, {
             exe: bin,
@@ -292,7 +307,16 @@ export class TranscriptService {
             ...this.share(),
             // el directo entero tarda horas: lo hecho se guarda por trozos y se puede pausar o apagar el equipo
             ...(range ? {} : { checkpointDir: this.checkpointDir(vodId) }),
-            onProgress: (pct, detail) => task.update(pct, detail),
+            onProgress: (pct, detail) => {
+              task.update(pct, detail);
+              opts.onProgress?.(pct, detail);
+            },
+            onInfo: ({ durationSec, skippedFraction }) => {
+              info = { durationSec, skippedFraction };
+              const est = (durationSec * (1 - skippedFraction)) / this.ratio(s.whisperModel);
+              task.estimate(est);
+              opts.onEstimate?.(est);
+            },
           });
         // Si el whisper-cli principal usa instrucciones que este procesador no tiene (código 0xC000001D), se usa el alternativo, sin extensiones.
         const basic = basicExe(exe);
@@ -341,6 +365,7 @@ export class TranscriptService {
           }
         }
         this.d.log.info(`Transcripción con Whisper (${words.length} palabras) para "${vod.title}"`);
+        if (info && !range) this.learnRatio(s.whisperModel, (info.durationSec * (1 - info.skippedFraction)) / Math.max(1, (Date.now() - t0) / 1000));
         const v = range ? this.savePartial(vod, words, range) : this.save(vod, words, 'whisper');
         if (!range) fs.rmSync(this.checkpointDir(vodId), { recursive: true, force: true });
         task.done(`${words.length} palabras`);

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { TranscriptInfo, VodJob, WhisperStatus } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
@@ -21,6 +22,8 @@ export interface TranscriptDeps {
   notifier: Notifier;
   /** Cola propia: transcribir puede tardar mucho y no debe bloquear los renders. */
   queue: SerialQueue;
+  /** Transcripciones a la vez: se reparten los núcleos entre ellas. */
+  concurrency?: () => number;
   tools: () => ToolPaths;
   tasks: TaskTracker;
   /** Ruta a whisper-cli (la de Ajustes o la incluida); null si no hay. */
@@ -219,7 +222,19 @@ export class TranscriptService {
   }
 
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
-  async downloadModel(): Promise<WhisperStatus> {
+  private modelJob?: Promise<WhisperStatus>;
+
+  /** Una sola descarga del modelo a la vez, aunque haya varias transcripciones esperándolo. */
+  downloadModel(): Promise<WhisperStatus> {
+    if (this.modelJob) return this.modelJob;
+    const p = this.fetchModel().finally(() => {
+      this.modelJob = undefined;
+    });
+    this.modelJob = p;
+    return p;
+  }
+
+  private async fetchModel(): Promise<WhisperStatus> {
     const name = this.d.store.data.settings.whisperModel;
     if (!isKnownModel(name)) throw new Error(`Modelo de Whisper desconocido: ${name} (usa tiny, base, small o medium).`);
     if (modelInstalled(this.modelsDir, name)) {
@@ -274,6 +289,7 @@ export class TranscriptService {
             model: modelPath(this.modelsDir, s.whisperModel),
             language: s.whisperLanguage,
             range,
+            ...this.share(),
             // el directo entero tarda horas: lo hecho se guarda por trozos y se puede pausar o apagar el equipo
             ...(range ? {} : { checkpointDir: this.checkpointDir(vodId) }),
             onProgress: (pct, detail) => task.update(pct, detail),
@@ -335,6 +351,13 @@ export class TranscriptService {
         throw e;
       }
     });
+  }
+
+  /** Con varias transcripciones a la vez, cada Whisper usa su parte de los núcleos (y trabaja de un trozo en uno). */
+  private share(): { jobs?: number; threads?: number } {
+    const n = Math.max(1, this.d.concurrency?.() ?? 1);
+    if (n === 1) return {};
+    return { jobs: 1, threads: Math.max(2, Math.floor((os.cpus().length * 0.75) / n)) };
   }
 
   /** Trozos de transcripción ya terminados de un directo a medias (para retomarlo). */

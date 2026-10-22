@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, parallel: a.parallel ?? 2,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -75,6 +75,13 @@ export default function AutopilotCard() {
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.chatCapture} onChange={(e) => up({ chatCapture: e.target.checked })} /> Guardar la actividad del chat durante el directo (anónimo, solo cuenta mensajes)
       </label>
+      <div className="field" style={{ maxWidth: 360 }}>
+        <label htmlFor="ap-parallel">Directos que se analizan a la vez</label>
+        <select id="ap-parallel" value={a.parallel ?? 2} onChange={(e) => up({ parallel: Number(e.target.value) })}>
+          {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <div className="muted small">Se reparten los núcleos del procesador: el total no acaba antes, pero ninguno espera a que termine otro. Con 1 se hacen de uno en uno.</div>
+      </div>
       <div className="row" style={{ marginTop: 10 }}>
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="ap-videos">Vídeos por directo (resumen incluido)</label>

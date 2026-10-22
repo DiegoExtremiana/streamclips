@@ -61,6 +61,8 @@ export interface AutopilotSettings {
   cleanup?: boolean;
   /** Borrar un vídeo o clip (archivos incluidos) cuando ya se ha publicado en todas sus redes. Por defecto sí. */
   purgePublished?: boolean;
+  /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */
+  parallel?: number;
   llm: { provider: LlmChoice; model: string; apiKey: string };
 }
 
@@ -188,6 +190,8 @@ export interface VodJob {
   filePath?: string;
   /** El directo completo ya se borró del disco (se conservan los vídeos, los clips y sus transcripciones); se vuelve a descargar si hace falta. */
   cleaned?: { at: string; freedBytes: number };
+  /** Día de la serie asignado a este directo (se reserva al analizarlo, así que repetir el análisis conserva el mismo). */
+  seriesDay?: number;
   error?: string;
   createdAt: string;
 }

@@ -31,6 +31,28 @@ function setup(extra: Parameters<typeof makeEnv>[0] = {}) {
 }
 
 
+describe('piloto automático: varios directos a la vez', () => {
+  it('dos directos se analizan a la vez y cada uno recibe su día de serie, sin repetirse', async () => {
+    const { e, vod } = setup();
+    e.ctx.settings.set({ autopilot: { maxClips: 0, maxVideos: 1, parallel: 2, series: { name: 'Serie', nextDay: 1 } } });
+    const vod2 = addDownloadedVod(e, video, 'vod2');
+    const seen = new Set<string>();
+    const watch = setInterval(() => {
+      for (const v of e.ctx.store.data.vods) if (v.autopilot && ['transcribing', 'analyzing', 'rendering'].includes(v.autopilot.status)) seen.add(v.id);
+    }, 50);
+    try {
+      await Promise.all([e.ctx.autopilot.run(vod.id), e.ctx.autopilot.run(vod2.id)]);
+    } finally {
+      clearInterval(watch);
+    }
+    assert.ok(e.ctx.store.data.vods.every((v) => v.autopilot?.status === 'done'));
+    assert.equal(seen.size, 2, 'los dos estuvieron trabajando a la vez');
+    const titles = e.ctx.store.data.outputs.map((o) => o.title).sort();
+    assert.deepEqual(titles, ['Serie Día 1 - Resumen', 'Serie Día 2 - Resumen']);
+    assert.equal(e.ctx.store.data.settings.autopilot.series.nextDay, 3);
+  });
+});
+
 describe('piloto automático: reanálisis y limpieza', () => {
   it('«Pausar» detiene el análisis dejándolo en pausa y «Reanudar» lo termina', async () => {
     const { e, vod } = setupCopy(false);

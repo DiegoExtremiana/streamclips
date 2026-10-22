@@ -103,13 +103,15 @@ export class AppContext {
   readonly cloud: CloudService;
   readonly engine: EngineService;
   readonly cloudQueue = new SerialQueue();
-  readonly autopilotQueue = new SerialQueue();
+  /** Cuántos directos se analizan a la vez (Ajustes › Piloto automático). */
+  private parallel = () => this.store.data.settings.autopilot.parallel ?? 2;
+  readonly autopilotQueue = new SerialQueue(() => this.parallel());
   /** Las descargas y los renders van en colas distintas, cada una de una en una. */
   private readonly bundled: BundledTools;
   private readonly socialEnv: PublisherEnv | undefined;
   readonly downloadQueue = new SerialQueue();
   readonly renderQueue = new SerialQueue();
-  readonly transcribeQueue = new SerialQueue();
+  readonly transcribeQueue = new SerialQueue(() => this.parallel());
 
   constructor(o: ContextOptions) {
     this.bundled = o.bundled ?? {};
@@ -139,6 +141,7 @@ export class AppContext {
       log: this.log,
       notifier: o.notifier,
       queue: this.transcribeQueue,
+      concurrency: () => this.parallel(),
       tools,
       tasks: this.tasks,
       whisperExe: () => this.whisperExe(),

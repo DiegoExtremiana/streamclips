@@ -222,8 +222,22 @@ export class Autopilot {
     const task = this.d.tasks.start('analyze', `Piloto automático: ${vod.title || 'directo'}`);
     const notes: string[] = [];
     try {
+      const t0 = Date.now();
+      const lap = (since: number) => {
+        const s = Math.round((Date.now() - since) / 1000);
+        return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
+      };
+      // El volumen del audio no depende de la transcripción: se calcula a la vez (ffmpeg y Whisper no se estorban) y se recoge después.
+      const energyJob = (async () => {
+        try {
+          return { v: await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath!, () => undefined) };
+        } catch (e) {
+          return { e };
+        }
+      })();
       // 1) transcripción (si se puede)
       let words = this.d.transcripts.words(vod.id);
+      let tTranscribe = '';
       if (!this.d.transcripts.isFull(vod.id)) {
         const st = this.d.transcripts.status();
         const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? (await this.d.clips.vodDuration(vod.id))) : null;
@@ -232,8 +246,12 @@ export class Autopilot {
           this.mark(vod, 'transcribing');
           task.update(2, 'Transcribiendo el directo (puede tardar)…');
           try {
+            const ts = Date.now();
             await this.d.transcripts.transcribe(vod.id);
             words = this.d.transcripts.words(vod.id);
+            tTranscribe = lap(ts);
+            const mins = (vod.durationSec ?? 0) / 60;
+            this.d.log.info(`Transcripción de "${vod.title}": ${tTranscribe}${mins ? ` (${(mins / Math.max(0.05, (Date.now() - ts) / 60000)).toFixed(1)}× tiempo real)` : ''}`);
           } catch (e) {
             if (isCancelled(e)) throw e;
             notes.push(`Sin transcripción: ${(e as Error).message}`);
@@ -246,12 +264,13 @@ export class Autopilot {
       task.update(30, 'Analizando audio y chat…');
       const duration = await this.d.clips.vodDuration(vod.id);
       let energyDb: number[] | undefined;
-      try {
-        energyDb = await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath!, (s) => task.update(30 + Math.min(20, (s / duration) * 20)));
-      } catch (e) {
-        if (isCancelled(e)) throw e;
-        notes.push(`Sin análisis de volumen: ${(e as Error).message}`);
+      const er = await energyJob;
+      if ('v' in er) energyDb = er.v;
+      else {
+        if (isCancelled(er.e)) throw er.e;
+        notes.push(`Sin análisis de volumen: ${(er.e as Error).message}`);
       }
+      task.update(50);
       throwIfCancelled();
       const chat = this.chatFor(vod);
       if (!chat && this.cfg.chatCapture) notes.push('Sin datos de chat de este directo.');
@@ -291,15 +310,22 @@ export class Autopilot {
       task.update(55, 'Poniendo títulos…');
       const titles = await this.titles(vod, words, moments, mains, notes);
       // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
-      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', this.cfg.series) : null;
+      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
       if (ser) {
         const st = seriesTitles(ser, mains.length);
         titles.summary = { title: clean(st.summary, 100), description: titles.summary.description };
         titles.mains = titles.mains.map((t, i) => ({ title: clean(st.mains[i], 100), description: t.description || `En este vídeo: ${t.title}` }));
         notes.push(`Serie «${ser.name}», día ${ser.day}.`);
+        if (!ser.fromTitle) {
+          // el día se reserva ya: con varios directos a la vez, dos no pueden coger el mismo número; al repetir este directo conserva el suyo
+          vod.seriesDay = ser.day;
+          this.cfg.series.nextDay = Math.max(this.cfg.series.nextDay, ser.day + 1);
+          this.d.store.save();
+        }
       }
 
       // 5) montaje
+      const tr = Date.now();
       this.mark(vod, 'rendering');
       const created: OutputItem[] = [];
       const errors: string[] = [];
@@ -375,10 +401,6 @@ export class Autopilot {
           }
         }
       }
-      if (ser && !ser.fromTitle && created.some((o) => o.kind === 'long')) {
-        this.cfg.series.nextDay = ser.day + 1; // el siguiente directo de la serie es el día siguiente
-        this.d.store.save();
-      }
       // ya están los vídeos y los clips: el directo completo y lo que solo servía para sacarlos se borra
       if (this.cfg.cleanup !== false && this.d.discardSource) {
         try {
@@ -388,6 +410,8 @@ export class Autopilot {
           notes.push(`No se pudo borrar el directo completo: ${(e as Error).message}`);
         }
       }
+      notes.push(`Tiempos: ${tTranscribe ? `transcripción ${tTranscribe}, ` : ''}montaje ${lap(tr)}, total ${lap(t0)}.`);
+      this.d.log.info(`Análisis de "${vod.title}": ${notes[notes.length - 1]}`);
       const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ` (${scheduled} programados)`}.`;
       this.mark(vod, 'done', [msg, ...errors, ...notes].join(' '));
       task.done(msg);

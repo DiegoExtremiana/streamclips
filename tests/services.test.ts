@@ -196,6 +196,32 @@ describe('SerialQueue', () => {
     assert.equal(max, 1);
   });
 
+  it('con límite 2 van dos a la vez, en orden de llegada, y el límite se puede cambiar en caliente', async () => {
+    let limit = 2;
+    const q = new SerialQueue(() => limit);
+    let running = 0;
+    let max = 0;
+    const started: number[] = [];
+    const task = (n: number) => () =>
+      (async () => {
+        started.push(n);
+        running++;
+        max = Math.max(max, running);
+        await sleep(30);
+        running--;
+        return n;
+      })();
+    assert.deepEqual(await Promise.all([1, 2, 3, 4, 5].map((n) => q.run(task(n)))), [1, 2, 3, 4, 5]);
+    assert.equal(max, 2);
+    assert.deepEqual(started, [1, 2, 3, 4, 5]);
+    limit = 1;
+    max = 0;
+    await Promise.all([6, 7, 8].map((n) => q.run(task(n))));
+    assert.equal(max, 1);
+    await q.idle();
+    assert.equal(q.size, 0);
+  });
+
   it('un fallo no bloquea las siguientes tareas', async () => {
     const q = new SerialQueue();
     const a = q.run(async () => {

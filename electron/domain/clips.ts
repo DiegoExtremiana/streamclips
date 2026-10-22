@@ -84,7 +84,7 @@ export class ClipService {
       // La miniatura es un extra: si falla, el elemento (ya validado) se conserva sin ella.
       const main = primaryRender(item);
       try {
-        if (main) item.thumbnail = await autoThumbnail(this.d.tools(), outDir, item.id, main, files[main]!, durationSec);
+        if (main) item.thumbnail = await autoThumbnail(this.d.tools(), outDir, item.id, main, files[main]!, durationSec, this.coverOpts(title));
       } catch (e) {
         this.d.log.warn(`Sin miniatura para "${title}": ${(e as Error).message}`);
       }
@@ -98,6 +98,11 @@ export class ClipService {
       this.d.log.error(`Render fallido ("${title}")`, e);
       throw e;
     }
+  }
+
+  /** Opciones de la portada con estilo: frase del título, fuente y el interruptor de Ajustes. */
+  private coverOpts(title: string) {
+    return { title, styled: this.d.store.data.settings.autopilot.styledCovers !== false, fontsDir: this.d.subtitles.fontsDir };
   }
 
   /** Duración real del VOD descargado. */

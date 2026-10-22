@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.19
+
+- **Portadas con estilo** (Piloto automático › «Portadas con estilo…», activado por defecto): en vídeos y clips horizontales se elige, entre 6 fotogramas, el más vivo y contrastado, se le sube color y nitidez, y se escribe una frase corta (1 a 3 palabras, mayúsculas, contorno grueso, amarillo y blanco) a la izquierda dejando libre la derecha para la cara; en series, el número de día/episodio grande en la esquina. Sale en 1280×720. Si algo falla se usa el fotograma sencillo de siempre.
+- **Ritmo de edición** algo más vivo: pausas a partir de 1 s, acercamientos de 1,15× más seguidos y más frases de énfasis.
+- Referencias de estilo: Ibai, PokeAlexVGC, Sekiam, IlloJuan, Rubius (los dos canales) y ElXokas. Solo se han mirado las páginas públicas de sus canales (miniaturas, títulos, duraciones) para sacar rasgos generales; no se copia ninguna portada. Del montaje de sus vídeos no se ha analizado nada: el ritmo es un criterio, no una medición.
+- El título de la portada sale del título del vídeo; la portada no detecta caras ni recorta al sujeto.
+
 ## Novedades de la v0.18
 
 - **Varios directos a la vez** (Piloto automático › «Directos que se analizan a la vez», 1 a 4, por defecto 2): los núcleos se reparten, así que el total no acaba antes, pero ninguno espera a que termine otro. Cada directo de una serie recibe su «Día N» sin repetirse.

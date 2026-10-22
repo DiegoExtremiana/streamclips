@@ -61,6 +61,8 @@ export interface AutopilotSettings {
   cleanup?: boolean;
   /** Borrar un vídeo o clip (archivos incluidos) cuando ya se ha publicado en todas sus redes. Por defecto sí. */
   purgePublished?: boolean;
+  /** Portadas con estilo de los canales grandes: fotograma más vivo y expresivo, frase corta grande y número de episodio. Por defecto sí. */
+  styledCovers?: boolean;
   /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */
   parallel?: number;
   llm: { provider: LlmChoice; model: string; apiKey: string };

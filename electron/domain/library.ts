@@ -170,6 +170,11 @@ export class LibraryService {
     return o;
   }
 
+  /** Opciones de la portada con estilo: frase del título, fuente y el interruptor de Ajustes. */
+  private coverOpts(title: string) {
+    return { title, styled: this.d.store.data.settings.autopilot.styledCovers !== false, fontsDir: this.d.subtitles.fontsDir };
+  }
+
   /** Cambia la miniatura guardada y borra la anterior solo después de haber registrado la nueva. */
   private swapThumbnail(o: OutputItem, next: string): void {
     const old = o.thumbnail;
@@ -271,7 +276,7 @@ export class LibraryService {
           if (kind === 'horizontal') durationSec = info.durationSec;
         }
         try {
-          thumb = await autoThumbnail(this.d.tools(), outDir, o.id, 'horizontal', files.horizontal!, durationSec);
+          thumb = await autoThumbnail(this.d.tools(), outDir, o.id, 'horizontal', files.horizontal!, durationSec, this.coverOpts(o.title));
         } catch (e) {
           this.d.log.warn(`Sin miniatura para "${o.title}": ${(e as Error).message}`);
         }
@@ -413,7 +418,7 @@ export class LibraryService {
         const f = primaryFile(o);
         if (!k || !f || !fs.existsSync(f)) return;
         try {
-          const t = await autoThumbnail(this.d.tools(), this.d.store.data.settings.outputDir, o.id, k, f, o.durationSec);
+          const t = await autoThumbnail(this.d.tools(), this.d.store.data.settings.outputDir, o.id, k, f, o.durationSec, this.coverOpts(o.title));
           o.thumbnail = t;
           this.changed();
           n++;

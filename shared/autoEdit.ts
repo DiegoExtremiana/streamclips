@@ -20,9 +20,12 @@ export interface EditOpts {
   maxCuts?: number;
 }
 
-const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro)/i;
+const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
 
 /**
+ * Ritmo tomado de los canales grandes en español (Ibai, Rubius, IlloJuan…): pausas cortas, acercamientos frecuentes
+ * en las reacciones y golpes de sonido. Los valores son un criterio de edición, no una medición de esos vídeos.
+ *
  * Plan de edición "de editor profesional" para un tramo a partir de lo que se dice:
  *  - corta las pausas largas (conservando un respiro) para que el ritmo no decaiga,
  *  - acerca la imagen (punch) en las frases exclamativas y de énfasis, con un golpe de sonido,
@@ -31,10 +34,10 @@ const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wo
  * Sin habla suficiente solo aplica fundidos y volumen. Todo cae dentro de lo que se conserva.
  */
 export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan {
-  const minGap = o.minGap ?? 1.2;
+  const minGap = o.minGap ?? 1.0;
   const keepBefore = o.keepBefore ?? 0.4;
   const keepAfter = o.keepAfter ?? 0.3;
-  const spacing = o.punchSpacing ?? 7;
+  const spacing = o.punchSpacing ?? 6;
   const inside = words.filter((w) => w.start >= seg.start && w.end <= seg.end + 0.25).sort((a, b) => a.start - b.start);
   const dur = seg.end - seg.start;
   const effects: Effect[] = [];
@@ -68,7 +71,7 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
     punches.push(at);
   }
   for (const at of punches) {
-    effects.push({ type: 'punch', at, duration: 1, zoom: 1.12 });
+    effects.push({ type: 'punch', at, duration: 1, zoom: 1.15 });
     effects.push({ type: 'sfx', at, sound: 'hit' });
   }
   // un whoosh en cada salto de corte

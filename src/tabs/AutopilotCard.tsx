@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, parallel: a.parallel ?? 2,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, styledCovers: a.styledCovers !== false, parallel: a.parallel ?? 2,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -65,6 +65,9 @@ export default function AutopilotCard() {
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.proEdit !== false} onChange={(e) => up({ proEdit: e.target.checked })} /> Edición profesional: quita silencios y tiempos muertos, acerca la imagen en los momentos fuertes, añade efectos de sonido y fundidos y iguala el volumen
+      </label>
+      <label className="row" style={{ gap: 8 }}>
+        <input type="checkbox" checked={a.styledCovers !== false} onChange={(e) => up({ styledCovers: e.target.checked })} /> Portadas con estilo de los canales grandes: el fotograma más vivo y expresivo, una frase corta grande con contorno y el número del episodio
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.cleanup !== false} onChange={(e) => up({ cleanup: e.target.checked })} /> Al terminar, borrar el directo completo y los datos que ya no sirven (se conservan los vídeos, los clips y sus transcripciones; si hace falta el directo más adelante, se vuelve a descargar solo)

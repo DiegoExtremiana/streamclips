@@ -14,8 +14,8 @@ export class SerialQueue {
     this.pending++;
     return new Promise<T>((resolve, reject) => {
       const start = () => {
-        this.active++;
-        fn().then(resolve, reject).finally(() => {
+        // siempre en el siguiente turno: quien encola puede seguir preparando el trabajo antes de que empiece
+        Promise.resolve().then(fn).then(resolve, reject).finally(() => {
           this.active--;
           this.pending--;
           this.pump();
@@ -29,7 +29,10 @@ export class SerialQueue {
 
   private pump(): void {
     const max = Math.max(1, Math.floor(this.limit()) || 1);
-    while (this.active < max && this.waiting.length) this.waiting.shift()!();
+    while (this.active < max && this.waiting.length) {
+      this.active++;
+      this.waiting.shift()!();
+    }
   }
 
   get size(): number {

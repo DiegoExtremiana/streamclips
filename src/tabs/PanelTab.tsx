@@ -16,6 +16,7 @@ const AUTO_STATUS: Record<NonNullable<VodJob['autopilot']>['status'], { label: s
   transcribing: { label: 'Piloto: transcribiendo', cls: 'warn' },
   analyzing: { label: 'Piloto: analizando', cls: 'warn' },
   rendering: { label: 'Piloto: montando', cls: 'warn' },
+  paused: { label: 'Piloto: en pausa', cls: 'warn' },
   done: { label: 'Piloto: listo', cls: 'ok' },
   skipped: { label: 'Piloto: sin momentos', cls: 'warn' },
   error: { label: 'Piloto: error', cls: 'bad' },
@@ -149,7 +150,13 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
               {v.status === 'downloaded' && (
                 <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   {['waiting', 'transcribing', 'analyzing', 'rendering'].includes(v.autopilot?.status ?? '') && (
+                    <button className="btn ghost small" disabled={busy === `ps${v.id}`} title="Detiene el análisis conservando lo ya transcrito; se retoma con «Reanudar», aunque cierres el programa." onClick={() => void act(`ps${v.id}`, () => window.api.pauseAutopilot(v.id))}>Pausar</button>
+                  )}
+                  {['waiting', 'transcribing', 'analyzing', 'rendering'].includes(v.autopilot?.status ?? '') && (
                     <button className="btn ghost small" disabled={busy === `cx${v.id}`} onClick={() => void act(`cx${v.id}`, () => window.api.cancelAutopilot(v.id))}>Cancelar análisis</button>
+                  )}
+                  {v.autopilot?.status === 'paused' && (
+                    <button className="btn small" disabled={busy === `ap${v.id}`} onClick={() => void act(`ap${v.id}`, () => window.api.runAutopilot(v.id))}>Reanudar</button>
                   )}
                   <button
                     className="btn ghost small"

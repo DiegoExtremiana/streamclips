@@ -9,7 +9,7 @@ const REFRESH_MS = 60_000;
 const LIVE_SLACK_MS = 5 * 60_000;
 const WORKING = ['waiting', 'transcribing', 'analyzing', 'rendering'];
 
-type Phase = 'live' | 'new' | 'queued' | 'downloading' | 'ready' | 'working' | 'done' | 'skipped' | 'failed';
+type Phase = 'live' | 'paused' | 'new' | 'queued' | 'downloading' | 'ready' | 'working' | 'done' | 'skipped' | 'failed';
 
 /** En qué punto está un directo de Twitch dentro del programa, a partir de su VOD descargado (si lo hay). */
 export function broadcastPhase(v: TwitchVod, job: VodJob | undefined, live: ChannelStatus['stream'] | undefined, now = Date.now()): { phase: Phase; label: string; cls: string } {
@@ -23,6 +23,7 @@ export function broadcastPhase(v: TwitchVod, job: VodJob | undefined, live: Chan
   const a = job.autopilot;
   if (!a) return { phase: 'ready', label: 'Descargado', cls: 'ok' };
   if (WORKING.includes(a.status)) return { phase: 'working', label: a.status === 'transcribing' ? 'Transcribiendo' : a.status === 'analyzing' ? 'Analizando' : a.status === 'rendering' ? 'Montando' : 'En cola', cls: 'warn' };
+  if (a.status === 'paused') return { phase: 'paused', label: 'En pausa', cls: 'warn' };
   if (a.status === 'done') return { phase: 'done', label: job.cleaned ? 'Analizado · directo borrado' : 'Analizado', cls: 'ok' };
   if (a.status === 'skipped') return { phase: 'skipped', label: 'Sin momentos', cls: 'warn' };
   return { phase: 'failed', label: 'Error al analizar', cls: 'bad' };
@@ -134,8 +135,9 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
                   title={p.phase === 'live' ? 'Todavía está en directo' : working ? 'Cancela el análisis en marcha y empieza de nuevo' : again ? 'Vuelve a analizarlo; sustituye los vídeos pendientes de revisión que sacó antes' : undefined}
                   onClick={() => void analyze(v)}
                 >
-                  {p.phase === 'live' ? 'En directo…' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
+                  {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' ? 'Reanudar' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
                 </button>
+                {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.pauseAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Pausar</button>}
                 {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.cancelAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Cancelar</button>}
               </div>
             </div>

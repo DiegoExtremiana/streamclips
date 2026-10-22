@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.18
+
+- **Pausar y retomar**: un análisis en marcha se puede pausar («Pausar») y retomar cuando quieras («Reanudar»). La transcripción, que es lo que más tarda, se guarda por trozos de 20 minutos: al reanudar solo se hacen los que faltan. Si cierras el programa o se apaga el PC a mitad, el análisis queda «En pausa» (ya no «Error») y se retoma igual. Lo que no se aprovecha es el trozo que estaba a medias en ese momento (hasta 20 minutos de audio) y el montaje, que empieza de nuevo.
+
 ## Novedades de la v0.17
 
 - **Volver a analizar siempre**: un análisis en marcha se puede cancelar («Cancelar») o reiniciar («Volver a analizar»), y si se cerró el programa a medias queda marcado como interrumpido y se puede repetir. Lo pendiente de revisión que sacó un análisis anterior se sustituye, no se duplica.

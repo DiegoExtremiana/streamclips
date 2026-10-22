@@ -49,6 +49,7 @@ const api: Api = {
   deleteOutputs: (ids) => call(CHANNELS.outputsDeleteMany, ids),
   runAutopilot: (id) => call(CHANNELS.autopilotRun, id),
   cancelAutopilot: (id) => call(CHANNELS.autopilotCancel, id),
+  pauseAutopilot: (id) => call(CHANNELS.autopilotPause, id),
   discardVod: (id) => call(CHANNELS.vodsDiscard, id),
   setAutoImport: (on) => call(CHANNELS.channelAuto, on),
   onChannelUpdate: (cb) => {

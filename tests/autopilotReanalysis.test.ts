@@ -32,6 +32,21 @@ function setup(extra: Parameters<typeof makeEnv>[0] = {}) {
 
 
 describe('piloto automático: reanálisis y limpieza', () => {
+  it('«Pausar» detiene el análisis dejándolo en pausa y «Reanudar» lo termina', async () => {
+    const { e, vod } = setupCopy(false);
+    const first = e.ctx.autopilot.run(vod.id);
+    first.catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(e.ctx.autopilot.pause(vod.id), true);
+    await assert.rejects(first);
+    const st = e.ctx.store.data.vods[0].autopilot;
+    assert.equal(st?.status, 'paused');
+    assert.match(st?.note ?? '', /pausa/i);
+    assert.equal(e.ctx.autopilot.pause(vod.id), false, 'ya no hay nada en marcha que pausar');
+    await e.ctx.autopilot.run(vod.id);
+    assert.equal(e.ctx.store.data.vods[0].autopilot?.status, 'done');
+  });
+
   function setupCopy(cleanup: boolean) {
     const { e, vod } = setup();
     const copy = path.join(e.root, 'copia-live.mp4');
@@ -96,8 +111,8 @@ describe('piloto automático: reanálisis y limpieza', () => {
     vod.autopilot = { status: 'rendering', at: new Date().toISOString() };
     assert.equal(e.ctx.autopilot.recoverInterrupted(), 1);
     const st = e.ctx.store.data.vods[0].autopilot;
-    assert.equal(st?.status, 'error');
-    assert.match(st?.note ?? '', /interrumpi/);
+    assert.equal(st?.status, 'paused');
+    assert.match(st?.note ?? '', /interrumpi.*Reanudar/);
     assert.equal(e.ctx.autopilot.recoverInterrupted(), 0);
   });
 

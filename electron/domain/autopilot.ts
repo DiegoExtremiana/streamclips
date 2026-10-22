@@ -120,6 +120,8 @@ export class Autopilot {
       () => undefined,
     ).finally(() => {
       if (this.running.get(vodId) === entry) this.running.delete(vodId);
+      // pausado antes de empezar (esperando en la cola): el estado se ajusta aquí
+      if (this.pauseRequested.delete(vodId) && vod.autopilot?.status === 'waiting') this.markPaused(vod);
     });
     return done;
   }
@@ -128,6 +130,15 @@ export class Autopilot {
   /** ¿Se está analizando este VOD ahora mismo (no solo marcado como tal)? */
   isRunning(vodId: string): boolean {
     return this.running.has(vodId);
+  }
+
+  private pauseRequested = new Set<string>();
+
+  /** Pausa el análisis: se detiene (Whisper y ffmpeg incluidos) conservando lo ya transcrito; «Reanudar» lo retoma. */
+  pause(vodId: string): boolean {
+    if (!this.running.has(vodId)) return false;
+    this.pauseRequested.add(vodId);
+    return this.cancel(vodId);
   }
 
   /** Detiene el análisis en marcha de un VOD (ffmpeg y Whisper incluidos). */
@@ -144,11 +155,16 @@ export class Autopilot {
     for (const v of this.d.store.data.vods) {
       const st = v.autopilot?.status;
       if (st && ['waiting', 'transcribing', 'analyzing', 'rendering'].includes(st) && !this.running.has(v.id)) {
-        this.mark(v, 'error', 'El análisis se interrumpió (se cerró el programa o se quedó colgado). Pulsa «Volver a analizar».');
+        this.markPaused(v, true);
         n++;
       }
     }
     return n;
+  }
+
+  private markPaused(vod: VodJob, interrupted = false): void {
+    const kept = this.d.transcripts.hasCheckpoint(vod.id) ? ' Lo ya transcrito se conserva.' : '';
+    this.mark(vod, 'paused', `${interrupted ? 'Se interrumpió al cerrar el programa o apagar el equipo.' : 'En pausa.'}${kept} Pulsa «Reanudar» cuando quieras.`);
   }
 
   /**
@@ -378,9 +394,11 @@ export class Autopilot {
       return vod;
     } catch (e) {
       if (isCancelled(e)) {
-        this.mark(vod, 'error', 'Análisis cancelado.');
-        task.fail('Cancelado');
-        this.d.log.info(`Análisis cancelado: "${vod.title}".`);
+        const paused = this.pauseRequested.delete(vod.id);
+        if (paused) this.markPaused(vod);
+        else this.mark(vod, 'error', 'Análisis cancelado.');
+        task.fail(paused ? 'En pausa' : 'Cancelado');
+        this.d.log.info(`Análisis ${paused ? 'en pausa' : 'cancelado'}: "${vod.title}".`);
         throw e;
       }
       this.mark(vod, 'error', (e as Error).message);

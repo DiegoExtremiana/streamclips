@@ -138,6 +138,32 @@ describe('transcripciones: Whisper (whisper.cpp)', () => {
     assert.deepEqual(par, seq);
     assert.deepEqual(par.map((w) => w.text).filter((t) => t.startsWith('trozo')), ['trozo0', 'trozo1', 'trozo2']);
   });
+  it('pausar y retomar: los trozos terminados se guardan y al repetir solo se hacen los que faltan', async () => {
+    const { e, vod, log } = withWhisper();
+    const { transcribeVideo } = await import('../electron/services/whisper');
+    const ck = path.join(e.root, 'parcial');
+    const o = { exe: fakeWhisper(), model: path.join(e.userData, 'models', 'ggml-tiny.bin'), language: 'es', chunkSec: 5, jobs: 1, threads: 1, checkpointDir: ck };
+    const all = await transcribeVideo(e.ctx.tools(), vod.filePath!, o);
+    assert.deepEqual(fs.readdirSync(ck).filter((f) => /^c\d+\.json$/.test(f)).sort(), ['c0.json', 'c1.json', 'c2.json']);
+    // se «pierde» el trozo 1 (el equipo se apagó antes de terminarlo)
+    fs.rmSync(path.join(ck, 'c1.json'));
+    fs.rmSync(log);
+    const again = await transcribeVideo(e.ctx.tools(), vod.filePath!, o);
+    const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]);
+    assert.equal(calls.length, 1, 'solo se rehace el trozo que faltaba');
+    assert.match(calls[0][calls[0].indexOf('-f') + 1], /c1\.wav$/);
+    assert.deepEqual(again, all, 'el resultado es idéntico al de una sola pasada');
+    // otro idioma u otro modelo: lo guardado ya no vale
+    fs.rmSync(log);
+    await transcribeVideo(e.ctx.tools(), vod.filePath!, { ...o, language: 'en' });
+    assert.equal(fs.readFileSync(log, 'utf8').trim().split('\n').length, 3);
+  });
+  it('al terminar la transcripción completa no queda la carpeta de trozos', async () => {
+    const { e, vod } = withWhisper();
+    await e.ctx.transcripts.transcribe(vod.id);
+    assert.equal(fs.existsSync(e.ctx.transcripts.checkpointDir(vod.id)), false);
+    assert.equal(e.ctx.transcripts.hasCheckpoint(vod.id), false);
+  });
   it('cancelar a media transcripción detiene Whisper y no deja procesos ni trozos', async () => {
     const { e, vod } = withWhisper();
     const { transcribeVideo } = await import('../electron/services/whisper');

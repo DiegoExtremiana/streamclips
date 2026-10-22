@@ -104,7 +104,7 @@ export interface TaskInfo {
 }
 
 export interface AutopilotState {
-  status: 'waiting' | 'transcribing' | 'analyzing' | 'rendering' | 'done' | 'error' | 'skipped';
+  status: 'waiting' | 'transcribing' | 'analyzing' | 'rendering' | 'paused' | 'done' | 'error' | 'skipped';
   note?: string;
   at: string;
 }
@@ -483,6 +483,8 @@ export interface Api {
   runAutopilot(vodId: string): Promise<VodJob>;
   /** Detiene el análisis en marcha de un VOD. Devuelve si había algo que detener. */
   cancelAutopilot(vodId: string): Promise<boolean>;
+  /** Pausa el análisis: lo ya transcrito se conserva y se retoma con «Reanudar» (aunque se cierre el programa). */
+  pauseAutopilot(vodId: string): Promise<boolean>;
   /** Borra del disco el directo completo (se conservan vídeos, clips y sus transcripciones). */
   discardVod(vodId: string): Promise<{ freedBytes: number; kept: number }>;
   onChannelUpdate(cb: (s: ChannelStatus) => void): () => void;
@@ -549,6 +551,7 @@ export const CHANNELS = {
   channelRefresh: 'channel:refresh',
   channelAnalyze: 'channel:analyze',
   autopilotCancel: 'autopilot:cancel',
+  autopilotPause: 'autopilot:pause',
   vodsDiscard: 'vods:discard',
   channelClips: 'channel:clips',
   channelImportClip: 'channel:import-clip',

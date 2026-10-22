@@ -129,6 +129,7 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
     return vod;
   });
   handle(CHANNELS.autopilotCancel, (id) => ctx.autopilot.cancel(str(id, 'id')));
+  handle(CHANNELS.autopilotPause, (id) => ctx.autopilot.pause(str(id, 'id')));
   handle(CHANNELS.vodsDiscard, (id) => ctx.autopilot.discard(str(id, 'id')));
 
   handle(CHANNELS.vodsList, () => ctx.store.data.vods);

@@ -225,6 +225,8 @@ export interface TranscribeOpts {
   threads?: number;
   /** Trozos que se transcriben a la vez (por defecto según los núcleos). */
   jobs?: number;
+  /** Carpeta donde se guarda cada trozo terminado: si se cancela o se apaga el equipo, al repetir solo se hacen los que faltan. */
+  checkpointDir?: string;
   chunkSec?: number;
   /** Solo este tramo del vídeo (segundos); las palabras salen con su tiempo en el vídeo completo. */
   range?: { start: number; end: number };
@@ -261,11 +263,43 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
   const n = Math.max(1, Math.ceil(dur / chunk));
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-whisper-'));
   const parts: Word[][] = Array.from({ length: n }, () => []);
+  const done = new Set<number>();
   // Varios trozos a la vez: un solo Whisper no aprovecha todos los núcleos (por encima de ~4-6 hilos apenas gana).
   const cpus = os.cpus().length;
   const jobs = Math.max(1, Math.min(n, o.jobs ?? (cpus >= 12 ? 3 : cpus >= 6 ? 2 : 1)));
   const threads = o.threads ?? (jobs === 1 ? Math.max(1, cpus - 1) : Math.max(2, Math.round(cpus / 2 / jobs)));
   const pct = new Array<number>(n).fill(0);
+  // Trozos ya hechos en un intento anterior (misma entrada, modelo, idioma y troceado)
+  const ck = o.checkpointDir;
+  const ckKey = ck ? JSON.stringify({ input: path.basename(input), size: fs.statSync(input).size, mtime: Math.round(fs.statSync(input).mtimeMs), model: path.basename(o.model), lang: o.language || 'auto', chunk, from, to }) : '';
+  const ckFile = (i: number) => path.join(ck!, `c${i}.json`);
+  if (ck) {
+    fs.mkdirSync(ck, { recursive: true });
+    const meta = path.join(ck, 'meta.json');
+    let same = false;
+    try {
+      same = fs.readFileSync(meta, 'utf8') === ckKey;
+    } catch {
+      /* sin intento anterior */
+    }
+    if (!same) {
+      for (const f of fs.readdirSync(ck)) fs.rmSync(path.join(ck, f), { force: true });
+      fs.writeFileSync(meta, ckKey);
+    } else {
+      for (let i = 0; i < n; i++) {
+        try {
+          const w = JSON.parse(fs.readFileSync(ckFile(i), 'utf8')) as Word[];
+          if (Array.isArray(w)) {
+            parts[i] = w;
+            pct[i] = 100;
+            done.add(i);
+          }
+        } catch {
+          /* trozo sin terminar o dañado: se rehace */
+        }
+      }
+    }
+  }
   const report = () => o.onProgress?.((pct.reduce((a, b) => a + b, 0) / n), `${n} trozo${n > 1 ? 's' : ''}`);
   const abort = currentAbort();
   let next = 0;
@@ -276,11 +310,12 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
         if (abort?.aborted) throw new CancelledError();
         const i = next++;
         if (i >= n) return;
+        if (done.has(i)) continue;
         const offset = from + i * chunk;
         const len = Math.min(chunk, Math.max(0.5, to - offset));
         const wav = path.join(tmp, `c${i}.wav`);
         await run(tools.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(offset), '-t', String(len), '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
-        if (!fs.existsSync(wav) || fs.statSync(wav).size < 2000) { pct[i] = 100; report(); continue; } // trozo sin audio
+        if (!fs.existsSync(wav) || fs.statSync(wav).size < 2000) { pct[i] = 100; if (ck) fs.writeFileSync(ckFile(i), '[]'); report(); continue; } // trozo sin audio
         const base = path.join(tmp, `c${i}`);
         // -bs 1 -bo 1: decodificación voraz. Por defecto whisper.cpp usa búsqueda en haz de 5 (bastante más lenta y casi igual de precisa en voz clara).
         const args = ['-m', o.model, '-f', wav, '-l', o.language || 'auto', '-oj', '-ml', '1', '-sow', '-pp', '-bs', '1', '-bo', '1', '-t', String(threads), '-of', base];
@@ -288,6 +323,10 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
         const json = `${base}.json`;
         if (!fs.existsSync(json)) throw new Error('Whisper terminó pero no generó la transcripción.');
         parts[i] = parseWhisperCppJson(fs.readFileSync(json, 'utf8'), offset);
+        if (ck) {
+          fs.writeFileSync(`${ckFile(i)}.tmp`, JSON.stringify(parts[i]));
+          fs.renameSync(`${ckFile(i)}.tmp`, ckFile(i)); // atómico: nunca queda un trozo a medias
+        }
         fs.rmSync(wav, { force: true });
         pct[i] = 100;
         report();

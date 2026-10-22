@@ -274,6 +274,8 @@ export class TranscriptService {
             model: modelPath(this.modelsDir, s.whisperModel),
             language: s.whisperLanguage,
             range,
+            // el directo entero tarda horas: lo hecho se guarda por trozos y se puede pausar o apagar el equipo
+            ...(range ? {} : { checkpointDir: this.checkpointDir(vodId) }),
             onProgress: (pct, detail) => task.update(pct, detail),
           });
         // Si el whisper-cli principal usa instrucciones que este procesador no tiene (código 0xC000001D), se usa el alternativo, sin extensiones.
@@ -324,6 +326,7 @@ export class TranscriptService {
         }
         this.d.log.info(`Transcripción con Whisper (${words.length} palabras) para "${vod.title}"`);
         const v = range ? this.savePartial(vod, words, range) : this.save(vod, words, 'whisper');
+        if (!range) fs.rmSync(this.checkpointDir(vodId), { recursive: true, force: true });
         task.done(`${words.length} palabras`);
         return v;
       } catch (e) {
@@ -332,6 +335,20 @@ export class TranscriptService {
         throw e;
       }
     });
+  }
+
+  /** Trozos de transcripción ya terminados de un directo a medias (para retomarlo). */
+  checkpointDir(vodId: string): string {
+    return path.join(this.dir, `${vodId.replace(/[^\w-]/g, '_')}.parcial`);
+  }
+
+  /** ¿Hay una transcripción a medias que se puede retomar? */
+  hasCheckpoint(vodId: string): boolean {
+    try {
+      return fs.readdirSync(this.checkpointDir(vodId)).some((f) => /^c\d+\.json$/.test(f));
+    } catch {
+      return false;
+    }
   }
 
   /** Instrucciones + transcripción para pegar en Claude. */

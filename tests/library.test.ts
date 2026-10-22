@@ -38,7 +38,7 @@ describe('Biblioteca: miniaturas automáticas', () => {
     assert.deepEqual([clip.start, clip.end, clip.cropX], [2, 6, 0]);
     assert.ok(clip.thumbnail && fs.existsSync(clip.thumbnail));
     const t = await probe(TOOLS, clip.thumbnail!);
-    assert.deepEqual([t.width, t.height], [640, 360]);
+    assert.deepEqual([t.width, t.height], [1280, 720]); // portada con estilo
   });
 
   it('un clip solo vertical también tiene miniatura (de su versión vertical)', async () => {

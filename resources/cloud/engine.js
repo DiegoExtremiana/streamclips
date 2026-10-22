@@ -30687,7 +30687,7 @@ var require_libsodium_wrappers = __commonJS({
 
 // electron/engine/engine.ts
 var import_node_fs21 = __toESM(require("node:fs"));
-var import_node_os4 = __toESM(require("node:os"));
+var import_node_os5 = __toESM(require("node:os"));
 var import_node_path15 = __toESM(require("node:path"));
 
 // electron/app/context.ts
@@ -30715,6 +30715,13 @@ function normalizeOutput(raw) {
   if (!Object.keys(files).length && o.remote !== true) return null;
   const { file: _legacyFile, ...rest } = o;
   return { ...rest, kind, files };
+}
+function ratios(x) {
+  const out = {};
+  if (typeof x === "object" && x !== null && !Array.isArray(x)) {
+    for (const [k, v] of Object.entries(x)) if (typeof v === "number" && Number.isFinite(v) && v > 0 && v < 1e3) out[k] = v;
+  }
+  return out;
 }
 function defaults(defaultOutputDir) {
   return {
@@ -30744,6 +30751,7 @@ function defaults(defaultOutputDir) {
         llm: { provider: "none", model: "", apiKey: "" }
       }
     },
+    stats: { transcribeRatio: {} },
     vods: [],
     outputs: [],
     groups: [],
@@ -30813,6 +30821,7 @@ var Store = class _Store {
           clipTimes: times(saved.settings?.autopilot?.clipTimes, base.settings.autopilot.clipTimes)
         }
       },
+      stats: { transcribeRatio: ratios(saved.stats?.transcribeRatio) },
       vods: arr(saved.vods),
       outputs: arr(saved.outputs).map(normalizeOutput).filter((x) => x !== null),
       groups: arr(saved.groups),
@@ -30907,29 +30916,41 @@ var Secrets = class {
 
 // electron/services/queue.ts
 var SerialQueue = class {
-  tail = Promise.resolve();
+  constructor(limit = () => 1) {
+    this.limit = limit;
+  }
+  waiting = [];
+  active = 0;
   pending = 0;
+  idleWaiters = [];
   run(fn) {
     this.pending++;
-    const result = this.tail.then(fn, fn);
-    this.tail = result.then(
-      () => void 0,
-      () => void 0
-    );
-    return result.finally(() => {
-      this.pending--;
+    return new Promise((resolve, reject) => {
+      const start = () => {
+        Promise.resolve().then(fn).then(resolve, reject).finally(() => {
+          this.active--;
+          this.pending--;
+          this.pump();
+          if (this.pending === 0) for (const w of this.idleWaiters.splice(0)) w();
+        });
+      };
+      this.waiting.push(start);
+      this.pump();
     });
+  }
+  pump() {
+    const max = Math.max(1, Math.floor(this.limit()) || 1);
+    while (this.active < max && this.waiting.length) {
+      this.active++;
+      this.waiting.shift()();
+    }
   }
   get size() {
     return this.pending;
   }
-  /** Se resuelve cuando no queda nada en cola. */
-  async idle() {
-    let seen;
-    do {
-      seen = this.tail;
-      await seen;
-    } while (seen !== this.tail);
+  /** Se resuelve cuando no queda nada en cola ni en marcha. */
+  idle() {
+    return this.pending === 0 ? Promise.resolve() : new Promise((r2) => this.idleWaiters.push(r2));
   }
 };
 
@@ -31304,6 +31325,11 @@ function validateAutopilot(cur, p, enc) {
   if (p.enabled !== void 0) n.enabled = bool(p.enabled, "El interruptor del piloto autom\xE1tico");
   if (p.requireApproval !== void 0) n.requireApproval = bool(p.requireApproval, "La aprobaci\xF3n previa");
   if (p.proEdit !== void 0) n.proEdit = bool(p.proEdit, "La edici\xF3n profesional");
+  if (p.parallel !== void 0) {
+    const v = Number(p.parallel);
+    if (!Number.isInteger(v) || v < 1 || v > 4) throw new Error("Los directos a la vez deben ser un n\xFAmero del 1 al 4.");
+    n.parallel = v;
+  }
   if (p.purgePublished !== void 0) n.purgePublished = bool(p.purgePublished, "El borrado tras publicar");
   if (p.cleanup !== void 0) n.cleanup = bool(p.cleanup, "La limpieza del directo");
   if (p.chatCapture !== void 0) n.chatCapture = bool(p.chatCapture, "La captura del chat");
@@ -32952,6 +32978,7 @@ var LibraryService = class {
 
 // electron/domain/transcripts.ts
 var import_node_fs12 = __toESM(require("node:fs"));
+var import_node_os4 = __toESM(require("node:os"));
 var import_node_path10 = __toESM(require("node:path"));
 
 // shared/transcript.ts
@@ -33309,11 +33336,41 @@ async function transcribeVideo(tools, input, o) {
   const n = Math.max(1, Math.ceil(dur / chunk));
   const tmp = import_node_fs11.default.mkdtempSync(import_node_path9.default.join(import_node_os3.default.tmpdir(), "streamclips-whisper-"));
   const parts = Array.from({ length: n }, () => []);
+  const done = /* @__PURE__ */ new Set();
   const cpus = import_node_os3.default.cpus().length;
   const jobs = Math.max(1, Math.min(n, o.jobs ?? (cpus >= 12 ? 3 : cpus >= 6 ? 2 : 1)));
   const threads = o.threads ?? (jobs === 1 ? Math.max(1, cpus - 1) : Math.max(2, Math.round(cpus / 2 / jobs)));
   const pct = new Array(n).fill(0);
+  const ck = o.checkpointDir;
+  const ckKey = ck ? JSON.stringify({ input: import_node_path9.default.basename(input), size: import_node_fs11.default.statSync(input).size, mtime: Math.round(import_node_fs11.default.statSync(input).mtimeMs), model: import_node_path9.default.basename(o.model), lang: o.language || "auto", chunk, from, to }) : "";
+  const ckFile = (i) => import_node_path9.default.join(ck, `c${i}.json`);
+  if (ck) {
+    import_node_fs11.default.mkdirSync(ck, { recursive: true });
+    const meta = import_node_path9.default.join(ck, "meta.json");
+    let same = false;
+    try {
+      same = import_node_fs11.default.readFileSync(meta, "utf8") === ckKey;
+    } catch {
+    }
+    if (!same) {
+      for (const f of import_node_fs11.default.readdirSync(ck)) import_node_fs11.default.rmSync(import_node_path9.default.join(ck, f), { force: true });
+      import_node_fs11.default.writeFileSync(meta, ckKey);
+    } else {
+      for (let i = 0; i < n; i++) {
+        try {
+          const w = JSON.parse(import_node_fs11.default.readFileSync(ckFile(i), "utf8"));
+          if (Array.isArray(w)) {
+            parts[i] = w;
+            pct[i] = 100;
+            done.add(i);
+          }
+        } catch {
+        }
+      }
+    }
+  }
   const report = () => o.onProgress?.(pct.reduce((a, b) => a + b, 0) / n, `${n} trozo${n > 1 ? "s" : ""}`);
+  o.onInfo?.({ durationSec: dur, skippedFraction: n ? done.size / n : 0 });
   const abort = currentAbort();
   let next = 0;
   let failed;
@@ -33323,12 +33380,14 @@ async function transcribeVideo(tools, input, o) {
         if (abort?.aborted) throw new CancelledError();
         const i = next++;
         if (i >= n) return;
+        if (done.has(i)) continue;
         const offset = from + i * chunk;
         const len = Math.min(chunk, Math.max(0.5, to - offset));
         const wav = import_node_path9.default.join(tmp, `c${i}.wav`);
         await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(offset), "-t", String(len), "-i", input, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]);
         if (!import_node_fs11.default.existsSync(wav) || import_node_fs11.default.statSync(wav).size < 2e3) {
           pct[i] = 100;
+          if (ck) import_node_fs11.default.writeFileSync(ckFile(i), "[]");
           report();
           continue;
         }
@@ -33341,6 +33400,10 @@ async function transcribeVideo(tools, input, o) {
         const json = `${base}.json`;
         if (!import_node_fs11.default.existsSync(json)) throw new Error("Whisper termin\xF3 pero no gener\xF3 la transcripci\xF3n.");
         parts[i] = parseWhisperCppJson(import_node_fs11.default.readFileSync(json, "utf8"), offset);
+        if (ck) {
+          import_node_fs11.default.writeFileSync(`${ckFile(i)}.tmp`, JSON.stringify(parts[i]));
+          import_node_fs11.default.renameSync(`${ckFile(i)}.tmp`, ckFile(i));
+        }
         import_node_fs11.default.rmSync(wav, { force: true });
         pct[i] = 100;
         report();
@@ -33529,7 +33592,28 @@ var TranscriptService = class {
     if (!restorable && (vod.status !== "downloaded" || !vod.filePath || !import_node_fs12.default.existsSync(vod.filePath))) throw new Error("No hay transcripci\xF3n de este tramo y el archivo del VOD no est\xE1 descargado, as\xED que no se puede transcribir.");
   }
   /** Descarga el modelo elegido en Ajustes (si ya está, no hace nada). */
-  async downloadModel() {
+  modelJob;
+  /** Segundos de audio que se transcriben por segundo de reloj con este modelo: lo medido en este equipo o, si aún no hay, una estimación gruesa. */
+  ratio(model) {
+    const guess = { tiny: 10, base: 5, small: 1.3, medium: 0.45 };
+    return this.d.store.data.stats.transcribeRatio[model] ?? guess[model] ?? 1;
+  }
+  learnRatio(model, measured) {
+    if (!Number.isFinite(measured) || measured <= 0 || measured >= 1e3) return;
+    const r2 = this.d.store.data.stats.transcribeRatio;
+    r2[model] = r2[model] ? Math.round((r2[model] * 0.5 + measured * 0.5) * 1e3) / 1e3 : Math.round(measured * 1e3) / 1e3;
+    this.d.store.save();
+  }
+  /** Una sola descarga del modelo a la vez, aunque haya varias transcripciones esperándolo. */
+  downloadModel() {
+    if (this.modelJob) return this.modelJob;
+    const p = this.fetchModel().finally(() => {
+      this.modelJob = void 0;
+    });
+    this.modelJob = p;
+    return p;
+  }
+  async fetchModel() {
     const name = this.d.store.data.settings.whisperModel;
     if (!isKnownModel(name)) throw new Error(`Modelo de Whisper desconocido: ${name} (usa tiny, base, small o medium).`);
     if (modelInstalled(this.modelsDir, name)) {
@@ -33559,7 +33643,7 @@ var TranscriptService = class {
     return this.status();
   }
   /** Audio del VOD -> whisper.cpp -> palabras con tiempos. Descarga el modelo la primera vez. */
-  async transcribe(vodId, range) {
+  async transcribe(vodId, range, opts = {}) {
     const exe = this.d.whisperExe();
     if (!exe) {
       throw new Error("No se encuentra Whisper. El instalador lo incluye; si lo has compilado t\xFA, indica la ruta de whisper-cli en Ajustes, o importa una transcripci\xF3n ya hecha.");
@@ -33573,14 +33657,28 @@ var TranscriptService = class {
     const s = this.d.store.data.settings;
     return this.d.queue.run(async () => {
       await this.downloadModel();
-      const task = this.d.tasks.start("transcribe", range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`);
+      const task = this.d.tasks.start("transcribe", range ? `Transcribiendo un tramo de "${vod.title || vod.url}" (${Math.round(range.end - range.start)} s)` : `Transcribiendo "${vod.title || vod.url}"`, vodId);
       try {
+        let info;
+        const t0 = Date.now();
         const runWith = (bin) => transcribeVideo(this.d.tools(), input, {
           exe: bin,
           model: modelPath(this.modelsDir, s.whisperModel),
           language: s.whisperLanguage,
           range,
-          onProgress: (pct, detail) => task.update(pct, detail)
+          ...this.share(),
+          // el directo entero tarda horas: lo hecho se guarda por trozos y se puede pausar o apagar el equipo
+          ...range ? {} : { checkpointDir: this.checkpointDir(vodId) },
+          onProgress: (pct, detail) => {
+            task.update(pct, detail);
+            opts.onProgress?.(pct, detail);
+          },
+          onInfo: ({ durationSec, skippedFraction }) => {
+            info = { durationSec, skippedFraction };
+            const est = durationSec * (1 - skippedFraction) / this.ratio(s.whisperModel);
+            task.estimate(est);
+            opts.onEstimate?.(est);
+          }
         });
         const basic = basicExe(exe);
         const run2 = async () => {
@@ -33626,7 +33724,9 @@ ${e2.message}`);
           }
         }
         this.d.log.info(`Transcripci\xF3n con Whisper (${words.length} palabras) para "${vod.title}"`);
+        if (info && !range) this.learnRatio(s.whisperModel, info.durationSec * (1 - info.skippedFraction) / Math.max(1, (Date.now() - t0) / 1e3));
         const v = range ? this.savePartial(vod, words, range) : this.save(vod, words, "whisper");
+        if (!range) import_node_fs12.default.rmSync(this.checkpointDir(vodId), { recursive: true, force: true });
         task.done(`${words.length} palabras`);
         return v;
       } catch (e) {
@@ -33635,6 +33735,24 @@ ${e2.message}`);
         throw e;
       }
     });
+  }
+  /** Con varias transcripciones a la vez, cada Whisper usa su parte de los núcleos (y trabaja de un trozo en uno). */
+  share() {
+    const n = Math.max(1, this.d.concurrency?.() ?? 1);
+    if (n === 1) return {};
+    return { jobs: 1, threads: Math.max(2, Math.floor(import_node_os4.default.cpus().length * 0.75 / n)) };
+  }
+  /** Trozos de transcripción ya terminados de un directo a medias (para retomarlo). */
+  checkpointDir(vodId) {
+    return import_node_path10.default.join(this.dir, `${vodId.replace(/[^\w-]/g, "_")}.parcial`);
+  }
+  /** ¿Hay una transcripción a medias que se puede retomar? */
+  hasCheckpoint(vodId) {
+    try {
+      return import_node_fs12.default.readdirSync(this.checkpointDir(vodId)).some((f) => /^c\d+\.json$/.test(f));
+    } catch {
+      return false;
+    }
   }
   /** Instrucciones + transcripción para pegar en Claude. */
   claudePrompt(vodId, durationSec) {
@@ -33785,38 +33903,68 @@ var GroupService = class {
 // electron/domain/tasks.ts
 var import_node_crypto6 = __toESM(require("node:crypto"));
 var KEEP = 40;
+function estimateEta(o) {
+  const { now, pct } = o;
+  if (pct >= 100) return 0;
+  if (o.firstAt !== void 0 && o.firstPct !== void 0) {
+    const dp = pct - o.firstPct;
+    const dt = (now - o.firstAt) / 1e3;
+    if (dp >= 2 && dt >= 20) return Math.max(0, (100 - pct) * dt / dp);
+  }
+  if (o.expectedSec && o.expectedSec > 0) {
+    return Math.max(0, o.expectedSec * ((100 - pct) / 100));
+  }
+  return void 0;
+}
 var TaskTracker = class {
-  constructor(notifier) {
+  constructor(notifier, clock2 = Date.now) {
     this.notifier = notifier;
+    this.clock = clock2;
   }
   tasks = [];
   list() {
     return this.tasks.map((t) => ({ ...t }));
   }
-  start(kind, label) {
-    const info = { id: import_node_crypto6.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  start(kind, label, ref) {
+    const startedMs = this.clock();
+    const info = { id: import_node_crypto6.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: new Date(startedMs).toISOString(), ...ref ? { ref } : {} };
     this.tasks.unshift(info);
     this.tasks.length = Math.min(this.tasks.length, KEEP);
     this.notifier.task({ ...info });
     const emit = () => this.notifier.task({ ...info });
+    let first;
+    let expectedSec;
+    const eta = () => {
+      const s = estimateEta({ now: this.clock(), firstAt: first?.at, firstPct: first?.pct, pct: info.progress, startedAt: startedMs, expectedSec });
+      info.etaAt = s === void 0 ? void 0 : new Date(this.clock() + s * 1e3).toISOString();
+    };
     return {
       info,
       update: (progress, detail) => {
         info.progress = Math.max(0, Math.min(100, Math.round(progress)));
+        first ??= { at: this.clock(), pct: info.progress };
         if (detail !== void 0) info.detail = detail;
+        eta();
+        emit();
+      },
+      estimate: (totalSec) => {
+        expectedSec = totalSec;
+        eta();
         emit();
       },
       done: (detail) => {
         info.status = "done";
         info.progress = 100;
+        info.etaAt = void 0;
         if (detail !== void 0) info.detail = detail;
-        info.endedAt = (/* @__PURE__ */ new Date()).toISOString();
+        info.endedAt = new Date(this.clock()).toISOString();
         emit();
       },
       fail: (error) => {
         info.status = "error";
+        info.etaAt = void 0;
         info.error = error;
-        info.endedAt = (/* @__PURE__ */ new Date()).toISOString();
+        info.endedAt = new Date(this.clock()).toISOString();
         emit();
       }
     };
@@ -35552,6 +35700,7 @@ var Autopilot = class {
       () => void 0
     ).finally(() => {
       if (this.running.get(vodId) === entry) this.running.delete(vodId);
+      if (this.pauseRequested.delete(vodId) && vod.autopilot?.status === "waiting") this.markPaused(vod);
     });
     return done;
   }
@@ -35559,6 +35708,13 @@ var Autopilot = class {
   /** ¿Se está analizando este VOD ahora mismo (no solo marcado como tal)? */
   isRunning(vodId) {
     return this.running.has(vodId);
+  }
+  pauseRequested = /* @__PURE__ */ new Set();
+  /** Pausa el análisis: se detiene (Whisper y ffmpeg incluidos) conservando lo ya transcrito; «Reanudar» lo retoma. */
+  pause(vodId) {
+    if (!this.running.has(vodId)) return false;
+    this.pauseRequested.add(vodId);
+    return this.cancel(vodId);
   }
   /** Detiene el análisis en marcha de un VOD (ffmpeg y Whisper incluidos). */
   cancel(vodId) {
@@ -35573,11 +35729,15 @@ var Autopilot = class {
     for (const v of this.d.store.data.vods) {
       const st = v.autopilot?.status;
       if (st && ["waiting", "transcribing", "analyzing", "rendering"].includes(st) && !this.running.has(v.id)) {
-        this.mark(v, "error", "El an\xE1lisis se interrumpi\xF3 (se cerr\xF3 el programa o se qued\xF3 colgado). Pulsa \xABVolver a analizar\xBB.");
+        this.markPaused(v, true);
         n++;
       }
     }
     return n;
+  }
+  markPaused(vod, interrupted = false) {
+    const kept = this.d.transcripts.hasCheckpoint(vod.id) ? " Lo ya transcrito se conserva." : "";
+    this.mark(vod, "paused", `${interrupted ? "Se interrumpi\xF3 al cerrar el programa o apagar el equipo." : "En pausa."}${kept} Pulsa \xABReanudar\xBB cuando quieras.`);
   }
   /**
    * Borra el directo completo del disco y los datos que ya no sirven, dejando los vídeos y clips creados con sus
@@ -35626,10 +35786,23 @@ var Autopilot = class {
     }
   }
   async process(vod) {
-    const task = this.d.tasks.start("analyze", `Piloto autom\xE1tico: ${vod.title || "directo"}`);
+    const task = this.d.tasks.start("analyze", `Piloto autom\xE1tico: ${vod.title || "directo"}`, vod.id);
     const notes = [];
     try {
+      const t0 = Date.now();
+      const lap = (since) => {
+        const s = Math.round((Date.now() - since) / 1e3);
+        return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
+      };
+      const energyJob = (async () => {
+        try {
+          return { v: await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath, () => void 0) };
+        } catch (e) {
+          return { e };
+        }
+      })();
       let words = this.d.transcripts.words(vod.id);
+      let tTranscribe = "";
       if (!this.d.transcripts.isFull(vod.id)) {
         const st = this.d.transcripts.status();
         const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? await this.d.clips.vodDuration(vod.id)) : null;
@@ -35638,8 +35811,15 @@ var Autopilot = class {
           this.mark(vod, "transcribing");
           task.update(2, "Transcribiendo el directo (puede tardar)\u2026");
           try {
-            await this.d.transcripts.transcribe(vod.id);
+            const ts = Date.now();
+            await this.d.transcripts.transcribe(vod.id, void 0, {
+              onProgress: (pct, detail) => task.update(2 + pct * 0.28, detail ? `Transcribiendo (${detail})\u2026` : void 0),
+              onEstimate: (sec) => task.estimate(sec / 0.28)
+            });
             words = this.d.transcripts.words(vod.id);
+            tTranscribe = lap(ts);
+            const mins = (vod.durationSec ?? 0) / 60;
+            this.d.log.info(`Transcripci\xF3n de "${vod.title}": ${tTranscribe}${mins ? ` (${(mins / Math.max(0.05, (Date.now() - ts) / 6e4)).toFixed(1)}\xD7 tiempo real)` : ""}`);
           } catch (e) {
             if (isCancelled(e)) throw e;
             notes.push(`Sin transcripci\xF3n: ${e.message}`);
@@ -35650,12 +35830,13 @@ var Autopilot = class {
       task.update(30, "Analizando audio y chat\u2026");
       const duration = await this.d.clips.vodDuration(vod.id);
       let energyDb;
-      try {
-        energyDb = await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath, (s) => task.update(30 + Math.min(20, s / duration * 20)));
-      } catch (e) {
-        if (isCancelled(e)) throw e;
-        notes.push(`Sin an\xE1lisis de volumen: ${e.message}`);
+      const er = await energyJob;
+      if ("v" in er) energyDb = er.v;
+      else {
+        if (isCancelled(er.e)) throw er.e;
+        notes.push(`Sin an\xE1lisis de volumen: ${er.e.message}`);
       }
+      task.update(50);
       throwIfCancelled();
       const chat = this.chatFor(vod);
       if (!chat && this.cfg.chatCapture) notes.push("Sin datos de chat de este directo.");
@@ -35688,13 +35869,19 @@ var Autopilot = class {
       }
       task.update(55, "Poniendo t\xEDtulos\u2026");
       const titles = await this.titles(vod, words, moments, mains, notes);
-      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", this.cfg.series) : null;
+      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
       if (ser) {
         const st = seriesTitles(ser, mains.length);
         titles.summary = { title: clean(st.summary, 100), description: titles.summary.description };
         titles.mains = titles.mains.map((t, i) => ({ title: clean(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
         notes.push(`Serie \xAB${ser.name}\xBB, d\xEDa ${ser.day}.`);
+        if (!ser.fromTitle) {
+          vod.seriesDay = ser.day;
+          this.cfg.series.nextDay = Math.max(this.cfg.series.nextDay, ser.day + 1);
+          this.d.store.save();
+        }
       }
+      const tr = Date.now();
       this.mark(vod, "rendering");
       const created = [];
       const errors = [];
@@ -35765,10 +35952,6 @@ var Autopilot = class {
           }
         }
       }
-      if (ser && !ser.fromTitle && created.some((o) => o.kind === "long")) {
-        this.cfg.series.nextDay = ser.day + 1;
-        this.d.store.save();
-      }
       if (this.cfg.cleanup !== false && this.d.discardSource) {
         try {
           const r2 = this.discard(vod.id, { fromRun: true });
@@ -35777,15 +35960,19 @@ var Autopilot = class {
           notes.push(`No se pudo borrar el directo completo: ${e.message}`);
         }
       }
+      notes.push(`Tiempos: ${tTranscribe ? `transcripci\xF3n ${tTranscribe}, ` : ""}montaje ${lap(tr)}, total ${lap(t0)}.`);
+      this.d.log.info(`An\xE1lisis de "${vod.title}": ${notes[notes.length - 1]}`);
       const msg = `${created.length} v\xEDdeo(s) listos${this.cfg.requireApproval ? " para revisar" : ` (${scheduled} programados)`}.`;
       this.mark(vod, "done", [msg, ...errors, ...notes].join(" "));
       task.done(msg);
       return vod;
     } catch (e) {
       if (isCancelled(e)) {
-        this.mark(vod, "error", "An\xE1lisis cancelado.");
-        task.fail("Cancelado");
-        this.d.log.info(`An\xE1lisis cancelado: "${vod.title}".`);
+        const paused = this.pauseRequested.delete(vod.id);
+        if (paused) this.markPaused(vod);
+        else this.mark(vod, "error", "An\xE1lisis cancelado.");
+        task.fail(paused ? "En pausa" : "Cancelado");
+        this.d.log.info(`An\xE1lisis ${paused ? "en pausa" : "cancelado"}: "${vod.title}".`);
         throw e;
       }
       this.mark(vod, "error", e.message);
@@ -37261,13 +37448,15 @@ var AppContext = class {
   cloud;
   engine;
   cloudQueue = new SerialQueue();
-  autopilotQueue = new SerialQueue();
+  /** Cuántos directos se analizan a la vez (Ajustes › Piloto automático). */
+  parallel = () => this.store.data.settings.autopilot.parallel ?? 2;
+  autopilotQueue = new SerialQueue(() => this.parallel());
   /** Las descargas y los renders van en colas distintas, cada una de una en una. */
   bundled;
   socialEnv;
   downloadQueue = new SerialQueue();
   renderQueue = new SerialQueue();
-  transcribeQueue = new SerialQueue();
+  transcribeQueue = new SerialQueue(() => this.parallel());
   constructor(o) {
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
@@ -37295,6 +37484,7 @@ var AppContext = class {
       log: this.log,
       notifier: o.notifier,
       queue: this.transcribeQueue,
+      concurrency: () => this.parallel(),
       tools,
       tasks: this.tasks,
       whisperExe: () => this.whisperExe(),
@@ -37503,7 +37693,7 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs21.default.mkdtempSync(import_node_path15.default.join(import_node_os4.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs21.default.mkdtempSync(import_node_path15.default.join(import_node_os5.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
     userDataDir: import_node_path15.default.join(work, "data"),
     defaultOutputDir: import_node_path15.default.join(work, "out"),
@@ -37624,7 +37814,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     await keepAlive(env);
     return;
   }
-  const r2 = await runEngine(p, { whisper: env.STREAMCLIPS_WHISPER?.replace(/^~/, import_node_os4.default.homedir()) || void 0 });
+  const r2 = await runEngine(p, { whisper: env.STREAMCLIPS_WHISPER?.replace(/^~/, import_node_os5.default.homedir()) || void 0 });
   console.log(`[streamclips] Resultado: ${r2.status}. Editados: ${r2.processed.length}, fallidos: ${r2.failed.length}.`);
   if (r2.status === "error" || r2.status === "partial") process.exitCode = 1;
 }

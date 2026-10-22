@@ -4,6 +4,9 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Novedades de la v0.18
 
+- **Varios directos a la vez** (Piloto automático › «Directos que se analizan a la vez», 1 a 4, por defecto 2): los núcleos se reparten, así que el total no acaba antes, pero ninguno espera a que termine otro. Cada directo de una serie recibe su «Día N» sin repetirse.
+- **Tiempo estimado y barra de progreso** en cada análisis (por la velocidad real de avance y por la velocidad de Whisper medida en tu PC) y, al terminar, los tiempos por fase en la nota del directo.
+- El volumen del audio se calcula a la vez que se transcribe.
 - **Pausar y retomar**: un análisis en marcha se puede pausar («Pausar») y retomar cuando quieras («Reanudar»). La transcripción, que es lo que más tarda, se guarda por trozos de 20 minutos: al reanudar solo se hacen los que faltan. Si cierras el programa o se apaga el PC a mitad, el análisis queda «En pausa» (ya no «Error») y se retoma igual. Lo que no se aprovecha es el trozo que estaba a medias en ese momento (hasta 20 minutos de audio) y el montaje, que empieza de nuevo.
 
 ## Novedades de la v0.17

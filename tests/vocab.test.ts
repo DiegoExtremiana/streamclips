@@ -100,3 +100,36 @@ test('applyLineChanges: sustituye las palabras de la línea y deja el resto', ()
   // borrar una línea
   assert.deepEqual(texts(applyLineChanges(ws, [{ start: 3, end: 3.3, text: '' }]).words), ['hola', 'movidas', 'marsan']);
 });
+
+test('Pokémon y jerga competitiva: la lista incorporada corrige sin tocar la lista del usuario', () => {
+  const v = emptyVocabulary();
+  assert.ok(!v.terms.includes('Archaludon'), 'la lista del usuario no se llena con la incorporada');
+  const ws = [w('Mi', 0), w('arkaludon', 1), w('gana', 2), w('el', 3), w('espid', 4), w('tai', 5), w('en', 6), w('be', 7), w('ge', 8), w('ce', 9), w('con', 10), w('nuzlock', 11)];
+  const out = texts(applyVocabulary(ws, v));
+  assert.ok(out.includes('Archaludon'), out.join(' '));
+  assert.ok(out.includes('speed tie'), out.join(' '));
+  assert.ok(out.includes('VGC'), out.join(' '));
+  assert.ok(out.includes('Nuzlocke'), out.join(' '));
+});
+
+test('Pokémon: las palabras corrientes y los nombres bien escritos no se tocan', () => {
+  const ws = 'la competición es una locura y el garaje de Pikachu y Gengar estaba cerca'.split(' ').map((t, i) => w(t, i));
+  assert.deepEqual(texts(applyVocabulary(ws, emptyVocabulary())), texts(ws));
+});
+
+test('whisperPrompt: añade Pokémon solo si se piden y sigue en ASCII y bajo el límite', () => {
+  const v = emptyVocabulary();
+  assert.ok(!/Archaludon/.test(whisperPrompt(v, ['Just Chatting'])));
+  const p = whisperPrompt(v, ['Pokémon VGC'], ['Archaludon', 'Pokémon Showdown']);
+  assert.match(p, /Movidas/);
+  assert.match(p, /Archaludon/);
+  assert.ok(p.length <= 480);
+  assert.ok(/^[\x20-\x7e]*$/.test(p), p);
+});
+
+test('looksLikePokemon reconoce el directo por el título y el juego', async () => {
+  const { looksLikePokemon } = await import('../shared/vocabPokemon');
+  assert.ok(looksLikePokemon(['Pokémon Escarlata', 'Directo']));
+  assert.ok(looksLikePokemon(['Nuzlocke día 3']));
+  assert.ok(!looksLikePokemon(['Minecraft', 'Día 3']));
+});

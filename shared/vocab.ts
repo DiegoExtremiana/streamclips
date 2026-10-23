@@ -1,4 +1,5 @@
 import type { Word } from './subtitles';
+import { COMPETITIVE_TERMS, POKEMON_CORRECTIONS, POKEMON_NAMES } from './vocabPokemon';
 
 /**
  * Vocabulario propio del streamer: palabras que Whisper no conoce (nombres, apodos, series…) y correcciones
@@ -19,8 +20,16 @@ export interface Vocabulary {
   corrections: Correction[];
 }
 
-export const DEFAULT_TERMS = ['Movidas', 'Marrshall', 'MovidasMarshall', 'Gorens', 'Reaptor'];
-export const MAX_TERMS = 200;
+/** Las palabras del streamer van primero (son las que se mandan siempre a Whisper); luego la jerga y los Pokémon. */
+export const OWN_TERMS = ['Movidas', 'Marrshall', 'MovidasMarshall', 'Gorens', 'Reaptor'];
+export const DEFAULT_TERMS = OWN_TERMS;
+/** Lista incorporada (Pokémon y jerga competitiva): no está en la lista del usuario, se suma siempre al aplicar el vocabulario, así crece con las versiones sin pisar lo suyo. */
+export const BUILTIN_TERMS = [...COMPETITIVE_TERMS, ...POKEMON_NAMES];
+export const BUILTIN_CORRECTIONS: Correction[] = POKEMON_CORRECTIONS.map((c) => ({ ...c, n: 1 }));
+/** Parecido mínimo para los términos de la lista de Pokémon y jerga competitiva (más exigente: hay muchos y se parecen a palabras corrientes). */
+export const FUZZY_STRICT = 0.8;
+const STRICT = new Set([...COMPETITIVE_TERMS, ...POKEMON_NAMES].map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, '')));
+export const MAX_TERMS = 400;
 export const MAX_CORRECTIONS = 500;
 /** Parecido mínimo (0 a 1) para dar por buena una palabra que se parece a un término del vocabulario. */
 export const FUZZY_MIN = 0.72;
@@ -102,19 +111,21 @@ const MAX_SPAN = 3;
  * las palabras que suenan casi igual que un término largo del vocabulario. Conserva los tiempos y la puntuación.
  */
 export function applyVocabulary(words: Word[], v: Vocabulary): Word[] {
-  if (!words.length || (!v.corrections.length && !v.terms.length)) return words;
+  if (!words.length) return words;
   const exact = new Map<string, string>();
-  for (const c of v.corrections) {
+  // primero las incorporadas, luego las del usuario (que mandan)
+  for (const c of [...BUILTIN_CORRECTIONS, ...v.corrections]) {
     const key = c.from.split(/\s+/).map(normToken).filter(Boolean).join(' ');
     if (key && c.to.trim()) exact.set(key, c.to.trim());
   }
-  const fuzzy = v.terms
-    .map((t) => ({ term: t, code: phonetic(t) }))
+  const fuzzy = [...new Set([...v.terms, ...BUILTIN_TERMS])]
+    .map((t) => ({ term: t, code: phonetic(t), min: STRICT.has(normToken(t)) ? FUZZY_STRICT : FUZZY_MIN }))
     .filter((t) => normToken(t.term).length >= FUZZY_MIN_LEN);
   if (!exact.size && !fuzzy.length) return words;
   const cores = words.map((w) => splitPunct(w.text));
   const keys = cores.map((c) => normToken(c.core));
   const out: Word[] = [];
+  let changed = false;
   for (let i = 0; i < words.length; ) {
     let done = false;
     // correcciones exactas, de la frase más larga a la más corta
@@ -125,6 +136,7 @@ export function applyVocabulary(words: Word[], v: Vocabulary): Word[] {
       out.push({ text: `${cores[i].pre}${to}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
       i += n;
       done = true;
+      changed = true;
     }
     if (done) continue;
     // parecido con un término largo del vocabulario (una palabra, o dos seguidas pegadas: «movidas marsan»)
@@ -133,35 +145,39 @@ export function applyVocabulary(words: Word[], v: Vocabulary): Word[] {
         const joined = keys.slice(i, i + n).join('');
         if (joined.length < 4 || keys.slice(i, i + n).some((k) => !k)) continue;
         if (n === 1 && COMMON.has(joined)) continue;
+        if (n === 2 && (COMMON.has(keys[i]) || COMMON.has(keys[i + 1]))) continue; // «pikachu y» / «y gengar» no son un nombre
         const code = phonetic(joined);
         let best: { term: string; s: number } | null = null;
         for (const f of fuzzy) {
           if (code[0] !== f.code[0] || Math.abs(code.length - f.code.length) > 3) continue;
           const s = similarity(code, f.code);
-          if (s >= FUZZY_MIN && (!best || s > best.s)) best = { term: f.term, s };
+          if (s >= f.min && (!best || s > best.s)) best = { term: f.term, s };
         }
         // si ya está bien escrita, no se toca; si es una palabra corriente del idioma, tampoco
         if (!best || normToken(best.term) === joined) continue;
         out.push({ text: `${cores[i].pre}${best.term}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
         i += n;
         done = true;
+        changed = true;
       }
     }
     if (!done) out.push(words[i++]);
   }
-  return out;
+  return changed ? out : words;
 }
 
 /** Texto para el prompt inicial de Whisper: ASCII (en Windows los argumentos con tildes llegan mal) y corto. */
-export function whisperPrompt(v: Vocabulary, context: string[] = []): string {
+export function whisperPrompt(v: Vocabulary, context: string[] = [], extra: string[] = []): string {
   const ascii = (s: string) =>
     s
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Za-z0-9 .'-]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-  const terms = [...new Set([...v.terms, ...v.corrections.map((c) => c.to)].map(ascii).filter(Boolean))].slice(0, 40);
+  // lo propio del usuario (las primeras de su lista) y lo aprendido van siempre; la jerga y los nombres de Pokémon, solo si el directo va de eso
+  const own = v.terms.slice(0, OWN_TERMS.length + 5);
+  const terms = [...new Set([...own, ...v.corrections.filter((c) => c.n >= 1 && !BUILTIN_CORRECTIONS.some((d) => d.to === c.to)).map((c) => c.to), ...extra].map(ascii).filter(Boolean))].slice(0, 60);
   const ctx = [...new Set(context.map(ascii).filter((c) => c.length >= 3))].slice(0, 10);
   const parts: string[] = [];
   if (ctx.length) parts.push(`Directo de Twitch en espanol sobre ${ctx.join(', ')}.`);
@@ -206,12 +222,12 @@ export function formatVocabText(v: Vocabulary): string {
 export function cleanVocabulary(x: unknown): Vocabulary {
   const o = (typeof x === 'object' && x !== null ? x : {}) as { terms?: unknown; corrections?: unknown };
   const terms = Array.isArray(o.terms) ? o.terms.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim().slice(0, 80)) : null;
-  const corr = Array.isArray(o.corrections)
-    ? o.corrections
+  const corr = !Array.isArray(o.corrections)
+    ? []
+    : o.corrections
         .filter((c): c is Correction => typeof c === 'object' && c !== null && typeof (c as Correction).from === 'string' && typeof (c as Correction).to === 'string')
         .map((c) => ({ from: c.from.trim().slice(0, 80), to: c.to.trim().slice(0, 80), n: Number.isFinite(c.n) && c.n > 0 ? Math.min(9999, Math.floor(c.n)) : 1 }))
-        .filter((c) => c.from && c.to)
-    : [];
+        .filter((c) => c.from && c.to);
   const seenT = new Set<string>();
   const uniqueTerms = (terms ?? DEFAULT_TERMS).filter((t) => {
     const k = normToken(t);

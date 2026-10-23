@@ -7,6 +7,7 @@ import type { Range } from '../../shared/timeline';
 import { parseTranscript } from '../../shared/transcript';
 import { applyVocabulary, cleanVocabulary, learnCorrections, mergeCorrections, normToken, whisperPrompt, type Vocabulary } from '../../shared/vocab';
 import { applyLineChanges, type LineChange } from '../../shared/subtitleEdit';
+import { looksLikePokemon, POKEMON_PROMPT_TERMS } from '../../shared/vocabPokemon';
 import { buildClaudePrompt } from '../../shared/claudePrompt';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
@@ -99,7 +100,7 @@ export class TranscriptService {
   /** Prompt inicial de Whisper: las palabras propias y de qué va el directo (título y juegos). */
   private promptFor(vod: VodJob): string {
     const context = [vod.title ?? '', ...(vod.chapters ?? []).map((c) => c.title)];
-    return whisperPrompt(this.vocabulary(), context);
+    return whisperPrompt(this.vocabulary(), context, looksLikePokemon(context) ? POKEMON_PROMPT_TERMS : []);
   }
 
   /**

@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import { planEdit, planLong } from '../../shared/autoEdit';
+import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
@@ -368,7 +369,11 @@ export class Autopilot {
           item.auto = { role, review: 'pending' };
           item.titleSource = 'auto';
           item.visibility = this.cfg.visibility;
-          if (t.description || item.category) this.d.library.setAutoDescription(item.id, withCategoryLine(t.description, item.category));
+          const ch = chapterOf.get(item.id);
+          if (t.description || item.category || ch) {
+            const base = withCategoryLine(t.description, item.category);
+            this.d.library.setAutoDescription(item.id, ch ? `${base}${base ? '\n\n' : ''}${ch}` : base);
+          }
           this.d.store.save();
           created.push(item);
         } catch (e) {
@@ -391,15 +396,30 @@ export class Autopilot {
           return plain();
         }
       };
-      const longMake = (title: string, segs: Seg[]) => {
+      // capítulos con marca de tiempo para la descripción del resumen (como los vídeos de los canales grandes)
+      const chapterOf = new Map<string, string>();
+      const longMake = async (title: string, segs: Seg[], chapters = false) => {
         const e = pro ? planLong(words, segs) : null;
-        return safely(
+        const item = await safely(
           Boolean(e),
           () => this.d.clips.createLong(vod.id, { title, segments: e!.segments, effects: e!.effects, ...subs }),
           () => this.d.clips.createLong(vod.id, { title, segments: segs, ...subs }),
         );
+        if (chapters && segs.length >= 3) {
+          try {
+            const starts = outputStarts(segs, item.segments ?? segs);
+            const block = chapterBlock(
+              segs.map((g, i) => ({ at: starts[i], label: i === 0 ? 'Inicio' : shortTitle(words, g, i) || `Momento ${i + 1}` })),
+              item.durationSec,
+            );
+            if (block) chapterOf.set(item.id, block);
+          } catch (err) {
+            this.d.log.warn(`Sin capítulos en "${title}": ${(err as Error).message}`);
+          }
+        }
+        return item;
       };
-      if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary), titles.summary);
+      if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary, true), titles.summary);
       for (const [i, m] of mains.entries()) {
         const t = titles.mains[i];
         await step('main', `vídeo ${i + 1}`, () => longMake(t.title, [m]), t);

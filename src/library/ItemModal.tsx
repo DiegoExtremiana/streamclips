@@ -10,6 +10,7 @@ import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS, wordsForOutput, type SubtitleStyle
 import { keptRanges } from '../../shared/timeline';
 import { round1, type TrimRange } from '../../shared/trim';
 import Captions, { SampleCaptions } from './Captions';
+import SubtitleText from './SubtitleText';
 import Player from './Player';
 import ClipStudio from './ClipStudio';
 import { PlatformSwitch } from './PlatformSwitch';
@@ -272,11 +273,9 @@ export default function ItemModal(props: {
     setSubsMsg(null);
     setSubsBusy(true);
     try {
-      if (!hasWords) {
-        await window.api.transcribeVod(o.vodId);
-        await loadWords();
-      }
+      // reeditClip transcribe solo los tramos de este vídeo (no el directo entero) si hace falta
       await window.api.reeditClip(o.id, { subtitles: subsStyle });
+      await loadWords();
       await props.onChanged();
       setSubsMsg({ ok: true, text: 'Subtítulos grabados en el vídeo.' });
     } catch (e) {
@@ -536,6 +535,29 @@ export default function ItemModal(props: {
                       <button type="button" className="btn ghost small" disabled={subsBusy || whisper?.engine === false} onClick={() => void subsTranscribe()}>Solo transcribir</button>
                     </div>
                   </>
+                )}
+                {hasWords && o.vodId && (
+                  <SubtitleText
+                    vodId={o.vodId}
+                    words={words}
+                    ranges={ranges}
+                    canRerender={burned}
+                    onSaved={async (rerender) => {
+                      await loadWords();
+                      if (rerender && burned) {
+                        setSubsBusy(true);
+                        try {
+                          await window.api.reeditClip(o.id, { subtitles: o.subtitles });
+                          await props.onChanged();
+                          setSubsMsg({ ok: true, text: 'Subtítulos corregidos y vídeo montado otra vez.' });
+                        } catch (e) {
+                          setSubsMsg({ ok: false, text: errMsg(e) });
+                        } finally {
+                          setSubsBusy(false);
+                        }
+                      }
+                    }}
+                  />
                 )}
                 <div className="row">
                   {subsOn && wordsLoaded && !hasWords ? (

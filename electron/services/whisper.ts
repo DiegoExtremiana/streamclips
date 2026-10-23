@@ -229,6 +229,8 @@ export interface TranscribeOpts {
   checkpointDir?: string;
   /** Se llama al empezar, ya sabida la duración y cuánto estaba hecho de un intento anterior (0 a 1). */
   onInfo?: (i: { durationSec: number; skippedFraction: number }) => void;
+  /** Texto inicial que guía a Whisper (nombres propios y de qué va el directo). Solo ASCII. */
+  prompt?: string;
   chunkSec?: number;
   /** Solo este tramo del vídeo (segundos); las palabras salen con su tiempo en el vídeo completo. */
   range?: { start: number; end: number };
@@ -321,7 +323,7 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
         if (!fs.existsSync(wav) || fs.statSync(wav).size < 2000) { pct[i] = 100; if (ck) fs.writeFileSync(ckFile(i), '[]'); report(); continue; } // trozo sin audio
         const base = path.join(tmp, `c${i}`);
         // -bs 1 -bo 1: decodificación voraz. Por defecto whisper.cpp usa búsqueda en haz de 5 (bastante más lenta y casi igual de precisa en voz clara).
-        const args = ['-m', o.model, '-f', wav, '-l', o.language || 'auto', '-oj', '-ml', '1', '-sow', '-pp', '-bs', '1', '-bo', '1', '-t', String(threads), '-of', base];
+        const args = ['-m', o.model, '-f', wav, '-l', o.language || 'auto', '-oj', '-ml', '1', '-sow', '-pp', '-bs', '1', '-bo', '1', '-t', String(threads), ...(o.prompt ? ['--prompt', o.prompt] : []), '-of', base];
         await runCli(o.exe, args, (p) => { pct[i] = Math.min(99, p); report(); });
         const json = `${base}.json`;
         if (!fs.existsSync(json)) throw new Error('Whisper terminó pero no generó la transcripción.');
@@ -337,7 +339,12 @@ export async function transcribeVideo(tools: ToolPaths, input: string, o: Transc
     };
     await Promise.all(Array.from({ length: jobs }, () => worker().catch((e) => { failed ??= e; throw e; })));
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    // en Windows el archivo puede seguir en uso unos instantes tras cancelar: no debe tumbar el análisis
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      /* se borra solo con la carpeta temporal */
+    }
   }
   const words: Word[] = parts.flat();
   if (!words.length && !o.range) throw new Error('Whisper no encontró ninguna palabra en el audio.');

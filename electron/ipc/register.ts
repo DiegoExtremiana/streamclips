@@ -211,6 +211,9 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.autoName, async () => (await ctx.autopilot.refreshLibraryAtStart({ generic: false })) ?? { renamed: 0, described: 0, noTranscript: 0, kept: 0 });
   handle(CHANNELS.suggestTitle, (vodId, start, end) => ctx.autopilot.suggestTitle(str(vodId, 'vodId'), num(start, 'start'), num(end, 'end')));
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
+  handle(CHANNELS.transcriptEdit, (vodId, changes) => ctx.transcripts.editLines(str(vodId, 'vodId'), changes as never));
+  handle(CHANNELS.vocabGet, () => ctx.transcripts.vocabulary());
+  handle(CHANNELS.vocabSet, (v) => ctx.transcripts.setVocabulary(v));
   handle(CHANNELS.transcriptPrompt, async (vodId) => {
     const id = str(vodId, 'vodId');
     const dur = await ctx.clips.vodDuration(id);

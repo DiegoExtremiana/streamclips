@@ -1,3 +1,4 @@
+import { cleanVocabulary, emptyVocabulary, type Vocabulary } from '../../shared/vocab';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Group, OutputItem, Platform, Publication, Settings, VodJob } from '../../shared/types';
@@ -51,6 +52,8 @@ export interface DataShape {
   engine: EngineState;
   /** Medidas de este equipo (p. ej. la velocidad de Whisper por modelo) para estimar cuánto tarda cada cosa. */
   stats: { transcribeRatio: Record<string, number> };
+  /** Palabras propias y correcciones aprendidas (ver shared/vocab.ts). */
+  vocab: Vocabulary;
 }
 
 /** Motor nocturno (repositorio público con GitHub Actions). */
@@ -126,6 +129,7 @@ function defaults(defaultOutputDir: string): DataShape {
       },
     },
     stats: { transcribeRatio: {} },
+    vocab: emptyVocabulary(),
     vods: [],
     outputs: [],
     groups: [],
@@ -210,6 +214,7 @@ export class Store {
         },
       },
       stats: { transcribeRatio: ratios(saved.stats?.transcribeRatio) },
+      vocab: cleanVocabulary(saved.vocab),
       vods: arr<VodJob>(saved.vods),
       outputs: arr<unknown>(saved.outputs).map(normalizeOutput).filter((x): x is OutputItem => x !== null),
       groups: arr<Group>(saved.groups),

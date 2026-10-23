@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.20
+
+- **Análisis rápido** (Piloto automático, activado por defecto): el programa elige los momentos con el volumen del audio y el chat, y **solo transcribe lo elegido** (resumen, vídeos y clips) en vez de las horas del directo entero, que era casi todo el tiempo. Varios tramos se transcriben a la vez. La nota del directo indica cuántos minutos se transcribieron. Si lo desactivas, vuelve a transcribir todo antes de elegir (y los momentos también cuentan por lo que se dice). Límite: sin las palabras, la elección se basa solo en volumen y chat.
+- **Mi vocabulario** (Ajustes › Piloto automático): lista de palabras propias (vienen Movidas, Marrshall, MovidasMarshall, Gorens y Reaptor) y correcciones «mal => bien». Whisper las recibe como pista al transcribir junto con de qué va el directo (título y juegos), y se corrigen las palabras que suenan casi igual (también en las transcripciones que ya tenías; lo guardado en disco no se toca).
+- **Editar el texto de los subtítulos** (en cada vídeo o clip, sección Subtítulos): corriges las líneas y, si quieres, se vuelve a montar el vídeo. **El programa aprende**: cada cambio pequeño pasa a ser una corrección (y los nombres propios, vocabulario) que se aplica solo desde entonces.
+- «Transcribir y poner subtítulos» ya no transcribe el directo entero: solo los tramos de ese vídeo.
+- Capítulos con marca de tiempo en la descripción del vídeo resumen (YouTube los muestra si hay al menos 3 y duran 10 s o más).
+- Arreglo: cancelar un análisis en Windows ya no falla al borrar el audio temporal (EBUSY).
+
 ## Novedades de la v0.19
 
 - **Portadas con estilo** (Piloto automático › «Portadas con estilo…», activado por defecto): en vídeos y clips horizontales se elige, entre 6 fotogramas, el más vivo y contrastado, se le sube color y nitidez, y se escribe una frase corta (1 a 3 palabras, mayúsculas, contorno grueso, amarillo y blanco) a la izquierda dejando libre la derecha para la cara; en series, el número de día/episodio grande en la esquina. Sale en 1280×720. Si algo falla se usa el fotograma sencillo de siempre.

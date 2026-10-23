@@ -1,3 +1,4 @@
+import type { Vocabulary } from './vocab';
 import type { SubtitleStyleId, Word } from './subtitles';
 import type { VerticalLayout } from './layout';
 /** Qué se renderiza (cada uno es un archivo con su medida). */
@@ -61,6 +62,8 @@ export interface AutopilotSettings {
   cleanup?: boolean;
   /** Borrar un vídeo o clip (archivos incluidos) cuando ya se ha publicado en todas sus redes. Por defecto sí. */
   purgePublished?: boolean;
+  /** Análisis rápido: se eligen los momentos por volumen y chat y SOLO se transcribe lo elegido (en vez de todo el directo). Por defecto sí. */
+  fastAnalysis?: boolean;
   /** Portadas con estilo de los canales grandes: fotograma más vivo y expresivo, frase corta grande y número de episodio. Por defecto sí. */
   styledCovers?: boolean;
   /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */
@@ -527,6 +530,11 @@ export interface Api {
   importTranscript(vodId: string): Promise<VodJob | null>;
   /** Transcribe el audio del VOD con la orden de Whisper configurada en Ajustes. */
   transcribeVod(vodId: string): Promise<VodJob>;
+  /** Corrige el texto de unas líneas de subtítulo en la transcripción; el programa aprende de lo que cambias. */
+  editTranscript(vodId: string, changes: { start: number; end: number; text: string }[]): Promise<{ changed: number; learned: { from: string; to: string }[] }>;
+  /** Palabras propias y correcciones aprendidas. */
+  getVocabulary(): Promise<Vocabulary>;
+  setVocabulary(v: Vocabulary): Promise<Vocabulary>;
   /** Título provisional de un tramo a partir de lo que se dice en él (null si no hay transcripción de ese tramo). */
   /** Duración del directo de origen de un clip (null si el archivo ya no está), para la línea de tiempo del recorte. */
   clipContext(id: string): Promise<{ vodDurationSec: number | null }>;
@@ -616,6 +624,9 @@ export const CHANNELS = {
   transcriptGet: 'transcript:get',
   transcriptImport: 'transcript:import',
   transcriptRun: 'transcript:run',
+  transcriptEdit: 'transcript:edit',
+  vocabGet: 'vocab:get',
+  vocabSet: 'vocab:set',
   suggestTitle: 'title:suggest',
   autoName: 'title:auto',
   clipContext: 'outputs:clipContext',

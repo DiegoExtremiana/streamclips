@@ -238,11 +238,15 @@ export class Autopilot {
       // 1) transcripción (si se puede)
       let words = this.d.transcripts.words(vod.id);
       let tTranscribe = '';
+      let deferTranscribe = false;
       if (!this.d.transcripts.isFull(vod.id)) {
         const st = this.d.transcripts.status();
         const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? (await this.d.clips.vodDuration(vod.id))) : null;
         if (skip) notes.push(`Sin transcripción: ${skip}.`);
-        else if (st.engine) {
+        else if (st.engine && this.cfg.fastAnalysis !== false && !this.d.transcripts.hasCheckpoint(vod.id)) {
+          // análisis rápido: primero se eligen los momentos con el volumen y el chat, y luego se transcribe solo lo elegido
+          deferTranscribe = true;
+        } else if (st.engine) {
           this.mark(vod, 'transcribing');
           task.update(2, 'Transcribiendo el directo (puede tardar)…');
           try {
@@ -308,6 +312,29 @@ export class Autopilot {
         this.mark(vod, 'skipped', ['No se encontraron momentos que destaquen en este directo.', ...notes].join(' '));
         task.done('Sin momentos destacados');
         return vod;
+      }
+
+      // 3b) análisis rápido: se transcribe solo lo elegido (tramos de clips, resumen y vídeos)
+      if (deferTranscribe) {
+        const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
+        this.mark(vod, 'transcribing');
+        task.update(40, 'Transcribiendo solo lo elegido…');
+        try {
+          const ts = Date.now();
+          const est = this.d.transcripts.estimate(vod.id, spans);
+          if (est.sec > 0) task.estimate(est.eta / 0.15);
+          await this.d.transcripts.ensure(vod.id, spans, {
+            onProgress: (doneSec, totalSec) => task.update(40 + (totalSec ? (doneSec / totalSec) * 15 : 15), `Transcribiendo lo elegido (${Math.round(doneSec / 60)} de ${Math.round(totalSec / 60)} min)…`),
+          });
+          words = this.d.transcripts.words(vod.id);
+          tTranscribe = lap(ts);
+          this.d.log.info(`Transcripción de lo elegido en "${vod.title}": ${tTranscribe} (${Math.round(est.sec / 60)} min de audio, de ${Math.round((vod.durationSec ?? duration) / 60)} del directo)`);
+          notes.push(`Análisis rápido: se transcribieron ${Math.round(est.sec / 60)} min de ${Math.round(duration / 60)}.`);
+        } catch (e) {
+          if (isCancelled(e)) throw e;
+          notes.push(`Sin transcripción: ${(e as Error).message}`);
+        }
+        this.mark(vod, 'analyzing');
       }
 
       // 4) títulos

@@ -5,6 +5,8 @@ import type { TranscriptInfo, VodJob, WhisperStatus } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import type { Range } from '../../shared/timeline';
 import { parseTranscript } from '../../shared/transcript';
+import { applyVocabulary, cleanVocabulary, learnCorrections, mergeCorrections, normToken, whisperPrompt, type Vocabulary } from '../../shared/vocab';
+import { applyLineChanges, type LineChange } from '../../shared/subtitleEdit';
 import { buildClaudePrompt } from '../../shared/claudePrompt';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
@@ -54,9 +56,91 @@ export class TranscriptService {
     return path.join(this.dir, `${vodId.replace(/[^\w-]/g, '_')}.json`);
   }
 
-  /** Palabras guardadas; vacío si no hay transcripción o el archivo no se puede leer. */
+  /** Versión del vocabulario: sube al cambiarlo, para descartar lo que ya se había corregido. */
+  private vocabVersion = 0;
+  private corrected = new Map<string, { key: string; words: Word[] }>();
+
+  /** Palabras propias y correcciones aprendidas. */
+  vocabulary(): Vocabulary {
+    return this.d.store.data.vocab;
+  }
+
+  setVocabulary(v: unknown): Vocabulary {
+    this.d.store.data.vocab = cleanVocabulary(v);
+    this.vocabVersion++;
+    this.d.store.save();
+    this.d.notifier.changed();
+    return this.d.store.data.vocab;
+  }
+
+  /**
+   * Palabras guardadas con el vocabulario aplicado (lo guardado en disco no se toca, así que lo que se aprenda
+   * mañana también corrige las transcripciones de hoy). Vacío si no hay transcripción o no se puede leer.
+   */
   words(vodId: string): Word[] {
-    return this.raw(vodId).words;
+    const raw = this.raw(vodId).words;
+    const v = this.vocabulary();
+    if (!raw.length || (!v.terms.length && !v.corrections.length)) return raw;
+    let mtime = 0;
+    try {
+      mtime = fs.statSync(this.file(vodId)).mtimeMs;
+    } catch {
+      /* sin archivo */
+    }
+    const key = `${this.vocabVersion}:${mtime}:${raw.length}`;
+    const hit = this.corrected.get(vodId);
+    if (hit?.key === key) return hit.words;
+    const words = applyVocabulary(raw, v);
+    this.corrected.set(vodId, { key, words });
+    if (this.corrected.size > 4) this.corrected.delete(this.corrected.keys().next().value as string);
+    return words;
+  }
+
+  /** Prompt inicial de Whisper: las palabras propias y de qué va el directo (título y juegos). */
+  private promptFor(vod: VodJob): string {
+    const context = [vod.title ?? '', ...(vod.chapters ?? []).map((c) => c.title)];
+    return whisperPrompt(this.vocabulary(), context);
+  }
+
+  /**
+   * El usuario corrige el texto de unas líneas de subtítulo: se guardan las palabras nuevas en la transcripción
+   * y se aprenden las correcciones (lo que salió mal → lo que puso) para el futuro.
+   */
+  editLines(vodId: string, changes: LineChange[]): { changed: number; learned: { from: string; to: string }[] } {
+    this.vod(vodId);
+    if (!Array.isArray(changes) || changes.length > 5000) throw new Error('Las correcciones no son válidas.');
+    for (const c of changes) {
+      if (typeof c?.text !== 'string' || typeof c.start !== 'number' || typeof c.end !== 'number') throw new Error('Las correcciones no son válidas.');
+      if (c.text.length > 600) throw new Error('Una línea de subtítulo es demasiado larga.');
+    }
+    const cur = this.raw(vodId);
+    if (!cur.words.length) throw new Error('Este VOD no tiene transcripción que corregir.');
+    // las líneas que ve el usuario son las ya corregidas con el vocabulario; sobre esas se aplican sus cambios
+    const base = this.words(vodId);
+    const r = applyLineChanges(base, changes);
+    if (!r.changed.length) return { changed: 0, learned: [] };
+    fs.mkdirSync(this.dir, { recursive: true });
+    const file = this.file(vodId);
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ words: r.words, ...(cur.covered ? { covered: cur.covered } : {}) }));
+    fs.renameSync(`${file}.tmp`, file);
+    const vod = this.vod(vodId);
+    vod.transcript = { ...(vod.transcript ?? { source: 'whisper', at: new Date().toISOString() }), words: r.words.length, at: new Date().toISOString() } as TranscriptInfo;
+    // aprender: cada cambio pequeño pasa a ser una corrección y su resultado, un término si es un nombre propio
+    let learned: { from: string; to: string }[] = [];
+    for (const c of r.changed) learned = learned.concat(learnCorrections(c.before, c.after));
+    if (learned.length) {
+      const v = this.vocabulary();
+      v.corrections = mergeCorrections(v.corrections, learned);
+      for (const l of learned) {
+        const name = /^\p{Lu}/u.test(l.to) && l.to.length >= 4 && !l.to.includes(' ');
+        if (name && !v.terms.some((t) => normToken(t) === normToken(l.to))) v.terms.push(l.to);
+      }
+      this.vocabVersion++;
+    }
+    this.corrected.delete(vodId);
+    this.d.store.save();
+    this.d.notifier.changed();
+    return { changed: r.changed.length, learned };
   }
 
   private raw(vodId: string): { words: Word[]; covered?: Range[] } {
@@ -188,7 +272,7 @@ export class TranscriptService {
    * no el directo entero; sin ellos, el directo completo. Así los subtítulos y los títulos sugeridos no obligan a transcribir
    * a mano ni a esperar a todo el directo. Falla con un motivo claro si no se puede (sin Whisper o sin el VOD descargado).
    */
-  async ensure(vodId: string, ranges?: Range[]): Promise<void> {
+  async ensure(vodId: string, ranges?: Range[], opts: { onProgress?: (doneSec: number, totalSec: number) => void } = {}): Promise<void> {
     if (!ranges?.length) {
       if (this.words(vodId).length && this.isFull(vodId)) return;
       return this.once(`${vodId}:full`, async () => {
@@ -196,14 +280,30 @@ export class TranscriptService {
         await this.transcribe(vodId);
       });
     }
-    for (const m of this.missing(vodId, ranges)) {
-      await this.once(`${vodId}:${Math.round(m.start)}-${Math.round(m.end)}`, async () => {
-        this.requirements(vodId);
-        // otro tramo pudo cubrirlo mientras esperaba
-        const still = this.missing(vodId, [{ start: m.start + 1.5, end: m.end - 1.5 }]);
-        for (const s of still) await this.transcribe(vodId, s);
-      });
-    }
+    const pending = this.missing(vodId, ranges);
+    const totalSec = pending.reduce((a, r) => a + (r.end - r.start), 0);
+    let doneSec = 0;
+    opts.onProgress?.(0, totalSec);
+    // varios tramos a la vez (la cola reparte los núcleos); cada uno se guarda al terminar, así que se puede pausar sin perder lo hecho
+    await Promise.all(
+      pending.map((m) =>
+        this.once(`${vodId}:${Math.round(m.start)}-${Math.round(m.end)}`, async () => {
+          this.requirements(vodId);
+          // otro tramo pudo cubrirlo mientras esperaba
+          const still = this.missing(vodId, [{ start: m.start + 1.5, end: m.end - 1.5 }]);
+          for (const s of still) await this.transcribe(vodId, s);
+        }).then(() => {
+          doneSec += m.end - m.start;
+          opts.onProgress?.(doneSec, totalSec);
+        }),
+      ),
+    );
+  }
+
+  /** Segundos de audio que faltan por transcribir de estos tramos y lo que tardará según la velocidad medida en este PC. */
+  estimate(vodId: string, ranges: Range[]): { sec: number; eta: number } {
+    const sec = this.missing(vodId, ranges).reduce((a, r) => a + (r.end - r.start), 0);
+    return { sec, eta: sec / this.ratio(this.d.store.data.settings.whisperModel) };
   }
 
   private once(key: string, fn: () => Promise<void>): Promise<void> {
@@ -303,6 +403,7 @@ export class TranscriptService {
             exe: bin,
             model: modelPath(this.modelsDir, s.whisperModel),
             language: s.whisperLanguage,
+            prompt: this.promptFor(vod),
             range,
             ...this.share(),
             // el directo entero tarda horas: lo hecho se guarda por trozos y se puede pausar o apagar el equipo

@@ -3,6 +3,7 @@ import type { ToolStatus, WhisperStatus } from '../../shared/types';
 import { errMsg } from '../lib';
 import AutopilotCard from './AutopilotCard';
 import UpdatesCard from './UpdatesCard';
+import VocabularyCard from './VocabularyCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
 import { SubTabs, useSubTab } from '../SubTabs';
@@ -202,6 +203,8 @@ export default function SettingsTab() {
         <button className="btn" onClick={() => void save()}>Guardar transcripción</button>
         {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
       </section>
+
+      <VocabularyCard />
 
       </div>}
 

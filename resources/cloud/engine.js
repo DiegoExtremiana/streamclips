@@ -211,9 +211,9 @@ var init_twitch = __esm({
   }
 });
 
-// ../streamclips/node_modules/libsodium/dist/modules/libsodium.js
+// node_modules/libsodium/dist/modules/libsodium.js
 var require_libsodium = __commonJS({
-  "../streamclips/node_modules/libsodium/dist/modules/libsodium.js"(exports2, module2) {
+  "node_modules/libsodium/dist/modules/libsodium.js"(exports2, module2) {
     (function(root) {
       function expose_libsodium(exports3) {
         "use strict";
@@ -28082,9 +28082,9 @@ var require_libsodium = __commonJS({
   }
 });
 
-// ../streamclips/node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js
+// node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js
 var require_libsodium_wrappers = __commonJS({
-  "../streamclips/node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js"(exports2) {
+  "node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js"(exports2) {
     !function(e) {
       function a(e2, a2) {
         "use strict";
@@ -35909,7 +35909,12 @@ var ClipScoreService = class {
     } catch {
     }
   }
-  /** ¿Pasa de 8/10? (Lo único que se enseña de la puntuación.) */
+  /** Nota de un clip (0-10, un decimal) si ya está valorado. */
+  scoreOf(id) {
+    const s = this.scores.get(id)?.score;
+    return typeof s === "number" ? Math.round(s * 10) / 10 : void 0;
+  }
+  /** ¿Pasa de 8/10? */
   gold(id) {
     return isGold(this.scores.get(id)?.score);
   }
@@ -38353,7 +38358,7 @@ var ChannelMonitor = class {
   lastWarn = { msg: "", at: 0 };
   busy = false;
   stream = null;
-  /** Puntuación interna de los clips del canal (solo se enseña si son «dorados»). */
+  /** Puntuación de los clips del canal: la nota y si son «dorados» (8 o más). */
   scores;
   /** Clips de otros canales consultados (se recuerdan unos minutos). */
   others = /* @__PURE__ */ new Map();
@@ -38606,7 +38611,7 @@ var ChannelMonitor = class {
     }
     const raw = [...this.clipCache?.byId.values() ?? []].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     this.scores?.enqueue(raw);
-    const list = raw.map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false }));
+    const list = raw.map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id) }));
     return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning, channel: this.d.creds().login, own: true };
   }
   /** Estado actual de la transmisión: el análisis en segundo plano espera a que acabe el directo. */

@@ -93,10 +93,10 @@ var init_twitch = __esm({
         this.token = { clientId: c.clientId, value: j.access_token, expiresAt: this.now() + (j.expires_in ?? 3600) * 1e3 };
         return j.access_token;
       }
-      async helix(path18, c) {
+      async helix(path20, c) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const token = await this.appToken(c, attempt > 0);
-          const res = await this.request(`https://api.twitch.tv/helix/${path18}`, {
+          const res = await this.request(`https://api.twitch.tv/helix/${path20}`, {
             headers: { "Client-Id": c.clientId, Authorization: `Bearer ${token}` }
           });
           if (res.status === 401) {
@@ -243,9 +243,9 @@ var require_libsodium = __commonJS({
             Module.getRandomValue = randomValuesStandard;
           } catch (e) {
             try {
-              var crypto10 = require("crypto");
+              var crypto11 = require("crypto");
               var randomValueNodeJS = function() {
-                var buf = crypto10["randomBytes"](4);
+                var buf = crypto11["randomBytes"](4);
                 return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
               };
               randomValueNodeJS();
@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs25 = require("fs");
+                var fs27 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs25.readFileSync(filename);
+                  var ret = fs27.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs25.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs27.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27147,7 +27147,7 @@ var require_libsodium = __commonJS({
                   try {
                     var window_2 = "object" === typeof window ? window : self;
                     var crypto_2 = typeof window_2.crypto !== "undefined" ? window_2.crypto : window_2.msCrypto;
-                    crypto_2 = crypto_2 === void 0 ? crypto11 : crypto_2;
+                    crypto_2 = crypto_2 === void 0 ? crypto12 : crypto_2;
                     var randomValuesStandard2 = function() {
                       var buf = new Uint32Array(1);
                       crypto_2.getRandomValues(buf);
@@ -27157,9 +27157,9 @@ var require_libsodium = __commonJS({
                     Module3.getRandomValue = randomValuesStandard2;
                   } catch (e) {
                     try {
-                      var crypto11 = require("crypto");
+                      var crypto12 = require("crypto");
                       var randomValueNodeJS2 = function() {
-                        var buf = crypto11["randomBytes"](4);
+                        var buf = crypto12["randomBytes"](4);
                         return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
                       };
                       randomValueNodeJS2();
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs24 = require("fs");
+            var fs26 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs24.readFileSync(filename);
+              var ret = fs26.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs24.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs26.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -27805,7 +27805,7 @@ var require_libsodium = __commonJS({
               try {
                 var window_2 = "object" === typeof window ? window : self;
                 var crypto_2 = typeof window_2.crypto !== "undefined" ? window_2.crypto : window_2.msCrypto;
-                crypto_2 = crypto_2 === void 0 ? crypto11 : crypto_2;
+                crypto_2 = crypto_2 === void 0 ? crypto12 : crypto_2;
                 var randomValuesStandard2 = function() {
                   var buf = new Uint32Array(1);
                   crypto_2.getRandomValues(buf);
@@ -27815,9 +27815,9 @@ var require_libsodium = __commonJS({
                 Module2.getRandomValue = randomValuesStandard2;
               } catch (e) {
                 try {
-                  var crypto11 = require("crypto");
+                  var crypto12 = require("crypto");
                   var randomValueNodeJS2 = function() {
-                    var buf = crypto11["randomBytes"](4);
+                    var buf = crypto12["randomBytes"](4);
                     return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
                   };
                   randomValueNodeJS2();
@@ -30686,12 +30686,131 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs23 = __toESM(require("node:fs"));
-var import_node_os6 = __toESM(require("node:os"));
-var import_node_path17 = __toESM(require("node:path"));
+var import_node_fs25 = __toESM(require("node:fs"));
+var import_node_os7 = __toESM(require("node:os"));
+var import_node_path19 = __toESM(require("node:path"));
 
 // electron/app/context.ts
-var import_node_path16 = __toESM(require("node:path"));
+var import_node_path18 = __toESM(require("node:path"));
+
+// shared/speakers.ts
+function assignSpeakers(words, segs, o = {}) {
+  const minShare = o.minShare ?? 0.5;
+  const ratio = o.overlapRatio ?? 0.6;
+  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  return words.map((w) => {
+    const dur = Math.max(0.05, w.end - w.start);
+    const cover = /* @__PURE__ */ new Map();
+    for (const s of sorted) {
+      if (s.start >= w.end) break;
+      const ov = Math.min(w.end, s.end) - Math.max(w.start, s.start);
+      if (ov > 0) cover.set(s.speaker, (cover.get(s.speaker) ?? 0) + ov);
+    }
+    const ranked = [...cover.entries()].sort((a, b) => b[1] - a[1]);
+    const { spk: _drop, ...rest } = w;
+    if (!ranked.length || ranked[0][1] / dur < minShare) return rest;
+    if (ranked[1] && ranked[1][1] >= ranked[0][1] * ratio) return rest;
+    return { ...rest, spk: ranked[0][0] };
+  });
+}
+var DEFAULT_SPEAKER_COLORS = ["#FFFFFF", "#FFE600", "#5AB4FF", "#5BE37D", "#FF8A5B", "#D58CFF", "#FF6BA8", "#7DF0E4"];
+function colorMap(ids, selfId, palette = DEFAULT_SPEAKER_COLORS) {
+  const out = {};
+  const colors = palette.length ? palette : DEFAULT_SPEAKER_COLORS;
+  let next = 1;
+  for (const id of ids) {
+    if (id in out) continue;
+    out[id] = id === selfId ? colors[0] : colors[1 + (next++ - 1) % Math.max(1, colors.length - 1)];
+  }
+  return out;
+}
+var defaultAlias = (id) => `Hablante ${id}`;
+function cosine(a, b) {
+  if (a.length !== b.length || !a.length) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na > 0 && nb > 0 ? dot / Math.sqrt(na * nb) : 0;
+}
+function matchProfile(embedding, profiles, o = {}) {
+  const min = o.minSimilarity ?? 0.6;
+  const margin = o.margin ?? 0.08;
+  const scored = profiles.map((p) => ({ p, s: cosine(embedding, p.embedding) })).sort((a, b) => b.s - a.s);
+  if (!scored.length || scored[0].s < min) return null;
+  if (scored[1] && scored[0].s - scored[1].s < margin) return null;
+  return scored[0].p;
+}
+function updateProfile(p, embedding, weight = 1) {
+  const n = p.n + weight;
+  return { ...p, n, embedding: p.embedding.map((x, i) => (x * p.n + embedding[i] * weight) / n) };
+}
+function mergeClusters(embeddings, threshold) {
+  const ids = [...embeddings.keys()].sort((a, b) => a - b);
+  let groups = ids.map((i) => [i]);
+  const sim = (a, b) => {
+    let s = 0;
+    for (const x of a) for (const y of b) s += cosine(embeddings.get(x), embeddings.get(y));
+    return s / (a.length * b.length);
+  };
+  for (; ; ) {
+    let best = -Infinity;
+    let bi = -1;
+    let bj = -1;
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const s = sim(groups[i], groups[j]);
+        if (s > best) {
+          best = s;
+          bi = i;
+          bj = j;
+        }
+      }
+    }
+    if (bi < 0 || best < threshold) break;
+    groups = groups.filter((_, k) => k !== bi && k !== bj).concat([[...groups[bi], ...groups[bj]]]);
+  }
+  groups.sort((a, b) => Math.min(...a) - Math.min(...b));
+  const out = /* @__PURE__ */ new Map();
+  groups.forEach((g, n) => g.forEach((id) => out.set(id, n)));
+  return out;
+}
+var emptyBook = () => ({ profiles: [], nextId: 1 });
+function cleanBook(x) {
+  const o = typeof x === "object" && x !== null ? x : {};
+  const profiles = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const p of Array.isArray(o.profiles) ? o.profiles : []) {
+    if (typeof p !== "object" || p === null) continue;
+    if (!Number.isInteger(p.id) || p.id < 1 || seen.has(p.id)) continue;
+    if (!Array.isArray(p.embedding) || p.embedding.length < 8 || p.embedding.length > 4096 || !p.embedding.every((v) => typeof v === "number" && Number.isFinite(v))) continue;
+    seen.add(p.id);
+    const alias = typeof p.alias === "string" ? p.alias.replace(/[<>]/g, "").trim().slice(0, 40) : "";
+    profiles.push({ id: p.id, ...alias ? { alias } : {}, ...p.self === true ? { self: true } : {}, embedding: p.embedding, n: Number.isFinite(p.n) && p.n > 0 ? p.n : 1 });
+  }
+  let selfSeen = false;
+  for (const p of profiles) {
+    if (p.self && selfSeen) delete p.self;
+    if (p.self) selfSeen = true;
+  }
+  const max = profiles.reduce((a, p) => Math.max(a, p.id), 0);
+  const next = Number.isInteger(o.nextId) && o.nextId > max ? o.nextId : max + 1;
+  return { profiles, nextId: next };
+}
+function resolveVoices(voices, profiles, o = {}) {
+  const cand = [...voices.entries()].map(([v, e]) => ({ v, p: matchProfile(e, profiles, o), s: 0 }));
+  for (const c of cand) c.s = c.p ? cosine(voices.get(c.v), c.p.embedding) : 0;
+  const out = /* @__PURE__ */ new Map();
+  for (const c of [...cand].sort((a, b) => b.s - a.s)) {
+    const taken = [...out.values()].includes(c.p);
+    out.set(c.v, c.p && !taken ? c.p : null);
+  }
+  return out;
+}
 
 // shared/vocabPokemon.ts
 var COMPETITIVE_TERMS = [
@@ -30969,13 +31088,18 @@ function applyVocabulary(words, v) {
   const keys = cores.map((c) => normToken(c.core));
   const out = [];
   let changed = false;
+  const spkOf = (i, n) => {
+    const s = words[i].spk;
+    for (let k = 1; k < n; k++) if (words[i + k].spk !== s) return {};
+    return s === void 0 ? {} : { spk: s };
+  };
   for (let i = 0; i < words.length; ) {
     let done = false;
     for (let n = Math.min(MAX_SPAN, words.length - i); n >= 1 && !done; n--) {
       if (keys.slice(i, i + n).some((k) => !k)) continue;
       const to = exact.get(keys.slice(i, i + n).join(" "));
       if (to === void 0) continue;
-      out.push({ text: `${cores[i].pre}${to}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
+      out.push({ text: `${cores[i].pre}${to}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end, ...spkOf(i, n) });
       i += n;
       done = true;
       changed = true;
@@ -30995,7 +31119,7 @@ function applyVocabulary(words, v) {
           if (s >= f.min && (!best || s > best.s)) best = { term: f.term, s };
         }
         if (!best || normToken(best.term) === joined) continue;
-        out.push({ text: `${cores[i].pre}${best.term}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
+        out.push({ text: `${cores[i].pre}${best.term}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end, ...spkOf(i, n) });
         i += n;
         done = true;
         changed = true;
@@ -31133,6 +31257,7 @@ function defaults(defaultOutputDir) {
     },
     stats: { transcribeRatio: {} },
     vocab: emptyVocabulary(),
+    speakers: emptyBook(),
     vods: [],
     outputs: [],
     groups: [],
@@ -31204,6 +31329,7 @@ var Store = class _Store {
       },
       stats: { transcribeRatio: ratios(saved.stats?.transcribeRatio) },
       vocab: cleanVocabulary(saved.vocab),
+      speakers: cleanBook(saved.speakers),
       vods: arr(saved.vods),
       outputs: arr(saved.outputs).map(normalizeOutput).filter((x) => x !== null),
       groups: arr(saved.groups),
@@ -31520,11 +31646,12 @@ function buildCues(words, style) {
   for (const w of words) {
     if (!w.text.trim()) continue;
     const prev = cur[cur.length - 1];
-    if (prev && w.start - prev.end > MAX_GAP_SEC) {
+    const changed = prev !== void 0 && prev.spk !== void 0 && w.spk !== void 0 && prev.spk !== w.spk;
+    if (prev && (w.start - prev.end > MAX_GAP_SEC || changed)) {
       sentences2.push(cur);
       cur = [];
     }
-    cur.push({ text: w.text.trim(), start: w.start, end: Math.max(w.end, w.start + 0.05) });
+    cur.push({ text: w.text.trim(), start: w.start, end: Math.max(w.end, w.start + 0.05), ...w.spk !== void 0 ? { spk: w.spk } : {} });
     if (SENTENCE_END.test(w.text.trim())) {
       sentences2.push(cur);
       cur = [];
@@ -31546,7 +31673,7 @@ function wordsForOutput(words, ranges) {
     const t = toOutputTime(mid, ranges);
     if (t === null) continue;
     const len = Math.max(0.05, w.end - w.start);
-    out.push({ text: w.text, start: Math.max(0, t - len / 2), end: t + len / 2 });
+    out.push({ text: w.text, start: Math.max(0, t - len / 2), end: t + len / 2, ...w.spk !== void 0 ? { spk: w.spk } : {} });
   }
   return out;
 }
@@ -31580,7 +31707,7 @@ var assTime = (s) => {
 function assEscape(t) {
   return t.replace(/[\\{}]/g, "").replace(/\r?\n/g, " ");
 }
-function buildAss(words, style, w, h) {
+function buildAss(words, style, w, h, speakerColors) {
   const L = captionLayout(style, w, h);
   const bold = style.bold ? -1 : 0;
   const primary = assColor(style.color);
@@ -31601,7 +31728,11 @@ function buildAss(words, style, w, h) {
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
   ];
   for (const cue of buildCues(words, style)) {
-    const texts = cue.words.map((x) => assEscape(displayText(x.text, style)));
+    const base = cue.words.map((x) => speakerColors && x.spk !== void 0 && speakerColors[x.spk] ? assColor(speakerColors[x.spk]) : primary);
+    const texts = cue.words.map((x, j) => {
+      const t = assEscape(displayText(x.text, style));
+      return base[j] === primary ? t : `{\\1c${base[j]}}${t}{\\1c${primary}}`;
+    });
     if (!style.highlight) {
       lines.push(`Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Default,,0,0,0,,${texts.join(" ")}`);
       continue;
@@ -31610,7 +31741,7 @@ function buildAss(words, style, w, h) {
       const from = i === 0 ? cue.start : word.start;
       const to = i === cue.words.length - 1 ? cue.end : cue.words[i + 1].start;
       if (to <= from) return;
-      const text = texts.map((t, j) => j === i ? `{\\1c${assColor(style.highlight)}}${t}{\\1c${primary}}` : t).join(" ");
+      const text = texts.map((t, j) => j === i ? `{\\1c${assColor(style.highlight)}}${assEscape(displayText(cue.words[j].text, style))}{\\1c${base[j]}}` : t).join(" ");
       lines.push(`Dialogue: 0,${assTime(from)},${assTime(to)},Default,,0,0,0,,${text}`);
     });
   }
@@ -31714,6 +31845,15 @@ function validateAutopilot(cur, p, enc) {
   }
   if (p.purgePublished !== void 0) n.purgePublished = bool(p.purgePublished, "El borrado tras publicar");
   if (p.fastAnalysis !== void 0) n.fastAnalysis = bool(p.fastAnalysis, "El an\xE1lisis r\xE1pido");
+  if (p.minQuality !== void 0) {
+    if (typeof p.minQuality !== "number" || !Number.isFinite(p.minQuality) || p.minQuality < 3 || p.minQuality > 9.5) throw new Error("La nota m\xEDnima debe estar entre 3 y 9,5.");
+    n.minQuality = Math.round(p.minQuality * 2) / 2;
+  }
+  if (p.speakers !== void 0) n.speakers = bool(p.speakers, "La identificaci\xF3n de hablantes");
+  if (p.speakerColors !== void 0) {
+    if (!Array.isArray(p.speakerColors) || p.speakerColors.length > 12 || p.speakerColors.some((c) => typeof c !== "string" || !/^#[0-9a-fA-F]{6}$/.test(c))) throw new Error("Los colores de los hablantes deben ser #RRGGBB (hasta 12).");
+    n.speakerColors = p.speakerColors.map((c) => c.toUpperCase());
+  }
   if (p.smartSelect !== void 0) n.smartSelect = bool(p.smartSelect, "La selecci\xF3n inteligente");
   if (p.styledCovers !== void 0) n.styledCovers = bool(p.styledCovers, "El estilo de las portadas");
   if (p.cleanup !== void 0) n.cleanup = bool(p.cleanup, "La limpieza del directo");
@@ -32756,7 +32896,7 @@ async function withSubtitles(env, vodId, style, ranges, kind, fn) {
   const dir = import_node_fs8.default.mkdtempSync(import_node_path7.default.join(import_node_os2.default.tmpdir(), "streamclips-ass-"));
   try {
     const ass = import_node_path7.default.join(dir, "subs.ass");
-    import_node_fs8.default.writeFileSync(ass, buildAss(words, SUBTITLE_STYLES[style], w, h));
+    import_node_fs8.default.writeFileSync(ass, buildAss(words, SUBTITLE_STYLES[style], w, h, env.speakerColors?.(words)));
     return await fn({ ass, fontsDir: env.fontsDir });
   } finally {
     import_node_fs8.default.rmSync(dir, { recursive: true, force: true });
@@ -33691,6 +33831,64 @@ function transcriptForClaude(words, windowSec = 6) {
   return lines.join("\n");
 }
 
+// shared/loops.ts
+var LOOP_WINDOW = 24;
+var LOOP_MAX_DISTINCT = 7;
+var LOOP_KEEP = 8;
+var LAUGH = /^(?:j+[aeiou]+j*)+$|^(?:ha|ja|je|ji|jo|ju)+$/;
+function dropLoops(words) {
+  const n = words.length;
+  if (n < LOOP_WINDOW) return { words, dropped: 0 };
+  const keys = words.map((w) => normToken(w.text));
+  const flagged = new Array(n).fill(false);
+  const count = /* @__PURE__ */ new Map();
+  let distinct = 0;
+  const add = (k, d) => {
+    const c = (count.get(k) ?? 0) + d;
+    if (c === 0) {
+      count.delete(k);
+      distinct--;
+    } else {
+      if (!count.has(k)) distinct++;
+      count.set(k, c);
+    }
+  };
+  for (let i = 0; i < n; i++) {
+    add(keys[i], 1);
+    if (i >= LOOP_WINDOW) add(keys[i - LOOP_WINDOW], -1);
+    if (i >= LOOP_WINDOW - 1 && distinct <= LOOP_MAX_DISTINCT) {
+      const from = i - LOOP_WINDOW + 1;
+      if (keys.slice(from, i + 1).filter((k) => LAUGH.test(k)).length < LOOP_WINDOW / 2) for (let j = from; j <= i; j++) flagged[j] = true;
+    }
+  }
+  for (let i = 0; i < n; ) {
+    if (!flagged[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < n && flagged[j]) j++;
+    const freq = /* @__PURE__ */ new Map();
+    for (let k = i; k < j; k++) freq.set(keys[k], (freq.get(keys[k]) ?? 0) + 1);
+    let a = i;
+    let b = j - 1;
+    while (a <= b && (freq.get(keys[a]) ?? 0) < 3) flagged[a++] = false;
+    while (b >= a && (freq.get(keys[b]) ?? 0) < 3) flagged[b--] = false;
+    i = j;
+  }
+  const out = [];
+  let run2 = 0;
+  let dropped = 0;
+  for (let i = 0; i < n; i++) {
+    if (!flagged[i]) {
+      run2 = 0;
+      out.push(words[i]);
+    } else if (++run2 <= LOOP_KEEP) out.push(words[i]);
+    else dropped++;
+  }
+  return { words: dropped ? out : words, dropped };
+}
+
 // shared/subtitleEdit.ts
 function applyLineChanges(words, changes) {
   const sorted = [...changes].filter((c) => Number.isFinite(c.start) && Number.isFinite(c.end) && c.end >= c.start).sort((a, b) => a.start - b.start);
@@ -34067,6 +34265,8 @@ var TranscriptService = class {
   dir;
   /** Lo llama al guardar una transcripción nueva (p. ej. para poner nombres cortos a lo ya creado). */
   onSaved;
+  /** Tramos de cada voz de un directo (los pone el servicio de hablantes). */
+  speakerOverlay;
   vod(vodId) {
     const v = this.d.store.data.vods.find((x) => x.id === vodId);
     if (!v) throw new Error("El VOD no existe.");
@@ -34096,16 +34296,18 @@ var TranscriptService = class {
   words(vodId) {
     const raw = this.raw(vodId).words;
     const v = this.vocabulary();
-    if (!raw.length || !v.terms.length && !v.corrections.length) return raw;
+    if (!raw.length) return raw;
     let mtime = 0;
     try {
       mtime = import_node_fs13.default.statSync(this.file(vodId)).mtimeMs;
     } catch {
     }
-    const key = `${this.vocabVersion}:${mtime}:${raw.length}`;
+    const ov = this.speakerOverlay?.(vodId);
+    const key = `${this.vocabVersion}:${mtime}:${raw.length}:${ov ? ov.version : 0}`;
     const hit = this.corrected.get(vodId);
     if (hit?.key === key) return hit.words;
-    const words = applyVocabulary(raw, v);
+    let words = applyVocabulary(dropLoops(raw).words, v);
+    if (ov?.segs.length) words = assignSpeakers(words, ov.segs);
     this.corrected.set(vodId, { key, words });
     if (this.corrected.size > 4) this.corrected.delete(this.corrected.keys().next().value);
     return words;
@@ -34133,7 +34335,7 @@ var TranscriptService = class {
     if (!r2.changed.length) return { changed: 0, learned: [] };
     import_node_fs13.default.mkdirSync(this.dir, { recursive: true });
     const file = this.file(vodId);
-    import_node_fs13.default.writeFileSync(`${file}.tmp`, JSON.stringify({ words: r2.words, ...cur.covered ? { covered: cur.covered } : {} }));
+    import_node_fs13.default.writeFileSync(`${file}.tmp`, JSON.stringify({ words: r2.words.map(({ spk: _s, ...w }) => (void 0, w)), ...cur.covered ? { covered: cur.covered } : {} }));
     import_node_fs13.default.renameSync(`${file}.tmp`, file);
     const vod = this.vod(vodId);
     vod.transcript = { ...vod.transcript ?? { source: "whisper", at: (/* @__PURE__ */ new Date()).toISOString() }, words: r2.words.length, at: (/* @__PURE__ */ new Date()).toISOString() };
@@ -34503,8 +34705,386 @@ function basicExe(exe) {
   return import_node_fs13.default.existsSync(p) ? p : void 0;
 }
 
-// electron/domain/groups.ts
+// electron/domain/speakers.ts
+var import_node_fs15 = __toESM(require("node:fs"));
+var import_node_path13 = __toESM(require("node:path"));
+
+// electron/services/diarize.ts
 var import_node_crypto5 = __toESM(require("node:crypto"));
+var import_node_fs14 = __toESM(require("node:fs"));
+var import_node_module = require("node:module");
+var import_node_os6 = __toESM(require("node:os"));
+var import_node_path12 = __toESM(require("node:path"));
+var import_node_stream2 = require("node:stream");
+var EMBEDDING_MODEL = {
+  file: "3dspeaker_eres2net_base_zh-cn_16k.onnx",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+  bytes: 39593761,
+  sha256: "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b"
+};
+var CLUSTER_THRESHOLD = 0.8;
+var SAME_VOICE = 0.45;
+var EMBED_SECONDS = 30;
+var SR = 16e3;
+var cachedSherpa;
+function loadSherpa() {
+  if (cachedSherpa !== void 0) return cachedSherpa;
+  try {
+    cachedSherpa = (0, import_node_module.createRequire)(__filename)("sherpa-onnx-node");
+  } catch {
+    cachedSherpa = null;
+  }
+  return cachedSherpa;
+}
+function embeddingPath(dir) {
+  return import_node_path12.default.join(dir, EMBEDDING_MODEL.file);
+}
+var embeddingInstalled = (dir) => {
+  try {
+    return import_node_fs14.default.statSync(embeddingPath(dir)).size === EMBEDDING_MODEL.bytes;
+  } catch {
+    return false;
+  }
+};
+async function downloadEmbeddingModel(dir, onProgress, fetchFn = fetch) {
+  const dest = embeddingPath(dir);
+  if (embeddingInstalled(dir)) return dest;
+  import_node_fs14.default.mkdirSync(dir, { recursive: true });
+  const part = `${dest}.part`;
+  try {
+    let res;
+    try {
+      res = await fetchFn(EMBEDDING_MODEL.url, { redirect: "follow" });
+    } catch {
+      throw new Error("No se pudo conectar para descargar el modelo de voz. Comprueba tu conexi\xF3n a internet.");
+    }
+    if (!res.ok || !res.body) throw new Error(`No se pudo descargar el modelo de voz (HTTP ${res.status}).`);
+    const hash = import_node_crypto5.default.createHash("sha256");
+    const fd = import_node_fs14.default.openSync(part, "w");
+    let got = 0;
+    let last = -1;
+    try {
+      for await (const raw of import_node_stream2.Readable.fromWeb(res.body)) {
+        const c = Buffer.from(raw);
+        hash.update(c);
+        let off = 0;
+        while (off < c.length) off += import_node_fs14.default.writeSync(fd, c, off, c.length - off);
+        got += c.length;
+        const pct = Math.min(100, Math.floor(got / EMBEDDING_MODEL.bytes * 100));
+        if (pct !== last) {
+          last = pct;
+          onProgress(pct);
+        }
+      }
+    } finally {
+      import_node_fs14.default.closeSync(fd);
+    }
+    if (got !== EMBEDDING_MODEL.bytes) throw new Error(`El modelo de voz se descarg\xF3 incompleto (${got} de ${EMBEDDING_MODEL.bytes} bytes).`);
+    if (hash.digest("hex") !== EMBEDDING_MODEL.sha256) throw new Error("El modelo de voz descargado no es el esperado (huella distinta).");
+    import_node_fs14.default.renameSync(part, dest);
+    return dest;
+  } finally {
+    import_node_fs14.default.rmSync(part, { force: true });
+  }
+}
+function sherpaEngine(segmentationModel, embeddingModel, threads = 2) {
+  const sherpa = loadSherpa();
+  if (!sherpa) throw new Error("El m\xF3dulo de diarizaci\xF3n (sherpa-onnx) no est\xE1 disponible en este equipo.");
+  const sd = new sherpa.OfflineSpeakerDiarization({
+    segmentation: { pyannote: { model: segmentationModel }, numThreads: threads, debug: 0 },
+    embedding: { model: embeddingModel, numThreads: threads, debug: 0 },
+    clustering: { numClusters: -1, threshold: CLUSTER_THRESHOLD },
+    minDurationOn: 0.2,
+    minDurationOff: 0.5
+  });
+  const ex = new sherpa.SpeakerEmbeddingExtractor({ model: embeddingModel, numThreads: threads, debug: 0 });
+  return {
+    process: (s) => sd.process(s),
+    embed: (s) => {
+      const st = ex.createStream();
+      st.acceptWaveform({ sampleRate: SR, samples: s });
+      return Array.from(ex.compute(st));
+    }
+  };
+}
+async function extractSamples(tools, file, r2) {
+  const tmp = import_node_fs14.default.mkdtempSync(import_node_path12.default.join(import_node_os6.default.tmpdir(), "streamclips-diar-"));
+  try {
+    const wav = import_node_path12.default.join(tmp, "a.wav");
+    await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.max(0, r2.start)), "-t", String(Math.max(0.1, r2.end - r2.start)), "-i", file, "-vn", "-ac", "1", "-ar", String(SR), "-c:a", "pcm_s16le", wav]);
+    const buf = import_node_fs14.default.readFileSync(wav);
+    let pos = 12;
+    let dataAt = -1;
+    let dataLen = 0;
+    while (pos + 8 <= buf.length) {
+      const id = buf.toString("ascii", pos, pos + 4);
+      const len = buf.readUInt32LE(pos + 4);
+      if (id === "data") {
+        dataAt = pos + 8;
+        dataLen = Math.min(len, buf.length - dataAt);
+        break;
+      }
+      pos += 8 + len + len % 2;
+    }
+    if (dataAt < 0) throw new Error("El audio extra\xEDdo no tiene datos.");
+    const n = Math.floor(dataLen / 2);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = buf.readInt16LE(dataAt + i * 2) / 32768;
+    return out;
+  } finally {
+    import_node_fs14.default.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+function diarizeSamples(engine, samples, offsetSec) {
+  const raw = engine.process(samples);
+  const byCluster = /* @__PURE__ */ new Map();
+  for (const s of raw) {
+    const a = Math.max(0, Math.floor(s.start * SR));
+    const b = Math.min(samples.length, Math.floor(s.end * SR));
+    if (b - a < SR * 0.3) continue;
+    (byCluster.get(s.speaker) ?? byCluster.set(s.speaker, []).get(s.speaker)).push(samples.subarray(a, b));
+  }
+  const clusterEmb = /* @__PURE__ */ new Map();
+  const clusterSec = /* @__PURE__ */ new Map();
+  for (const [k, parts] of byCluster) {
+    const total = parts.reduce((a, p) => a + p.length, 0);
+    clusterSec.set(k, total / SR);
+    const take = Math.min(total, EMBED_SECONDS * SR);
+    const all = new Float32Array(take);
+    let o = 0;
+    for (const p of parts) {
+      const n = Math.min(p.length, take - o);
+      if (n <= 0) break;
+      all.set(p.subarray(0, n), o);
+      o += n;
+    }
+    if (take >= SR * 1) clusterEmb.set(k, engine.embed(all));
+  }
+  const groups = mergeClusters(clusterEmb, SAME_VOICE);
+  const embeddings = /* @__PURE__ */ new Map();
+  const seconds = /* @__PURE__ */ new Map();
+  for (const [k, g] of groups) {
+    seconds.set(g, (seconds.get(g) ?? 0) + (clusterSec.get(k) ?? 0));
+  }
+  for (const [k, g] of groups) {
+    const w = clusterSec.get(k) ?? 0;
+    const e = clusterEmb.get(k);
+    const cur = embeddings.get(g);
+    const tot = seconds.get(g) || 1;
+    embeddings.set(g, (cur ?? new Array(e.length).fill(0)).map((x, i) => x + e[i] * w / tot));
+  }
+  const segs = [];
+  for (const s of raw) {
+    const g = groups.get(s.speaker);
+    if (g === void 0) continue;
+    segs.push({ start: s.start + offsetSec, end: s.end + offsetSec, speaker: g });
+  }
+  return { segs, embeddings, seconds };
+}
+async function diarizeRange(tools, engine, file, r2) {
+  return diarizeSamples(engine, await extractSamples(tools, file, r2), r2.start);
+}
+
+// electron/domain/speakers.ts
+var MIN_VOICE_SEC = 4;
+var KNOWN_VOICE = 0.55;
+var CHUNK_SEC2 = 15 * 60;
+var JOIN_GAP_SEC = 20;
+var SpeakerService = class {
+  constructor(d) {
+    this.d = d;
+    this.dir = import_node_path13.default.join(import_node_path13.default.dirname(d.store.file), "speakers");
+  }
+  dir;
+  engine = null;
+  versions = /* @__PURE__ */ new Map();
+  cache = /* @__PURE__ */ new Map();
+  chain = Promise.resolve();
+  file(vodId) {
+    return import_node_path13.default.join(this.dir, `${vodId.replace(/[^\w-]/g, "_")}.json`);
+  }
+  read(vodId) {
+    const f = this.file(vodId);
+    try {
+      const mtime = import_node_fs15.default.statSync(f).mtimeMs;
+      const hit = this.cache.get(vodId);
+      if (hit && hit.mtime === mtime) return hit.data;
+      const j = JSON.parse(import_node_fs15.default.readFileSync(f, "utf8"));
+      const data = { segs: Array.isArray(j.segs) ? j.segs : [], covered: Array.isArray(j.covered) ? j.covered : [] };
+      this.cache.set(vodId, { mtime, data });
+      return data;
+    } catch {
+      return { segs: [], covered: [] };
+    }
+  }
+  write(vodId, data) {
+    import_node_fs15.default.mkdirSync(this.dir, { recursive: true });
+    const f = this.file(vodId);
+    import_node_fs15.default.writeFileSync(`${f}.tmp`, JSON.stringify(data));
+    import_node_fs15.default.renameSync(`${f}.tmp`, f);
+    this.cache.delete(vodId);
+    this.versions.set(vodId, (this.versions.get(vodId) ?? 0) + 1);
+  }
+  /** Para el servicio de transcripciones: los tramos de cada voz de un directo. */
+  overlay(vodId) {
+    const s = this.read(vodId);
+    return s.segs.length ? { segs: s.segs, version: this.versions.get(vodId) ?? 1 } : null;
+  }
+  /** ¿Se puede identificar hablantes en este equipo? */
+  available() {
+    if (this.d.engine) return { ok: true };
+    if (!loadSherpa()) return { ok: false, reason: "El m\xF3dulo de diarizaci\xF3n (sherpa-onnx) no est\xE1 disponible en este equipo." };
+    if (!import_node_fs15.default.existsSync(this.d.segmentationModel)) return { ok: false, reason: "Falta el modelo de segmentaci\xF3n de voces incluido con el programa." };
+    return { ok: true };
+  }
+  async getEngine() {
+    if (this.engine) return this.engine;
+    if (this.d.engine) return this.engine = this.d.engine();
+    const a = this.available();
+    if (!a.ok) throw new Error(a.reason);
+    if (!embeddingInstalled(this.d.modelsDir)) {
+      this.d.log.info("Descargando el modelo de voz (40 MB) para identificar hablantes\u2026");
+      await downloadEmbeddingModel(this.d.modelsDir, () => void 0, this.d.fetchFn);
+    }
+    this.engine = sherpaEngine(this.d.segmentationModel, embeddingPath(this.d.modelsDir));
+    return this.engine;
+  }
+  /** Partes de `ranges` que todavía no se han analizado, unidas si están cerca y partidas en trozos manejables. */
+  pending(vodId, ranges) {
+    const cov = this.read(vodId).covered;
+    let todo = ranges.map((r2) => ({ start: Math.max(0, r2.start), end: r2.end })).filter((r2) => r2.end > r2.start);
+    for (const c of cov) {
+      todo = todo.flatMap((p) => {
+        if (c.end <= p.start || c.start >= p.end) return [p];
+        const parts = [];
+        if (c.start > p.start) parts.push({ start: p.start, end: c.start });
+        if (c.end < p.end) parts.push({ start: c.end, end: p.end });
+        return parts;
+      });
+    }
+    todo = todo.filter((r2) => r2.end - r2.start >= 3).sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const r2 of todo) {
+      const last = merged[merged.length - 1];
+      if (last && r2.start - last.end <= JOIN_GAP_SEC && r2.end - last.start <= CHUNK_SEC2) last.end = Math.max(last.end, r2.end);
+      else merged.push({ ...r2 });
+    }
+    return merged.flatMap((r2) => {
+      const out = [];
+      for (let s = r2.start; s < r2.end; s += CHUNK_SEC2) out.push({ start: s, end: Math.min(r2.end, s + CHUNK_SEC2) });
+      return out;
+    });
+  }
+  /** Segundos de audio que faltan por analizar (para estimar el tiempo). */
+  pendingSeconds(vodId, ranges) {
+    return this.pending(vodId, ranges).reduce((a, r2) => a + (r2.end - r2.start), 0);
+  }
+  /**
+   * Identifica quién habla en los tramos indicados (solo los que faltan) y lo recuerda: las voces conocidas se reconocen, las
+   * nuevas pasan a ser «Hablante N». Las llamadas se hacen de una en una para que la memoria de voces sea coherente.
+   */
+  diarize(vodId, ranges, onProgress) {
+    const job = this.chain.then(() => this.doDiarize(vodId, ranges, onProgress));
+    this.chain = job.catch(() => void 0);
+    return job;
+  }
+  async doDiarize(vodId, ranges, onProgress) {
+    const todo = this.pending(vodId, ranges);
+    const total = todo.reduce((a, r2) => a + (r2.end - r2.start), 0);
+    if (!todo.length) return { voices: 0, sec: 0 };
+    const engine = await this.getEngine();
+    const file = await this.d.source(vodId);
+    let done = 0;
+    const ids = /* @__PURE__ */ new Set();
+    for (const r2 of todo) {
+      const res = await diarizeRange(this.d.tools(), engine, file, r2);
+      const book = this.d.store.data.speakers;
+      const known = resolveVoices(res.embeddings, book.profiles, { minSimilarity: KNOWN_VOICE });
+      const map = /* @__PURE__ */ new Map();
+      for (const [voice, emb] of res.embeddings) {
+        const sec = res.seconds.get(voice) ?? 0;
+        const p = known.get(voice);
+        if (p) {
+          const i = book.profiles.findIndex((x) => x.id === p.id);
+          book.profiles[i] = updateProfile(p, emb, Math.min(sec, 60) / 60);
+          map.set(voice, p.id);
+        } else if (sec >= MIN_VOICE_SEC) {
+          const np = { id: book.nextId++, embedding: emb, n: Math.min(sec, 60) / 60 };
+          book.profiles.push(np);
+          map.set(voice, np.id);
+        }
+      }
+      const cur = this.read(vodId);
+      const segs = res.segs.flatMap((s) => map.has(s.speaker) ? [{ ...s, speaker: map.get(s.speaker) }] : []);
+      for (const s of segs) ids.add(s.speaker);
+      const kept = cur.segs.filter((s) => s.end <= r2.start || s.start >= r2.end);
+      this.write(vodId, { segs: [...kept, ...segs].sort((a, b) => a.start - b.start), covered: [...cur.covered, { start: r2.start, end: r2.end }] });
+      this.d.store.save();
+      done += r2.end - r2.start;
+      onProgress?.(done, total);
+    }
+    this.d.notifier.changed();
+    return { voices: ids.size, sec: total };
+  }
+  profiles() {
+    return this.d.store.data.speakers.profiles.map((p) => ({ id: p.id, alias: p.alias || defaultAlias(p.id), self: p.self === true, named: Boolean(p.alias) }));
+  }
+  profile(id) {
+    const p = this.d.store.data.speakers.profiles.find((x) => x.id === id);
+    if (!p) throw new Error("Ese hablante no existe.");
+    return p;
+  }
+  /** Pone o quita el nombre de un hablante (se conserva en los próximos directos). */
+  rename(id, alias) {
+    const p = this.profile(id);
+    const a = String(alias ?? "").replace(/[<>]/g, "").trim().slice(0, 40);
+    if (a) p.alias = a;
+    else delete p.alias;
+    this.d.store.save();
+    this.d.notifier.changed();
+  }
+  /** Marca qué voz es la del propio streamer (null = ninguna). */
+  setSelf(id) {
+    for (const p of this.d.store.data.speakers.profiles) delete p.self;
+    if (id !== null) this.profile(id).self = true;
+    this.d.store.save();
+    this.d.notifier.changed();
+  }
+  /** Une dos hablantes que en realidad son la misma persona: `from` desaparece y sus frases pasan a `into`. */
+  merge(from, into) {
+    if (from === into) throw new Error("Elige dos hablantes distintos.");
+    const a = this.profile(from);
+    const b = this.profile(into);
+    const book = this.d.store.data.speakers;
+    const merged = updateProfile(b, a.embedding, a.n);
+    merged.self = a.self || b.self ? true : void 0;
+    if (!merged.self) delete merged.self;
+    if (!b.alias && a.alias) merged.alias = a.alias;
+    book.profiles = book.profiles.filter((p) => p.id !== from).map((p) => p.id === into ? merged : p);
+    if (import_node_fs15.default.existsSync(this.dir)) {
+      for (const f of import_node_fs15.default.readdirSync(this.dir)) {
+        if (!f.endsWith(".json")) continue;
+        const id = f.slice(0, -5);
+        const cur = this.read(id);
+        if (cur.segs.some((s) => s.speaker === from)) this.write(id, { ...cur, segs: cur.segs.map((s) => s.speaker === from ? { ...s, speaker: into } : s) });
+      }
+    }
+    this.d.store.save();
+    this.d.notifier.changed();
+  }
+  /** Colores de las voces que aparecen en unas palabras; undefined si hay una sola voz (no hace falta colorear). */
+  colorsFor(words) {
+    const ids = [];
+    for (const w of words) if (w.spk !== void 0 && !ids.includes(w.spk)) ids.push(w.spk);
+    if (ids.length < 2) return void 0;
+    const self2 = this.d.store.data.speakers.profiles.find((p) => p.self)?.id;
+    const palette = this.d.store.data.settings.autopilot.speakerColors;
+    return colorMap(ids, self2, palette?.length ? palette : DEFAULT_SPEAKER_COLORS);
+  }
+};
+
+// electron/domain/groups.ts
+var import_node_crypto6 = __toESM(require("node:crypto"));
 var GroupService = class {
   constructor(store, notifier) {
     this.store = store;
@@ -34565,7 +35145,7 @@ var GroupService = class {
       if (this.depth(parentId) >= MAX_GROUP_DEPTH) throw new Error(`No se pueden anidar m\xE1s de ${MAX_GROUP_DEPTH} niveles.`);
     }
     this.assertUnique(n, section, parentId);
-    const g = { id: import_node_crypto5.default.randomUUID(), name: n, kind, section, parentId, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const g = { id: import_node_crypto6.default.randomUUID(), name: n, kind, section, parentId, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.store.data.groups.push(g);
     this.done();
     return g;
@@ -34626,7 +35206,7 @@ var GroupService = class {
 };
 
 // electron/domain/tasks.ts
-var import_node_crypto6 = __toESM(require("node:crypto"));
+var import_node_crypto7 = __toESM(require("node:crypto"));
 var KEEP = 40;
 function estimateEta(o) {
   const { now, pct } = o;
@@ -34652,7 +35232,7 @@ var TaskTracker = class {
   }
   start(kind, label, ref) {
     const startedMs = this.clock();
-    const info = { id: import_node_crypto6.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: new Date(startedMs).toISOString(), ...ref ? { ref } : {} };
+    const info = { id: import_node_crypto7.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: new Date(startedMs).toISOString(), ...ref ? { ref } : {} };
     this.tasks.unshift(info);
     this.tasks.length = Math.min(this.tasks.length, KEEP);
     this.notifier.task({ ...info });
@@ -34697,20 +35277,20 @@ var TaskTracker = class {
 };
 
 // electron/domain/cloud.ts
-var import_node_fs19 = __toESM(require("node:fs"));
-var import_node_path12 = __toESM(require("node:path"));
+var import_node_fs21 = __toESM(require("node:fs"));
+var import_node_path14 = __toESM(require("node:path"));
 var import_libsodium_wrappers = __toESM(require_libsodium_wrappers());
 
 // electron/services/cloud/github.ts
-var import_node_fs15 = __toESM(require("node:fs"));
+var import_node_fs17 = __toESM(require("node:fs"));
 
 // electron/services/social/common.ts
-var import_node_fs14 = __toESM(require("node:fs"));
+var import_node_fs16 = __toESM(require("node:fs"));
 var defaultSleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
 var PublishError = class extends Error {
 };
 async function readChunk(file, start, endExclusive) {
-  const fh = await import_node_fs14.default.promises.open(file, "r");
+  const fh = await import_node_fs16.default.promises.open(file, "r");
   try {
     const len = endExclusive - start;
     const buf = Buffer.alloc(len);
@@ -34800,30 +35380,30 @@ var Github = class {
     const j = await r2.json();
     return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
   }
-  async getContent(path18) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path18)}`);
+  async getContent(path20) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path20)}`);
     if (r2.status === 404) return null;
-    if (!r2.ok) await this.fail(r2, `el archivo ${path18}`);
+    if (!r2.ok) await this.fail(r2, `el archivo ${path20}`);
     const j = await r2.json();
     return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
   }
   /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
-  async putContent(path18, text, message, sha) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path18)}`, {
+  async putContent(path20, text, message, sha) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path20)}`, {
       json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
     });
     if (r2.status === 409 || r2.status === 422) return null;
-    if (!r2.ok) await this.fail(r2, `guardar ${path18}`);
+    if (!r2.ok) await this.fail(r2, `guardar ${path20}`);
     return (await r2.json()).content.sha;
   }
-  async deleteContent(path18, sha, message) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path18)}`, { json: { message, sha } });
-    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path18}`);
+  async deleteContent(path20, sha, message) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path20)}`, { json: { message, sha } });
+    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path20}`);
   }
-  async listDir(path18) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path18)}`);
+  async listDir(path20) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path20)}`);
     if (r2.status === 404) return [];
-    if (!r2.ok) await this.fail(r2, `la carpeta ${path18}`);
+    if (!r2.ok) await this.fail(r2, `la carpeta ${path20}`);
     const j = await r2.json();
     return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
   }
@@ -34833,10 +35413,10 @@ var Github = class {
     return { id: (await r2.json()).id };
   }
   async uploadAsset(releaseId, name, file, contentType) {
-    const size = import_node_fs15.default.statSync(file).size;
+    const size = import_node_fs17.default.statSync(file).size;
     const r2 = await this.req("POST", `${this.uploads}/repos/${this.o.repo}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`, {
       headers: { "Content-Type": contentType, "Content-Length": String(size) },
-      body: import_node_fs15.default.createReadStream(file),
+      body: import_node_fs17.default.createReadStream(file),
       duplex: true,
       timeout: 60 * 6e4
     });
@@ -34849,9 +35429,9 @@ var Github = class {
   async downloadAsset(assetId, dest) {
     const r2 = await this.req("GET", `/repos/${this.o.repo}/releases/assets/${assetId}`, { headers: { Accept: "application/octet-stream" }, timeout: 60 * 6e4 });
     if (!r2.ok || !r2.body) await this.fail(r2, "descargar el v\xEDdeo");
-    const { Readable: Readable2 } = await import("node:stream");
+    const { Readable: Readable3 } = await import("node:stream");
     const { pipeline: pipeline2 } = await import("node:stream/promises");
-    await pipeline2(Readable2.fromWeb(r2.body), import_node_fs15.default.createWriteStream(dest));
+    await pipeline2(Readable3.fromWeb(r2.body), import_node_fs17.default.createWriteStream(dest));
   }
   /** Borra la versión y su etiqueta (y con ella los archivos). */
   async deleteRelease(releaseId, tag) {
@@ -34941,7 +35521,7 @@ jobs:
 }
 
 // electron/services/social/youtube.ts
-var import_node_fs16 = __toESM(require("node:fs"));
+var import_node_fs18 = __toESM(require("node:fs"));
 var YT_ENDPOINTS = {
   upload: "https://www.googleapis.com/upload/youtube/v3",
   api: "https://www.googleapis.com/youtube/v3"
@@ -34970,8 +35550,8 @@ async function publishYoutube(d, o) {
   const sleep = d.sleep ?? defaultSleep;
   const chunk = d.chunkSize ?? YT_CHUNK;
   const { file, short } = youtubeFile(o);
-  if (!import_node_fs16.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs16.default.statSync(file).size;
+  if (!import_node_fs18.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs18.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const token = await d.token();
   const auth = { Authorization: `Bearer ${token}` };
@@ -35031,9 +35611,9 @@ async function publishYoutube(d, o) {
     }
   }
   const warn = d.warn ?? (() => void 0);
-  if (o.kind === "long" && o.thumbnail && import_node_fs16.default.existsSync(o.thumbnail)) {
+  if (o.kind === "long" && o.thumbnail && import_node_fs18.default.existsSync(o.thumbnail)) {
     try {
-      const img = import_node_fs16.default.readFileSync(o.thumbnail);
+      const img = import_node_fs18.default.readFileSync(o.thumbnail);
       const r2 = await timedFetch(f, `${ep.upload}/thumbnails/set?videoId=${encodeURIComponent(videoId)}`, { method: "POST", headers: { ...auth, "Content-Type": "image/jpeg" }, body: new Uint8Array(img) });
       if (!r2.ok) warn(`Miniatura no aceptada por YouTube: ${await apiMessage(r2)}`);
     } catch (e) {
@@ -35092,7 +35672,7 @@ async function ensurePlaylist(d, name) {
 }
 
 // electron/services/social/tiktok.ts
-var import_node_fs17 = __toESM(require("node:fs"));
+var import_node_fs19 = __toESM(require("node:fs"));
 var TT_API = "https://open.tiktokapis.com/v2";
 var CHUNK = 10 * 1024 * 1024;
 var POLL_MS = 5e3;
@@ -35103,9 +35683,9 @@ function tiktokFile(o) {
   if (!f) throw new PublishError("El clip no tiene archivo.");
   return f;
 }
-async function call(d, path18, body) {
+async function call(d, path20, body) {
   const f = d.fetchFn ?? fetch;
-  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path18}`, {
+  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path20}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify(body)
@@ -35123,8 +35703,8 @@ async function publishTiktok(d, o) {
   const f = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? defaultSleep;
   const file = tiktokFile(o);
-  if (!import_node_fs17.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs17.default.statSync(file).size;
+  if (!import_node_fs19.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs19.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const info = await call(d, "/post/publish/creator_info/query/", {});
   const options = info.privacy_level_options ?? [];
@@ -35161,7 +35741,7 @@ async function publishTiktok(d, o) {
 }
 
 // electron/services/social/instagram.ts
-var import_node_fs18 = __toESM(require("node:fs"));
+var import_node_fs20 = __toESM(require("node:fs"));
 var IG_GRAPH = "https://graph.facebook.com/v21.0";
 var POLL_MS2 = 5e3;
 var POLL_MAX2 = 120;
@@ -35185,8 +35765,8 @@ async function publishInstagram(d, o) {
   const sleep = d.sleep ?? defaultSleep;
   const graph = d.graph ?? IG_GRAPH;
   const file = instagramFile(o);
-  if (!import_node_fs18.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs18.default.statSync(file).size;
+  if (!import_node_fs20.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs20.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const { accessToken, igUserId } = await d.token();
   if (!igUserId) throw new PublishError("No hay una cuenta de Instagram profesional enlazada. Vuelve a conectar la cuenta en Conexiones.");
@@ -35205,7 +35785,7 @@ async function publishInstagram(d, o) {
     {
       method: "POST",
       headers: { Authorization: `OAuth ${accessToken}`, offset: "0", file_size: String(size) },
-      body: import_node_fs18.default.createReadStream(file),
+      body: import_node_fs20.default.createReadStream(file),
       // @ts-expect-error opción de Node necesaria para enviar un flujo
       duplex: "half"
     },
@@ -35364,7 +35944,7 @@ var CloudService = class {
   }
   filesFor(o, platform) {
     const video = platform === "youtube" ? youtubeFile(o).file : platform === "tiktok" ? tiktokFile(o) : instagramFile(o);
-    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs19.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
+    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs21.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
   }
   /** Una pasada: sube lo nuevo, trae el estado de lo ya subido y limpia lo cancelado. Nunca lanza. */
   sync() {
@@ -35529,7 +36109,7 @@ var CloudService = class {
         pub.note = e.message;
         continue;
       }
-      if (!import_node_fs19.default.existsSync(files.video)) {
+      if (!import_node_fs21.default.existsSync(files.video)) {
         pub.status = "failed";
         pub.note = "El archivo del v\xEDdeo ya no est\xE1 en su sitio.";
         continue;
@@ -35548,10 +36128,10 @@ var CloudService = class {
           if (e.status !== 422) throw e;
           throw new GithubError(`Hay una subida anterior a medias de \xAB${o.title}\xBB. Pulsa \xABSincronizar\xBB para reintentar.`, 422);
         });
-        const size = import_node_fs19.default.statSync(files.video).size;
-        const asset = await gh.uploadAsset(rel.id, import_node_path12.default.basename(files.video), files.video, "video/mp4");
+        const size = import_node_fs21.default.statSync(files.video).size;
+        const asset = await gh.uploadAsset(rel.id, import_node_path14.default.basename(files.video), files.video, "video/mp4");
         task.update(90);
-        const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path12.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
+        const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path14.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
         const job = {
           v: 1,
           key: pub.key,
@@ -35565,8 +36145,8 @@ var CloudService = class {
           kind: o.kind,
           releaseId: rel.id,
           releaseTag: tag,
-          file: { name: import_node_path12.default.basename(files.video), assetId: asset.id, size },
-          ...thumb ? { thumb: { name: import_node_path12.default.basename(files.thumb), assetId: thumb.id } } : {},
+          file: { name: import_node_path14.default.basename(files.video), assetId: asset.id, size },
+          ...thumb ? { thumb: { name: import_node_path14.default.basename(files.thumb), assetId: thumb.id } } : {},
           updatedAt: new Date(this.now()).toISOString()
         };
         const sha = await gh.putContent(jobPath(pub.key), serializeJob(job), `En cola: ${pub.key}`, prev ? existing.sha : void 0);
@@ -35733,8 +36313,8 @@ function friendly(e) {
 }
 
 // electron/domain/autopilot.ts
-var import_node_fs21 = __toESM(require("node:fs"));
-var import_node_path14 = __toESM(require("node:path"));
+var import_node_fs23 = __toESM(require("node:fs"));
+var import_node_path16 = __toESM(require("node:path"));
 
 // shared/autoEdit.ts
 var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
@@ -35788,7 +36368,9 @@ function planEdit(words, seg, o = {}) {
 function planLong(words, segs, o = {}) {
   const segments = [];
   const body = [];
-  for (const s of segs) {
+  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  for (const [i, s] of sorted.entries()) {
+    if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3) body.push({ type: "sfx", at: s.start + 0.05, sound: "whoosh" });
     const p = planEdit(words, s, o);
     segments.push(...keptRanges(s.start, s.end, p.cuts));
     body.push(...p.effects.filter((e) => e.type === "punch" || e.type === "sfx"));
@@ -36156,9 +36738,9 @@ var GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
 var isGenericAutoTitle = (o) => o.titleSource !== "manual" && GENERIC_TITLE.test(o.title.trim());
 
 // electron/services/momentJudge.ts
-var import_node_crypto7 = __toESM(require("node:crypto"));
-var import_node_fs20 = __toESM(require("node:fs"));
-var import_node_path13 = __toESM(require("node:path"));
+var import_node_crypto8 = __toESM(require("node:crypto"));
+var import_node_fs22 = __toESM(require("node:fs"));
+var import_node_path15 = __toESM(require("node:path"));
 
 // shared/judge.ts
 var KINDS = ["gracia", "fail", "reaccion", "discusion", "historia", "epico", "otro"];
@@ -36189,10 +36771,10 @@ function judgeText(words, c, maxChars = 1100) {
   const t = out.join(" ");
   return t.length > maxChars ? `${t.slice(0, maxChars)}\u2026` : t;
 }
-var JUDGE_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Valoras fragmentos transcritos de un directo para decidir cu\xE1les merecen estar en un v\xEDdeo de mejores momentos. Las voces del streamer y de sus amigos de Discord llegan mezcladas, as\xED que la transcripci\xF3n no dice qui\xE9n habla: deduce el contexto. S\xE9 EXIGENTE y no te dejes llevar por el volumen: una conversaci\xF3n larga o gritos no son gracia. La media de un directo es mediocre: punt\xFAa 5 lo normal, 7 lo bueno y 9-10 solo lo realmente excepcional. Cada criterio es de 0 a 10: humor (gracia o potencial humor\xEDstico), originalidad (algo que no se ve siempre), interaccion (calidad del intercambio entre personas), reaccion (reacciones espont\xE1neas), contexto (tiene planteamiento y desenlace claros dentro del fragmento), autonomia (se entiende sin haber visto el directo). "tipo" es uno de: gracia, fail, reaccion, discusion, historia, epico, otro. "descartar" es true si no merece un v\xEDdeo (charla sin inter\xE9s, silencios, se entiende solo con contexto que falta, o la transcripci\xF3n es ininteligible). "inicio" y "fin" son los segundos (relativos al inicio del fragmento, como las marcas [Ns]) donde empieza y acaba de verdad la situaci\xF3n: sin relleno antes ni despu\xE9s, pero incluyendo planteamiento y remate. "motivo" es una frase corta en castellano que explica la nota. Responde SOLO con JSON.';
+var JUDGE_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Valoras fragmentos transcritos de un directo para decidir cu\xE1les merecen estar en un v\xEDdeo de mejores momentos. Las voces del streamer y de sus amigos de Discord llegan mezcladas, as\xED que la transcripci\xF3n no dice qui\xE9n habla: deduce el contexto. S\xE9 EXIGENTE y no te dejes llevar por el volumen: una conversaci\xF3n larga o gritos no son gracia. La media de un directo es mediocre: punt\xFAa 5 lo normal, 7 lo bueno y 9-10 solo lo realmente excepcional. Cada criterio es de 0 a 10: humor (gracia o potencial humor\xEDstico), originalidad (algo que no se ve siempre), interaccion (calidad del intercambio entre personas), reaccion (reacciones espont\xE1neas), contexto (tiene planteamiento y desenlace claros dentro del fragmento), autonomia (se entiende sin haber visto el directo). "tipo" es uno de: gracia, fail, reaccion, discusion, historia, epico, otro. "descartar" es true si no merece un v\xEDdeo (charla sin inter\xE9s, silencios, se entiende solo con contexto que falta, o la transcripci\xF3n es ininteligible). "inicio" y "fin" son los segundos (relativos al inicio del fragmento, como las marcas [Ns]) donde empieza y acaba de verdad la situaci\xF3n: sin relleno antes ni despu\xE9s, pero incluyendo planteamiento y remate. "titulo" es un nombre corto del momento en castellano (2 a 5 palabras, m\xE1ximo 40 caracteres, sin emojis ni clickbait falso). "motivo" es una frase corta en castellano que explica la nota. Responde SOLO con JSON.';
 function judgePrompt(words, cands) {
   const items = cands.map((c) => ({ id: c.id, duracion: Math.round(c.end - c.start), texto: judgeText(words, c) }));
-  return `Valora cada fragmento. Devuelve {"juicios":[{"id":"","humor":0,"originalidad":0,"interaccion":0,"reaccion":0,"contexto":0,"autonomia":0,"tipo":"","descartar":false,"inicio":0,"fin":0,"motivo":""}]} con un juicio por fragmento.
+  return `Valora cada fragmento. Devuelve {"juicios":[{"id":"","humor":0,"originalidad":0,"interaccion":0,"reaccion":0,"contexto":0,"autonomia":0,"tipo":"","descartar":false,"inicio":0,"fin":0,"titulo":"","motivo":""}]} con un juicio por fragmento.
 Fragmentos:
 ${JSON.stringify(items)}`;
 }
@@ -36219,7 +36801,8 @@ function parseJudgements(raw, cands) {
       const b = clamp2(r2.fin, 0, len);
       if (b - a >= 10 && b - a >= len * 0.5) trim = { start: c.start + a, end: c.start + b };
     }
-    out.push({ id, scores, kind, reason, discard: r2.descartar === true, trim });
+    const title = typeof r2.titulo === "string" ? r2.titulo.replace(/[<>"]/g, "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+    out.push({ id, scores, kind, reason, title: title.length >= 3 ? title : void 0, discard: r2.descartar === true, trim });
   }
   return out;
 }
@@ -36293,8 +36876,15 @@ var textFn = (words) => (s) => textOf(words, s.start, s.end, 2e3);
 // electron/services/llm.ts
 var LLM_PROVIDERS = {
   groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile" },
-  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.0-flash" }
+  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-3.5-flash-lite" }
 };
+function resolveModel(provider, model) {
+  const m = model.trim();
+  if (!m) return LLM_PROVIDERS[provider].defaultModel;
+  if (provider === "gemini" && /^gemini-(1\.5|2\.0)/.test(m)) return LLM_PROVIDERS.gemini.defaultModel;
+  return m;
+}
+var MIN_INTERVAL_MS = { groq: 14e3, gemini: 4e3 };
 var TIMEOUT_MS = 9e4;
 function extractJson(text) {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
@@ -36347,6 +36937,7 @@ async function askJson(cfg, system, user, d = {}) {
     }
     if (res.status === 401 || res.status === 403) throw new Error("El modelo de lenguaje rechaz\xF3 la clave. Rev\xEDsala en Ajustes.");
     if (res.status === 429) throw new Error("Se agot\xF3 el l\xEDmite gratuito del modelo de lenguaje. Se reintentar\xE1 en el pr\xF3ximo directo.");
+    if (res.status === 404) throw new Error(`El modelo \xAB${cfg.model}\xBB no existe o ya no est\xE1 disponible. C\xE1mbialo en Ajustes \u203A Piloto autom\xE1tico.`);
     if (!res.ok) throw new Error(`Error del modelo de lenguaje (${res.status}).`);
     const j = await res.json();
     const content = j.choices?.[0]?.message?.content;
@@ -36356,13 +36947,13 @@ async function askJson(cfg, system, user, d = {}) {
 }
 
 // electron/services/momentJudge.ts
-var VERSION = "v1";
+var VERSION = "v2";
 var CHUNK2 = 6;
-var keyOf = (words, c) => import_node_crypto7.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
+var keyOf = (words, c) => import_node_crypto8.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
 function loadCache(file) {
   if (!file) return {};
   try {
-    const j = JSON.parse(import_node_fs20.default.readFileSync(file, "utf8"));
+    const j = JSON.parse(import_node_fs22.default.readFileSync(file, "utf8"));
     return typeof j === "object" && j ? j : {};
   } catch {
     return {};
@@ -36371,8 +36962,8 @@ function loadCache(file) {
 function saveCache(file, data) {
   if (!file) return;
   try {
-    import_node_fs20.default.mkdirSync(import_node_path13.default.dirname(file), { recursive: true });
-    import_node_fs20.default.writeFileSync(file, JSON.stringify(data));
+    import_node_fs22.default.mkdirSync(import_node_path15.default.dirname(file), { recursive: true });
+    import_node_fs22.default.writeFileSync(file, JSON.stringify(data));
   } catch {
   }
 }
@@ -36382,7 +36973,7 @@ async function judgeCandidates(conf, words, cands, d = {}) {
   const todo = [];
   for (const c of cands) {
     const s = cache[keyOf(words, c)];
-    if (s) found.push({ id: c.id, scores: s.scores, kind: s.kind, reason: s.reason, discard: s.discard, trim: s.trim ? { start: c.start + s.trim.a, end: c.start + s.trim.b } : void 0 });
+    if (s) found.push({ id: c.id, scores: s.scores, kind: s.kind, reason: s.reason, title: s.title, discard: s.discard, trim: s.trim ? { start: c.start + s.trim.a, end: c.start + s.trim.b } : void 0 });
     else todo.push(c);
   }
   const cached = found.length;
@@ -36392,12 +36983,13 @@ async function judgeCandidates(conf, words, cands, d = {}) {
   let lastError = null;
   for (const [n, chunk] of chunks.entries()) {
     d.signal?.();
+    if (n > 0) await (d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms))))(d.paceMs ?? MIN_INTERVAL_MS[conf.provider]);
     try {
       const raw = await askJson(conf, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
       const js = parseJudgements(raw, chunk);
       for (const j of js) {
         const c = chunk.find((x) => x.id === j.id);
-        cache[keyOf(words, c)] = { scores: j.scores, kind: j.kind, reason: j.reason, discard: j.discard, trim: j.trim ? { a: j.trim.start - c.start, b: j.trim.end - c.start } : void 0 };
+        cache[keyOf(words, c)] = { scores: j.scores, kind: j.kind, reason: j.reason, title: j.title, discard: j.discard, trim: j.trim ? { a: j.trim.start - c.start, b: j.trim.end - c.start } : void 0 };
         found.push(j);
       }
       saveCache(d.cacheFile, cache);
@@ -36593,8 +37185,7 @@ function audioEnergy(tools, input, onProgress) {
 }
 
 // electron/domain/autopilot.ts
-var QUALITY_CLIP = 6.5;
-var QUALITY_SUMMARY = 6.5;
+var DEFAULT_QUALITY = 6.5;
 var MIN_SUMMARY_SEC = 150;
 var clean = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var Autopilot = class {
@@ -36633,7 +37224,7 @@ var Autopilot = class {
       await prev.done.catch(() => void 0);
     }
     if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    const missing = !vod.filePath || !import_node_fs21.default.existsSync(vod.filePath);
+    const missing = !vod.filePath || !import_node_fs23.default.existsSync(vod.filePath);
     if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const ctrl = new AbortController();
     this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
@@ -36709,18 +37300,18 @@ var Autopilot = class {
     }
     if (known) this.d.transcripts.prune(vodId, spans);
     const chat = this.chatFileFor(vod);
-    if (chat) import_node_fs21.default.rmSync(chat, { force: true });
+    if (chat) import_node_fs23.default.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
     return { freedBytes, kept: outs.length };
   }
   /** Archivo con la actividad del chat de este directo, si se guardó. */
   chatFileFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs21.default.existsSync(this.d.chatDir)) return void 0;
+    if (!vod.streamStartedAt || !import_node_fs23.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs21.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs23.default.readdirSync(this.d.chatDir)) {
       try {
-        const full = import_node_path14.default.join(this.d.chatDir, f);
-        const j = JSON.parse(import_node_fs21.default.readFileSync(full, "utf8"));
+        const full = import_node_path16.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs23.default.readFileSync(full, "utf8"));
         if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
@@ -36731,7 +37322,7 @@ var Autopilot = class {
     const f = this.chatFileFor(vod);
     if (!f) return void 0;
     try {
-      return ChatBins.fromArray(JSON.parse(import_node_fs21.default.readFileSync(f, "utf8")).bins).toArray();
+      return ChatBins.fromArray(JSON.parse(import_node_fs23.default.readFileSync(f, "utf8")).bins).toArray();
     } catch {
       return void 0;
     }
@@ -36830,6 +37421,7 @@ var Autopilot = class {
         moments = [];
         summary = [];
       }
+      const chapterLabels = /* @__PURE__ */ new Map();
       let summaryMeta;
       const meta = /* @__PURE__ */ new Map();
       if (!moments.length && !summary.length && !mains.length && !pool.length) {
@@ -36866,7 +37458,7 @@ var Autopilot = class {
           try {
             const r2 = await judgeCandidates(llmConf, words, pool, {
               fetchFn: this.d.llmFetch,
-              cacheFile: this.d.judgeDir ? import_node_path14.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
+              cacheFile: this.d.judgeDir ? import_node_path16.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
               onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
               signal: () => throwIfCancelled()
             });
@@ -36878,13 +37470,14 @@ var Autopilot = class {
           }
         }
         if (judged) {
+          const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
           const textFor = textFn(words);
-          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: QUALITY_CLIP, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
-          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: QUALITY_SUMMARY, maxLen: 90, minGap: 20, textFor }) : null;
+          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
           if (clips) {
             moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
             clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
-            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota m\xEDnima (${QUALITY_CLIP}/10); no se rellen\xF3 con momentos flojos.`);
+            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota m\xEDnima (${quality}/10); no se rellen\xF3 con momentos flojos.`);
           }
           if (sum && sum.chosen.length) {
             if (sum.totalSec >= MIN_SUMMARY_SEC) {
@@ -36896,9 +37489,10 @@ var Autopilot = class {
                 if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
                 summary = dom.segs;
               }
+              for (const c of sum.chosen) if (c.judgement.title) chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
               summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
-            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${QUALITY_SUMMARY}/10).`);
-          } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${QUALITY_SUMMARY}/10).`);
+            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
+          } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${quality}/10).`);
         } else {
           ({ moments, summary } = legacy);
           try {
@@ -36914,7 +37508,27 @@ var Autopilot = class {
           return vod;
         }
       }
-      task.update(55, "Poniendo t\xEDtulos\u2026");
+      if (this.cfg.speakers !== false && words.length) {
+        const avail = this.d.speakers.available();
+        if (!avail.ok) notes.push(`Hablantes sin identificar: ${avail.reason}`);
+        else {
+          const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
+          const need = this.d.speakers.pendingSeconds(vod.id, spans);
+          if (need > 0) {
+            task.update(60, "Identificando hablantes\u2026");
+            try {
+              const ts = Date.now();
+              const r2 = await this.d.speakers.diarize(vod.id, spans, (done, total2) => task.update(60 + (total2 ? done / total2 * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total2 / 60)} min)\u2026`));
+              words = this.d.transcripts.words(vod.id);
+              notes.push(`Hablantes: ${r2.voices} voz/voces en ${Math.round(r2.sec / 60)} min de audio (${lap(ts)}).`);
+            } catch (e) {
+              if (isCancelled(e)) throw e;
+              notes.push(`Hablantes sin identificar: ${e.message}`);
+            }
+          }
+        }
+      }
+      task.update(75, "Poniendo t\xEDtulos\u2026");
       const titles = await this.titles(vod, words, moments, mains, notes);
       const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
       if (ser) {
@@ -36951,7 +37565,7 @@ var Autopilot = class {
           if (isCancelled(e)) throw e;
           errors.push(`${label}: ${e.message}`);
         }
-        task.update(55 + ++doneCount / total * 40, `Montando (${doneCount}/${total})\u2026`);
+        task.update(76 + ++doneCount / total * 19, `Montando (${doneCount}/${total})\u2026`);
       };
       const pro = this.cfg.proEdit !== false && words.length > 0;
       if (this.cfg.proEdit !== false && !words.length) notes.push("Edici\xF3n profesional omitida: no hay transcripci\xF3n.");
@@ -36978,7 +37592,7 @@ var Autopilot = class {
           try {
             const starts = outputStarts(segs, item.segments ?? segs);
             const block = chapterBlock(
-              segs.map((g, i) => ({ at: starts[i], label: i === 0 ? "Inicio" : shortTitle(words, g, i) || `Momento ${i + 1}` })),
+              segs.map((g, i) => ({ at: starts[i], label: chapterLabels.get(Math.round(g.start)) ?? (i === 0 ? "Inicio" : shortTitle(words, g, i) || `Momento ${i + 1}`) })),
               item.durationSec
             );
             if (block) chapterOf.set(item.id, block);
@@ -37051,7 +37665,7 @@ var Autopilot = class {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === "none" || !key) return null;
-    return { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
   }
   async titles(vod, words, moments, mains, notes) {
     const base = {
@@ -37071,7 +37685,7 @@ var Autopilot = class {
       uniq();
       return base;
     }
-    const conf = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+    const conf = { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
     const items = [
       ...mains.map((m, i) => ({ id: `video${i + 1}`, texto: textOf(words, m.start, Math.min(m.end, m.start + 240), 900) })),
       ...moments.map((m, i) => ({ id: `clip${i + 1}`, texto: textOf(words, m.start, m.end, 600) }))
@@ -37125,7 +37739,7 @@ ${JSON.stringify(items)}`,
     const key = this.d.llmKey();
     if (llm.provider !== "none" && key) {
       try {
-        const conf = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+        const conf = { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
         const text = segs.map((g) => textOf(words, g.start, Math.min(g.end, g.start + 240), 900)).join(" / ").slice(0, 1400);
         const raw = await askJson(
           conf,
@@ -37217,7 +37831,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs21.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs23.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -37259,8 +37873,8 @@ ${text}`,
 };
 
 // electron/domain/channel.ts
-var import_node_fs22 = __toESM(require("node:fs"));
-var import_node_path15 = __toESM(require("node:path"));
+var import_node_fs24 = __toESM(require("node:fs"));
+var import_node_path17 = __toESM(require("node:path"));
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
 var OFFLINE_CONFIRMATIONS = 2;
 var MIN_IMPORT_SEC = 60;
@@ -37420,10 +38034,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs22.default.mkdirSync(c.dir, { recursive: true });
-      const file = import_node_path15.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs22.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs22.default.renameSync(`${file}.tmp`, file);
+      import_node_fs24.default.mkdirSync(c.dir, { recursive: true });
+      const file = import_node_path17.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
+      import_node_fs24.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs24.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -37890,7 +38504,7 @@ var Scheduler = class {
 };
 
 // electron/domain/engine.ts
-var import_node_crypto8 = __toESM(require("node:crypto"));
+var import_node_crypto9 = __toESM(require("node:crypto"));
 
 // electron/engine/workflow.ts
 function engineCrons(offsetMinutes = (/* @__PURE__ */ new Date()).getTimezoneOffset(), fromHour = 20, toHour = 4) {
@@ -38066,13 +38680,13 @@ var EngineService = class {
     };
   }
   hash(payload, crons) {
-    return import_node_crypto8.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
+    return import_node_crypto9.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
-  async put(gh, path18, text, msg) {
-    const cur = await gh.getContent(path18);
+  async put(gh, path20, text, msg) {
+    const cur = await gh.getContent(path20);
     if (cur?.text === text) return;
-    const sha = await gh.putContent(path18, text, msg, cur?.sha);
-    if (!sha) throw new Error(`No se pudo escribir ${path18} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    const sha = await gh.putContent(path20, text, msg, cur?.sha);
+    if (!sha) throw new Error(`No se pudo escribir ${path20} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
   }
   /** Sube el motor, el flujo y la configuración. */
   async push(gh, payload, crons) {
@@ -38178,7 +38792,7 @@ var EngineService = class {
 };
 
 // electron/services/oauth.ts
-var import_node_crypto9 = __toESM(require("node:crypto"));
+var import_node_crypto10 = __toESM(require("node:crypto"));
 var import_node_http = __toESM(require("node:http"));
 var PROVIDERS = {
   google: {
@@ -38217,8 +38831,8 @@ var PROVIDERS = {
   }
 };
 function pkcePair() {
-  const verifier = import_node_crypto9.default.randomBytes(48).toString("base64url");
-  return { verifier, challenge: import_node_crypto9.default.createHash("sha256").update(verifier).digest("base64url") };
+  const verifier = import_node_crypto10.default.randomBytes(48).toString("base64url");
+  return { verifier, challenge: import_node_crypto10.default.createHash("sha256").update(verifier).digest("base64url") };
 }
 var redirectUri = (p) => `http://127.0.0.1:${p.port}/callback`;
 function buildAuthUrl(p, c, state, challenge) {
@@ -38337,7 +38951,7 @@ async function refreshToken(p, c, t, d = {}) {
 }
 async function authorize(p, c, openUrl, d = {}) {
   if (!c.clientId || !c.clientSecret) throw new Error(`Faltan el ID y el secreto de la app de ${p.label}.`);
-  const state = import_node_crypto9.default.randomBytes(16).toString("hex");
+  const state = import_node_crypto10.default.randomBytes(16).toString("hex");
   const pk = p.pkce ? pkcePair() : void 0;
   const w = waitForCode(p, state, d.timeoutMs);
   d.onCancel?.(w.close);
@@ -38509,6 +39123,7 @@ var AppContext = class {
   categories;
   library;
   transcripts;
+  speakers;
   tasks;
   groups;
   pubs;
@@ -38532,7 +39147,7 @@ var AppContext = class {
   constructor(o) {
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
-    this.log = new Logger(import_node_path16.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
+    this.log = new Logger(import_node_path18.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
       this.log.warn(`data.json estaba da\xF1ado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? " (se recuper\xF3 la \xFAltima copia buena)" : " (se empez\xF3 con datos vac\xEDos)"}`);
@@ -38563,7 +39178,18 @@ var AppContext = class {
       modelBaseUrl: o.modelBaseUrl,
       source: (id) => this.vods.ensureFile(id)
     });
-    const subtitles = { words: (vodId) => this.transcripts.words(vodId), ensure: (vodId, ranges) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
+    this.speakers = new SpeakerService({
+      store: this.store,
+      log: this.log,
+      notifier: o.notifier,
+      tools,
+      source: (id) => this.vods.ensureFile(id),
+      segmentationModel: o.diarizationModel ?? "",
+      modelsDir: import_node_path18.default.join(o.userDataDir, "models"),
+      engine: o.diarizationEngine
+    });
+    this.transcripts.speakerOverlay = (id) => this.speakers.overlay(id);
+    const subtitles = { speakerColors: (words) => this.speakers.colorsFor(words), words: (vodId) => this.transcripts.words(vodId), ensure: (vodId, ranges) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
     this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes, source: (id) => this.vods.ensureFile(id) });
     this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, source: (id) => this.vods.ensureFile(id) });
@@ -38582,7 +39208,7 @@ var AppContext = class {
         const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
         return r2.stdout.trim().split("\n")[0] ?? "";
       },
-      chat: { dir: import_node_path16.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
+      chat: { dir: import_node_path18.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
     this.autopilot = new Autopilot({
       store: this.store,
@@ -38592,12 +39218,13 @@ var AppContext = class {
       queue: this.autopilotQueue,
       tools,
       transcripts: this.transcripts,
+      speakers: this.speakers,
       clips: this.clips,
       categories: this.categories,
       library: this.library,
       pubs: this.pubs,
-      chatDir: import_node_path16.default.join(o.userDataDir, "chat"),
-      judgeDir: import_node_path16.default.join(o.userDataDir, "judgements"),
+      chatDir: import_node_path18.default.join(o.userDataDir, "chat"),
+      judgeDir: import_node_path18.default.join(o.userDataDir, "judgements"),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
@@ -38766,10 +39393,10 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs23.default.mkdtempSync(import_node_path17.default.join(import_node_os6.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs25.default.mkdtempSync(import_node_path19.default.join(import_node_os7.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
-    userDataDir: import_node_path17.default.join(work, "data"),
-    defaultOutputDir: import_node_path17.default.join(work, "out"),
+    userDataDir: import_node_path19.default.join(work, "data"),
+    defaultOutputDir: import_node_path19.default.join(work, "out"),
     cipher: plainCipher,
     notifier: silentNotifier,
     headless: true,
@@ -38835,7 +39462,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs23.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs25.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -38843,7 +39470,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs23.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs25.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -38877,7 +39504,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs23.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs25.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {
@@ -38887,7 +39514,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     await keepAlive(env);
     return;
   }
-  const r2 = await runEngine(p, { whisper: env.STREAMCLIPS_WHISPER?.replace(/^~/, import_node_os6.default.homedir()) || void 0 });
+  const r2 = await runEngine(p, { whisper: env.STREAMCLIPS_WHISPER?.replace(/^~/, import_node_os7.default.homedir()) || void 0 });
   console.log(`[streamclips] Resultado: ${r2.status}. Editados: ${r2.processed.length}, fallidos: ${r2.failed.length}.`);
   if (r2.status === "error" || r2.status === "partial") process.exitCode = 1;
 }

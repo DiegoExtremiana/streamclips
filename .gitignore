@@ -6,3 +6,4 @@ release
 tests/e2e/out
 dist-test
 resources/bin/
+.tmp-d*/

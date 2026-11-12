@@ -66,6 +66,8 @@ export interface AutopilotSettings {
   fastAnalysis?: boolean;
   /** Valorar los candidatos con el modelo de lenguaje (humor, originalidad, contexto…) en vez de fiarse solo del volumen. Por defecto sí, si hay modelo configurado. */
   smartSelect?: boolean;
+  /** Nota mínima (0-10) para que un momento entre en un vídeo o clip; el modelo puntúa 5 lo normal y 7 lo bueno. Por defecto 6,5. */
+  minQuality?: number;
   /** Portadas con estilo de los canales grandes: fotograma más vivo y expresivo, frase corta grande y número de episodio. Por defecto sí. */
   styledCovers?: boolean;
   /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */

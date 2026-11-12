@@ -126,3 +126,13 @@ test('judgeCandidates espera entre lotes para no pasar el límite gratuito', asy
   assert.equal(r.judged.length, 13);
   assert.deepEqual(waits, [14_000, 14_000], 'no espera antes del primero');
 });
+
+test('el modelo también da un nombre corto al momento (limpio y de tamaño razonable)', () => {
+  const c = cand('a', 100, 160);
+  const [ok] = parseJudgements({ juicios: [raw('a', 7, { titulo: '  El "susto" del <b>creeper</b>  ' })] }, [c]);
+  assert.equal(ok.title, 'El susto del bcreeper/b');
+  const [none] = parseJudgements({ juicios: [raw('a', 7, { titulo: 'ab' })] }, [c]);
+  assert.equal(none.title, undefined);
+  const [long] = parseJudgements({ juicios: [raw('a', 7, { titulo: 'x'.repeat(200) })] }, [c]);
+  assert.equal(long.title!.length, 40);
+});

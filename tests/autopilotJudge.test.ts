@@ -160,4 +160,23 @@ describe('selección inteligente', () => {
       srv.close();
     }
   });
+
+  it('la nota mínima se valida, se redondea a medios puntos y se aplica', async () => {
+    const srv = await llm();
+    try {
+      const { e, vod } = setup(srv.url, { maxVideos: 0 });
+      assert.throws(() => e.ctx.settings.set({ autopilot: { minQuality: 2 } }), /entre 3 y 9,5/);
+      assert.throws(() => e.ctx.settings.set({ autopilot: { minQuality: 11 } }), /entre 3 y 9,5/);
+      assert.equal(e.ctx.store.data.settings.autopilot.minQuality, undefined);
+      e.ctx.settings.set({ autopilot: { minQuality: 9.3 } });
+      assert.equal(e.ctx.store.data.settings.autopilot.minQuality, 9.5);
+      await e.ctx.autopilot.run(vod.id);
+      assert.equal(e.ctx.store.data.vods[0].autopilot?.status, 'skipped', 'ni lo mejor llega a 9,5');
+      e.ctx.settings.set({ autopilot: { minQuality: 5 } });
+      await e.ctx.autopilot.run(vod.id);
+      assert.equal(e.ctx.store.data.outputs.filter((o) => o.auto?.role === 'clip').length, 1, 'con 5 sigue sin entrar el de nota 3: solo el bueno');
+    } finally {
+      srv.close();
+    }
+  });
 });

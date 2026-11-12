@@ -58,6 +58,10 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   }
   if (p.purgePublished !== undefined) n.purgePublished = bool(p.purgePublished, 'El borrado tras publicar');
   if (p.fastAnalysis !== undefined) n.fastAnalysis = bool(p.fastAnalysis, 'El análisis rápido');
+  if (p.minQuality !== undefined) {
+    if (typeof p.minQuality !== 'number' || !Number.isFinite(p.minQuality) || p.minQuality < 3 || p.minQuality > 9.5) throw new Error('La nota mínima debe estar entre 3 y 9,5.');
+    n.minQuality = Math.round(p.minQuality * 2) / 2;
+  }
   if (p.smartSelect !== undefined) n.smartSelect = bool(p.smartSelect, 'La selección inteligente');
   if (p.styledCovers !== undefined) n.styledCovers = bool(p.styledCovers, 'El estilo de las portadas');
   if (p.cleanup !== undefined) n.cleanup = bool(p.cleanup, 'La limpieza del directo');

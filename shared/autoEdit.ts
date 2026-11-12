@@ -92,7 +92,10 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
 export function planLong(words: Word[], segs: Range[], o: EditOpts = {}): { segments: Range[]; effects: Effect[] } {
   const segments: Range[] = [];
   const body: Effect[] = [];
-  for (const s of segs) {
+  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  for (const [i, s] of sorted.entries()) {
+    // el salto entre dos momentos distintos del directo lleva un «whoosh», como las transiciones de los resúmenes de los canales grandes
+    if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3) body.push({ type: 'sfx', at: s.start + 0.05, sound: 'whoosh' });
     const p = planEdit(words, s, o);
     segments.push(...keptRanges(s.start, s.end, p.cuts));
     body.push(...p.effects.filter((e) => e.type === 'punch' || e.type === 'sfx'));

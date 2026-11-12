@@ -5,7 +5,7 @@ import type { Word } from '../../shared/subtitles';
 import { JUDGE_SYSTEM, judgePrompt, judgeText, parseJudgements, toJudged, type Candidate, type Judged, type Judgement } from '../../shared/judge';
 import { MIN_INTERVAL_MS, askJson, type LlmConfig } from './llm';
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CHUNK = 6;
 
 export interface JudgeResult {
@@ -21,6 +21,7 @@ interface Stored {
   scores: Judgement['scores'];
   kind: Judgement['kind'];
   reason: string;
+  title?: string;
   discard: boolean;
   trim?: { a: number; b: number };
 }
@@ -63,7 +64,7 @@ export async function judgeCandidates(
   const todo: Candidate[] = [];
   for (const c of cands) {
     const s = cache[keyOf(words, c)];
-    if (s) found.push({ id: c.id, scores: s.scores, kind: s.kind, reason: s.reason, discard: s.discard, trim: s.trim ? { start: c.start + s.trim.a, end: c.start + s.trim.b } : undefined });
+    if (s) found.push({ id: c.id, scores: s.scores, kind: s.kind, reason: s.reason, title: s.title, discard: s.discard, trim: s.trim ? { start: c.start + s.trim.a, end: c.start + s.trim.b } : undefined });
     else todo.push(c);
   }
   const cached = found.length;
@@ -79,7 +80,7 @@ export async function judgeCandidates(
       const js = parseJudgements(raw, chunk);
       for (const j of js) {
         const c = chunk.find((x) => x.id === j.id)!;
-        cache[keyOf(words, c)] = { scores: j.scores, kind: j.kind, reason: j.reason, discard: j.discard, trim: j.trim ? { a: j.trim.start - c.start, b: j.trim.end - c.start } : undefined };
+        cache[keyOf(words, c)] = { scores: j.scores, kind: j.kind, reason: j.reason, title: j.title, discard: j.discard, trim: j.trim ? { a: j.trim.start - c.start, b: j.trim.end - c.start } : undefined };
         found.push(j);
       }
       saveCache(d.cacheFile, cache);

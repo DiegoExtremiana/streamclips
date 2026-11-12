@@ -1,0 +1,99 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.planEdit = planEdit;
+exports.planLong = planLong;
+const timeline_1 = require("./timeline");
+const plan_1 = require("./plan");
+const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
+/**
+ * Ritmo tomado de los canales grandes en español (Ibai, Rubius, IlloJuan…): pausas cortas, acercamientos frecuentes
+ * en las reacciones y golpes de sonido. Los valores son un criterio de edición, no una medición de esos vídeos.
+ *
+ * Plan de edición "de editor profesional" para un tramo a partir de lo que se dice:
+ *  - corta las pausas largas (conservando un respiro) para que el ritmo no decaiga,
+ *  - acerca la imagen (punch) en las frases exclamativas y de énfasis, con un golpe de sonido,
+ *  - pone un "whoosh" en cada salto de corte,
+ *  - fundido de entrada y salida y volumen parejo.
+ * Sin habla suficiente solo aplica fundidos y volumen. Todo cae dentro de lo que se conserva.
+ */
+function planEdit(words, seg, o = {}) {
+    const minGap = o.minGap ?? 1.0;
+    const keepBefore = o.keepBefore ?? 0.4;
+    const keepAfter = o.keepAfter ?? 0.3;
+    const spacing = o.punchSpacing ?? 6;
+    const inside = words.filter((w) => w.start >= seg.start && w.end <= seg.end + 0.25).sort((a, b) => a.start - b.start);
+    const dur = seg.end - seg.start;
+    const effects = [];
+    const cuts = [];
+    if (inside.length >= 6 && dur >= 8) {
+        const gaps = [];
+        for (let i = 0; i + 1 < inside.length; i++) {
+            const gap = inside[i + 1].start - inside[i].end;
+            if (gap > minGap)
+                gaps.push({ start: inside[i].end + keepBefore, end: inside[i + 1].start - keepAfter });
+        }
+        gaps
+            .filter((g) => g.end - g.start >= 0.3 && g.start >= seg.start && g.end <= seg.end)
+            .sort((a, b) => b.end - b.start - (a.end - a.start))
+            .slice(0, o.maxCuts ?? 20)
+            .sort((a, b) => a.start - b.start)
+            .forEach((g) => cuts.push(g));
+    }
+    const kept = (0, timeline_1.keptRanges)(seg.start, seg.end, cuts);
+    const isKept = (t) => kept.some((r) => t >= r.start && t <= r.end);
+    // acercamientos en las frases con énfasis
+    const maxPunch = Math.min(6, Math.floor(dur / 10));
+    const punches = [];
+    for (const w of inside) {
+        if (punches.length >= maxPunch)
+            break;
+        const strong = /[!¡]/.test(w.text) || EMPHASIS.test(w.text);
+        if (!strong)
+            continue;
+        const at = Math.max(seg.start, w.start - 0.1);
+        if (!isKept(at) || !isKept(Math.min(seg.end, at + 1)))
+            continue;
+        if (punches.some((p) => Math.abs(p - at) < spacing))
+            continue;
+        if (at - seg.start < 1.5 || seg.end - at < 2)
+            continue;
+        punches.push(at);
+    }
+    for (const at of punches) {
+        effects.push({ type: 'punch', at, duration: 1, zoom: 1.15 });
+        effects.push({ type: 'sfx', at, sound: 'hit' });
+    }
+    // un whoosh en cada salto de corte
+    for (const c of cuts.slice(0, 8)) {
+        const at = c.end + 0.02;
+        if (isKept(at) && at < seg.end - 0.5)
+            effects.push({ type: 'sfx', at, sound: 'whoosh' });
+    }
+    const fadeBudget = dur > 3;
+    if (fadeBudget) {
+        effects.push({ type: 'fadeIn', duration: 0.3 });
+        effects.push({ type: 'fadeOut', duration: 0.5 });
+    }
+    effects.push({ type: 'polish' });
+    return { cuts, effects: effects.slice(0, plan_1.MAX_EFFECTS) };
+}
+/** Lo mismo para un vídeo hecho de varios tramos: devuelve los tramos ya sin los silencios y los efectos de todo el vídeo. */
+function planLong(words, segs, o = {}) {
+    const segments = [];
+    const body = [];
+    const sorted = [...segs].sort((a, b) => a.start - b.start);
+    for (const [i, s] of sorted.entries()) {
+        // el salto entre dos momentos distintos del directo lleva un «whoosh», como las transiciones de los resúmenes de los canales grandes
+        if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3)
+            body.push({ type: 'sfx', at: s.start + 0.05, sound: 'whoosh' });
+        const p = planEdit(words, s, o);
+        segments.push(...(0, timeline_1.keptRanges)(s.start, s.end, p.cuts));
+        body.push(...p.effects.filter((e) => e.type === 'punch' || e.type === 'sfx'));
+    }
+    const total = segments.reduce((a, r) => a + (r.end - r.start), 0);
+    const effects = body.slice(0, plan_1.MAX_EFFECTS - 3);
+    if (total > 3)
+        effects.push({ type: 'fadeIn', duration: 0.4 }, { type: 'fadeOut', duration: 0.8 });
+    effects.push({ type: 'polish' });
+    return { segments, effects };
+}

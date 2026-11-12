@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { IconLibrary, IconLink, IconLogo, IconPanel, IconScissors, IconSettings } from './icons';
+import { IconImage, IconLibrary, IconLink, IconLogo, IconPanel, IconScissors, IconSettings } from './icons';
 import type { Group, OutputItem, Publication, VodJob } from '../shared/types';
 import ScheduleTab from './tabs/ScheduleTab';
 import ClipsTab from './tabs/ClipsTab';
 import LibraryTab from './tabs/LibraryTab';
 import ConnectionsTab from './tabs/ConnectionsTab';
+import CoversTab from './tabs/CoversTab';
 import SettingsTab from './tabs/SettingsTab';
 import { errMsg } from './lib';
 import { useUpdateStatus } from './tabs/UpdatesCard';
 import Toasts from './Toasts';
 
-export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'conexiones' | 'ajustes';
+export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'portadas' | 'conexiones' | 'ajustes';
 
 const TABS: { id: TabId; label: string; hint: string; icon: ReactNode }[] = [
   { id: 'programacion', label: 'Inicio', hint: 'Tus últimos clips y vídeos a la izquierda: arrástralos a un día (o una hora, en la línea de tiempo) del calendario y configura ahí su publicación.', icon: <IconPanel /> },
   { id: 'biblioteca', label: 'Biblioteca', hint: 'Tus clips y vídeos: edítalos, ordénalos en carpetas y programa su publicación.', icon: <IconLibrary /> },
   { id: 'clips', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, las herramientas para crear los tuyos a partir de un directo y los directos recogidos.', icon: <IconScissors /> },
+  { id: 'portadas', label: 'Portadas', hint: 'Tus piezas (PNG, fondos, fotos, documentos) con el nombre que quieras y las portadas que se componen con ellas.', icon: <IconImage /> },
   { id: 'conexiones', label: 'Conexiones', hint: 'Estado de tu canal de Twitch, primeros pasos y tus redes sociales.', icon: <IconLink /> },
-  { id: 'ajustes', label: 'Ajustes', hint: 'Carpetas y herramientas, piloto automático y subtítulos, y publicar con el PC apagado.', icon: <IconSettings /> },
+  { id: 'ajustes', label: 'Ajustes', hint: 'Todo en un sitio, por secciones: carpetas y herramientas, inteligencia artificial, piloto automático, voz y subtítulos, tu estilo y publicar con el PC apagado.', icon: <IconSettings /> },
 ];
 
 export default function App() {
@@ -62,7 +64,7 @@ export default function App() {
 
   const current = TABS.find((t) => t.id === tab) ?? TABS[0];
 
-  // Ctrl+1…5 cambia de sección sin soltar el teclado
+  // Ctrl+1…6 cambia de sección sin soltar el teclado
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
@@ -127,6 +129,7 @@ export default function App() {
           {tab === 'programacion' && <ScheduleTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} onOpenVideo={(id) => { setOpenOutput(id); setTab('biblioteca'); }} />}
           {tab === 'biblioteca' && <LibraryTab outputs={outputs} groups={groups} pubs={pubs} onChanged={refresh} openId={openOutput} onOpened={() => setOpenOutput(null)} />}
           {tab === 'clips' && <ClipsTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} />}
+          {tab === 'portadas' && <CoversTab />}
           {tab === 'conexiones' && <ConnectionsTab vods={vods} outputs={outputs} pubs={pubs} onChanged={refresh} onNavigate={setTab} />}
           {tab === 'ajustes' && <SettingsTab />}
         </main>

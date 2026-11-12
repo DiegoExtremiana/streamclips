@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ToolStatus, WhisperStatus } from '../../shared/types';
 import { errMsg } from '../lib';
-import AutopilotCard from './AutopilotCard';
+import { AutopilotCard, PublishingCard, AutoSubtitlesCard, AiCard, CoversStyleCard } from './AutopilotCards';
 import UpdatesCard from './UpdatesCard';
 import VocabularyCard from './VocabularyCard';
 import SpeakersCard from './SpeakersCard';
@@ -9,7 +9,16 @@ import PrefsCard from './PrefsCard';
 import StyleCard from './StyleCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
-import { SubTabs, useSubTab } from '../SubTabs';
+import { SideNav, useSubTab } from '../SubTabs';
+
+const SECTIONS = [
+  { id: 'general', label: 'General', hint: 'Dónde se guardan los vídeos, las herramientas que usa el programa y las actualizaciones.' },
+  { id: 'ia', label: 'Inteligencia artificial', hint: 'La clave gratuita (Groq o Gemini) con la que el programa entiende los clips y los directos.' },
+  { id: 'piloto', label: 'Piloto automático', hint: 'Qué prepara solo el programa al acabar un directo, cuánto y cuándo lo publica.' },
+  { id: 'voz', label: 'Voz y subtítulos', hint: 'Cómo escucha lo que dices (Whisper), quién habla, tu vocabulario y los subtítulos.' },
+  { id: 'estilo', label: 'Mi estilo', hint: 'Cómo quieres que edite: ritmo, silencios, música, títulos, portadas y lo que ha aprendido de ti.' },
+  { id: 'nube', label: 'PC apagado', hint: 'Opcional: que un servicio gratuito de GitHub prepare y suba los vídeos mientras tu PC está apagado.' },
+];
 
 export default function SettingsTab() {
   const [outputDir, setOutputDir] = useState('');
@@ -22,7 +31,7 @@ export default function SettingsTab() {
   const [wprog, setWprog] = useState<number | null>(null);
   const [tools, setTools] = useState<ToolStatus | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [sub, setSub] = useSubTab('streamclips.settings.sub', ['general', 'auto', 'nube']);
+  const [sub, setSub] = useSubTab('streamclips.settings.sec', SECTIONS.map((x) => x.id));
 
   useEffect(() => {
     window.api
@@ -114,17 +123,7 @@ export default function SettingsTab() {
     );
 
   return (
-    <div className="stack">
-      <SubTabs
-        label="Ajustes"
-        value={sub}
-        onChange={setSub}
-        tabs={[
-          { id: 'general', label: 'General', hint: 'Dónde se guardan los vídeos, las herramientas que usa el programa y las actualizaciones.' },
-          { id: 'auto', label: 'Piloto automático y subtítulos', hint: 'Qué prepara solo el programa al acabar un directo y cómo escucha lo que dices (Whisper).' },
-          { id: 'nube', label: 'Publicar con el PC apagado', hint: 'Opcional: que un servicio gratuito de GitHub prepare y suba los vídeos mientras tu PC está apagado.' },
-        ]}
-      />
+    <SideNav label="Ajustes" tabs={SECTIONS} value={sub} onChange={setSub}>
       {sub === 'general' && <div className="grid">
       <section className="card">
         <h2>Carpeta de salida</h2>
@@ -161,9 +160,17 @@ export default function SettingsTab() {
       <UpdatesCard />
       </div>}
 
-      {sub === 'auto' && <div className="grid">
-      <AutopilotCard />
+      {sub === 'ia' && <div className="grid">
+        <AiCard />
+      </div>}
 
+      {sub === 'piloto' && <div className="grid">
+        <AutopilotCard />
+        <PublishingCard />
+        <CoversStyleCard />
+      </div>}
+
+      {sub === 'voz' && <div className="grid">
       <section className="card">
         <h2>Transcripción (Whisper)</h2>
         <div className="muted small">
@@ -206,18 +213,20 @@ export default function SettingsTab() {
         <button className="btn" onClick={() => void save()}>Guardar transcripción</button>
         {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
       </section>
+        <AutoSubtitlesCard />
+        <SpeakersCard />
+        <VocabularyCard />
+      </div>}
 
-      <VocabularyCard />
-      <SpeakersCard />
-      <StyleCard />
-      <PrefsCard />
-
+      {sub === 'estilo' && <div className="grid">
+        <StyleCard />
+        <PrefsCard />
       </div>}
 
       {sub === 'nube' && <div className="grid">
         <CloudCard />
         <EngineCard />
       </div>}
-    </div>
+    </SideNav>
   );
 }

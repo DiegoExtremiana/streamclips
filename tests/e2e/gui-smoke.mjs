@@ -88,7 +88,7 @@ try {
   }
   await tab(page, 'Biblioteca');
   await page.getByRole('tab', { name: 'Vídeos', exact: true }).waitFor();
-  log('las cinco pestañas se muestran');
+  log('las seis pestañas se muestran');
 
   // ── Inicio: últimos clips, últimos vídeos y calendario alineados en horizontal, sin scroll general ──
   await tab(page, 'Inicio');
@@ -141,7 +141,7 @@ try {
   await shot(page, '1-ajustes');
   log('comprobación de herramientas: ffmpeg, ffprobe y yt-dlp detectados');
 
-  await sub(page, 'Piloto automático y subtítulos');
+  await sub(page, 'Voz y subtítulos');
   await page.locator('#whisper-path').fill('whisper.exe');
   await page.getByRole('button', { name: 'Guardar transcripción' }).click();
   assert.match(await alertText(page), /ruta de whisper debe ser absoluta/);
@@ -153,6 +153,50 @@ try {
   const wset = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings;
   assert.deepEqual([wset.whisperModel, wset.whisperLanguage, wset.whisperPath], ['tiny', 'es', '']);
   log('Ajustes: Whisper se valida (ruta absoluta) y el modelo y el idioma se guardan');
+
+  // ── Ajustes: secciones, la clave de IA y el piloto ──
+  await sub(page, 'Inteligencia artificial');
+  await page.locator('#ap-llm').selectOption('groq');
+  await page.locator('#ap-key').fill('gsk_clave_de_prueba');
+  await page.getByRole('button', { name: 'Guardar inteligencia artificial' }).click();
+  await page.getByText('Guardado.').first().waitFor();
+  await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings.autopilot.llm.provider === 'groq');
+  assert.ok(!fs.readFileSync(path.join(userData, 'data.json'), 'utf8').includes('gsk_clave_de_prueba'), 'la clave no se guarda en claro');
+  await sub(page, 'Piloto automático');
+  await page.locator('#ap-clips').fill('4');
+  await page.getByRole('button', { name: 'Guardar piloto automático' }).click();
+  await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings.autopilot.maxClips === 4);
+  const apset = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings.autopilot;
+  assert.equal(apset.llm.provider, 'groq', 'guardar el piloto no pisa lo guardado en Inteligencia artificial');
+  for (const name of ['Mi estilo', 'PC apagado', 'General']) await sub(page, name);
+  log('Ajustes: seis secciones; la clave de IA y el piloto se guardan por separado sin pisarse y la clave no queda en claro');
+
+  // ── Portadas ──
+  await tab(page, 'Portadas');
+  const solid = (hex) => Buffer.from(hex, 'base64');
+  const PNG_RED = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAFCAIAAAD38zoCAAAAEUlEQVR4nGM4ISeHFTHQQQIABrMooTYkvzkAAAAASUVORK5CYII=';
+  await page.getByTestId('cover-input').setInputFiles([
+    { name: 'Fondo Ciudad.png', mimeType: 'image/png', buffer: solid(PNG_RED) },
+    { name: 'Diego Sorprendido.png', mimeType: 'image/png', buffer: solid(PNG_RED) },
+    { name: 'guion.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') },
+  ]);
+  await page.getByText('3 piezas añadidas.').waitFor();
+  assert.equal(await page.getByTestId('cover-piece').count(), 3);
+  await page.getByLabel('Nombre de Diego_Sorprendido').fill('Diego Feliz');
+  await page.getByLabel('Nombre de Diego_Sorprendido').blur();
+  await page.getByLabel('Nombre de Diego_Feliz').waitFor();
+  await page.getByRole('button', { name: 'Documentos' }).click();
+  assert.equal(await page.getByTestId('cover-piece').count(), 1);
+  await page.getByRole('button', { name: 'Todas' }).click();
+  log('Portadas: se añaden piezas (imágenes y documentos), se renombran y se filtran por tipo');
+  await page.locator('#cv-bg').selectOption({ label: 'Fondo_Ciudad' });
+  await page.locator('#cv-subject').selectOption({ label: 'Diego_Feliz' });
+  await page.locator('#cv-text').fill('no lo esperaba');
+  await page.getByRole('button', { name: 'Crear portada' }).click();
+  await page.getByTestId('cover-made').waitFor();
+  assert.equal(await page.getByTestId('cover-piece').count(), 4);
+  await shot(page, '1-portadas');
+  log('Portadas: se compone una portada con fondo, pieza y frase y queda en la biblioteca');
 
   // ── Conexiones ──
   await tab(page, 'Conexiones');

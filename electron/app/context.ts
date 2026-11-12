@@ -23,6 +23,7 @@ import { askJson } from '../services/llm';
 import { CLIP_JUDGE_SYSTEM, clipJudgePrompt, parseClipJudgement } from '../../shared/clipCriteria';
 import { audioEnergy as measureEnergy } from '../services/audioEnergy';
 import { StyleService } from '../domain/style';
+import { CoverService } from '../domain/covers';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
@@ -111,6 +112,7 @@ export class AppContext {
   readonly moments: MomentsService;
   readonly clipScores: ClipScoreService;
   readonly style: StyleService;
+  readonly covers: CoverService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -178,6 +180,7 @@ export class AppContext {
       engine: o.diarizationEngine,
     });
     this.style = new StyleService(path.join(o.userDataDir, 'style-profile.json'));
+    this.covers = new CoverService({ dir: path.join(o.userDataDir, 'covers'), tools, fontsDir: o.fontsDir });
     this.moments = new MomentsService({
       dir: path.join(o.userDataDir, 'moments'),
       prefsFile: path.join(o.userDataDir, 'preferences.json'),

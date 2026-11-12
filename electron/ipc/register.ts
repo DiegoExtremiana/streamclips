@@ -222,6 +222,26 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.momentsAdd, (v, a, b, t) => ctx.moments.add(str(v, 'vodId'), num(a, 'start'), num(b, 'end'), typeof t === 'string' ? t : undefined));
   handle(CHANNELS.momentsRemove, (v, k) => ctx.moments.remove(str(v, 'vodId'), str(k, 'key')));
   handle(CHANNELS.momentsClear, (v) => ctx.moments.clear(str(v, 'vodId')));
+  handle(CHANNELS.coversList, () => ctx.covers.list());
+  handle(CHANNELS.coversAdd, (n, d) => {
+    if (!(d instanceof Uint8Array)) throw new Error('Parámetro no válido: archivo.');
+    return ctx.covers.add(str(n, 'nombre'), Buffer.from(d));
+  });
+  handle(CHANNELS.coversRename, (id, n) => ctx.covers.rename(str(id, 'id'), str(n, 'nombre')));
+  handle(CHANNELS.coversKind, (id, k) => ctx.covers.setKind(str(id, 'id'), k));
+  handle(CHANNELS.coversRemove, (id) => ctx.covers.remove(str(id, 'id')));
+  handle(CHANNELS.coversPreview, (id) => ctx.covers.preview(str(id, 'id')));
+  handle(CHANNELS.coversCompose, (o) => {
+    const r = obj(o, 'portada');
+    return ctx.covers.compose({
+      backgroundId: str(r.backgroundId, 'fondo'),
+      subjectId: typeof r.subjectId === 'string' && r.subjectId ? r.subjectId : undefined,
+      text: typeof r.text === 'string' ? r.text : '',
+      badge: typeof r.badge === 'number' ? r.badge : null,
+      name: typeof r.name === 'string' ? r.name : undefined,
+    });
+  });
+  handle(CHANNELS.coversReveal, (id) => platform.showItem(ctx.covers.filePath(str(id, 'id'))));
   handle(CHANNELS.styleGet, () => ctx.style.get());
   handle(CHANNELS.styleSet, (p) => ctx.style.set(p));
   handle(CHANNELS.styleAddLore, (n, note, tr) => ctx.style.addLore(str(n, 'name'), typeof note === 'string' ? note : '', Array.isArray(tr) ? tr.filter((x): x is string => typeof x === 'string') : []));

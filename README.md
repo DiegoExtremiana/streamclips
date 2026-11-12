@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.25.0
+
+- **Todos los clips se examinan de nuevo.** Las notas guardadas se descartan y se recalculan. Con una clave gratuita de Groq o Gemini, **el modelo lee todos los clips que tienen texto**, también los que no suben el volumen ni tienen risas (el humor de contraste y de «estupidez fingida» solo lo puede ver el modelo, no el volumen). Los clips que se valoraron sin clave se repiten con modelo en cuanto la hay.
+- **Ajustes, por secciones y con menú lateral:** General (carpeta, herramientas, actualizaciones), **Inteligencia artificial** (la clave, con los pasos para conseguirla gratis), Piloto automático (qué prepara, cuánto, serie, horas y redes), Voz y subtítulos (Whisper, hablantes, vocabulario y subtítulos de lo automático), Mi estilo (tu perfil de edición, portadas automáticas y preferencias aprendidas) y PC apagado. Cada tarjeta guarda lo suyo sin pisar a las demás.
+- **Perfil de estilo** (de la entrevista) integrado: silencios de 2 s como máximo, duraciones, música baja, titulares estéticos y el lore del canal.
+- **Nueva sección Portadas en el menú izquierdo:** biblioteca de piezas (PNG, fondos, fotos y documentos) que se añaden arrastrando o eligiendo archivos, con el nombre que quieras (Diego_Sorprendido, Fondo_Ciudad), tipo editable, filtros y borrado con confirmación. Con ellas se **componen portadas de 1280x720**: fondo, pieza principal a la derecha, frase grande con contorno y número de episodio; la portada queda en la biblioteca.
+
+Límites: la composición de portadas es manual; todavía no usa las piezas en las portadas automáticas ni busca material en internet.
+
 ## Novedades de la v0.24.2
 
 - **La nota de cada clip sale de cuatro criterios**, cada uno de 0 a 10: **humor**, **se cuenta algo** (planteamiento y desarrollo), **puede ser viral** y **momento interesante**. La nota final es su media ponderada y va con una frase que explica por qué. No mira visualizaciones ni popularidad. Se ven en cada clip (barras) y, al abrirlo, con el desglose y el motivo.

@@ -36,3 +36,4 @@ export const IconCrop = (p: P) => <Svg {...p}><path d="M6 2v14a2 2 0 0 0 2 2h14"
 export const IconSearch = (p: P) => <Svg {...p}><circle cx="11" cy="11" r="7" /><line x1="16.5" y1="16.5" x2="21" y2="21" /></Svg>;
 export const IconSortAsc = (p: P) => <Svg {...p}><path d="M12 19V6" /><polyline points="7 11 12 6 17 11" /><line x1="5" y1="21" x2="19" y2="21" /></Svg>;
 export const IconSortDesc = (p: P) => <Svg {...p}><path d="M12 5v13" /><polyline points="7 13 12 18 17 13" /><line x1="5" y1="3" x2="19" y2="3" /></Svg>;
+export const IconImage = (p: P) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.8" /><path d="M21 16l-5-5-8 9" /></Svg>;

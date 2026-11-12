@@ -1,3 +1,4 @@
+import type { AssetKind, ComposeOpts, CoverAsset } from './covers';
 import type { StyleProfile } from './styleProfile';
 import type { Vocabulary } from './vocab';
 import type { SubtitleStyleId, Word } from './subtitles';
@@ -571,6 +572,14 @@ export interface Api {
   clearMomentEdits(vodId: string): Promise<MomentsView>;
   /** Perfil de estilo de edición (silencios, duración, música, subtítulos, títulos y lore del canal). */
   getStyle(): Promise<StyleProfile>;
+  coversList(): Promise<CoverAsset[]>;
+  coversAdd(fileName: string, data: Uint8Array): Promise<CoverAsset>;
+  coversRename(id: string, name: string): Promise<CoverAsset>;
+  coversSetKind(id: string, kind: AssetKind): Promise<CoverAsset>;
+  coversRemove(id: string): Promise<void>;
+  coversPreview(id: string): Promise<string | null>;
+  coversCompose(opts: ComposeOpts): Promise<CoverAsset>;
+  coversReveal(id: string): Promise<void>;
   setStyle(patch: Partial<StyleProfile>): Promise<StyleProfile>;
   addLore(name: string, note?: string, triggers?: string[]): Promise<StyleProfile>;
   removeLore(id: string): Promise<StyleProfile>;
@@ -682,6 +691,14 @@ export const CHANNELS = {
   momentsAdd: 'moments:add',
   momentsRemove: 'moments:remove',
   momentsClear: 'moments:clear',
+  coversList: 'covers:list',
+  coversAdd: 'covers:add',
+  coversRename: 'covers:rename',
+  coversKind: 'covers:kind',
+  coversRemove: 'covers:remove',
+  coversPreview: 'covers:preview',
+  coversCompose: 'covers:compose',
+  coversReveal: 'covers:reveal',
   styleGet: 'style:get',
   styleSet: 'style:set',
   styleAddLore: 'style:addLore',

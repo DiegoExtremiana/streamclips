@@ -607,6 +607,26 @@ try {
   await shot(page, '8-modal-composicion');
   log('composición vertical: 1, 2 o 3 ventanas con varias disposiciones por defecto para elegir');
 
+  // tamaño de cada ventana desde la vista previa vertical: la línea entre ventanas se arrastra y la otra se adapta (como en Twitch)
+  const div0 = dlg.getByTestId('vdiv-0');
+  await div0.scrollIntoViewIfNeeded();
+  const before = Number(await div0.getAttribute('aria-valuenow'));
+  const db = await div0.boundingBox();
+  const pvBox = await dlg.locator('canvas[aria-label="Vista previa del vídeo vertical"]').boundingBox();
+  await page.mouse.move(db.x + db.width / 2, db.y + db.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(db.x + db.width / 2, db.y + db.height / 2 + pvBox.height * 0.15, { steps: 6 });
+  await page.mouse.up();
+  const after = Number(await div0.getAttribute('aria-valuenow'));
+  assert.ok(after >= before + 10, `arrastrar la línea hacia abajo agranda la ventana 1 (${before} a ${after})`);
+  await shot(page, '8-modal-tamano-ventana-vertical');
+  await div0.focus();
+  await page.keyboard.press('ArrowUp');
+  assert.ok(Number(await div0.getAttribute('aria-valuenow')) < after, 'las flechas también cambian el tamaño');
+  await poll(async () => (await previewPixels()) > 1000);
+  await ed.getByRole('button', { name: 'Mitad y mitad' }).click();
+  log('composición vertical: la línea entre ventanas de la vista previa cambia el tamaño de una ventana y la otra se adapta; con flechas también');
+
   // mover la segunda ventana y guardar: se vuelve a renderizar y la composición queda guardada con el clip
   const w1 = dlg.getByTestId('vwin-1');
   await w1.scrollIntoViewIfNeeded();

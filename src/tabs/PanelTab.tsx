@@ -6,6 +6,7 @@ import AnalysisProgress from '../AnalysisProgress';
 import { errMsg } from '../lib';
 import type { TabId } from '../App';
 import GuideCard from './GuideCard';
+import MomentsDialog from './MomentsDialog';
 
 const VOD_STATUS: Record<VodJob['status'], { label: string; cls: string }> = {
   queued: { label: 'En cola', cls: 'warn' },
@@ -31,6 +32,7 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [url, setUrl] = useState('');
+  const [momentsFor, setMomentsFor] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     window.api.channelStatus().then(setChannel).catch((e) => setError(errMsg(e)));
@@ -165,6 +167,9 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
                   >
                     {v.autopilot ? 'Volver a analizar' : 'Analizar ahora'}
                   </button>
+                  {v.autopilot?.status && ['done', 'skipped'].includes(v.autopilot.status) && (
+                    <button className="btn ghost small" title="Mira la nota y el motivo de cada momento, descarta, incluye o recorta, y regenera sin volver a analizar." onClick={() => setMomentsFor({ id: v.id, title: v.title ?? 'Directo' })}>Revisar momentos</button>
+                  )}
                   {v.filePath && <button className="btn ghost small" onClick={() => void window.api.openPath(v.filePath!).catch(() => undefined)}>Mostrar en carpeta</button>}
                   {v.filePath && v.origin !== 'clip' && v.autopilot?.status === 'done' && (
                     <button className="btn ghost small" title="Borra el directo completo del disco; se conservan los vídeos, los clips y sus transcripciones." disabled={busy === `dc${v.id}`} onClick={() => void act(`dc${v.id}`, () => window.api.discardVod(v.id))}>Liberar espacio</button>
@@ -191,6 +196,16 @@ export default function PanelTab(props: { vods: VodJob[]; outputs: OutputItem[];
         </details>
         {props.part === 'bottom' && error && <div className="msg bad" role="alert">{error}</div>}
       </section>
+      )}
+      {momentsFor && (
+        <MomentsDialog
+          vodId={momentsFor.id}
+          title={momentsFor.title}
+          onClose={() => setMomentsFor(null)}
+          onRegenerate={async () => {
+            await window.api.runAutopilot(momentsFor.id);
+          }}
+        />
       )}
     </div>
   );

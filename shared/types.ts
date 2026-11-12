@@ -543,6 +543,13 @@ export interface Api {
   /** Palabras propias y correcciones aprendidas. */
   getVocabulary(): Promise<Vocabulary>;
   /** Hablantes conocidos (voces) y si se pueden identificar en este equipo. */
+  /** Revisión de los momentos que eligió el piloto en un directo. */
+  getMoments(vodId: string): Promise<MomentsView>;
+  setMomentState(vodId: string, key: string, state: 'include' | 'exclude' | 'reset'): Promise<MomentsView>;
+  trimMoment(vodId: string, key: string, start: number, end: number): Promise<MomentsView>;
+  addMoment(vodId: string, start: number, end: number, title?: string): Promise<MomentsView>;
+  removeMoment(vodId: string, key: string): Promise<MomentsView>;
+  clearMomentEdits(vodId: string): Promise<MomentsView>;
   getSpeakers(): Promise<{ available: { ok: boolean; reason?: string }; profiles: { id: number; alias: string; self: boolean; named: boolean }[] }>;
   renameSpeaker(id: number, alias: string): Promise<void>;
   /** Marca qué voz es la tuya (null = ninguna): sale en el primer color (blanco). */
@@ -641,6 +648,12 @@ export const CHANNELS = {
   transcriptRun: 'transcript:run',
   transcriptEdit: 'transcript:edit',
   vocabGet: 'vocab:get',
+  momentsGet: 'moments:get',
+  momentsState: 'moments:state',
+  momentsTrim: 'moments:trim',
+  momentsAdd: 'moments:add',
+  momentsRemove: 'moments:remove',
+  momentsClear: 'moments:clear',
   speakersGet: 'speakers:get',
   speakersRename: 'speakers:rename',
   speakersSelf: 'speakers:self',
@@ -658,3 +671,37 @@ export const CHANNELS = {
   whisperModel: 'whisper:model',
   eventData: 'event:data',
 } as const;
+
+/** Un momento candidato en la pantalla de revisión. */
+export interface MomentRow {
+  /** Identificador estable (inicio redondeado del candidato). */
+  key: string;
+  start: number;
+  end: number;
+  /** Nota de entretenimiento 0-10. */
+  total: number;
+  kind: string;
+  reason: string;
+  title: string;
+  /** Lo que se dice en el tramo, para juzgarlo sin verlo. */
+  text: string;
+  /** Entró en la última selección del piloto. */
+  chosen: boolean;
+  excluded: boolean;
+  pinned: boolean;
+  /** Tiene un recorte hecho a mano. */
+  edited: boolean;
+  /** Lo añadiste tú. */
+  manual: boolean;
+  /** No llegaba a la nota mínima. */
+  belowFloor: boolean;
+}
+
+export interface MomentsView {
+  /** Hay una selección guardada (el directo ya se analizó con selección inteligente). */
+  available: boolean;
+  quality: number | null;
+  rows: MomentRow[];
+  /** Hay correcciones tuyas que se aplicarán al volver a generar. */
+  pending: boolean;
+}

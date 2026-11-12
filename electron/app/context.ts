@@ -15,6 +15,7 @@ import type { Chapter } from '../../shared/categories';
 import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
 import { SpeakerService } from '../domain/speakers';
+import { MomentsService } from '../domain/moments';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
@@ -100,6 +101,7 @@ export class AppContext {
   readonly library: LibraryService;
   readonly transcripts: TranscriptService;
   readonly speakers: SpeakerService;
+  readonly moments: MomentsService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -166,6 +168,12 @@ export class AppContext {
       modelsDir: path.join(o.userDataDir, 'models'),
       engine: o.diarizationEngine,
     });
+    this.moments = new MomentsService({
+      dir: path.join(o.userDataDir, 'moments'),
+      words: (id) => this.transcripts.words(id),
+      duration: (id) => this.store.data.vods.find((v) => v.id === id)?.durationSec,
+      exists: (id) => this.store.data.vods.some((v) => v.id === id),
+    });
     this.transcripts.speakerOverlay = (id) => this.speakers.overlay(id);
     const subtitles = { speakerColors: (words: Word[]) => this.speakers.colorsFor(words), words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string, ranges?: { start: number; end: number }[]) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
@@ -203,6 +211,7 @@ export class AppContext {
       pubs: this.pubs,
       chatDir: path.join(o.userDataDir, 'chat'),
       judgeDir: path.join(o.userDataDir, 'judgements'),
+      momentsDir: path.join(o.userDataDir, 'moments'),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,

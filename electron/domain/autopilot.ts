@@ -6,6 +6,8 @@ import { planEdit, planLong } from '../../shared/autoEdit';
 import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { judgeCandidates } from '../services/momentJudge';
+import { applyEdits } from '../../shared/momentEdits';
+import { loadEdits, saveSnapshot } from '../services/momentStore';
 import { kindSummary, selectBest, textFn, type Candidate, type Judged } from '../../shared/judge';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
@@ -44,6 +46,8 @@ export interface AutopilotDeps {
   chatDir: string;
   /** Carpeta donde se guardan las valoraciones del modelo (para no repetirlas al regenerar un directo). */
   judgeDir?: string;
+  /** Dónde se guardan las instantáneas de selección y las correcciones manuales de cada directo. */
+  momentsDir?: string;
   llmKey: () => string;
   /** Solo pruebas. */
   llmBaseUrl?: string;
@@ -391,6 +395,15 @@ export class Autopilot {
         }
         if (judged) {
           const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
+          const raw = judged;
+          if (this.d.momentsDir) {
+            const edits = loadEdits(this.d.momentsDir, vod.id);
+            const n = edits.exclude.length + edits.pin.length + Object.keys(edits.trims).length + edits.extra.length;
+            if (n) {
+              judged = applyEdits(judged, edits);
+              notes.push(`Se aplicaron ${n} corrección(es) tuyas a la selección de momentos.`);
+            }
+          }
           const textFor = textFn(words);
           const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
           const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
@@ -399,6 +412,7 @@ export class Autopilot {
             clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
             if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota mínima (${quality}/10); no se rellenó con momentos flojos.`);
           }
+          if (this.d.momentsDir) saveSnapshot(this.d.momentsDir, vod.id, raw, [...(clips?.chosen ?? []), ...(sum?.chosen ?? [])].map((c) => c.start), quality);
           if (sum && sum.chosen.length) {
             if (sum.totalSec >= MIN_SUMMARY_SEC) {
               summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));

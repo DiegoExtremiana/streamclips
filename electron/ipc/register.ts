@@ -213,6 +213,15 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
   handle(CHANNELS.transcriptEdit, (vodId, changes) => ctx.transcripts.editLines(str(vodId, 'vodId'), changes as never));
   handle(CHANNELS.vocabGet, () => ctx.transcripts.vocabulary());
+  handle(CHANNELS.momentsGet, (v) => ctx.moments.list(str(v, 'vodId')));
+  handle(CHANNELS.momentsState, (v, k, st) => {
+    if (st !== 'include' && st !== 'exclude' && st !== 'reset') throw new Error('Estado no válido.');
+    return ctx.moments.setState(str(v, 'vodId'), str(k, 'key'), st);
+  });
+  handle(CHANNELS.momentsTrim, (v, k, a, b) => ctx.moments.trim(str(v, 'vodId'), str(k, 'key'), num(a, 'start'), num(b, 'end')));
+  handle(CHANNELS.momentsAdd, (v, a, b, t) => ctx.moments.add(str(v, 'vodId'), num(a, 'start'), num(b, 'end'), typeof t === 'string' ? t : undefined));
+  handle(CHANNELS.momentsRemove, (v, k) => ctx.moments.remove(str(v, 'vodId'), str(k, 'key')));
+  handle(CHANNELS.momentsClear, (v) => ctx.moments.clear(str(v, 'vodId')));
   handle(CHANNELS.speakersGet, () => ({ available: ctx.speakers.available(), profiles: ctx.speakers.profiles() }));
   handle(CHANNELS.speakersRename, (id, alias) => ctx.speakers.rename(num(id, 'id'), typeof alias === 'string' ? alias : ''));
   handle(CHANNELS.speakersSelf, (id) => ctx.speakers.setSelf(id === null ? null : num(id, 'id')));

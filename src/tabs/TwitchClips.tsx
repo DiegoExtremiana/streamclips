@@ -1,14 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { OutputItem, TwitchClip, VodJob } from '../../shared/types';
+import type { ClipsResult, OutputItem, TwitchClip, VodJob } from '../../shared/types';
+
+type ClipsResultScoring = NonNullable<ClipsResult['scoring']>;
 import { fmtDate, fmtTime } from '../../shared/time';
-import { clipLibraryState, filterClips, type ClipLibraryState, type ClipSort } from '../../shared/twitchClips';
+import { clipLibraryState, defaultDir, filterClips, type ClipLibraryState, type ClipSort, type SortDir } from '../../shared/twitchClips';
+import { CLIP_CRITERIA, CRITERION_LABEL } from '../../shared/clipCriteria';
 
 import { errMsg } from '../lib';
-import { IconPlus, IconSearch } from '../icons';
+import { IconPlus, IconSearch, IconSortAsc, IconSortDesc } from '../icons';
 import { Modal } from '../library/ui';
 
 const REFRESH_MS = 60_000;
+const SCORING_MS = 15_000; // mientras se valoran clips se vuelve a preguntar para que vayan saliendo las notas
 const LOADING_MS = 3_000; // mientras se lee el historial se vuelve a preguntar enseguida
+
+const fmtScore = (n: number) => n.toFixed(1).replace('.', ',');
+
+/** Los cuatro criterios de la nota como barras, con el motivo y cómo se calculó. */
+function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
+  const cr = clip.criteria;
+  if (!cr) return null;
+  const by = clip.scoredBy === 'model' ? 'Valorado por el modelo de lenguaje.' : 'Calculado con lo que se oye y se dice (sin modelo de lenguaje).';
+  return (
+    <div className={`crit${compact ? ' compact' : ''}`} data-testid={`crit-${clip.id}`} title={`${clip.reason ?? ''} ${by}`.trim()}>
+      {CLIP_CRITERIA.map((k) => (
+        <div key={k} className="crit-row">
+          <span className="crit-name">{CRITERION_LABEL[k]}</span>
+          <span className="crit-bar" role="img" aria-label={`${CRITERION_LABEL[k]}: ${fmtScore(cr[k])} de 10`}><i style={{ width: `${Math.min(100, cr[k] * 10)}%` }} /></span>
+          <span className="crit-val">{fmtScore(cr[k])}</span>
+        </div>
+      ))}
+      {!compact && clip.reason && <div className="crit-reason">{clip.reason}</div>}
+      {!compact && <div className="muted small">{by}</div>}
+    </div>
+  );
+}
 
 const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'No está en la Biblioteca' };
 
@@ -31,6 +57,12 @@ function ClipPreview({ clip, state, busy, onAdd, onClose }: { clip: TwitchClip; 
         ) : (
           <div className="muted" role="status" style={{ padding: 30, textAlign: 'center' }}>Cargando el clip desde Twitch…</div>
         )}
+        {clip.score !== undefined && (
+          <div className="clipprev-score" data-testid="clip-preview-score">
+            <div className={`bigscore${clip.gold ? ' gold' : ''}`}>{fmtScore(clip.score)}<small>/10</small></div>
+            <Criteria clip={clip} />
+          </div>
+        )}
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
           <div className="muted small">{fmtDate(clip.createdAt)} · {fmtTime(Math.round(clip.durationSec))} · {clip.views} visualizaciones · por {clip.creator}</div>
           <button className="btn small" disabled={state !== 'none' || busy} onClick={onAdd}>
@@ -43,7 +75,7 @@ function ClipPreview({ clip, state, busy, onAdd, onClose }: { clip: TwitchClip; 
 }
 
 const PAGE = 60;
-type Show = 'all' | 'new' | 'library';
+type Show = 'all' | 'new' | 'library' | 'gold';
 
 /**
  * Clips del canal de Twitch: todos, del más reciente al más antiguo, en cuadrícula, con búsqueda por nombre y filtro
@@ -60,6 +92,8 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const [query, setQuery] = useState('');
   const [show, setShow] = useState<Show>('all');
   const [sort, setSort] = useState<ClipSort>('fecha');
+  const [dir, setDir] = useState<SortDir>('desc');
+  const [scoring, setScoring] = useState<ClipsResultScoring | undefined>(undefined);
   const [limit, setLimit] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
   /** Canal que se está viendo: '' es el propio. */
@@ -82,6 +116,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
         setHistory(r.loading);
         setWarning(r.warning);
         setOwn(r.own);
+        setScoring(r.scoring);
         setShownChannel(r.channel);
         setError('');
       } catch (e) {
@@ -97,9 +132,9 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
     void load();
     // el canal propio se refresca solo; el de otro canal solo cuando se pide (cada lectura son varias peticiones a Twitch)
     if (channel) return undefined;
-    const t = setInterval(() => void load(), history ? LOADING_MS : REFRESH_MS);
+    const t = setInterval(() => void load(), history ? LOADING_MS : scoring && scoring.pending > 0 ? SCORING_MS : REFRESH_MS);
     return () => clearInterval(t);
-  }, [load, history, channel]);
+  }, [load, history, channel, scoring]);
 
   function goTo(login: string) {
     setClips(null);
@@ -115,12 +150,13 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const counts = useMemo(() => {
     const all = clips ?? [];
     const inLib = all.filter((c) => clipLibraryState(c.id, vods, outputs) !== 'none').length;
-    return { all: all.length, library: inLib, fresh: all.length - inLib };
+    return { all: all.length, library: inLib, fresh: all.length - inLib, gold: all.filter((c) => c.gold).length };
   }, [clips, vods, outputs]);
   const matching = useMemo(() => {
-    const byName = filterClips(clips ?? [], query, sort);
+    const byName = filterClips(clips ?? [], query, sort, dir);
+    if (show === 'gold') return byName.filter((c) => c.gold);
     return byName.filter((c) => show === 'all' || (show === 'library') === (clipLibraryState(c.id, vods, outputs) !== 'none'));
-  }, [clips, query, sort, show, vods, outputs]);
+  }, [clips, query, sort, dir, show, vods, outputs]);
   const shown = matching.slice(0, limit);
   const current = clips?.find((c) => c.id === open) ?? null;
 
@@ -136,50 +172,87 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
     }
   }
 
+  const sortLabel: Record<ClipSort, string> = { fecha: 'Fecha', nombre: 'Nombre', nota: 'Nota' };
+  const dirText = (d: SortDir) => (sort === 'fecha' ? (d === 'desc' ? 'más recientes primero' : 'más antiguos primero') : sort === 'nombre' ? (d === 'asc' ? 'de la A a la Z' : 'de la Z a la A') : d === 'desc' ? 'mejor nota primero' : 'peor nota primero');
+  const progress = scoring && scoring.total > 0 ? Math.round((scoring.scored / scoring.total) * 100) : 0;
+
   return (
-    <section className="card" aria-label="Clips de tu canal de Twitch">
-      <div className="row" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <h2>{own ? 'Clips de tu canal de Twitch' : `Clips del canal ${shownChannel}`}</h2>
+    <section className="card twpanel" aria-label="Clips de tu canal de Twitch">
+      <div className="twhead">
+        <div>
+          <h2>{own ? 'Clips de tu canal de Twitch' : `Clips del canal ${shownChannel}`}</h2>
+          <div className="muted small">
+            {own ? 'Pulsa uno para verlo aquí sin descargarlo; «Añadir» lo deja en la Biblioteca en vertical y horizontal.' : 'Clips de los últimos 12 meses de este canal. Puedes verlos y añadirlos; solo los de tu canal se valoran.'}
+          </div>
+        </div>
+        <div className="twstats" aria-label="Resumen">
+          <span className="twstat"><b>{counts.all}</b> clips</span>
+          {own && scoring && <span className="twstat"><b>{scoring.scored}</b> valorados</span>}
+          {own && <span className="twstat gold"><b>{counts.gold}</b> destacados</span>}
+        </div>
         <button className="btn ghost small" disabled={loading} onClick={() => void load(true)} title="Vuelve a pedir todos los clips a Twitch">{loading ? 'Actualizando…' : 'Actualizar'}</button>
       </div>
-      <div className="muted small">
-        {own
-          ? 'Todos los clips de tu canal, del más reciente al más antiguo. Pulsa uno para verlo aquí sin descargarlo; «Añadir» lo descarga y lo deja en la Biblioteca en vertical y horizontal. Los que el programa valora muy bien salen con el fondo dorado.'
-          : 'Clips de los últimos 12 meses de este canal, del más reciente al más antiguo. Puedes verlos y añadirlos a la Biblioteca; solo los clips de tu canal se puntúan (fondo dorado).'}
-      </div>
-      <form
-        className="row"
-        style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (channelInput.trim()) goTo(channelInput.trim());
-        }}
-      >
-        <label className="searchbox">
-          <IconSearch size={16} />
-          <input type="text" aria-label="Buscar otro canal de Twitch" placeholder="Ver los clips de otro canal…" value={channelInput} onChange={(e) => setChannelInput(e.target.value)} />
-        </label>
-        <button className="btn small" type="submit" disabled={!channelInput.trim() || loading}>Ver canal</button>
-        {!own && <button className="btn ghost small" type="button" onClick={() => { setChannelInput(''); goTo(''); }}>Volver a mi canal</button>}
-      </form>
-      <div className="row twtools" style={{ gap: 12, flexWrap: 'wrap' }}>
+      {own && scoring && (
+        <div className="twscoring" data-testid="scoring-status" role="status">
+          {!scoring.enabled ? (
+            <span className="muted small">La valoración en segundo plano está desactivada (Ajustes, Piloto automático).</span>
+          ) : scoring.pending > 0 ? (
+            <>
+              <span className="small">Valorando tus clips en segundo plano: {scoring.scored} de {scoring.total}. Solo trabaja cuando no hay directo ni análisis en marcha.</span>
+              <div className="progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${progress}%` }} /></div>
+            </>
+          ) : (
+            <span className="muted small">La nota sale del contenido: humor, si se cuenta algo, si puede ser viral y si es un momento interesante. No mira visualizaciones.</span>
+          )}
+        </div>
+      )}
+      <div className="twbar">
         <label className="searchbox">
           <IconSearch size={16} />
           <input type="search" aria-label="Buscar clips por nombre" placeholder="Buscar por nombre…" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} />
         </label>
-        <label className="row" style={{ gap: 6 }}>
-          <span className="muted small">Ordenar por</span>
-          <select aria-label="Ordenar clips por" value={sort} onChange={(e) => { setSort(e.target.value as ClipSort); setLimit(PAGE); }}>
-            <option value="fecha">Fecha</option>
-            <option value="nombre">Nombre</option>
-            <option value="nota" disabled={!own}>Nota</option>
-          </select>
-        </label>
+        <div className="twsort" role="group" aria-label="Orden">
+          <label className="row" style={{ gap: 6 }}>
+            <span className="muted small">Ordenar por</span>
+            <select aria-label="Ordenar clips por" value={sort} onChange={(e) => { const v = e.target.value as ClipSort; setSort(v); setDir(defaultDir(v)); setLimit(PAGE); }}>
+              <option value="fecha">{sortLabel.fecha}</option>
+              <option value="nombre">{sortLabel.nombre}</option>
+              <option value="nota" disabled={!own}>{sortLabel.nota}</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn ghost small dirbtn"
+            data-testid="sort-dir"
+            data-dir={dir}
+            aria-label={`Sentido del orden: ${dir === 'asc' ? 'ascendente' : 'descendente'}, ${dirText(dir)}. Pulsa para cambiarlo`}
+            title={`${dir === 'asc' ? 'Ascendente' : 'Descendente'}: ${dirText(dir)}. Pulsa para invertir`}
+            onClick={() => { setDir(dir === 'asc' ? 'desc' : 'asc'); setLimit(PAGE); }}
+          >
+            {dir === 'asc' ? <IconSortAsc size={16} /> : <IconSortDesc size={16} />}
+            <span className="small">{dir === 'asc' ? 'Ascendente' : 'Descendente'}</span>
+          </button>
+        </div>
         <div className="seg" role="group" aria-label="Qué clips mostrar">
           <button type="button" aria-pressed={show === 'all'} className={`segbtn ${show === 'all' ? 'active' : ''}`} onClick={() => { setShow('all'); setLimit(PAGE); }}>Todos ({counts.all})</button>
           <button type="button" aria-pressed={show === 'new'} className={`segbtn ${show === 'new' ? 'active' : ''}`} onClick={() => { setShow('new'); setLimit(PAGE); }}>Sin añadir ({counts.fresh})</button>
           <button type="button" aria-pressed={show === 'library'} className={`segbtn ${show === 'library' ? 'active' : ''}`} onClick={() => { setShow('library'); setLimit(PAGE); }}>En la Biblioteca ({counts.library})</button>
+          {own && <button type="button" aria-pressed={show === 'gold'} className={`segbtn gold ${show === 'gold' ? 'active' : ''}`} onClick={() => { setShow('gold'); setLimit(PAGE); }}>Destacados ({counts.gold})</button>}
         </div>
+        <form
+          className="twchannel"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (channelInput.trim()) goTo(channelInput.trim());
+          }}
+        >
+          <label className="searchbox">
+            <IconSearch size={16} />
+            <input type="text" aria-label="Buscar otro canal de Twitch" placeholder="Ver otro canal…" value={channelInput} onChange={(e) => setChannelInput(e.target.value)} />
+          </label>
+          <button className="btn small" type="submit" disabled={!channelInput.trim() || loading}>Ver canal</button>
+          {!own && <button className="btn ghost small" type="button" onClick={() => { setChannelInput(''); goTo(''); }}>Volver a mi canal</button>}
+        </form>
       </div>
       {history && clips && <div className="muted small" role="status" style={{ marginTop: 6 }}>Leyendo el resto del historial de tu canal… ya puedes ver y usar los clips que han salido.</div>}
       {warning && <div className="msg warn" role="status">{warning}</div>}
@@ -196,10 +269,11 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
               <div className="twthumb">
                 {c.thumbnail ? <img src={c.thumbnail} alt="" draggable={false} loading="lazy" /> : null}
                 <span className="twdur">{fmtTime(Math.round(c.durationSec))}</span>
-                {c.score !== undefined && <span className="twscore" data-testid={`twscore-${c.id}`} title="Nota del contenido del clip (no depende de las visualizaciones)">{String(c.score.toFixed(1)).replace('.', ',')}/10</span>}
+                {c.score !== undefined && <span className="twscore" data-testid={`twscore-${c.id}`} title="Nota del contenido del clip (no depende de las visualizaciones)">{fmtScore(c.score)}/10</span>}
               </div>
               <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.title}</div>
               <div className="muted small" style={{ padding: '0 3px' }}>{fmtDate(c.createdAt)} · {c.views} vis.</div>
+              <Criteria clip={c} compact />
               <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
                 <span className={`badge twstate ${st}`} data-testid={`twstate-${c.id}`}>{STATE_LABEL[st]}</span>
                 {st === 'none' && (

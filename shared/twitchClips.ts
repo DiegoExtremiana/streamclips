@@ -16,20 +16,28 @@ export function clipLibraryState(clipId: string, vods: VodJob[], outputs: Output
 const plain = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 export type ClipSort = 'fecha' | 'nombre' | 'nota';
+export type SortDir = 'asc' | 'desc';
 
-const byDate = (a: TwitchClip, b: TwitchClip) => b.createdAt.localeCompare(a.createdAt);
+/** Sentido por defecto de cada orden: lo más reciente, de la A a la Z y la mejor nota primero. */
+export const defaultDir = (sort: ClipSort): SortDir => (sort === 'nombre' ? 'asc' : 'desc');
 
 /**
- * Solo los que contienen el texto en el nombre (sin distinguir mayúsculas ni tildes), ordenados por fecha (más recientes arriba,
- * por defecto), por nombre (de la A a la Z) o por nota (de mayor a menor; los aún sin valorar al final, y entre iguales, los más recientes).
+ * Solo los que contienen el texto en el nombre (sin distinguir mayúsculas ni tildes), ordenados por fecha (por defecto, los más
+ * recientes arriba), por nombre o por nota, en el sentido que se pida (ascendente o descendente; por defecto el de `defaultDir`).
+ * Los clips aún sin nota quedan siempre al final al ordenar por nota, en cualquier sentido; entre iguales, los más recientes.
  */
-export function filterClips(clips: TwitchClip[], query: string, sort: ClipSort = 'fecha'): TwitchClip[] {
+export function filterClips(clips: TwitchClip[], query: string, sort: ClipSort = 'fecha', dir: SortDir = defaultDir(sort)): TwitchClip[] {
   const q = plain(query.trim());
-  const cmp =
-    sort === 'nombre'
-      ? (a: TwitchClip, b: TwitchClip) => plain(a.title).localeCompare(plain(b.title), 'es') || byDate(a, b)
-      : sort === 'nota'
-        ? (a: TwitchClip, b: TwitchClip) => (b.score ?? -1) - (a.score ?? -1) || byDate(a, b)
-        : byDate;
+  // en cada orden, «descendente» es: fecha, la más reciente primero; nombre, de la Z a la A; nota, la más alta primero
+  const sign = dir === 'desc' ? 1 : -1;
+  const date = (a: TwitchClip, b: TwitchClip) => b.createdAt.localeCompare(a.createdAt) * (sort === 'fecha' ? sign : 1);
+  const cmp = (a: TwitchClip, b: TwitchClip): number => {
+    if (sort === 'nombre') return -sign * plain(a.title).localeCompare(plain(b.title), 'es') || date(a, b);
+    if (sort === 'nota') {
+      if (a.score === undefined || b.score === undefined) return a.score === b.score ? date(a, b) : a.score === undefined ? 1 : -1;
+      return sign * (b.score - a.score) || date(a, b);
+    }
+    return date(a, b);
+  };
   return [...clips].sort(cmp).filter((c) => !q || plain(c.title).includes(q));
 }

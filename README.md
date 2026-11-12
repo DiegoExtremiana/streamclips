@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.24.2
+
+- **La nota de cada clip sale de cuatro criterios**, cada uno de 0 a 10: **humor**, **se cuenta algo** (planteamiento y desarrollo), **puede ser viral** y **momento interesante**. La nota final es su media ponderada y va con una frase que explica por qué. No mira visualizaciones ni popularidad. Se ven en cada clip (barras) y, al abrirlo, con el desglose y el motivo.
+- **Cómo se valora:** el programa baja el audio del clip, lo transcribe y mide la reacción en el volumen. Con una clave gratuita de Gemini o Groq (Ajustes, Piloto automático) **el modelo lee la transcripción y puntúa los cuatro criterios**; sin clave, o si el modelo falla, se calcula con lo que se oye y se dice (risas y subidón, hilo del discurso, reacción) y el clip lo indica. Sin modelo es una aproximación: detecta señales, no entiende el chiste.
+- **Menú de clips rediseñado:** resumen (clips, valorados, destacados), barra de progreso de la valoración en segundo plano, barra de herramientas con búsqueda, orden y filtros (Todos, Sin añadir, En la Biblioteca, **Destacados**), y la búsqueda de otro canal integrada.
+- **Orden ascendente o descendente** en cada caso: Fecha (más recientes o más antiguos primero), Nombre (A a Z o Z a A) y Nota (mejor o peor primero; los sin valorar quedan siempre al final).
+
+Límites: las notas de la versión anterior se descartan y se recalculan poco a poco (cada clip se descarga y se transcribe, solo con el equipo libre); con el modelo gratuito hay límites diarios y, si se agotan, ese clip se valora por señales; los umbrales no están calibrados con tus clips reales.
+
 ## Novedades de la v0.24.1
 
 - **Ordenar los clips** (pestaña Clips): por **Fecha** (por defecto, los más recientes arriba), por **Nombre** (de la A a la Z, sin importar tildes) o por **Nota** (de mayor a menor; los que aún no tienen nota quedan al final). La búsqueda por nombre sigue funcionando con cualquier orden.

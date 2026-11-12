@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OutputItem, TwitchClip, VodJob } from '../shared/types';
-import { clipLibraryState, filterClips } from '../shared/twitchClips';
+import { clipLibraryState, defaultDir, filterClips } from '../shared/twitchClips';
 
 const clip = (id: string, title: string, createdAt: string): TwitchClip => ({ id, title, url: `https://clips.twitch.tv/${id}`, durationSec: 10, createdAt, creator: 'x', views: 0, thumbnail: '' });
 const vod = (id: string, twitchId: string, status: VodJob['status'] = 'downloaded', origin: VodJob['origin'] = 'clip'): VodJob => ({ id, url: 'u', title: 't', status, progress: 100, createdAt: '2026-10-01T00:00:00Z', twitchId, origin });
@@ -32,7 +32,7 @@ describe('clips de Twitch en la interfaz', () => {
     assert.equal(clipLibraryState('x', [vod('v1', 'x', 'downloaded', 'live')], [out('o1', 'v1')]), 'none');
   });
 
-  it('se ordenan por fecha (por defecto), por nombre o por nota, con los sin valorar al final', () => {
+  it('se ordenan por fecha (por defecto), por nombre o por nota, en los dos sentidos, con los sin valorar siempre al final', () => {
     const sc = (c: TwitchClip, score?: number): TwitchClip => ({ ...c, score });
     const src = [
       sc(clip('a', 'Zorro épico', '2026-10-01T00:00:00Z'), 7.5),
@@ -40,9 +40,16 @@ describe('clips de Twitch en la interfaz', () => {
       sc(clip('c', 'Mono', '2026-10-02T00:00:00Z')),
       sc(clip('d', 'Cebra', '2026-10-04T00:00:00Z'), 7.5),
     ];
-    assert.deepEqual(filterClips(src, '').map((c) => c.id), ['d', 'b', 'c', 'a'], 'por defecto, fecha');
-    assert.deepEqual(filterClips(src, '', 'nombre').map((c) => c.id), ['b', 'd', 'c', 'a'], 'A a Z sin importar tildes');
-    assert.deepEqual(filterClips(src, '', 'nota').map((c) => c.id), ['b', 'd', 'a', 'c'], 'mayor nota primero, empates por fecha, sin valorar al final');
-    assert.deepEqual(filterClips(src, 'o', 'nota').map((c) => c.id), ['a', 'c'], 'el filtro por nombre sigue valiendo');
+    const ids = (sort?: 'fecha' | 'nombre' | 'nota', dir?: 'asc' | 'desc', q = '') => filterClips(src, q, sort, dir).map((c) => c.id);
+    assert.deepEqual(ids(), ['d', 'b', 'c', 'a'], 'por defecto, fecha descendente (la más reciente primero)');
+    assert.deepEqual(ids('fecha', 'asc'), ['a', 'c', 'b', 'd'], 'fecha ascendente: la más antigua primero');
+    assert.deepEqual(ids('nombre'), ['b', 'd', 'c', 'a'], 'nombre: de la A a la Z sin importar tildes');
+    assert.deepEqual(ids('nombre', 'desc'), ['a', 'c', 'd', 'b'], 'nombre descendente: de la Z a la A');
+    assert.deepEqual(ids('nota'), ['b', 'd', 'a', 'c'], 'nota: la mayor primero, empates por fecha, sin valorar al final');
+    assert.deepEqual(ids('nota', 'asc'), ['d', 'a', 'b', 'c'], 'nota ascendente: la menor primero (empates, el más reciente) y los sin valorar siguen al final');
+    assert.deepEqual(ids('nota', 'desc', 'o'), ['a', 'c'], 'el filtro por nombre sigue valiendo');
+    assert.equal(defaultDir('fecha'), 'desc');
+    assert.equal(defaultDir('nombre'), 'asc');
+    assert.equal(defaultDir('nota'), 'desc');
   });
 });

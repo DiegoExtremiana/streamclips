@@ -27,6 +27,16 @@ describe('edición profesional automática', () => {
     assert.ok(p.cuts[0].start > 11.5 && p.cuts[0].end < 17 && p.cuts[0].end - p.cuts[0].start > 3, JSON.stringify(p.cuts));
   });
 
+  it('el umbral de silencio sale del perfil de estilo: con 2 s no se corta una pausa de 1,5 s pero sí una de 5 s', () => {
+    const short = mkWords([
+      ...Array.from({ length: 8 }, (_, i) => ['hola', i] as [string, number]),
+      ...Array.from({ length: 8 }, (_, i) => ['vale', 8.9 + i] as [string, number]),
+    ]);
+    assert.equal(planEdit(short, { start: 0, end: 18 }, { minGap: 1 }).cuts.length, 1, 'con 1 s sí se corta la pausa de 1,5 s');
+    assert.equal(planEdit(short, { start: 0, end: 18 }, { minGap: 2 }).cuts.length, 0, 'con 2 s no');
+    assert.equal(planEdit(words, { start: 0, end: 30 }, { minGap: 2 }).cuts.length, 1, 'la de 5 s se corta con 2 s');
+  });
+
   it('acerca la imagen con un golpe de sonido en la exclamación, un whoosh en el corte, fundidos y volumen parejo', () => {
     const p = planEdit(words, { start: 0, end: 30 });
     const punch = p.effects.filter((e) => e.type === 'punch');

@@ -217,6 +217,7 @@ export class AppContext {
       judgeDir: path.join(o.userDataDir, 'judgements'),
       momentsDir: path.join(o.userDataDir, 'moments'),
       prefsFile: path.join(o.userDataDir, 'preferences.json'),
+      style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,

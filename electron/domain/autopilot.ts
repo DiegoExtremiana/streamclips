@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import { planEdit, planLong } from '../../shared/autoEdit';
+import { defaultStyle, type StyleProfile } from '../../shared/styleProfile';
 import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { judgeCandidates } from '../services/momentJudge';
@@ -51,6 +52,8 @@ export interface AutopilotDeps {
   momentsDir?: string;
   /** Archivo con lo que el programa ha aprendido de tus decisiones al revisar momentos. */
   prefsFile?: string;
+  /** Perfil de estilo del creador (silencios, etc.); sin él se usan los valores de la entrevista. */
+  style?: () => StyleProfile;
   llmKey: () => string;
   /** Solo pruebas. */
   llmBaseUrl?: string;
@@ -535,10 +538,13 @@ export class Autopilot {
           return plain();
         }
       };
+      // los silencios de más de lo que dijo el creador (2 s por defecto) se cortan; su estilo manda sobre el criterio general
+      const style = this.d.style?.() ?? defaultStyle();
+      const editOpts = { minGap: style.silenceMaxSec };
       // capítulos con marca de tiempo para la descripción del resumen (como los vídeos de los canales grandes)
       const chapterOf = new Map<string, string>();
       const longMake = async (title: string, segs: Seg[], chapters = false) => {
-        const e = pro ? planLong(words, segs) : null;
+        const e = pro ? planLong(words, segs, editOpts) : null;
         const item = await safely(
           Boolean(e),
           () => this.d.clips.createLong(vod.id, { title, segments: e!.segments, effects: e!.effects, ...subs }),
@@ -565,7 +571,7 @@ export class Autopilot {
       }
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
-        const e = pro ? planEdit(words, m) : null;
+        const e = pro ? planEdit(words, m, editOpts) : null;
         await step('clip', `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e!.cuts, effects: e!.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, meta.get(m));
       }
       if (!created.length) throw new Error(`No se pudo montar ningún vídeo. ${errors.join(' ')}`);

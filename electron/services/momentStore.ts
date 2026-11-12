@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cleanEdits, emptyEdits, momentKey, type MomentEdits } from '../../shared/momentEdits';
 import type { Judged } from '../../shared/judge';
+import { cleanPrefs, type Preferences } from '../../shared/preferences';
 
 /** Lo que el piloto vio y eligió en un directo, para poder revisarlo sin volver a analizar. */
 export interface MomentSnapshot {
@@ -74,3 +75,6 @@ export function saveSnapshot(dir: string, vodId: string, judged: Judged[], chose
     /* sin instantánea solo se pierde la pantalla de revisión de este directo */
   }
 }
+
+export const loadPrefs = (file: string): Preferences => cleanPrefs(readJson(file));
+export const savePrefs = (file: string, p: Preferences): void => writeJson(file, cleanPrefs(p));

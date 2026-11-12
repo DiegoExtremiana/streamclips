@@ -550,6 +550,9 @@ export interface Api {
   addMoment(vodId: string, start: number, end: number, title?: string): Promise<MomentsView>;
   removeMoment(vodId: string, key: string): Promise<MomentsView>;
   clearMomentEdits(vodId: string): Promise<MomentsView>;
+  getPrefs(): Promise<PrefsView>;
+  setPrefsEnabled(enabled: boolean): Promise<PrefsView>;
+  resetPrefs(): Promise<PrefsView>;
   getSpeakers(): Promise<{ available: { ok: boolean; reason?: string }; profiles: { id: number; alias: string; self: boolean; named: boolean }[] }>;
   renameSpeaker(id: number, alias: string): Promise<void>;
   /** Marca qué voz es la tuya (null = ninguna): sale en el primer color (blanco). */
@@ -654,6 +657,9 @@ export const CHANNELS = {
   momentsAdd: 'moments:add',
   momentsRemove: 'moments:remove',
   momentsClear: 'moments:clear',
+  prefsGet: 'prefs:get',
+  prefsEnabled: 'prefs:enabled',
+  prefsReset: 'prefs:reset',
   speakersGet: 'speakers:get',
   speakersRename: 'speakers:rename',
   speakersSelf: 'speakers:self',
@@ -704,4 +710,10 @@ export interface MomentsView {
   rows: MomentRow[];
   /** Hay correcciones tuyas que se aplicarán al volver a generar. */
   pending: boolean;
+}
+
+/** Lo que el programa ha aprendido de tus decisiones al revisar momentos. */
+export interface PrefsView {
+  enabled: boolean;
+  kinds: { kind: string; bias: number; count: number; active: boolean }[];
 }

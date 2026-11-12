@@ -7,7 +7,8 @@ import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { judgeCandidates } from '../services/momentJudge';
 import { applyEdits } from '../../shared/momentEdits';
-import { loadEdits, saveSnapshot } from '../services/momentStore';
+import { loadEdits, loadPrefs, saveSnapshot } from '../services/momentStore';
+import { applyPrefs, describePrefs } from '../../shared/preferences';
 import { kindSummary, selectBest, textFn, type Candidate, type Judged } from '../../shared/judge';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
@@ -48,6 +49,8 @@ export interface AutopilotDeps {
   judgeDir?: string;
   /** Dónde se guardan las instantáneas de selección y las correcciones manuales de cada directo. */
   momentsDir?: string;
+  /** Archivo con lo que el programa ha aprendido de tus decisiones al revisar momentos. */
+  prefsFile?: string;
   llmKey: () => string;
   /** Solo pruebas. */
   llmBaseUrl?: string;
@@ -395,6 +398,14 @@ export class Autopilot {
         }
         if (judged) {
           const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
+          if (this.d.prefsFile) {
+            const prefs = loadPrefs(this.d.prefsFile);
+            const act = describePrefs(prefs).filter((x) => x.active);
+            if (prefs.enabled && act.length) {
+              judged = applyPrefs(judged, prefs);
+              notes.push(`Preferencias aprendidas aplicadas: ${act.map((x) => `${x.kind} ${x.bias > 0 ? '+' : ''}${x.bias}`).join(', ')}.`);
+            }
+          }
           const raw = judged;
           if (this.d.momentsDir) {
             const edits = loadEdits(this.d.momentsDir, vod.id);

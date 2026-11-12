@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.23
+
+- **Revisar momentos** (Panel, en cada directo analizado): ves la nota de 0 a 10, el tipo, el motivo que dio el modelo y lo que se dice en cada candidato, también los que no entraron. Puedes **descartar**, **incluir** uno que se quedó fuera (aunque no llegue a la nota mínima), **ajustar dónde empieza y acaba** (minutos:segundos) y **añadir un tramo tuyo**. «Aplicar y regenerar» vuelve a montar los vídeos con tus cambios **sin volver a transcribir ni a preguntar al modelo** (usa lo guardado). Tus cambios se guardan aparte de la valoración del modelo y «Deshacer mis cambios» los quita.
+- **Preferencias aprendidas** (Ajustes): cada vez que descartas un momento elegido o incluyes uno que no lo estaba, se anota por tipo (gracia, fail, reacción…). Con 3 decisiones o más de un tipo, su nota sube o baja un poco (0,25 por decisión, como mucho 1,5 puntos) en los siguientes análisis. Se ve, se apaga y se borra desde Ajustes, y la nota del análisis dice cuándo se ha aplicado.
+
+Límites: lo aprendido solo viene de tus descartes e inclusiones (no de cuánto recortas ni de qué vídeos apruebas o borras); un momento añadido a mano dura entre 8 y 180 s; la ventana no tiene reproductor, se juzga por el texto, la nota y el motivo.
+
 ## Novedades de la v0.22
 
 - **Hablantes (diarización local y gratuita)**: tras elegir los momentos, el Piloto automático identifica quién habla en lo elegido (modelo pyannote + embeddings 3D-Speaker con sherpa-onnx, todo en tu PC, ~0,2× tiempo real). Las voces se recuerdan **entre directos** en un «libro de voces»: puedes ponerles nombre, marcar cuál eres tú y unir dos voces que sean la misma, en Ajustes → Hablantes. Lo ya analizado no se repite.

@@ -5,7 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { execFileSync } from 'node:child_process';
-import { saveSnapshot } from '../electron/services/momentStore';
+import { savePrefs, saveSnapshot } from '../electron/services/momentStore';
 import type { Judged } from '../shared/judge';
 import { addDownloadedVod, makeEnv, rmDir, tmpDir, type TestEnv } from './helpers';
 
@@ -168,5 +168,55 @@ describe('revisión de momentos', () => {
     const vod = addDownloadedVod(e, video);
     const v = e.ctx.moments.list(vod.id);
     assert.deepEqual([v.available, v.rows.length, v.quality], [false, 0, null]);
+  });
+
+  it('aprende de lo que descartas y fijas, sin contar dos veces lo mismo ni lo que no estaba elegido', () => {
+    const e = makeEnv();
+    envs.push(e);
+    const vod = addDownloadedVod(e, video);
+    e.ctx.store.data.vods[0].durationSec = 2000;
+    const j = (start: number, total: number, kind: 'fail' | 'gracia'): Judged => ({ id: `c${start}`, start, end: start + 40, signal: 5, total, judgement: { id: `c${start}`, scores: { humor: 5, originalidad: 5, interaccion: 5, reaccion: 5, contexto: 5, autonomia: 5 }, kind, reason: '', discard: false } });
+    const all = [100, 300, 500, 700].map((s) => j(s, 8, 'fail')).concat([j(900, 3, 'gracia')]);
+    saveSnapshot(path.join(e.userData, 'moments'), vod.id, all, [100, 300, 500, 700], 6.5);
+    assert.deepEqual(e.ctx.moments.prefs(), { enabled: true, kinds: [] });
+    e.ctx.moments.setState(vod.id, '100', 'exclude');
+    e.ctx.moments.setState(vod.id, '100', 'exclude'); // repetir no cuenta
+    e.ctx.moments.setState(vod.id, '900', 'exclude'); // no estaba elegido: no dice nada
+    e.ctx.moments.setState(vod.id, '300', 'include'); // ya estaba elegido: tampoco
+    assert.deepEqual(e.ctx.moments.prefs().kinds, [{ kind: 'fail', bias: -0.25, count: 1, active: false }]);
+    e.ctx.moments.setState(vod.id, '300', 'exclude');
+    e.ctx.moments.setState(vod.id, '500', 'exclude');
+    assert.deepEqual(e.ctx.moments.prefs().kinds, [{ kind: 'fail', bias: -0.75, count: 3, active: true }]);
+    // fijar uno que no estaba elegido sube su tipo
+    e.ctx.moments.setState(vod.id, '900', 'include');
+    assert.equal(e.ctx.moments.prefs().kinds.find((k) => k.kind === 'gracia')!.bias, 0.25);
+    assert.equal(e.ctx.moments.setPrefsEnabled(false).enabled, false);
+    assert.equal(e.ctx.moments.resetPrefs().kinds.length, 0);
+    assert.equal(e.ctx.moments.prefs().enabled, false, 'borrar lo aprendido no cambia si está activado');
+  });
+
+  it('las preferencias aprendidas bajan la nota del tipo que sueles descartar y se avisa en la nota del análisis', async () => {
+    const srv = await llm();
+    try {
+      const { e, vod } = setup(srv.url);
+      const prefsFile = path.join(e.userData, 'preferences.json');
+      // sin lo aprendido: se ve la nota real del momento bueno
+      await e.ctx.autopilot.run(vod.id);
+      const score = clipsOf(e)[0].auto!.score!;
+      assert.ok(score > 7, String(score));
+      // la nota mínima justo por debajo de esa nota; el ajuste de -1,5 lo deja fuera
+      e.ctx.settings.set({ autopilot: { minQuality: Math.floor(score * 2) / 2 } });
+      savePrefs(prefsFile, { enabled: true, kindBias: { fail: -1.5 }, counts: { fail: 6 } });
+      await e.ctx.autopilot.run(vod.id);
+      assert.match(e.ctx.store.data.vods[0].autopilot?.note ?? '', /Preferencias aprendidas aplicadas: fail -1\.5/);
+      assert.equal(clipsOf(e).length, 0, 'el momento bueno de tipo fail queda por debajo de la nota mínima');
+      // con ellas apagadas vuelve a salir
+      e.ctx.moments.setPrefsEnabled(false);
+      await e.ctx.autopilot.run(vod.id);
+      assert.equal(clipsOf(e).length, 1);
+      assert.doesNotMatch(e.ctx.store.data.vods[0].autopilot?.note ?? '', /Preferencias aprendidas/);
+    } finally {
+      srv.close();
+    }
   });
 });

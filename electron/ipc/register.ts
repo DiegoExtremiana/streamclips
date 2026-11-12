@@ -222,6 +222,9 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.momentsAdd, (v, a, b, t) => ctx.moments.add(str(v, 'vodId'), num(a, 'start'), num(b, 'end'), typeof t === 'string' ? t : undefined));
   handle(CHANNELS.momentsRemove, (v, k) => ctx.moments.remove(str(v, 'vodId'), str(k, 'key')));
   handle(CHANNELS.momentsClear, (v) => ctx.moments.clear(str(v, 'vodId')));
+  handle(CHANNELS.prefsGet, () => ctx.moments.prefs());
+  handle(CHANNELS.prefsEnabled, (on) => ctx.moments.setPrefsEnabled(on === true));
+  handle(CHANNELS.prefsReset, () => ctx.moments.resetPrefs());
   handle(CHANNELS.speakersGet, () => ({ available: ctx.speakers.available(), profiles: ctx.speakers.profiles() }));
   handle(CHANNELS.speakersRename, (id, alias) => ctx.speakers.rename(num(id, 'id'), typeof alias === 'string' ? alias : ''));
   handle(CHANNELS.speakersSelf, (id) => ctx.speakers.setSelf(id === null ? null : num(id, 'id')));

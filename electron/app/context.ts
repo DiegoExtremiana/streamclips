@@ -170,6 +170,7 @@ export class AppContext {
     });
     this.moments = new MomentsService({
       dir: path.join(o.userDataDir, 'moments'),
+      prefsFile: path.join(o.userDataDir, 'preferences.json'),
       words: (id) => this.transcripts.words(id),
       duration: (id) => this.store.data.vods.find((v) => v.id === id)?.durationSec,
       exists: (id) => this.store.data.vods.some((v) => v.id === id),
@@ -212,6 +213,7 @@ export class AppContext {
       chatDir: path.join(o.userDataDir, 'chat'),
       judgeDir: path.join(o.userDataDir, 'judgements'),
       momentsDir: path.join(o.userDataDir, 'moments'),
+      prefsFile: path.join(o.userDataDir, 'preferences.json'),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,

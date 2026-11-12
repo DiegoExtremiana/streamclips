@@ -19,7 +19,8 @@ import { TranscriptService } from '../domain/transcripts';
 import { SpeakerService } from '../domain/speakers';
 import { MomentsService } from '../domain/moments';
 import { ClipScoreService } from '../domain/clipScores';
-import { judgeCandidates } from '../services/momentJudge';
+import { askJson } from '../services/llm';
+import { CLIP_JUDGE_SYSTEM, clipJudgePrompt, parseClipJudgement } from '../../shared/clipCriteria';
 import { audioEnergy as measureEnergy } from '../services/audioEnergy';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
@@ -230,6 +231,7 @@ export class AppContext {
     this.clipScores = new ClipScoreService({
       file: path.join(o.userDataDir, 'clip-scores.json'),
       log: this.log,
+      enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
       canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
       analyze: async (clip) => {
         const t = this.tools();
@@ -248,8 +250,8 @@ export class AppContext {
       judge: async (clip, words) => {
         const conf = this.autopilot.llmConf();
         if (!conf) return null;
-        const r = await judgeCandidates(conf, words, [{ id: 'clip', start: 0, end: Math.max(clip.durationSec, words[words.length - 1]?.end ?? 0), signal: 0 }]);
-        return r.judged[0] && !r.judged[0].judgement.discard ? r.judged[0].total : r.judged[0] ? Math.min(r.judged[0].total, 4) : null;
+        const raw = await askJson(conf, CLIP_JUDGE_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec), { temperature: 0.2 });
+        return parseClipJudgement(raw);
       },
     });
     this.channel.scores = this.clipScores;

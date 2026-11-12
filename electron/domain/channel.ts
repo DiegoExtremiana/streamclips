@@ -49,7 +49,7 @@ export class ChannelMonitor {
   private busy = false;
   private stream: TwitchStream | null = null;
   /** Puntuación de los clips del canal: la nota y si son «dorados» (8 o más). */
-  scores?: { gold: (id: string) => boolean; scoreOf?: (id: string) => number | undefined; enqueue: (clips: TwitchClip[]) => void };
+  scores?: { gold: (id: string) => boolean; scoreOf?: (id: string) => number | undefined; detailOf?: (id: string) => { criteria: TwitchClip['criteria'] & object; reason: string; by: 'model' | 'signals' } | undefined; pending?: () => number; enabled?: () => boolean; enqueue: (clips: TwitchClip[]) => void };
   /** Clips de otros canales consultados (se recuerdan unos minutos). */
   private others = new Map<string, { at: number; byId: Map<string, TwitchClip> }>();
   private lastCheck: string | null = null;
@@ -325,8 +325,13 @@ export class ChannelMonitor {
     }
     const raw = [...(this.clipCache?.byId.values() ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     this.scores?.enqueue(raw);
-    const list = raw.map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id) }));
-    return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning, channel: this.d.creds().login, own: true };
+    const list = raw.map((c) => {
+      const d = this.scores?.detailOf?.(c.id);
+      return { ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id), criteria: d?.criteria, reason: d?.reason, scoredBy: d?.by };
+    });
+    const scored = list.filter((c) => c.score !== undefined).length;
+    const scoring = this.scores ? { scored, pending: this.scores.pending?.() ?? 0, total: list.length, enabled: this.scores.enabled?.() ?? true } : undefined;
+    return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning, channel: this.d.creds().login, own: true, scoring };
   }
 
   /** Estado actual de la transmisión: el análisis en segundo plano espera a que acabe el directo. */

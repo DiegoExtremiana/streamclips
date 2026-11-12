@@ -2,13 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { TwitchClip } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { heuristicScore, isGold, modelScore, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
+import { isGold, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
+import { criteriaFromSignals, overall, reasonFromCriteria, type ClipCriteria } from '../../shared/clipCriteria';
 
 interface Stored {
   /** Nota 0-10. Ausente si el análisis falló. */
   score?: number;
   v: number;
   at: number;
+  /** Los cuatro criterios (humor, se cuenta algo, viral, interesante). */
+  crit?: ClipCriteria;
+  /** Frase con lo que explica la nota. */
+  reason?: string;
   /** Cómo se puntuó: con el modelo de lenguaje o con las señales del propio clip. */
   by?: 'model' | 'signals';
   /** Intentos fallidos seguidos. */
@@ -19,17 +24,19 @@ export interface ClipScoreDeps {
   file: string;
   /** Baja el audio del clip y saca sus palabras y su volumen. Lanza si no se puede. */
   analyze: (clip: TwitchClip) => Promise<ClipSignals>;
-  /** Valoración del contenido por el modelo de lenguaje (0-10); null si no hay modelo o no respondió. */
-  judge?: (clip: TwitchClip, words: Word[]) => Promise<number | null>;
+  /** Valoración del contenido por el modelo de lenguaje (cuatro criterios y motivo); null si no hay modelo o no respondió. */
+  judge?: (clip: TwitchClip, words: Word[]) => Promise<{ criteria: ClipCriteria; reason: string } | null>;
   /** Solo se trabaja cuando el equipo está libre (sin directo en marcha ni análisis del piloto). */
   canRun: () => boolean;
+  /** ¿Está activado puntuar en segundo plano? (Solo para informar a la interfaz.) */
+  enabled?: () => boolean;
   log?: { info: (m: string) => void; warn: (m: string) => void };
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
 
 /** Nota por señales a partir de la cual merece la pena preguntar al modelo de lenguaje. */
-const PRE_JUDGE_MIN = 5.5;
+const PRE_JUDGE_MIN = 3.5;
 const MAX_FAILS = 2;
 const RETRY_AFTER_MS = 24 * 3600_000;
 const WAIT_MS = 60_000;
@@ -37,8 +44,8 @@ const WAIT_MS = 60_000;
 const MAX_CLIP_SEC = 180;
 
 /**
- * Puntúa en segundo plano los clips del canal (de uno en uno, solo con el equipo libre) y recuerda la nota. La nota es interna:
- * lo único que sale de aquí es si un clip es «dorado» (8/10 o más). Lo ya puntuado no se vuelve a analizar.
+ * Puntúa en segundo plano los clips del canal (de uno en uno, solo con el equipo libre) y recuerda la nota con sus cuatro
+ * criterios y el motivo. Un clip es «dorado» con 8/10 o más. Lo ya puntuado no se vuelve a analizar.
  */
 export class ClipScoreService {
   private scores = new Map<string, Stored>();
@@ -76,9 +83,20 @@ export class ClipScoreService {
     return typeof s === 'number' ? Math.round(s * 10) / 10 : undefined;
   }
 
+  /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
+  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'signals' } | undefined {
+    const s = this.scores.get(id);
+    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'signals' } : undefined;
+  }
+
   /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
     return isGold(this.scores.get(id)?.score);
+  }
+
+  /** El análisis en segundo plano está activado (Ajustes). */
+  enabled(): boolean {
+    return this.d.enabled ? this.d.enabled() : true;
   }
 
   /** Clips por puntuar (los que quedan en cola). */
@@ -142,16 +160,17 @@ export class ClipScoreService {
 
   private async score(clip: TwitchClip): Promise<Stored> {
     const sig = await this.d.analyze(clip);
-    const base = heuristicScore(sig);
-    // el modelo (límite gratuito diario) solo se gasta en los que pueden llegar a dorado: confirma o rebaja
+    const crit = criteriaFromSignals(sig);
+    const base = overall(crit);
+    // el modelo (límite gratuito diario) solo se gasta en los que no son claramente flojos: confirma o rebaja
     if (this.d.judge && sig.words.length >= 4 && base >= PRE_JUDGE_MIN) {
       try {
-        const judged = await this.d.judge(clip, sig.words);
-        if (judged !== null) return { score: modelScore(judged), v: SCORE_VERSION, at: this.now(), by: 'model' };
+        const j = await this.d.judge(clip, sig.words);
+        if (j) return { score: overall(j.criteria), crit: j.criteria, reason: j.reason || reasonFromCriteria(j.criteria, 'model'), v: SCORE_VERSION, at: this.now(), by: 'model' };
       } catch (e) {
         this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
       }
     }
-    return { score: base, v: SCORE_VERSION, at: this.now(), by: 'signals' };
+    return { score: base, crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals' };
   }
 }

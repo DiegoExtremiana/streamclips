@@ -417,6 +417,8 @@ export interface ClipsResult {
   own: boolean;
   loading: boolean;
   warning: string;
+  /** Cómo va la valoración en segundo plano de los clips de tu canal (ausente en otros canales). */
+  scoring?: { scored: number; pending: number; total: number; enabled: boolean };
 }
 
 export interface TwitchClip {
@@ -434,6 +436,12 @@ export interface TwitchClip {
   gold?: boolean;
   /** Nota del contenido del clip, de 0 a 10 con un decimal; ausente si aún no se ha valorado. Nunca depende de las visualizaciones. */
   score?: number;
+  /** Los cuatro criterios de la nota (0-10): humor, se cuenta algo, puede ser viral, momento interesante. */
+  criteria?: { humor: number; historia: number; viral: number; interes: number };
+  /** Frase que explica la nota. */
+  reason?: string;
+  /** Cómo se valoró: con el modelo de lenguaje o solo con lo que se oye y se dice. */
+  scoredBy?: 'model' | 'signals';
 }
 
 /** Estado del vigilante del canal, para el Panel. */

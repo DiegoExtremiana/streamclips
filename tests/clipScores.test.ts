@@ -106,12 +106,17 @@ describe('puntuación de clips en segundo plano', () => {
 
   it('el modelo solo se consulta para los que pueden ser dorados y su nota manda sobre las señales', async () => {
     const asked: string[] = [];
-    const { svc } = make({ judge: async (c) => { asked.push(c.id); return c.id === 'good1' ? 9.5 : 2; } });
+    const { svc } = make({ judge: async (c) => { asked.push(c.id); const n = c.id === 'good1' ? 9.5 : 2; return { criteria: { humor: n, historia: n, viral: n, interes: n }, reason: n > 5 ? 'Remate con sorpresa' : 'Charla sin más' }; } });
     svc.enqueue([...many(10), clip('good1', { views: 500 }), clip('good2', { views: 500 })]);
     await svc.idle();
     assert.deepEqual(asked.sort(), ['good1', 'good2'], 'los aburridos no gastan modelo');
     assert.equal(svc.gold('good1'), true);
     assert.equal(svc.gold('good2'), false, 'el modelo lo rebaja');
+    const d = svc.detailOf('good1')!;
+    assert.equal(d.by, 'model');
+    assert.equal(d.reason, 'Remate con sorpresa');
+    assert.equal(d.criteria.humor, 9.5);
+    assert.equal(svc.scoreOf('good2'), 2);
   });
 
   it('si el modelo falla o no hay, vale la nota por señales', async () => {
@@ -119,6 +124,8 @@ describe('puntuación de clips en segundo plano', () => {
     svc.enqueue([...many(10), clip('good1', { views: 500 })]);
     await svc.idle();
     assert.equal(svc.gold('good1'), true);
+    assert.equal(svc.detailOf('good1')!.by, 'signals', 'sin modelo se dice que se calculó con señales');
+    assert.match(svc.detailOf('good1')!.reason, /Calculado con lo que se oye/);
     const { svc: s2 } = make({ judge: async () => null });
     s2.enqueue([...many(10), clip('good1', { views: 500 })]);
     await s2.idle();

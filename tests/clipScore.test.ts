@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { GOLD_MIN, heuristicScore, isGold, modelScore, peakRise } from '../shared/clipScore';
+import { GOLD_MIN, isGold, modelScore, peakRise } from '../shared/clipScore';
+import { heuristicScore } from '../shared/clipCriteria';
 
 const words = (txt: string, dur: number) => txt.split(' ').map((text, i, a) => ({ text, start: (i / a.length) * dur, end: ((i + 0.8) / a.length) * dur }));
 /** Habla densa (unas 2,5 palabras por segundo) repitiendo la frase, para que lo que se dice escale con la duración. */

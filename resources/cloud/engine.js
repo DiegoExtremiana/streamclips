@@ -36008,6 +36008,7 @@ var ClipScoreService = class {
   running = null;
   stopped = false;
   blocker = null;
+  lastError = null;
   sleep;
   now;
   save() {
@@ -36033,6 +36034,13 @@ var ClipScoreService = class {
   skipReason(id) {
     const s = this.scores.get(id);
     return s?.noText ? s.reason : void 0;
+  }
+  /** Cómo está la cola ahora: por qué espera, cuántos clips han fallado y el último error. */
+  diagnostics() {
+    let failed = 0;
+    for (const v of this.scores.values()) if (v.score === void 0 && !v.noText && (v.fails ?? 0) > 0) failed++;
+    const waiting = this.queue.length && !this.d.canRun() ? this.d.waitReason?.() ?? "el equipo est\xE1 ocupado" : void 0;
+    return { ...waiting ? { waiting } : {}, failed, ...this.lastError ? { lastError: this.lastError } : {} };
   }
   /** Lo que impide valorar ahora mismo (p. ej. falta el modelo de Whisper); undefined si nada. */
   problem() {
@@ -36098,9 +36106,11 @@ var ClipScoreService = class {
       if (!this.needs(clip)) continue;
       try {
         this.scores.set(clip.id, await this.score(clip));
+        this.lastError = null;
       } catch (e) {
         const prev = this.scores.get(clip.id);
         this.scores.set(clip.id, { v: SCORE_VERSION, at: this.now(), fails: (prev?.fails ?? 0) + 1 });
+        this.lastError = e.message.slice(0, 240);
         this.d.log?.warn(`No se pudo puntuar el clip ${clip.id}: ${e.message}`);
       }
       this.save();
@@ -40204,6 +40214,7 @@ var AppContext = class {
       log: this.log,
       enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
       canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
+      waitReason: () => this.channel.isLive() ? "hay un directo en marcha" : this.autopilot.isBusy() ? "el piloto autom\xE1tico est\xE1 analizando un directo" : null,
       hasJudge: () => Boolean(this.autopilot.llmConf()),
       ready: () => {
         const w = this.transcripts.status();

@@ -93,10 +93,10 @@ var init_twitch = __esm({
         this.token = { clientId: c.clientId, value: j.access_token, expiresAt: this.now() + (j.expires_in ?? 3600) * 1e3 };
         return j.access_token;
       }
-      async helix(path20, c) {
+      async helix(path21, c) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const token = await this.appToken(c, attempt > 0);
-          const res = await this.request(`https://api.twitch.tv/helix/${path20}`, {
+          const res = await this.request(`https://api.twitch.tv/helix/${path21}`, {
             headers: { "Client-Id": c.clientId, Authorization: `Bearer ${token}` }
           });
           if (res.status === 401) {
@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs27 = require("fs");
+                var fs28 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs27.readFileSync(filename);
+                  var ret = fs28.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs27.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs28.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs26 = require("fs");
+            var fs27 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs26.readFileSync(filename);
+              var ret = fs27.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs26.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs27.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -30686,12 +30686,12 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs25 = __toESM(require("node:fs"));
+var import_node_fs26 = __toESM(require("node:fs"));
 var import_node_os7 = __toESM(require("node:os"));
-var import_node_path19 = __toESM(require("node:path"));
+var import_node_path20 = __toESM(require("node:path"));
 
 // electron/app/context.ts
-var import_node_path18 = __toESM(require("node:path"));
+var import_node_path19 = __toESM(require("node:path"));
 
 // shared/speakers.ts
 function assignSpeakers(words, segs, o = {}) {
@@ -35083,1332 +35083,6 @@ var SpeakerService = class {
   }
 };
 
-// electron/domain/groups.ts
-var import_node_crypto6 = __toESM(require("node:crypto"));
-var GroupService = class {
-  constructor(store, notifier) {
-    this.store = store;
-    this.notifier = notifier;
-  }
-  list() {
-    return this.store.data.groups;
-  }
-  find(id) {
-    const g = this.store.data.groups.find((x) => x.id === id);
-    if (!g) throw new Error("La carpeta no existe.");
-    return g;
-  }
-  done() {
-    this.store.save();
-    this.notifier.changed();
-  }
-  cleanName(name) {
-    const n = typeof name === "string" ? name.trim() : "";
-    if (!n) throw new Error("El nombre de la carpeta no puede estar vac\xEDo.");
-    if (n.length > MAX_GROUP_NAME_LEN) throw new Error(`El nombre no puede pasar de ${MAX_GROUP_NAME_LEN} caracteres.`);
-    return n;
-  }
-  assertKind(kind) {
-    if (kind !== "theme" && kind !== "series") throw new Error('El tipo debe ser "tema" o "serie".');
-    return kind;
-  }
-  assertUnique(name, section, parentId, exceptId) {
-    const lower = name.toLowerCase();
-    const clash = this.store.data.groups.some(
-      (g) => g.id !== exceptId && g.section === section && g.parentId === parentId && g.name.toLowerCase() === lower
-    );
-    if (clash) throw new Error(`Ya hay una carpeta llamada "${name}" en ese sitio.`);
-  }
-  /** Nº de niveles desde la raíz hasta la carpeta (la raíz vale 1). */
-  depth(id) {
-    let d = 0;
-    let cur = id;
-    while (cur) {
-      d++;
-      cur = this.store.data.groups.find((g) => g.id === cur)?.parentId;
-      if (d > 100) break;
-    }
-    return d;
-  }
-  /** Altura del subárbol que cuelga de la carpeta (ella misma cuenta 1). */
-  height(id) {
-    const kids = this.store.data.groups.filter((g) => g.parentId === id);
-    return 1 + Math.max(0, ...kids.map((k) => this.height(k.id)));
-  }
-  create(name, kind, section, parentId) {
-    const n = this.cleanName(name);
-    this.assertKind(kind);
-    if (section !== "clips" && section !== "videos") throw new Error("Secci\xF3n no v\xE1lida.");
-    if (parentId !== void 0) {
-      const parent = this.find(parentId);
-      if (parent.section !== section) throw new Error("La carpeta superior es de otra secci\xF3n.");
-      if (this.depth(parentId) >= MAX_GROUP_DEPTH) throw new Error(`No se pueden anidar m\xE1s de ${MAX_GROUP_DEPTH} niveles.`);
-    }
-    this.assertUnique(n, section, parentId);
-    const g = { id: import_node_crypto6.default.randomUUID(), name: n, kind, section, parentId, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
-    this.store.data.groups.push(g);
-    this.done();
-    return g;
-  }
-  update(id, patch) {
-    const g = this.find(id);
-    const name = patch.name === void 0 ? g.name : this.cleanName(patch.name);
-    const kind = patch.kind === void 0 ? g.kind : this.assertKind(patch.kind);
-    this.assertUnique(name, g.section, g.parentId, g.id);
-    g.name = name;
-    g.kind = kind;
-    this.done();
-    return g;
-  }
-  delete(id) {
-    const g = this.find(id);
-    for (const o of this.store.data.outputs) if (o.groupId === id) o.groupId = g.parentId;
-    for (const c of this.store.data.groups) if (c.parentId === id) c.parentId = g.parentId;
-    this.store.data.groups = this.store.data.groups.filter((x) => x.id !== id);
-    this.done();
-  }
-  move(id, parentId) {
-    const g = this.find(id);
-    const target = parentId ?? void 0;
-    if (target !== void 0) {
-      const parent = this.find(target);
-      if (parent.section !== g.section) throw new Error("No se puede mover una carpeta a otra secci\xF3n.");
-      for (let cur = target, i = 0; cur && i < 100; i++) {
-        if (cur === g.id) throw new Error("Una carpeta no se puede meter dentro de s\xED misma.");
-        cur = this.store.data.groups.find((x) => x.id === cur)?.parentId;
-      }
-      if (this.depth(target) + this.height(g.id) > MAX_GROUP_DEPTH) {
-        throw new Error(`No se pueden anidar m\xE1s de ${MAX_GROUP_DEPTH} niveles.`);
-      }
-    }
-    if (g.parentId === target) return g;
-    this.assertUnique(g.name, g.section, target, g.id);
-    g.parentId = target;
-    this.done();
-    return g;
-  }
-  moveOutput(outputId, groupId) {
-    const o = this.store.data.outputs.find((x) => x.id === outputId);
-    if (!o) throw new Error("El v\xEDdeo no existe.");
-    if (groupId !== null) {
-      const g = this.find(groupId);
-      if (g.section !== sectionOf(o.kind)) {
-        throw new Error(g.section === "clips" ? "Esa carpeta es de Clips; los v\xEDdeos largos van en carpetas de V\xEDdeos." : "Esa carpeta es de V\xEDdeos; los clips van en carpetas de Clips.");
-      }
-    }
-    const next = groupId ?? void 0;
-    if (o.groupId !== next) {
-      o.groupId = next;
-      this.done();
-    }
-    return o;
-  }
-};
-
-// electron/domain/tasks.ts
-var import_node_crypto7 = __toESM(require("node:crypto"));
-var KEEP = 40;
-function estimateEta(o) {
-  const { now, pct } = o;
-  if (pct >= 100) return 0;
-  if (o.firstAt !== void 0 && o.firstPct !== void 0) {
-    const dp = pct - o.firstPct;
-    const dt = (now - o.firstAt) / 1e3;
-    if (dp >= 2 && dt >= 20) return Math.max(0, (100 - pct) * dt / dp);
-  }
-  if (o.expectedSec && o.expectedSec > 0) {
-    return Math.max(0, o.expectedSec * ((100 - pct) / 100));
-  }
-  return void 0;
-}
-var TaskTracker = class {
-  constructor(notifier, clock3 = Date.now) {
-    this.notifier = notifier;
-    this.clock = clock3;
-  }
-  tasks = [];
-  list() {
-    return this.tasks.map((t) => ({ ...t }));
-  }
-  start(kind, label, ref) {
-    const startedMs = this.clock();
-    const info = { id: import_node_crypto7.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: new Date(startedMs).toISOString(), ...ref ? { ref } : {} };
-    this.tasks.unshift(info);
-    this.tasks.length = Math.min(this.tasks.length, KEEP);
-    this.notifier.task({ ...info });
-    const emit = () => this.notifier.task({ ...info });
-    let first;
-    let expectedSec;
-    const eta = () => {
-      const s = estimateEta({ now: this.clock(), firstAt: first?.at, firstPct: first?.pct, pct: info.progress, startedAt: startedMs, expectedSec });
-      info.etaAt = s === void 0 ? void 0 : new Date(this.clock() + s * 1e3).toISOString();
-    };
-    return {
-      info,
-      update: (progress, detail) => {
-        info.progress = Math.max(0, Math.min(100, Math.round(progress)));
-        first ??= { at: this.clock(), pct: info.progress };
-        if (detail !== void 0) info.detail = detail;
-        eta();
-        emit();
-      },
-      estimate: (totalSec) => {
-        expectedSec = totalSec;
-        eta();
-        emit();
-      },
-      done: (detail) => {
-        info.status = "done";
-        info.progress = 100;
-        info.etaAt = void 0;
-        if (detail !== void 0) info.detail = detail;
-        info.endedAt = new Date(this.clock()).toISOString();
-        emit();
-      },
-      fail: (error) => {
-        info.status = "error";
-        info.etaAt = void 0;
-        info.error = error;
-        info.endedAt = new Date(this.clock()).toISOString();
-        emit();
-      }
-    };
-  }
-};
-
-// electron/domain/cloud.ts
-var import_node_fs21 = __toESM(require("node:fs"));
-var import_node_path14 = __toESM(require("node:path"));
-var import_libsodium_wrappers = __toESM(require_libsodium_wrappers());
-
-// electron/services/cloud/github.ts
-var import_node_fs17 = __toESM(require("node:fs"));
-
-// electron/services/social/common.ts
-var import_node_fs16 = __toESM(require("node:fs"));
-var defaultSleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
-var PublishError = class extends Error {
-};
-async function readChunk(file, start, endExclusive) {
-  const fh = await import_node_fs16.default.promises.open(file, "r");
-  try {
-    const len = endExclusive - start;
-    const buf = Buffer.alloc(len);
-    let got = 0;
-    while (got < len) {
-      const { bytesRead } = await fh.read(buf, got, len - got, start + got);
-      if (!bytesRead) break;
-      got += bytesRead;
-    }
-    return got === len ? buf : buf.subarray(0, got);
-  } finally {
-    await fh.close();
-  }
-}
-async function timedFetch(f, url, init, ms = 6e4) {
-  try {
-    return await f(url, { ...init, signal: AbortSignal.timeout(ms) });
-  } catch (e) {
-    const n = e.name;
-    if (n === "TimeoutError" || n === "AbortError") throw new PublishError("La red social no respondi\xF3 a tiempo.");
-    throw new PublishError("No se pudo conectar con la red social. Comprueba tu conexi\xF3n a internet.");
-  }
-}
-async function apiMessage(res) {
-  const t = await res.text().catch(() => "");
-  try {
-    const j = JSON.parse(t);
-    const reason = typeof j.error === "object" ? j.error?.errors?.[0]?.reason : void 0;
-    const m = typeof j.error === "object" ? j.error?.message : j.error ?? j.message;
-    return [reason, m].filter(Boolean).join(": ").slice(0, 300) || `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-// electron/services/cloud/github.ts
-var GithubError = class extends Error {
-  constructor(message, status) {
-    super(message);
-    this.status = status;
-  }
-};
-var Github = class {
-  constructor(o) {
-    this.o = o;
-    this.api = o.api ?? "https://api.github.com";
-    this.uploads = o.uploads ?? "https://uploads.github.com";
-    this.f = o.fetchFn ?? fetch;
-  }
-  api;
-  uploads;
-  f;
-  async req(method, url, init = {}) {
-    let res;
-    try {
-      res = await this.f(url.startsWith("http") ? url : `${this.api}${url}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${this.o.token}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "StreamClips",
-          ...init.json !== void 0 ? { "Content-Type": "application/json" } : {},
-          ...init.headers ?? {}
-        },
-        body: init.json !== void 0 ? JSON.stringify(init.json) : init.body,
-        signal: AbortSignal.timeout(init.timeout ?? 6e4),
-        ...init.duplex ? { duplex: "half" } : {}
-      });
-    } catch {
-      throw new GithubError("No se pudo conectar con GitHub. Comprueba tu conexi\xF3n a internet.", 0);
-    }
-    return res;
-  }
-  async fail(res, what) {
-    const j = await res.json().catch(() => ({}));
-    const m = j.message ?? `HTTP ${res.status}`;
-    if (res.status === 401) throw new GithubError("GitHub rechaz\xF3 el token. Revisa que no haya caducado.", 401);
-    if (res.status === 403 && /rate limit/i.test(m)) throw new GithubError("GitHub limit\xF3 las peticiones. Se reintentar\xE1 m\xE1s tarde.", 403);
-    if (res.status === 403) throw new GithubError(`GitHub no permite ${what} con este token (${m}). Revisa los permisos del token.`, 403);
-    if (res.status === 404) throw new GithubError(`GitHub no encuentra ${what}. Comprueba el nombre del repositorio y los permisos del token.`, 404);
-    throw new GithubError(`GitHub: ${what}: ${m}`, res.status);
-  }
-  async repoInfo() {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}`);
-    if (!r2.ok) await this.fail(r2, "el repositorio");
-    const j = await r2.json();
-    return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
-  }
-  async getContent(path20) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path20)}`);
-    if (r2.status === 404) return null;
-    if (!r2.ok) await this.fail(r2, `el archivo ${path20}`);
-    const j = await r2.json();
-    return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
-  }
-  /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
-  async putContent(path20, text, message, sha) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path20)}`, {
-      json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
-    });
-    if (r2.status === 409 || r2.status === 422) return null;
-    if (!r2.ok) await this.fail(r2, `guardar ${path20}`);
-    return (await r2.json()).content.sha;
-  }
-  async deleteContent(path20, sha, message) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path20)}`, { json: { message, sha } });
-    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path20}`);
-  }
-  async listDir(path20) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path20)}`);
-    if (r2.status === 404) return [];
-    if (!r2.ok) await this.fail(r2, `la carpeta ${path20}`);
-    const j = await r2.json();
-    return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
-  }
-  async createRelease(tag, name) {
-    const r2 = await this.req("POST", `/repos/${this.o.repo}/releases`, { json: { tag_name: tag, name, draft: false, prerelease: true, body: "V\xEDdeo en cola de StreamClips. Se borra solo al publicarse." } });
-    if (!r2.ok) await this.fail(r2, "crear la versi\xF3n de subida");
-    return { id: (await r2.json()).id };
-  }
-  async uploadAsset(releaseId, name, file, contentType) {
-    const size = import_node_fs17.default.statSync(file).size;
-    const r2 = await this.req("POST", `${this.uploads}/repos/${this.o.repo}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`, {
-      headers: { "Content-Type": contentType, "Content-Length": String(size) },
-      body: import_node_fs17.default.createReadStream(file),
-      duplex: true,
-      timeout: 60 * 6e4
-    });
-    if (r2.status === 422) throw new GithubError(`GitHub no admite este archivo (${name}); el m\xE1ximo por archivo son 2 GB.`, 422);
-    if (!r2.ok) await this.fail(r2, "subir el v\xEDdeo");
-    const j = await r2.json();
-    if (j.size !== size) throw new GithubError("La subida a GitHub qued\xF3 incompleta. Se reintentar\xE1.", 0);
-    return { id: j.id, size: j.size };
-  }
-  async downloadAsset(assetId, dest) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/releases/assets/${assetId}`, { headers: { Accept: "application/octet-stream" }, timeout: 60 * 6e4 });
-    if (!r2.ok || !r2.body) await this.fail(r2, "descargar el v\xEDdeo");
-    const { Readable: Readable3 } = await import("node:stream");
-    const { pipeline: pipeline2 } = await import("node:stream/promises");
-    await pipeline2(Readable3.fromWeb(r2.body), import_node_fs17.default.createWriteStream(dest));
-  }
-  /** Borra la versión y su etiqueta (y con ella los archivos). */
-  async deleteRelease(releaseId, tag) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/releases/${releaseId}`);
-    if (!r2.ok && r2.status !== 404) await this.fail(r2, "borrar la versi\xF3n");
-    const t = await this.req("DELETE", `/repos/${this.o.repo}/git/refs/tags/${encodeURIComponent(tag)}`);
-    if (!t.ok && t.status !== 404 && t.status !== 422) await this.fail(t, "borrar la etiqueta");
-  }
-  async publicKey() {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/actions/secrets/public-key`);
-    if (!r2.ok) await this.fail(r2, "la clave p\xFAblica de secretos");
-    const j = await r2.json();
-    return { keyId: j.key_id, key: j.key };
-  }
-  async putSecret(name, encryptedBase64, keyId) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/actions/secrets/${name}`, { json: { encrypted_value: encryptedBase64, key_id: keyId } });
-    if (!r2.ok) await this.fail(r2, `guardar el secreto ${name}`);
-  }
-  async deleteSecret(name) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/actions/secrets/${name}`);
-    if (!r2.ok && r2.status !== 404) await this.fail(r2, `borrar el secreto ${name}`);
-  }
-  async dispatch(workflowFile, ref) {
-    const r2 = await this.req("POST", `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref } });
-    if (!r2.ok) await this.fail(r2, "lanzar el flujo de publicaci\xF3n");
-  }
-};
-var encodePath = (p) => p.split("/").map(encodeURIComponent).join("/");
-
-// electron/services/cloud/jobs.ts
-var jobPath = (key) => `queue/${key.replace(/[^\w-]/g, "__")}.json`;
-var releaseTag = (key) => `q-${key.replace(/[^\w-]/g, "-")}`.slice(0, 120);
-function parseJob(text) {
-  try {
-    const j = JSON.parse(text);
-    if (j.v !== 1 || typeof j.key !== "string" || typeof j.platform !== "string" || typeof j.scheduledAt !== "string" || !j.file) return null;
-    if (!["queued", "publishing", "published", "failed"].includes(String(j.status))) return null;
-    return j;
-  } catch {
-    return null;
-  }
-}
-var serializeJob = (j) => `${JSON.stringify(j, null, 2)}
-`;
-
-// electron/services/cloud/workflow.ts
-var utc = (d) => ({ m: d.getUTCMinutes(), h: d.getUTCHours() });
-function cronLines(times2, opts = {}) {
-  const set = /* @__PURE__ */ new Map();
-  for (const t of times2) {
-    const d = new Date(t.getTime() + 6e4);
-    const { m, h } = utc(d);
-    set.set(`${m}:${h}`, `${m} ${h} * * *`);
-  }
-  const lines = [...set.values()].sort().slice(0, opts.max ?? 20);
-  lines.push(`23 */${opts.fallbackHours ?? 3} * * *`);
-  return lines;
-}
-function workflowYaml(crons) {
-  return `# Generado por StreamClips. No lo edites a mano: el programa lo vuelve a escribir.
-name: Publicar
-on:
-  workflow_dispatch:
-  schedule:
-${crons.map((c) => `    - cron: '${c}'`).join("\n")}
-concurrency:
-  group: streamclips-publish
-  cancel-in-progress: false
-permissions:
-  contents: write
-jobs:
-  publicar:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: runner
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: node runner/runner.js
-        env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-          STREAMCLIPS_CREDS: \${{ secrets.STREAMCLIPS_CREDS }}
-`;
-}
-
-// electron/services/social/youtube.ts
-var import_node_fs18 = __toESM(require("node:fs"));
-var YT_ENDPOINTS = {
-  upload: "https://www.googleapis.com/upload/youtube/v3",
-  api: "https://www.googleapis.com/youtube/v3"
-};
-var YT_CHUNK = 8 * 1024 * 1024;
-var MAX_RETRIES = 5;
-function explain(res, msg) {
-  if (res.status === 401) return new PublishError("YouTube rechaz\xF3 la conexi\xF3n. Vuelve a conectar la cuenta en Conexiones.");
-  if (/quotaExceeded|dailyLimitExceeded|rateLimitExceeded/.test(msg)) return new PublishError("Se agot\xF3 la cuota diaria de la API de YouTube. Se podr\xE1 volver a intentar ma\xF1ana.");
-  if (/uploadLimitExceeded/.test(msg)) return new PublishError("YouTube ha alcanzado el l\xEDmite de subidas de tu canal por hoy.");
-  if (/forbidden|insufficientPermissions|youtubeSignupRequired/.test(msg)) return new PublishError(`YouTube no permite esta acci\xF3n con la cuenta conectada (${msg}).`);
-  return new PublishError(`YouTube: ${msg}`);
-}
-function youtubeFile(o) {
-  if (o.kind === "long") {
-    if (!o.files.long) throw new PublishError("El v\xEDdeo no tiene archivo.");
-    return { file: o.files.long, short: false };
-  }
-  const f = o.files.vertical ?? o.files.horizontal;
-  if (!f) throw new PublishError("El clip no tiene archivo.");
-  return { file: f, short: !!o.files.vertical };
-}
-async function publishYoutube(d, o) {
-  const f = d.fetchFn ?? fetch;
-  const ep = d.endpoints ?? YT_ENDPOINTS;
-  const sleep = d.sleep ?? defaultSleep;
-  const chunk = d.chunkSize ?? YT_CHUNK;
-  const { file, short } = youtubeFile(o);
-  if (!import_node_fs18.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs18.default.statSync(file).size;
-  if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
-  const token = await d.token();
-  const auth = { Authorization: `Bearer ${token}` };
-  let title = o.title;
-  if (short && !/#shorts/i.test(title) && title.length <= 92) title = `${title} #Shorts`;
-  const meta = {
-    snippet: { title, description: o.description ?? (short ? "#Shorts" : ""), categoryId: "20" },
-    status: { privacyStatus: o.visibility === "public" ? "public" : "private", selfDeclaredMadeForKids: false }
-  };
-  const init = await timedFetch(f, `${ep.upload}/videos?uploadType=resumable&part=snippet,status`, {
-    method: "POST",
-    headers: { ...auth, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Length": String(size), "X-Upload-Content-Type": "video/mp4" },
-    body: JSON.stringify(meta)
-  });
-  if (!init.ok) throw explain(init, await apiMessage(init));
-  const session = init.headers.get("location");
-  if (!session) throw new PublishError("YouTube no devolvi\xF3 la direcci\xF3n de subida.");
-  let offset = 0;
-  let retries = 0;
-  let videoId = "";
-  while (!videoId) {
-    const end = Math.min(size, offset + chunk);
-    let res = null;
-    try {
-      const body = await readChunk(file, offset, end);
-      res = await timedFetch(
-        f,
-        session,
-        { method: "PUT", headers: { "Content-Length": String(body.length), "Content-Range": `bytes ${offset}-${end - 1}/${size}` }, body: new Uint8Array(body) },
-        10 * 6e4
-      );
-    } catch (e) {
-      if (!(e instanceof PublishError) || retries >= MAX_RETRIES) throw e;
-    }
-    if (res && (res.status === 200 || res.status === 201)) {
-      const j = await res.json().catch(() => ({}));
-      if (!j.id) throw new PublishError("YouTube termin\xF3 la subida pero no devolvi\xF3 el identificador del v\xEDdeo.");
-      videoId = j.id;
-      break;
-    }
-    if (res && res.status === 308) {
-      offset = nextOffset(res.headers.get("range"));
-      retries = 0;
-      continue;
-    }
-    if (res && res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) throw explain(res, await apiMessage(res));
-    if (++retries > MAX_RETRIES) throw new PublishError(`La subida a YouTube fall\xF3 repetidamente${res ? ` (HTTP ${res.status})` : ""}.`);
-    await sleep(Math.min(3e4, 1e3 * 2 ** retries));
-    try {
-      const q = await timedFetch(f, session, { method: "PUT", headers: { "Content-Length": "0", "Content-Range": `bytes */${size}` } });
-      if (q.status === 308) offset = nextOffset(q.headers.get("range"));
-      else if (q.status === 200 || q.status === 201) {
-        const j = await q.json().catch(() => ({}));
-        if (j.id) videoId = j.id;
-      }
-    } catch {
-    }
-  }
-  const warn = d.warn ?? (() => void 0);
-  if (o.kind === "long" && o.thumbnail && import_node_fs18.default.existsSync(o.thumbnail)) {
-    try {
-      const img = import_node_fs18.default.readFileSync(o.thumbnail);
-      const r2 = await timedFetch(f, `${ep.upload}/thumbnails/set?videoId=${encodeURIComponent(videoId)}`, { method: "POST", headers: { ...auth, "Content-Type": "image/jpeg" }, body: new Uint8Array(img) });
-      if (!r2.ok) warn(`Miniatura no aceptada por YouTube: ${await apiMessage(r2)}`);
-    } catch (e) {
-      warn(`Miniatura no subida: ${e.message}`);
-    }
-  }
-  if (o.playlist) {
-    try {
-      const id = await ensurePlaylist(d, o.playlist);
-      const r2 = await timedFetch(f, `${ep.api}/playlistItems?part=snippet`, {
-        method: "POST",
-        headers: { ...auth, "Content-Type": "application/json" },
-        body: JSON.stringify({ snippet: { playlistId: id, resourceId: { kind: "youtube#video", videoId } } })
-      });
-      if (!r2.ok) warn(`No se pudo a\xF1adir a la lista "${o.playlist}": ${await apiMessage(r2)}`);
-    } catch (e) {
-      warn(`Lista de reproducci\xF3n: ${e.message}`);
-    }
-  }
-  return { videoId };
-}
-function nextOffset(range) {
-  const m = /bytes=0-(\d+)/.exec(range ?? "");
-  return m ? Number(m[1]) + 1 : 0;
-}
-async function listPlaylists(d) {
-  const f = d.fetchFn ?? fetch;
-  const ep = d.endpoints ?? YT_ENDPOINTS;
-  const auth = { Authorization: `Bearer ${await d.token()}` };
-  const out = [];
-  let page = "";
-  for (let i = 0; i < 20; i++) {
-    const r2 = await timedFetch(f, `${ep.api}/playlists?part=snippet&mine=true&maxResults=50${page ? `&pageToken=${encodeURIComponent(page)}` : ""}`, { headers: auth });
-    if (!r2.ok) throw explain(r2, await apiMessage(r2));
-    const j = await r2.json();
-    for (const it of j.items ?? []) out.push({ id: it.id, title: it.snippet?.title ?? "" });
-    if (!j.nextPageToken) break;
-    page = j.nextPageToken;
-  }
-  return out;
-}
-async function ensurePlaylist(d, name) {
-  const found = (await listPlaylists(d)).find((p) => p.title.trim().toLowerCase() === name.trim().toLowerCase());
-  if (found) return found.id;
-  const f = d.fetchFn ?? fetch;
-  const ep = d.endpoints ?? YT_ENDPOINTS;
-  const r2 = await timedFetch(f, `${ep.api}/playlists?part=snippet,status`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ snippet: { title: name }, status: { privacyStatus: "private" } })
-  });
-  if (!r2.ok) throw explain(r2, await apiMessage(r2));
-  const j = await r2.json();
-  if (!j.id) throw new PublishError("YouTube no devolvi\xF3 la lista creada.");
-  return j.id;
-}
-
-// electron/services/social/tiktok.ts
-var import_node_fs19 = __toESM(require("node:fs"));
-var TT_API = "https://open.tiktokapis.com/v2";
-var CHUNK = 10 * 1024 * 1024;
-var POLL_MS = 5e3;
-var POLL_MAX = 72;
-function tiktokFile(o) {
-  if (o.kind === "long") throw new PublishError("TikTok solo admite clips. Este v\xEDdeo largo no se puede publicar ah\xED.");
-  const f = o.files.vertical ?? o.files.horizontal;
-  if (!f) throw new PublishError("El clip no tiene archivo.");
-  return f;
-}
-async function call(d, path20, body) {
-  const f = d.fetchFn ?? fetch;
-  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path20}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
-    body: JSON.stringify(body)
-  });
-  const j = await r2.json().catch(() => ({}));
-  if (r2.status === 401 || j.error?.code === "access_token_invalid") throw new PublishError("TikTok rechaz\xF3 la conexi\xF3n. Vuelve a conectar la cuenta en Conexiones.");
-  if (!r2.ok || j.error?.code && j.error.code !== "ok") {
-    const code = j.error?.code ?? r2.status;
-    if (code === "spam_risk_too_many_posts") throw new PublishError("TikTok limita las publicaciones diarias de tu cuenta. Int\xE9ntalo ma\xF1ana.");
-    throw new PublishError(`TikTok: ${j.error?.message || code}`);
-  }
-  return j.data;
-}
-async function publishTiktok(d, o) {
-  const f = d.fetchFn ?? fetch;
-  const sleep = d.sleep ?? defaultSleep;
-  const file = tiktokFile(o);
-  if (!import_node_fs19.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs19.default.statSync(file).size;
-  if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
-  const info = await call(d, "/post/publish/creator_info/query/", {});
-  const options = info.privacy_level_options ?? [];
-  const wantPublic = o.visibility === "public" && options.includes("PUBLIC_TO_EVERYONE");
-  const privacy = wantPublic ? "PUBLIC_TO_EVERYONE" : options.includes("SELF_ONLY") ? "SELF_ONLY" : options[0];
-  if (!privacy) throw new PublishError("TikTok no ofrece ninguna opci\xF3n de privacidad para esta cuenta.");
-  const chunk = Math.max(d.chunkSize ?? CHUNK, 1);
-  const total = Math.max(1, Math.floor(size / chunk));
-  const init = await call(d, "/post/publish/video/init/", {
-    post_info: { title: o.title.slice(0, 2200), privacy_level: privacy, disable_duet: false, disable_comment: false, disable_stitch: false },
-    source_info: { source: "FILE_UPLOAD", video_size: size, chunk_size: total === 1 ? size : chunk, total_chunk_count: total }
-  });
-  if (!init.publish_id || !init.upload_url) throw new PublishError("TikTok no devolvi\xF3 la direcci\xF3n de subida.");
-  const step = total === 1 ? size : chunk;
-  for (let i = 0; i < total; i++) {
-    const start = i * step;
-    const end = i === total - 1 ? size : start + step;
-    const body = await readChunk(file, start, end);
-    const r2 = await timedFetch(
-      f,
-      init.upload_url,
-      { method: "PUT", headers: { "Content-Type": "video/mp4", "Content-Length": String(body.length), "Content-Range": `bytes ${start}-${end - 1}/${size}` }, body: new Uint8Array(body) },
-      10 * 6e4
-    );
-    if (r2.status !== 206 && r2.status !== 201 && r2.status !== 200) throw new PublishError(`TikTok rechaz\xF3 un trozo del v\xEDdeo: ${await apiMessage(r2)}`);
-  }
-  for (let i = 0; i < POLL_MAX; i++) {
-    const st = await call(d, "/post/publish/status/fetch/", { publish_id: init.publish_id });
-    if (st.status === "PUBLISH_COMPLETE") return { publishId: init.publish_id };
-    if (st.status === "FAILED") throw new PublishError(`TikTok no pudo publicar el v\xEDdeo (${st.fail_reason ?? "motivo desconocido"}).`);
-    await sleep(d.pollMs ?? POLL_MS);
-  }
-  throw new PublishError("TikTok sigue procesando el v\xEDdeo. Comprueba en la app de TikTok antes de reprogramarlo.");
-}
-
-// electron/services/social/instagram.ts
-var import_node_fs20 = __toESM(require("node:fs"));
-var IG_GRAPH = "https://graph.facebook.com/v21.0";
-var POLL_MS2 = 5e3;
-var POLL_MAX2 = 120;
-function instagramFile(o) {
-  if (o.kind === "long") throw new PublishError("Instagram solo admite clips (Reels). Este v\xEDdeo largo no se puede publicar ah\xED.");
-  const f = o.files.vertical;
-  if (!f) throw new PublishError("Instagram necesita la versi\xF3n vertical del clip.");
-  return f;
-}
-async function graphJson(r2) {
-  const j = await r2.json().catch(() => ({}));
-  if (!r2.ok || j.error) {
-    const e = j.error;
-    if (r2.status === 401 || e?.code === 190) throw new PublishError("Instagram rechaz\xF3 la conexi\xF3n. Vuelve a conectar la cuenta en Conexiones.");
-    throw new PublishError(`Instagram: ${e?.message ?? `HTTP ${r2.status}`}`);
-  }
-  return j;
-}
-async function publishInstagram(d, o) {
-  const f = d.fetchFn ?? fetch;
-  const sleep = d.sleep ?? defaultSleep;
-  const graph = d.graph ?? IG_GRAPH;
-  const file = instagramFile(o);
-  if (!import_node_fs20.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs20.default.statSync(file).size;
-  if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
-  const { accessToken, igUserId } = await d.token();
-  if (!igUserId) throw new PublishError("No hay una cuenta de Instagram profesional enlazada. Vuelve a conectar la cuenta en Conexiones.");
-  const create = await graphJson(
-    await timedFetch(f, `${graph}/${encodeURIComponent(igUserId)}/media`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ media_type: "REELS", upload_type: "resumable", caption: o.title.slice(0, 2200), share_to_feed: "true", access_token: accessToken })
-    })
-  );
-  if (!create.id) throw new PublishError("Instagram no cre\xF3 el contenedor del v\xEDdeo.");
-  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v21.0/${create.id}`;
-  const up = await timedFetch(
-    f,
-    uploadUri,
-    {
-      method: "POST",
-      headers: { Authorization: `OAuth ${accessToken}`, offset: "0", file_size: String(size) },
-      body: import_node_fs20.default.createReadStream(file),
-      // @ts-expect-error opción de Node necesaria para enviar un flujo
-      duplex: "half"
-    },
-    30 * 6e4
-  );
-  await graphJson(up);
-  let status = "";
-  for (let i = 0; i < POLL_MAX2; i++) {
-    const s = await graphJson(
-      await timedFetch(f, `${graph}/${create.id}?fields=status_code,status&access_token=${encodeURIComponent(accessToken)}`, {})
-    );
-    status = s.status_code ?? "";
-    if (status === "FINISHED") break;
-    if (status === "ERROR" || status === "EXPIRED") throw new PublishError(`Instagram no pudo procesar el v\xEDdeo (${s.status ?? status}).`);
-    await sleep(d.pollMs ?? POLL_MS2);
-  }
-  if (status !== "FINISHED") throw new PublishError("Instagram sigue procesando el v\xEDdeo. Comprueba en la app antes de reprogramarlo.");
-  const pub = await graphJson(
-    await timedFetch(f, `${graph}/${encodeURIComponent(igUserId)}/media_publish`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ creation_id: create.id, access_token: accessToken })
-    })
-  );
-  if (!pub.id) throw new PublishError("Instagram no confirm\xF3 la publicaci\xF3n.");
-  return { mediaId: pub.id };
-}
-
-// electron/domain/cloud.ts
-var WORKFLOW = ".github/workflows/publish.yml";
-var RUNNER = "runner/runner.js";
-var SECRET = "STREAMCLIPS_CREDS";
-function parseRepo(raw) {
-  const m = /^(?:https?:\/\/github\.com\/)?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(raw.trim());
-  return m ? `${m[1]}/${m[2]}` : null;
-}
-async function sealSecret(publicKeyB64, value) {
-  await import_libsodium_wrappers.default.ready;
-  const key = import_libsodium_wrappers.default.from_base64(publicKeyB64, import_libsodium_wrappers.default.base64_variants.ORIGINAL);
-  const enc = import_libsodium_wrappers.default.crypto_box_seal(import_libsodium_wrappers.default.from_string(value), key);
-  return import_libsodium_wrappers.default.to_base64(enc, import_libsodium_wrappers.default.base64_variants.ORIGINAL);
-}
-var CloudService = class {
-  constructor(d) {
-    this.d = d;
-  }
-  timer = null;
-  syncing = false;
-  error = null;
-  credsAt = 0;
-  get st() {
-    return this.d.store.data.cloud;
-  }
-  now() {
-    return (this.d.now ?? Date.now)();
-  }
-  gh() {
-    if (!this.st.repo || !this.st.token) throw new Error("El modo nube no est\xE1 configurado.");
-    return new Github({ token: this.d.secrets.decode(this.st.token), repo: this.st.repo, ...this.d.github });
-  }
-  status() {
-    return {
-      enabled: this.st.enabled,
-      repo: this.st.repo,
-      hasToken: !!this.st.token,
-      lastSync: this.st.lastSync,
-      error: this.error,
-      queued: this.d.store.data.publications.filter((p) => p.cloud && (p.cloud.state === "queued" || p.cloud.state === "publishing")).length,
-      syncing: this.syncing
-    };
-  }
-  start() {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.sync(), this.d.intervalMs ?? 2 * 6e4);
-    this.timer.unref?.();
-    if (this.st.enabled) void this.sync();
-  }
-  stop() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
-  }
-  /** Configura el repositorio: comprueba que es privado, instala el publicador y sube los permisos de tus redes. */
-  async setup(repoRaw, token) {
-    const repo = parseRepo(repoRaw);
-    if (!repo) throw new Error("El repositorio debe ser \xABusuario/nombre\xBB (por ejemplo diego/streamclips-nube).");
-    const tok = token === MASKED_SECRET ? this.d.secrets.decode(this.st.token) : token.trim();
-    if (!tok) throw new Error("Pega el token de GitHub.");
-    const gh = new Github({ token: tok, repo, ...this.d.github });
-    const info = await gh.repoInfo();
-    if (!info.private) throw new Error("El repositorio es P\xDABLICO: tus v\xEDdeos quedar\xEDan a la vista de todos. Crea uno privado y vuelve a intentarlo.");
-    this.st.repo = info.fullName;
-    this.st.token = this.d.secrets.encode(tok);
-    this.st.enabled = true;
-    this.st.workflowCrons = "";
-    this.d.store.save();
-    try {
-      await this.installRunner(gh, info.defaultBranch);
-      await this.syncCreds(gh);
-      this.credsAt = this.now();
-    } catch (e) {
-      this.st.enabled = false;
-      this.d.store.save();
-      throw e;
-    }
-    this.d.log.info(`Modo nube activado en ${this.st.repo}`);
-    await this.sync();
-    return this.status();
-  }
-  async installRunner(gh, branch) {
-    const put = async (p, text, msg) => {
-      const cur = await gh.getContent(p);
-      if (cur?.text === text) return;
-      const sha = await gh.putContent(p, text, msg, cur?.sha);
-      if (!sha) throw new Error(`No se pudo escribir ${p} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
-    };
-    await put(RUNNER, this.d.runnerSource(), "StreamClips: publicador");
-    await put("README.md", "# StreamClips (nube)\n\nRepositorio privado de StreamClips: cola de v\xEDdeos y publicador. No lo edites a mano.\n", "StreamClips: leeme");
-    await this.syncWorkflow(gh, true);
-  }
-  /** Reescribe el flujo con las horas que hacen falta. */
-  async syncWorkflow(gh, force = false) {
-    const times2 = this.d.store.data.publications.filter((p) => p.cloud?.state === "queued").map((p) => new Date(p.scheduledAt)).filter((d) => d.getTime() > this.now() - 6e4);
-    const a = this.d.store.data.settings.autopilot;
-    for (const hhmm2 of [...a.videoTimes, ...a.clipTimes]) {
-      const [h, m] = hhmm2.split(":").map(Number);
-      const d = new Date(this.now());
-      d.setHours(h, m, 0, 0);
-      times2.push(d);
-    }
-    const crons = cronLines(times2);
-    const key = crons.join("|");
-    if (!force && key === this.st.workflowCrons) return;
-    const text = workflowYaml(crons);
-    const cur = await gh.getContent(WORKFLOW);
-    if (cur?.text !== text) {
-      const sha = await gh.putContent(WORKFLOW, text, "StreamClips: horas de publicaci\xF3n", cur?.sha);
-      if (!sha) throw new Error("No se pudo escribir el flujo de publicaci\xF3n en GitHub.");
-    }
-    this.st.workflowCrons = key;
-    this.d.store.save();
-  }
-  /** Sube las claves de tus redes como secreto cifrado del repositorio. */
-  async syncCreds(gh = this.gh()) {
-    const creds = {};
-    const raw = this.d.store.data.connections;
-    for (const p of ["youtube", "tiktok"]) {
-      const c = raw[p];
-      const t = c?.tokens ? await this.d.connections.accessToken(p) : null;
-      if (c && t?.refreshToken) creds[p] = { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret), refreshToken: t.refreshToken };
-    }
-    const ig = raw.instagram;
-    const igt = ig?.tokens ? await this.d.connections.accessToken("instagram") : null;
-    if (ig && igt?.extra?.igUserId) creds.instagram = { clientId: ig.clientId, clientSecret: this.d.secrets.decode(ig.clientSecret), accessToken: igt.accessToken, igUserId: igt.extra.igUserId };
-    const pk = await gh.publicKey();
-    await gh.putSecret(SECRET, await sealSecret(pk.key, JSON.stringify(creds)), pk.keyId);
-  }
-  filesFor(o, platform) {
-    const video = platform === "youtube" ? youtubeFile(o).file : platform === "tiktok" ? tiktokFile(o) : instagramFile(o);
-    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs21.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
-  }
-  /** Una pasada: sube lo nuevo, trae el estado de lo ya subido y limpia lo cancelado. Nunca lanza. */
-  sync() {
-    if (!this.st.enabled || this.syncing) return Promise.resolve(this.status());
-    return this.d.queue.run(async () => {
-      this.syncing = true;
-      this.error = null;
-      try {
-        const gh = this.gh();
-        if (!this.d.headless && this.now() - this.credsAt > 12 * 36e5) {
-          await this.syncCreds(gh);
-          this.credsAt = this.now();
-        }
-        await this.pull(gh);
-        await this.adopt(gh);
-        await this.push(gh);
-        await this.cleanOrphans(gh);
-        await this.syncWorkflow(gh);
-        this.st.lastSync = new Date(this.now()).toISOString();
-        this.d.store.save();
-      } catch (e) {
-        this.error = e.message;
-        this.d.log.warn(`Nube: ${this.error}`);
-      } finally {
-        this.syncing = false;
-        this.d.notifier.changed();
-      }
-      return this.status();
-    });
-  }
-  /** Trae el estado de lo ya subido. */
-  async pull(gh) {
-    const publishedNow = [];
-    for (const pub of this.d.store.data.publications.filter((p) => p.cloud && (p.cloud.state === "queued" || p.cloud.state === "publishing"))) {
-      const c = await gh.getContent(jobPath(pub.key));
-      const job = c && parseJob(c.text);
-      if (!c || !job) {
-        pub.cloud = void 0;
-        continue;
-      }
-      if (job.status === "published") {
-        pub.status = "published";
-        pub.cloud = { state: "published" };
-        pub.note = void 0;
-        this.d.log.info(`Publicado desde la nube: ${pub.key}`);
-        publishedNow.push(pub.outputId);
-      } else if (job.status === "failed") {
-        pub.status = "failed";
-        pub.cloud = { state: "failed" };
-        pub.note = job.note ?? "Fall\xF3 la publicaci\xF3n desde la nube.";
-        await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => void 0);
-      } else if (job.status === "publishing") {
-        pub.cloud = { state: "publishing" };
-      } else {
-        const o = this.d.store.data.outputs.find((x) => x.id === pub.outputId);
-        let changed = false;
-        if (Date.parse(job.scheduledAt) !== Date.parse(pub.scheduledAt)) {
-          job.scheduledAt = new Date(pub.scheduledAt).toISOString();
-          changed = true;
-        }
-        if (o) {
-          const same = (a, b) => (a ?? "") === (b ?? "");
-          if (job.title !== o.title) {
-            job.title = o.title;
-            changed = true;
-          }
-          if (!same(job.description, o.description)) {
-            job.description = o.description || void 0;
-            changed = true;
-          }
-          if (!same(job.playlist, o.playlist)) {
-            job.playlist = o.playlist || void 0;
-            changed = true;
-          }
-          if (o.visibility !== job.visibility) {
-            job.visibility = o.visibility;
-            changed = true;
-          }
-        }
-        if (changed) {
-          job.updatedAt = new Date(this.now()).toISOString();
-          await gh.putContent(jobPath(pub.key), serializeJob(job), `Cambios: ${pub.key}`, c.sha);
-        }
-      }
-    }
-    this.d.store.save();
-    for (const id of new Set(publishedNow)) {
-      try {
-        this.d.onPublished?.(id);
-      } catch (e) {
-        this.d.log.warn(`Tras publicar desde la nube: ${e.message}`);
-      }
-    }
-    this.d.notifier.changed();
-  }
-  /**
-   * Trae al programa lo que el motor nocturno dejó en la cola mientras el PC estaba apagado: aparece en el calendario
-   * y se puede cambiar (nombre, descripción, hora, redes). Los vídeos viven en la nube; aquí solo están sus datos.
-   */
-  async adopt(gh) {
-    const st = this.d.store.data;
-    const known = new Set(st.publications.map((p) => jobPath(p.key).split("/")[1]));
-    for (const p of st.publications) if (p.cloud && !this.st.known.includes(p.key)) this.st.known.push(p.key);
-    const seen = new Set(this.st.known);
-    let added = 0;
-    for (const f of await gh.listDir("queue")) {
-      if (!f.name.endsWith(".json") || known.has(f.name)) continue;
-      const c = await gh.getContent(`queue/${f.name}`);
-      const job = c && parseJob(c.text);
-      if (!job) continue;
-      const outputId = job.key.slice(0, job.key.lastIndexOf(":"));
-      if (!outputId || st.publications.some((p) => p.key === job.key) || seen.has(job.key)) continue;
-      this.st.known.push(job.key);
-      if (!st.outputs.some((o) => o.id === outputId)) {
-        st.outputs.push({
-          id: outputId,
-          kind: job.kind,
-          title: job.title,
-          ...job.description ? { description: job.description } : {},
-          ...job.playlist ? { playlist: job.playlist } : {},
-          ...job.visibility ? { visibility: job.visibility } : {},
-          files: {},
-          durationSec: 0,
-          createdAt: job.updatedAt,
-          remote: true
-        });
-      }
-      const status = job.status === "published" ? "published" : job.status === "failed" ? "failed" : "scheduled";
-      st.publications.push({
-        key: job.key,
-        outputId,
-        platform: job.platform,
-        scheduledAt: job.scheduledAt,
-        status,
-        ...job.note ? { note: job.note } : {},
-        cloud: { state: job.status }
-      });
-      added++;
-    }
-    if (added) {
-      this.d.log.info(`Nube: ${added} subida(s) preparadas en la nube se han a\xF1adido al programa.`);
-      this.d.store.save();
-      this.d.notifier.changed();
-    }
-  }
-  /** Sube lo programado que aún no está en la nube. */
-  async push(gh) {
-    const todo = this.d.store.data.publications.filter((p) => p.status === "scheduled" && !p.cloud);
-    for (const pub of todo) {
-      const o = this.d.store.data.outputs.find((x) => x.id === pub.outputId);
-      if (!o) continue;
-      if (o.remote) {
-        pub.status = "failed";
-        pub.note = "Este v\xEDdeo vive en la nube y esa red ya no est\xE1 en su cola, as\xED que no se puede volver a a\xF1adir desde aqu\xED.";
-        continue;
-      }
-      let files;
-      try {
-        files = this.filesFor(o, pub.platform);
-      } catch (e) {
-        pub.status = "failed";
-        pub.note = e.message;
-        continue;
-      }
-      if (!import_node_fs21.default.existsSync(files.video)) {
-        pub.status = "failed";
-        pub.note = "El archivo del v\xEDdeo ya no est\xE1 en su sitio.";
-        continue;
-      }
-      const existing = await gh.getContent(jobPath(pub.key));
-      const prev = existing && parseJob(existing.text);
-      if (prev && prev.status !== "failed") {
-        pub.cloud = { state: prev.status };
-        continue;
-      }
-      const task = this.d.tasks.start("cloud", `Subiendo a la nube: ${o.title} (${pub.platform})`);
-      const tag = releaseTag(pub.key);
-      let rel = null;
-      try {
-        rel = await gh.createRelease(tag, `${o.title} (${pub.platform})`).catch(async (e) => {
-          if (e.status !== 422) throw e;
-          throw new GithubError(`Hay una subida anterior a medias de \xAB${o.title}\xBB. Pulsa \xABSincronizar\xBB para reintentar.`, 422);
-        });
-        const size = import_node_fs21.default.statSync(files.video).size;
-        const asset = await gh.uploadAsset(rel.id, import_node_path14.default.basename(files.video), files.video, "video/mp4");
-        task.update(90);
-        const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path14.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
-        const job = {
-          v: 1,
-          key: pub.key,
-          platform: pub.platform,
-          scheduledAt: new Date(pub.scheduledAt).toISOString(),
-          status: "queued",
-          title: o.title,
-          ...o.description ? { description: o.description } : {},
-          ...o.playlist ? { playlist: o.playlist } : {},
-          ...o.visibility ? { visibility: o.visibility } : {},
-          kind: o.kind,
-          releaseId: rel.id,
-          releaseTag: tag,
-          file: { name: import_node_path14.default.basename(files.video), assetId: asset.id, size },
-          ...thumb ? { thumb: { name: import_node_path14.default.basename(files.thumb), assetId: thumb.id } } : {},
-          updatedAt: new Date(this.now()).toISOString()
-        };
-        const sha = await gh.putContent(jobPath(pub.key), serializeJob(job), `En cola: ${pub.key}`, prev ? existing.sha : void 0);
-        if (!sha) throw new Error("No se pudo registrar el trabajo en la cola de GitHub.");
-        pub.cloud = { state: "queued" };
-        pub.note = void 0;
-        if (!this.st.known.includes(pub.key)) this.st.known.push(pub.key);
-        this.d.store.save();
-        task.done("En la cola de la nube");
-        rel = null;
-      } catch (e) {
-        task.fail(e.message);
-        if (rel) await gh.deleteRelease(rel.id, tag).catch(() => void 0);
-        if (e instanceof GithubError && e.status === 422) {
-          pub.status = "failed";
-          pub.note = e.message;
-          this.d.store.save();
-        } else {
-          this.error = e.message;
-          this.d.log.warn(`Nube: ${this.error}`);
-        }
-        continue;
-      }
-      if (Date.parse(pub.scheduledAt) <= this.now() + 6e4) {
-        const info = await gh.repoInfo();
-        await gh.dispatch("publish.yml", info.defaultBranch).catch((e) => this.d.log.warn(`No se pudo lanzar la publicaci\xF3n: ${e.message}`));
-      }
-    }
-  }
-  /** Quita de la nube lo que ya no está programado en el programa. */
-  async cleanOrphans(gh) {
-    const keep = new Set(this.d.store.data.publications.filter((p) => p.cloud && p.cloud.state !== "published").map((p) => jobPath(p.key).split("/")[1]));
-    for (const f of await gh.listDir("queue")) {
-      if (keep.has(f.name) || !f.name.endsWith(".json")) continue;
-      const c = await gh.getContent(`queue/${f.name}`);
-      const job = c && parseJob(c.text);
-      if (!c || !job) continue;
-      if (job.status === "queued" || job.status === "failed") {
-        await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => void 0);
-        await gh.deleteContent(`queue/${f.name}`, c.sha, `Cancelado: ${job.key}`);
-      } else if (job.status === "published") {
-        await gh.deleteContent(`queue/${f.name}`, c.sha, `Archivado: ${job.key}`);
-      }
-    }
-  }
-  /** Quita la copia de la nube de una publicación cancelada o reprogramada. */
-  async forget(pub) {
-    if (!pub.cloud || !this.st.enabled) return;
-    await this.sync();
-  }
-  /** Apaga el modo nube: borra lo subido y deja que el PC publique. */
-  async disable() {
-    if (this.st.enabled) {
-      try {
-        const gh = this.gh();
-        for (const f of await gh.listDir("queue")) {
-          const c = await gh.getContent(`queue/${f.name}`);
-          const job = c && parseJob(c.text);
-          if (!c || !job) continue;
-          if (job.status === "queued" || job.status === "failed") {
-            await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => void 0);
-            await gh.deleteContent(`queue/${f.name}`, c.sha, `Desactivado: ${job.key}`);
-          }
-        }
-      } catch (e) {
-        this.d.log.warn(`Nube: no se pudo limpiar al desactivar: ${e.message}`);
-      }
-    }
-    for (const p of this.d.store.data.publications) if (p.cloud && (p.cloud.state === "queued" || p.cloud.state === "failed")) p.cloud = void 0;
-    this.st.enabled = false;
-    this.d.store.save();
-    this.d.notifier.changed();
-    return this.status();
-  }
-};
-
-// electron/services/updater.ts
-var HOUR = 60 * 60 * 1e3;
-var UpdateService = class {
-  constructor(d) {
-    this.d = d;
-    this.state = { status: d.updater ? "idle" : "unsupported", currentVersion: d.currentVersion };
-    const u = d.updater;
-    if (!u) return;
-    u.autoDownload = true;
-    u.autoInstallOnAppQuit = true;
-    u.allowPrerelease = false;
-    u.on("checking-for-update", () => {
-      this.busySince = (this.d.now ?? Date.now)();
-      this.set({ status: "checking" });
-    });
-    u.on("update-available", (info) => this.set({ status: "downloading", version: info.version, progress: 0 }));
-    u.on("update-not-available", () => this.set({ status: "idle", version: void 0, progress: void 0, error: void 0 }));
-    u.on("download-progress", (p) => this.set({ status: "downloading", progress: Math.round(p.percent) }));
-    u.on("update-downloaded", (info) => {
-      this.set({ status: "ready", version: info.version, progress: 100 });
-      this.tryRestart();
-    });
-    u.on("error", (e) => {
-      this.d.log.warn(`Actualizaciones: ${e.message}`);
-      this.set({ status: "error", error: friendly(e) });
-    });
-  }
-  timer = null;
-  retry = null;
-  first = null;
-  state;
-  busySince = 0;
-  status() {
-    return { ...this.state };
-  }
-  set(p) {
-    this.state = { ...this.state, ...p };
-    this.d.onStatus(this.status());
-  }
-  start() {
-    if (!this.d.updater || this.timer) return;
-    this.first = setTimeout(() => void this.check(), this.d.firstCheckMs ?? 3e4);
-    this.timer = setInterval(() => void this.check(), this.d.intervalMs ?? HOUR);
-    this.first.unref?.();
-    this.timer.unref?.();
-  }
-  stop() {
-    for (const t of [this.timer, this.retry, this.first]) if (t) clearTimeout(t);
-    this.timer = this.retry = this.first = null;
-  }
-  /** Busca ahora. Nunca lanza. */
-  async check() {
-    const u = this.d.updater;
-    if (!u) return this.status();
-    const stuck = (this.d.now ?? Date.now)() - this.busySince > 15 * 6e4;
-    if (this.state.status === "ready" || (this.state.status === "checking" || this.state.status === "downloading") && !stuck) return this.status();
-    try {
-      await u.checkForUpdates();
-      this.set({ lastCheck: new Date((this.d.now ?? Date.now)()).toISOString() });
-    } catch (e) {
-      this.d.log.warn(`Actualizaciones: ${e.message}`);
-      this.set({ status: "error", error: friendly(e), lastCheck: new Date((this.d.now ?? Date.now)()).toISOString() });
-    }
-    return this.status();
-  }
-  /** Instala y reinicia si no hay trabajo en marcha; si lo hay, lo intenta de nuevo en un minuto. */
-  tryRestart(force = false) {
-    if (this.state.status !== "ready" || !this.d.updater) return false;
-    if (this.retry) clearTimeout(this.retry);
-    this.retry = null;
-    if (force || this.d.canRestart()) {
-      this.d.log.info(`Instalando la versi\xF3n ${this.state.version}.`);
-      this.d.updater.quitAndInstall(true, true);
-      return true;
-    }
-    this.retry = setTimeout(() => this.tryRestart(), this.d.retryRestartMs ?? 6e4);
-    this.retry.unref?.();
-    return false;
-  }
-};
-function friendly(e) {
-  const m = e.message ?? "";
-  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|net::ERR/i.test(m)) return "Sin conexi\xF3n con GitHub. Se reintentar\xE1 en una hora.";
-  if (/latest\.yml|Cannot find latest/i.test(m)) return "La \xFAltima versi\xF3n de GitHub a\xFAn no tiene su instalador adjunto (se est\xE1 compilando; suele tardar unos 5 minutos). Se volver\xE1 a comprobar sola.";
-  if (/404|No published versions/i.test(m)) return "Todav\xEDa no hay versiones publicadas en GitHub.";
-  if (/403|rate limit/i.test(m)) return "GitHub limit\xF3 las consultas. Se reintentar\xE1 en una hora.";
-  return m.split("\n")[0].slice(0, 200);
-}
-
-// electron/domain/autopilot.ts
-var import_node_fs23 = __toESM(require("node:fs"));
-var import_node_path16 = __toESM(require("node:path"));
-
-// shared/autoEdit.ts
-var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
-function planEdit(words, seg, o = {}) {
-  const minGap = o.minGap ?? 1;
-  const keepBefore = o.keepBefore ?? 0.4;
-  const keepAfter = o.keepAfter ?? 0.3;
-  const spacing = o.punchSpacing ?? 6;
-  const inside = words.filter((w) => w.start >= seg.start && w.end <= seg.end + 0.25).sort((a, b) => a.start - b.start);
-  const dur = seg.end - seg.start;
-  const effects = [];
-  const cuts = [];
-  if (inside.length >= 6 && dur >= 8) {
-    const gaps = [];
-    for (let i = 0; i + 1 < inside.length; i++) {
-      const gap = inside[i + 1].start - inside[i].end;
-      if (gap > minGap) gaps.push({ start: inside[i].end + keepBefore, end: inside[i + 1].start - keepAfter });
-    }
-    gaps.filter((g) => g.end - g.start >= 0.3 && g.start >= seg.start && g.end <= seg.end).sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, o.maxCuts ?? 20).sort((a, b) => a.start - b.start).forEach((g) => cuts.push(g));
-  }
-  const kept = keptRanges(seg.start, seg.end, cuts);
-  const isKept = (t) => kept.some((r2) => t >= r2.start && t <= r2.end);
-  const maxPunch = Math.min(6, Math.floor(dur / 10));
-  const punches = [];
-  for (const w of inside) {
-    if (punches.length >= maxPunch) break;
-    const strong = /[!¡]/.test(w.text) || EMPHASIS.test(w.text);
-    if (!strong) continue;
-    const at = Math.max(seg.start, w.start - 0.1);
-    if (!isKept(at) || !isKept(Math.min(seg.end, at + 1))) continue;
-    if (punches.some((p) => Math.abs(p - at) < spacing)) continue;
-    if (at - seg.start < 1.5 || seg.end - at < 2) continue;
-    punches.push(at);
-  }
-  for (const at of punches) {
-    effects.push({ type: "punch", at, duration: 1, zoom: 1.15 });
-    effects.push({ type: "sfx", at, sound: "hit" });
-  }
-  for (const c of cuts.slice(0, 8)) {
-    const at = c.end + 0.02;
-    if (isKept(at) && at < seg.end - 0.5) effects.push({ type: "sfx", at, sound: "whoosh" });
-  }
-  const fadeBudget = dur > 3;
-  if (fadeBudget) {
-    effects.push({ type: "fadeIn", duration: 0.3 });
-    effects.push({ type: "fadeOut", duration: 0.5 });
-  }
-  effects.push({ type: "polish" });
-  return { cuts, effects: effects.slice(0, MAX_EFFECTS) };
-}
-function planLong(words, segs, o = {}) {
-  const segments = [];
-  const body = [];
-  const sorted = [...segs].sort((a, b) => a.start - b.start);
-  for (const [i, s] of sorted.entries()) {
-    if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3) body.push({ type: "sfx", at: s.start + 0.05, sound: "whoosh" });
-    const p = planEdit(words, s, o);
-    segments.push(...keptRanges(s.start, s.end, p.cuts));
-    body.push(...p.effects.filter((e) => e.type === "punch" || e.type === "sfx"));
-  }
-  const total = segments.reduce((a, r2) => a + (r2.end - r2.start), 0);
-  const effects = body.slice(0, MAX_EFFECTS - 3);
-  if (total > 3) effects.push({ type: "fadeIn", duration: 0.4 }, { type: "fadeOut", duration: 0.8 });
-  effects.push({ type: "polish" });
-  return { segments, effects };
-}
-
-// shared/chapters.ts
-var CHAPTER_MIN = 3;
-var CHAPTER_MIN_SEC = 10;
-var clock2 = (sec) => {
-  const s = Math.max(0, Math.floor(sec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor(s % 3600 / 60);
-  const r2 = s % 60;
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(r2).padStart(2, "0")}` : `${m}:${String(r2).padStart(2, "0")}`;
-};
-function outputStarts(segs, kept) {
-  return segs.map((s) => kept.filter((k) => k.end <= s.start + 0.01).reduce((a, k) => a + (k.end - k.start), 0));
-}
-function chapterBlock(items, totalSec, firstLabel = "Inicio") {
-  const sorted = [...items].filter((c) => Number.isFinite(c.at) && c.at >= 0 && c.label.trim()).sort((a, b) => a.at - b.at);
-  const out = [];
-  for (const c of sorted) {
-    const prev = out[out.length - 1];
-    if (prev && c.at - prev.at < CHAPTER_MIN_SEC) continue;
-    out.push({ at: out.length === 0 ? 0 : c.at, label: c.label.trim().replace(/\s+/g, " ").slice(0, 60) });
-  }
-  while (out.length > 1 && totalSec - out[out.length - 1].at < CHAPTER_MIN_SEC) out.pop();
-  if (out.length < CHAPTER_MIN) return "";
-  if (out[0].label === "") out[0].label = firstLabel;
-  return out.map((c) => `${clock2(c.at)} ${c.label}`).join("\n");
-}
-
 // shared/highlights.ts
 var HYPE = /\b(no puede ser|increíble|brutal|joder|madre mía|vamos|por fin|qué|cómo|socorro|jajaja|ostia|wow|guau|no me lo creo|ayuda|nooo+|siii+)\b/i;
 var median = (xs) => {
@@ -36737,10 +35411,58 @@ function isAutoNameable(o) {
 var GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
 var isGenericAutoTitle = (o) => o.titleSource !== "manual" && GENERIC_TITLE.test(o.title.trim());
 
-// electron/services/momentJudge.ts
-var import_node_crypto8 = __toESM(require("node:crypto"));
-var import_node_fs22 = __toESM(require("node:fs"));
-var import_node_path15 = __toESM(require("node:path"));
+// shared/momentEdits.ts
+var emptyEdits = () => ({ exclude: [], pin: [], trims: {}, extra: [] });
+var momentKey = (start) => String(Math.round(start));
+var num = (x) => typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null;
+function cleanEdits(raw) {
+  const r2 = raw ?? {};
+  const keys = (a) => Array.isArray(a) ? [...new Set(a.filter((x) => typeof x === "string" && /^\d+$/.test(x)))].slice(0, 500) : [];
+  const trims = {};
+  if (r2.trims && typeof r2.trims === "object") {
+    for (const [k, v] of Object.entries(r2.trims)) {
+      const s = num(v?.start);
+      const e = num(v?.end);
+      if (/^\d+$/.test(k) && s !== null && e !== null && e - s >= MIN_LEN && e - s <= MAX_LEN) trims[k] = { start: s, end: e };
+    }
+  }
+  const extra = (Array.isArray(r2.extra) ? r2.extra : []).flatMap((x) => {
+    const s = num(x?.start);
+    const e = num(x?.end);
+    if (s === null || e === null || e - s < MIN_LEN || e - s > MAX_LEN) return [];
+    const title = typeof x.title === "string" ? x.title.replace(/[<>]/g, "").trim().slice(0, 60) : "";
+    return [{ start: s, end: e, ...title ? { title } : {} }];
+  });
+  return { exclude: keys(r2.exclude), pin: keys(r2.pin), trims, extra: extra.slice(0, 100) };
+}
+var MIN_LEN = 8;
+var MAX_LEN = 180;
+function applyEdits(items, edits) {
+  const ex = new Set(edits.exclude);
+  const pin = new Set(edits.pin);
+  const out = items.map((it) => {
+    const k = momentKey(it.start);
+    const trim = edits.trims[k];
+    const j = { ...it.judgement, ...trim ? { trim, manual: true } : {}, ...ex.has(k) ? { discard: true } : pin.has(k) ? { discard: false } : {} };
+    return { ...it, judgement: j, total: pin.has(k) && !ex.has(k) ? Math.max(it.total, 10) : it.total };
+  });
+  for (const x of edits.extra) {
+    if (ex.has(momentKey(x.start))) continue;
+    out.push({
+      id: `m${momentKey(x.start)}`,
+      start: x.start,
+      end: x.end,
+      signal: 10,
+      total: 10,
+      judgement: { id: `m${momentKey(x.start)}`, scores: { humor: 10, originalidad: 10, interaccion: 10, reaccion: 10, contexto: 10, autonomia: 10 }, kind: "otro", reason: "A\xF1adido por ti", discard: false, manual: true, ...x.title ? { title: x.title } : {} }
+    });
+  }
+  return out;
+}
+
+// electron/services/momentStore.ts
+var import_node_fs16 = __toESM(require("node:fs"));
+var import_node_path14 = __toESM(require("node:path"));
 
 // shared/judge.ts
 var KINDS = ["gracia", "fail", "reaccion", "discusion", "historia", "epico", "otro"];
@@ -36848,7 +35570,7 @@ function selectBest(items, o) {
     if (bi < 0) break;
     const it = left.splice(bi, 1)[0];
     let seg = it.judgement.trim ?? { start: it.start, end: it.end };
-    if (o.maxLen && seg.end - seg.start > o.maxLen) {
+    if (o.maxLen && !it.judgement.manual && seg.end - seg.start > o.maxLen) {
       const peakMid = (it.start + it.end) / 2;
       const a = Math.max(seg.start, Math.min(peakMid - o.maxLen / 2, seg.end - o.maxLen));
       seg = { start: a, end: a + o.maxLen };
@@ -36872,6 +35594,1563 @@ function kindSummary(sel) {
   return [...n.entries()].map(([k, v]) => `${v} ${k}`).join(", ");
 }
 var textFn = (words) => (s) => textOf(words, s.start, s.end, 2e3);
+
+// shared/preferences.ts
+var STEP = 0.25;
+var MAX_BIAS = 1.5;
+var MIN_DECISIONS = 3;
+var emptyPrefs = () => ({ enabled: true, kindBias: {}, counts: {} });
+function cleanPrefs(raw) {
+  const r2 = raw ?? {};
+  const out = emptyPrefs();
+  out.enabled = r2.enabled !== false;
+  for (const k of KINDS) {
+    const b = r2.kindBias?.[k];
+    const c = r2.counts?.[k];
+    if (typeof b === "number" && Number.isFinite(b) && b !== 0) out.kindBias[k] = Math.max(-MAX_BIAS, Math.min(MAX_BIAS, Math.round(b * 100) / 100));
+    if (typeof c === "number" && Number.isFinite(c) && c > 0) out.counts[k] = Math.min(1e4, Math.floor(c));
+  }
+  return out;
+}
+function learn(p, kind, action) {
+  if (!KINDS.includes(kind) || kind === "otro") return p;
+  const next = cleanPrefs(p);
+  const b = (next.kindBias[kind] ?? 0) + (action === "exclude" ? -STEP : STEP);
+  next.kindBias[kind] = Math.max(-MAX_BIAS, Math.min(MAX_BIAS, Math.round(b * 100) / 100));
+  next.counts[kind] = (next.counts[kind] ?? 0) + 1;
+  return next;
+}
+function biasFor(p, kind) {
+  if (!p.enabled || (p.counts[kind] ?? 0) < MIN_DECISIONS) return 0;
+  return p.kindBias[kind] ?? 0;
+}
+function applyPrefs(items, p) {
+  if (!p.enabled) return items;
+  return items.map((it) => {
+    if (it.total >= 10 || it.judgement.manual) return it;
+    const b = biasFor(p, it.judgement.kind);
+    return b ? { ...it, total: Math.max(0, Math.min(10, Math.round((it.total + b) * 100) / 100)) } : it;
+  });
+}
+function describePrefs(p) {
+  return KINDS.filter((k) => (p.counts[k] ?? 0) > 0).map((k) => ({ kind: k, bias: p.kindBias[k] ?? 0, count: p.counts[k] ?? 0, active: biasFor(p, k) !== 0 }));
+}
+
+// electron/services/momentStore.ts
+var safe = (id) => id.replace(/[^A-Za-z0-9_-]/g, "_");
+var editsFile = (dir, id) => import_node_path14.default.join(dir, `${safe(id)}.edits.json`);
+var snapFile = (dir, id) => import_node_path14.default.join(dir, `${safe(id)}.json`);
+function readJson(file) {
+  try {
+    return JSON.parse(import_node_fs16.default.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function writeJson(file, data) {
+  import_node_fs16.default.mkdirSync(import_node_path14.default.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  import_node_fs16.default.writeFileSync(tmp, JSON.stringify(data));
+  import_node_fs16.default.renameSync(tmp, file);
+}
+var loadEdits = (dir, vodId) => import_node_fs16.default.existsSync(editsFile(dir, vodId)) ? cleanEdits(readJson(editsFile(dir, vodId))) : emptyEdits();
+var saveEdits = (dir, vodId, e) => writeJson(editsFile(dir, vodId), cleanEdits(e));
+function loadSnapshot(dir, vodId) {
+  const j = readJson(snapFile(dir, vodId));
+  if (!j || !Array.isArray(j.items) || !Array.isArray(j.chosen)) return null;
+  return { quality: typeof j.quality === "number" ? j.quality : 6.5, items: j.items, chosen: j.chosen.filter((x) => typeof x === "string") };
+}
+function saveSnapshot(dir, vodId, judged, chosenStarts, quality) {
+  const snap = {
+    quality,
+    items: judged.map((j) => ({
+      key: momentKey(j.start),
+      start: j.start,
+      end: j.end,
+      total: j.total,
+      kind: j.judgement.kind,
+      reason: j.judgement.reason,
+      ...j.judgement.title ? { title: j.judgement.title } : {},
+      scores: j.judgement.scores,
+      ...j.judgement.trim ? { trim: j.judgement.trim } : {},
+      discard: j.judgement.discard
+    })),
+    chosen: [...new Set(chosenStarts.map(momentKey))]
+  };
+  try {
+    writeJson(snapFile(dir, vodId), snap);
+  } catch {
+  }
+}
+var loadPrefs = (file) => cleanPrefs(readJson(file));
+var savePrefs = (file, p) => writeJson(file, cleanPrefs(p));
+
+// electron/domain/moments.ts
+var MomentsService = class {
+  constructor(d) {
+    this.d = d;
+  }
+  list(vodId) {
+    if (!this.d.exists(vodId)) throw new Error("El VOD no existe.");
+    const snap = loadSnapshot(this.d.dir, vodId);
+    const edits = loadEdits(this.d.dir, vodId);
+    const words = snap || edits.extra.length ? this.d.words(vodId) : [];
+    const chosen = new Set(snap?.chosen ?? []);
+    const ex = new Set(edits.exclude);
+    const pin = new Set(edits.pin);
+    const rows = (snap?.items ?? []).map((i) => {
+      const trim = edits.trims[i.key] ?? i.trim;
+      const seg = trim ?? { start: i.start, end: i.end };
+      return {
+        key: i.key,
+        start: seg.start,
+        end: seg.end,
+        total: Math.round(i.total * 10) / 10,
+        kind: i.kind,
+        reason: i.reason,
+        title: i.title ?? "",
+        text: textOf(words, seg.start, seg.end, 500),
+        chosen: chosen.has(i.key),
+        excluded: ex.has(i.key),
+        pinned: pin.has(i.key),
+        edited: Boolean(edits.trims[i.key]),
+        manual: false,
+        belowFloor: i.total < (snap?.quality ?? 0)
+      };
+    });
+    for (const x of edits.extra) {
+      const key = momentKey(x.start);
+      rows.push({ key, start: x.start, end: x.end, total: 10, kind: "otro", reason: "A\xF1adido por ti", title: x.title ?? "", text: textOf(words, x.start, x.end, 500), chosen: chosen.has(key), excluded: ex.has(key), pinned: false, edited: false, manual: true, belowFloor: false });
+    }
+    rows.sort((a, b) => a.start - b.start);
+    const pending2 = this.countEdits(edits) > 0;
+    return { available: Boolean(snap), quality: snap?.quality ?? null, rows, pending: pending2 };
+  }
+  countEdits(e) {
+    return e.exclude.length + e.pin.length + Object.keys(e.trims).length + e.extra.length;
+  }
+  mutate(vodId, f) {
+    if (!this.d.exists(vodId)) throw new Error("El VOD no existe.");
+    const e = loadEdits(this.d.dir, vodId);
+    f(e);
+    saveEdits(this.d.dir, vodId, e);
+    return this.list(vodId);
+  }
+  known(vodId, key) {
+    const inSnap = loadSnapshot(this.d.dir, vodId)?.items.some((i) => i.key === key);
+    const inExtra = loadEdits(this.d.dir, vodId).extra.some((x) => momentKey(x.start) === key);
+    if (!inSnap && !inExtra) throw new Error("Ese momento ya no existe: actualiza la lista.");
+  }
+  /** `include` lo fija (sale aunque no llegue a la nota), `exclude` lo descarta y `reset` quita ambas cosas y el recorte manual. */
+  setState(vodId, key, state) {
+    this.known(vodId, key);
+    if (state === "exclude" || state === "include") this.learnFrom(vodId, key, state);
+    return this.mutate(vodId, (e) => {
+      e.exclude = e.exclude.filter((k) => k !== key);
+      e.pin = e.pin.filter((k) => k !== key);
+      if (state === "exclude") e.exclude.push(key);
+      if (state === "include") e.pin.push(key);
+      if (state === "reset") delete e.trims[key];
+    });
+  }
+  /** Anota la decisión para aprender del tipo de momento; repetir la misma decisión sobre el mismo momento no cuenta dos veces. */
+  learnFrom(vodId, key, action) {
+    const e = loadEdits(this.d.dir, vodId);
+    if (action === "exclude" ? e.exclude.includes(key) : e.pin.includes(key)) return;
+    const item = loadSnapshot(this.d.dir, vodId)?.items.find((i) => i.key === key);
+    if (!item) return;
+    if (action === "include" && loadSnapshot(this.d.dir, vodId)?.chosen.includes(key)) return;
+    if (action === "exclude" && !loadSnapshot(this.d.dir, vodId)?.chosen.includes(key)) return;
+    try {
+      savePrefs(this.d.prefsFile, learn(loadPrefs(this.d.prefsFile), item.kind, action));
+    } catch {
+    }
+  }
+  prefs() {
+    const p = loadPrefs(this.d.prefsFile);
+    return { enabled: p.enabled, kinds: describePrefs(p) };
+  }
+  setPrefsEnabled(enabled) {
+    savePrefs(this.d.prefsFile, { ...loadPrefs(this.d.prefsFile), enabled });
+    return this.prefs();
+  }
+  resetPrefs() {
+    savePrefs(this.d.prefsFile, { ...emptyPrefs(), enabled: loadPrefs(this.d.prefsFile).enabled });
+    return this.prefs();
+  }
+  trim(vodId, key, start, end) {
+    this.known(vodId, key);
+    this.checkRange(vodId, start, end);
+    return this.mutate(vodId, (e) => {
+      const x = e.extra.find((m) => momentKey(m.start) === key);
+      if (x) {
+        e.extra = e.extra.filter((m) => m !== x);
+        e.extra.push({ ...x, start, end });
+        e.exclude = e.exclude.filter((k) => k !== key);
+      } else e.trims[key] = { start, end };
+    });
+  }
+  add(vodId, start, end, title) {
+    this.checkRange(vodId, start, end);
+    const key = momentKey(start);
+    return this.mutate(vodId, (e) => {
+      if (e.extra.some((m) => momentKey(m.start) === key)) throw new Error("Ya hay un momento que empieza ah\xED.");
+      e.extra.push({ start, end, ...title?.trim() ? { title: title.trim().slice(0, 60) } : {} });
+    });
+  }
+  remove(vodId, key) {
+    return this.mutate(vodId, (e) => {
+      e.extra = e.extra.filter((m) => momentKey(m.start) !== key);
+    });
+  }
+  /** Borra todas las correcciones del directo (vuelve a lo que eligió el piloto). */
+  clear(vodId) {
+    return this.mutate(vodId, (e) => {
+      e.exclude = [];
+      e.pin = [];
+      e.trims = {};
+      e.extra = [];
+    });
+  }
+  checkRange(vodId, start, end) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0) throw new Error("Los tiempos no son v\xE1lidos.");
+    if (end - start < MIN_LEN) throw new Error(`El momento debe durar al menos ${MIN_LEN} s.`);
+    if (end - start > MAX_LEN) throw new Error(`El momento no puede durar m\xE1s de ${MAX_LEN} s.`);
+    const dur = this.d.duration(vodId);
+    if (dur && end > dur + 1) throw new Error("El final queda fuera del directo.");
+  }
+};
+
+// electron/domain/groups.ts
+var import_node_crypto6 = __toESM(require("node:crypto"));
+var GroupService = class {
+  constructor(store, notifier) {
+    this.store = store;
+    this.notifier = notifier;
+  }
+  list() {
+    return this.store.data.groups;
+  }
+  find(id) {
+    const g = this.store.data.groups.find((x) => x.id === id);
+    if (!g) throw new Error("La carpeta no existe.");
+    return g;
+  }
+  done() {
+    this.store.save();
+    this.notifier.changed();
+  }
+  cleanName(name) {
+    const n = typeof name === "string" ? name.trim() : "";
+    if (!n) throw new Error("El nombre de la carpeta no puede estar vac\xEDo.");
+    if (n.length > MAX_GROUP_NAME_LEN) throw new Error(`El nombre no puede pasar de ${MAX_GROUP_NAME_LEN} caracteres.`);
+    return n;
+  }
+  assertKind(kind) {
+    if (kind !== "theme" && kind !== "series") throw new Error('El tipo debe ser "tema" o "serie".');
+    return kind;
+  }
+  assertUnique(name, section, parentId, exceptId) {
+    const lower = name.toLowerCase();
+    const clash = this.store.data.groups.some(
+      (g) => g.id !== exceptId && g.section === section && g.parentId === parentId && g.name.toLowerCase() === lower
+    );
+    if (clash) throw new Error(`Ya hay una carpeta llamada "${name}" en ese sitio.`);
+  }
+  /** Nº de niveles desde la raíz hasta la carpeta (la raíz vale 1). */
+  depth(id) {
+    let d = 0;
+    let cur = id;
+    while (cur) {
+      d++;
+      cur = this.store.data.groups.find((g) => g.id === cur)?.parentId;
+      if (d > 100) break;
+    }
+    return d;
+  }
+  /** Altura del subárbol que cuelga de la carpeta (ella misma cuenta 1). */
+  height(id) {
+    const kids = this.store.data.groups.filter((g) => g.parentId === id);
+    return 1 + Math.max(0, ...kids.map((k) => this.height(k.id)));
+  }
+  create(name, kind, section, parentId) {
+    const n = this.cleanName(name);
+    this.assertKind(kind);
+    if (section !== "clips" && section !== "videos") throw new Error("Secci\xF3n no v\xE1lida.");
+    if (parentId !== void 0) {
+      const parent = this.find(parentId);
+      if (parent.section !== section) throw new Error("La carpeta superior es de otra secci\xF3n.");
+      if (this.depth(parentId) >= MAX_GROUP_DEPTH) throw new Error(`No se pueden anidar m\xE1s de ${MAX_GROUP_DEPTH} niveles.`);
+    }
+    this.assertUnique(n, section, parentId);
+    const g = { id: import_node_crypto6.default.randomUUID(), name: n, kind, section, parentId, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+    this.store.data.groups.push(g);
+    this.done();
+    return g;
+  }
+  update(id, patch) {
+    const g = this.find(id);
+    const name = patch.name === void 0 ? g.name : this.cleanName(patch.name);
+    const kind = patch.kind === void 0 ? g.kind : this.assertKind(patch.kind);
+    this.assertUnique(name, g.section, g.parentId, g.id);
+    g.name = name;
+    g.kind = kind;
+    this.done();
+    return g;
+  }
+  delete(id) {
+    const g = this.find(id);
+    for (const o of this.store.data.outputs) if (o.groupId === id) o.groupId = g.parentId;
+    for (const c of this.store.data.groups) if (c.parentId === id) c.parentId = g.parentId;
+    this.store.data.groups = this.store.data.groups.filter((x) => x.id !== id);
+    this.done();
+  }
+  move(id, parentId) {
+    const g = this.find(id);
+    const target = parentId ?? void 0;
+    if (target !== void 0) {
+      const parent = this.find(target);
+      if (parent.section !== g.section) throw new Error("No se puede mover una carpeta a otra secci\xF3n.");
+      for (let cur = target, i = 0; cur && i < 100; i++) {
+        if (cur === g.id) throw new Error("Una carpeta no se puede meter dentro de s\xED misma.");
+        cur = this.store.data.groups.find((x) => x.id === cur)?.parentId;
+      }
+      if (this.depth(target) + this.height(g.id) > MAX_GROUP_DEPTH) {
+        throw new Error(`No se pueden anidar m\xE1s de ${MAX_GROUP_DEPTH} niveles.`);
+      }
+    }
+    if (g.parentId === target) return g;
+    this.assertUnique(g.name, g.section, target, g.id);
+    g.parentId = target;
+    this.done();
+    return g;
+  }
+  moveOutput(outputId, groupId) {
+    const o = this.store.data.outputs.find((x) => x.id === outputId);
+    if (!o) throw new Error("El v\xEDdeo no existe.");
+    if (groupId !== null) {
+      const g = this.find(groupId);
+      if (g.section !== sectionOf(o.kind)) {
+        throw new Error(g.section === "clips" ? "Esa carpeta es de Clips; los v\xEDdeos largos van en carpetas de V\xEDdeos." : "Esa carpeta es de V\xEDdeos; los clips van en carpetas de Clips.");
+      }
+    }
+    const next = groupId ?? void 0;
+    if (o.groupId !== next) {
+      o.groupId = next;
+      this.done();
+    }
+    return o;
+  }
+};
+
+// electron/domain/tasks.ts
+var import_node_crypto7 = __toESM(require("node:crypto"));
+var KEEP = 40;
+function estimateEta(o) {
+  const { now, pct } = o;
+  if (pct >= 100) return 0;
+  if (o.firstAt !== void 0 && o.firstPct !== void 0) {
+    const dp = pct - o.firstPct;
+    const dt = (now - o.firstAt) / 1e3;
+    if (dp >= 2 && dt >= 20) return Math.max(0, (100 - pct) * dt / dp);
+  }
+  if (o.expectedSec && o.expectedSec > 0) {
+    return Math.max(0, o.expectedSec * ((100 - pct) / 100));
+  }
+  return void 0;
+}
+var TaskTracker = class {
+  constructor(notifier, clock3 = Date.now) {
+    this.notifier = notifier;
+    this.clock = clock3;
+  }
+  tasks = [];
+  list() {
+    return this.tasks.map((t) => ({ ...t }));
+  }
+  start(kind, label, ref) {
+    const startedMs = this.clock();
+    const info = { id: import_node_crypto7.default.randomUUID(), kind, label, status: "running", progress: 0, startedAt: new Date(startedMs).toISOString(), ...ref ? { ref } : {} };
+    this.tasks.unshift(info);
+    this.tasks.length = Math.min(this.tasks.length, KEEP);
+    this.notifier.task({ ...info });
+    const emit = () => this.notifier.task({ ...info });
+    let first;
+    let expectedSec;
+    const eta = () => {
+      const s = estimateEta({ now: this.clock(), firstAt: first?.at, firstPct: first?.pct, pct: info.progress, startedAt: startedMs, expectedSec });
+      info.etaAt = s === void 0 ? void 0 : new Date(this.clock() + s * 1e3).toISOString();
+    };
+    return {
+      info,
+      update: (progress, detail) => {
+        info.progress = Math.max(0, Math.min(100, Math.round(progress)));
+        first ??= { at: this.clock(), pct: info.progress };
+        if (detail !== void 0) info.detail = detail;
+        eta();
+        emit();
+      },
+      estimate: (totalSec) => {
+        expectedSec = totalSec;
+        eta();
+        emit();
+      },
+      done: (detail) => {
+        info.status = "done";
+        info.progress = 100;
+        info.etaAt = void 0;
+        if (detail !== void 0) info.detail = detail;
+        info.endedAt = new Date(this.clock()).toISOString();
+        emit();
+      },
+      fail: (error) => {
+        info.status = "error";
+        info.etaAt = void 0;
+        info.error = error;
+        info.endedAt = new Date(this.clock()).toISOString();
+        emit();
+      }
+    };
+  }
+};
+
+// electron/domain/cloud.ts
+var import_node_fs22 = __toESM(require("node:fs"));
+var import_node_path15 = __toESM(require("node:path"));
+var import_libsodium_wrappers = __toESM(require_libsodium_wrappers());
+
+// electron/services/cloud/github.ts
+var import_node_fs18 = __toESM(require("node:fs"));
+
+// electron/services/social/common.ts
+var import_node_fs17 = __toESM(require("node:fs"));
+var defaultSleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
+var PublishError = class extends Error {
+};
+async function readChunk(file, start, endExclusive) {
+  const fh = await import_node_fs17.default.promises.open(file, "r");
+  try {
+    const len = endExclusive - start;
+    const buf = Buffer.alloc(len);
+    let got = 0;
+    while (got < len) {
+      const { bytesRead } = await fh.read(buf, got, len - got, start + got);
+      if (!bytesRead) break;
+      got += bytesRead;
+    }
+    return got === len ? buf : buf.subarray(0, got);
+  } finally {
+    await fh.close();
+  }
+}
+async function timedFetch(f, url, init, ms = 6e4) {
+  try {
+    return await f(url, { ...init, signal: AbortSignal.timeout(ms) });
+  } catch (e) {
+    const n = e.name;
+    if (n === "TimeoutError" || n === "AbortError") throw new PublishError("La red social no respondi\xF3 a tiempo.");
+    throw new PublishError("No se pudo conectar con la red social. Comprueba tu conexi\xF3n a internet.");
+  }
+}
+async function apiMessage(res) {
+  const t = await res.text().catch(() => "");
+  try {
+    const j = JSON.parse(t);
+    const reason = typeof j.error === "object" ? j.error?.errors?.[0]?.reason : void 0;
+    const m = typeof j.error === "object" ? j.error?.message : j.error ?? j.message;
+    return [reason, m].filter(Boolean).join(": ").slice(0, 300) || `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+
+// electron/services/cloud/github.ts
+var GithubError = class extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+};
+var Github = class {
+  constructor(o) {
+    this.o = o;
+    this.api = o.api ?? "https://api.github.com";
+    this.uploads = o.uploads ?? "https://uploads.github.com";
+    this.f = o.fetchFn ?? fetch;
+  }
+  api;
+  uploads;
+  f;
+  async req(method, url, init = {}) {
+    let res;
+    try {
+      res = await this.f(url.startsWith("http") ? url : `${this.api}${url}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${this.o.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "StreamClips",
+          ...init.json !== void 0 ? { "Content-Type": "application/json" } : {},
+          ...init.headers ?? {}
+        },
+        body: init.json !== void 0 ? JSON.stringify(init.json) : init.body,
+        signal: AbortSignal.timeout(init.timeout ?? 6e4),
+        ...init.duplex ? { duplex: "half" } : {}
+      });
+    } catch {
+      throw new GithubError("No se pudo conectar con GitHub. Comprueba tu conexi\xF3n a internet.", 0);
+    }
+    return res;
+  }
+  async fail(res, what) {
+    const j = await res.json().catch(() => ({}));
+    const m = j.message ?? `HTTP ${res.status}`;
+    if (res.status === 401) throw new GithubError("GitHub rechaz\xF3 el token. Revisa que no haya caducado.", 401);
+    if (res.status === 403 && /rate limit/i.test(m)) throw new GithubError("GitHub limit\xF3 las peticiones. Se reintentar\xE1 m\xE1s tarde.", 403);
+    if (res.status === 403) throw new GithubError(`GitHub no permite ${what} con este token (${m}). Revisa los permisos del token.`, 403);
+    if (res.status === 404) throw new GithubError(`GitHub no encuentra ${what}. Comprueba el nombre del repositorio y los permisos del token.`, 404);
+    throw new GithubError(`GitHub: ${what}: ${m}`, res.status);
+  }
+  async repoInfo() {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}`);
+    if (!r2.ok) await this.fail(r2, "el repositorio");
+    const j = await r2.json();
+    return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
+  }
+  async getContent(path21) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path21)}`);
+    if (r2.status === 404) return null;
+    if (!r2.ok) await this.fail(r2, `el archivo ${path21}`);
+    const j = await r2.json();
+    return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
+  }
+  /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
+  async putContent(path21, text, message, sha) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path21)}`, {
+      json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
+    });
+    if (r2.status === 409 || r2.status === 422) return null;
+    if (!r2.ok) await this.fail(r2, `guardar ${path21}`);
+    return (await r2.json()).content.sha;
+  }
+  async deleteContent(path21, sha, message) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path21)}`, { json: { message, sha } });
+    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path21}`);
+  }
+  async listDir(path21) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path21)}`);
+    if (r2.status === 404) return [];
+    if (!r2.ok) await this.fail(r2, `la carpeta ${path21}`);
+    const j = await r2.json();
+    return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
+  }
+  async createRelease(tag, name) {
+    const r2 = await this.req("POST", `/repos/${this.o.repo}/releases`, { json: { tag_name: tag, name, draft: false, prerelease: true, body: "V\xEDdeo en cola de StreamClips. Se borra solo al publicarse." } });
+    if (!r2.ok) await this.fail(r2, "crear la versi\xF3n de subida");
+    return { id: (await r2.json()).id };
+  }
+  async uploadAsset(releaseId, name, file, contentType) {
+    const size = import_node_fs18.default.statSync(file).size;
+    const r2 = await this.req("POST", `${this.uploads}/repos/${this.o.repo}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`, {
+      headers: { "Content-Type": contentType, "Content-Length": String(size) },
+      body: import_node_fs18.default.createReadStream(file),
+      duplex: true,
+      timeout: 60 * 6e4
+    });
+    if (r2.status === 422) throw new GithubError(`GitHub no admite este archivo (${name}); el m\xE1ximo por archivo son 2 GB.`, 422);
+    if (!r2.ok) await this.fail(r2, "subir el v\xEDdeo");
+    const j = await r2.json();
+    if (j.size !== size) throw new GithubError("La subida a GitHub qued\xF3 incompleta. Se reintentar\xE1.", 0);
+    return { id: j.id, size: j.size };
+  }
+  async downloadAsset(assetId, dest) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/releases/assets/${assetId}`, { headers: { Accept: "application/octet-stream" }, timeout: 60 * 6e4 });
+    if (!r2.ok || !r2.body) await this.fail(r2, "descargar el v\xEDdeo");
+    const { Readable: Readable3 } = await import("node:stream");
+    const { pipeline: pipeline2 } = await import("node:stream/promises");
+    await pipeline2(Readable3.fromWeb(r2.body), import_node_fs18.default.createWriteStream(dest));
+  }
+  /** Borra la versión y su etiqueta (y con ella los archivos). */
+  async deleteRelease(releaseId, tag) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/releases/${releaseId}`);
+    if (!r2.ok && r2.status !== 404) await this.fail(r2, "borrar la versi\xF3n");
+    const t = await this.req("DELETE", `/repos/${this.o.repo}/git/refs/tags/${encodeURIComponent(tag)}`);
+    if (!t.ok && t.status !== 404 && t.status !== 422) await this.fail(t, "borrar la etiqueta");
+  }
+  async publicKey() {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/actions/secrets/public-key`);
+    if (!r2.ok) await this.fail(r2, "la clave p\xFAblica de secretos");
+    const j = await r2.json();
+    return { keyId: j.key_id, key: j.key };
+  }
+  async putSecret(name, encryptedBase64, keyId) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/actions/secrets/${name}`, { json: { encrypted_value: encryptedBase64, key_id: keyId } });
+    if (!r2.ok) await this.fail(r2, `guardar el secreto ${name}`);
+  }
+  async deleteSecret(name) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/actions/secrets/${name}`);
+    if (!r2.ok && r2.status !== 404) await this.fail(r2, `borrar el secreto ${name}`);
+  }
+  async dispatch(workflowFile, ref) {
+    const r2 = await this.req("POST", `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref } });
+    if (!r2.ok) await this.fail(r2, "lanzar el flujo de publicaci\xF3n");
+  }
+};
+var encodePath = (p) => p.split("/").map(encodeURIComponent).join("/");
+
+// electron/services/cloud/jobs.ts
+var jobPath = (key) => `queue/${key.replace(/[^\w-]/g, "__")}.json`;
+var releaseTag = (key) => `q-${key.replace(/[^\w-]/g, "-")}`.slice(0, 120);
+function parseJob(text) {
+  try {
+    const j = JSON.parse(text);
+    if (j.v !== 1 || typeof j.key !== "string" || typeof j.platform !== "string" || typeof j.scheduledAt !== "string" || !j.file) return null;
+    if (!["queued", "publishing", "published", "failed"].includes(String(j.status))) return null;
+    return j;
+  } catch {
+    return null;
+  }
+}
+var serializeJob = (j) => `${JSON.stringify(j, null, 2)}
+`;
+
+// electron/services/cloud/workflow.ts
+var utc = (d) => ({ m: d.getUTCMinutes(), h: d.getUTCHours() });
+function cronLines(times2, opts = {}) {
+  const set = /* @__PURE__ */ new Map();
+  for (const t of times2) {
+    const d = new Date(t.getTime() + 6e4);
+    const { m, h } = utc(d);
+    set.set(`${m}:${h}`, `${m} ${h} * * *`);
+  }
+  const lines = [...set.values()].sort().slice(0, opts.max ?? 20);
+  lines.push(`23 */${opts.fallbackHours ?? 3} * * *`);
+  return lines;
+}
+function workflowYaml(crons) {
+  return `# Generado por StreamClips. No lo edites a mano: el programa lo vuelve a escribir.
+name: Publicar
+on:
+  workflow_dispatch:
+  schedule:
+${crons.map((c) => `    - cron: '${c}'`).join("\n")}
+concurrency:
+  group: streamclips-publish
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: runner
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node runner/runner.js
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          STREAMCLIPS_CREDS: \${{ secrets.STREAMCLIPS_CREDS }}
+`;
+}
+
+// electron/services/social/youtube.ts
+var import_node_fs19 = __toESM(require("node:fs"));
+var YT_ENDPOINTS = {
+  upload: "https://www.googleapis.com/upload/youtube/v3",
+  api: "https://www.googleapis.com/youtube/v3"
+};
+var YT_CHUNK = 8 * 1024 * 1024;
+var MAX_RETRIES = 5;
+function explain(res, msg) {
+  if (res.status === 401) return new PublishError("YouTube rechaz\xF3 la conexi\xF3n. Vuelve a conectar la cuenta en Conexiones.");
+  if (/quotaExceeded|dailyLimitExceeded|rateLimitExceeded/.test(msg)) return new PublishError("Se agot\xF3 la cuota diaria de la API de YouTube. Se podr\xE1 volver a intentar ma\xF1ana.");
+  if (/uploadLimitExceeded/.test(msg)) return new PublishError("YouTube ha alcanzado el l\xEDmite de subidas de tu canal por hoy.");
+  if (/forbidden|insufficientPermissions|youtubeSignupRequired/.test(msg)) return new PublishError(`YouTube no permite esta acci\xF3n con la cuenta conectada (${msg}).`);
+  return new PublishError(`YouTube: ${msg}`);
+}
+function youtubeFile(o) {
+  if (o.kind === "long") {
+    if (!o.files.long) throw new PublishError("El v\xEDdeo no tiene archivo.");
+    return { file: o.files.long, short: false };
+  }
+  const f = o.files.vertical ?? o.files.horizontal;
+  if (!f) throw new PublishError("El clip no tiene archivo.");
+  return { file: f, short: !!o.files.vertical };
+}
+async function publishYoutube(d, o) {
+  const f = d.fetchFn ?? fetch;
+  const ep = d.endpoints ?? YT_ENDPOINTS;
+  const sleep = d.sleep ?? defaultSleep;
+  const chunk = d.chunkSize ?? YT_CHUNK;
+  const { file, short } = youtubeFile(o);
+  if (!import_node_fs19.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs19.default.statSync(file).size;
+  if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
+  const token = await d.token();
+  const auth = { Authorization: `Bearer ${token}` };
+  let title = o.title;
+  if (short && !/#shorts/i.test(title) && title.length <= 92) title = `${title} #Shorts`;
+  const meta = {
+    snippet: { title, description: o.description ?? (short ? "#Shorts" : ""), categoryId: "20" },
+    status: { privacyStatus: o.visibility === "public" ? "public" : "private", selfDeclaredMadeForKids: false }
+  };
+  const init = await timedFetch(f, `${ep.upload}/videos?uploadType=resumable&part=snippet,status`, {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Length": String(size), "X-Upload-Content-Type": "video/mp4" },
+    body: JSON.stringify(meta)
+  });
+  if (!init.ok) throw explain(init, await apiMessage(init));
+  const session = init.headers.get("location");
+  if (!session) throw new PublishError("YouTube no devolvi\xF3 la direcci\xF3n de subida.");
+  let offset = 0;
+  let retries = 0;
+  let videoId = "";
+  while (!videoId) {
+    const end = Math.min(size, offset + chunk);
+    let res = null;
+    try {
+      const body = await readChunk(file, offset, end);
+      res = await timedFetch(
+        f,
+        session,
+        { method: "PUT", headers: { "Content-Length": String(body.length), "Content-Range": `bytes ${offset}-${end - 1}/${size}` }, body: new Uint8Array(body) },
+        10 * 6e4
+      );
+    } catch (e) {
+      if (!(e instanceof PublishError) || retries >= MAX_RETRIES) throw e;
+    }
+    if (res && (res.status === 200 || res.status === 201)) {
+      const j = await res.json().catch(() => ({}));
+      if (!j.id) throw new PublishError("YouTube termin\xF3 la subida pero no devolvi\xF3 el identificador del v\xEDdeo.");
+      videoId = j.id;
+      break;
+    }
+    if (res && res.status === 308) {
+      offset = nextOffset(res.headers.get("range"));
+      retries = 0;
+      continue;
+    }
+    if (res && res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) throw explain(res, await apiMessage(res));
+    if (++retries > MAX_RETRIES) throw new PublishError(`La subida a YouTube fall\xF3 repetidamente${res ? ` (HTTP ${res.status})` : ""}.`);
+    await sleep(Math.min(3e4, 1e3 * 2 ** retries));
+    try {
+      const q = await timedFetch(f, session, { method: "PUT", headers: { "Content-Length": "0", "Content-Range": `bytes */${size}` } });
+      if (q.status === 308) offset = nextOffset(q.headers.get("range"));
+      else if (q.status === 200 || q.status === 201) {
+        const j = await q.json().catch(() => ({}));
+        if (j.id) videoId = j.id;
+      }
+    } catch {
+    }
+  }
+  const warn = d.warn ?? (() => void 0);
+  if (o.kind === "long" && o.thumbnail && import_node_fs19.default.existsSync(o.thumbnail)) {
+    try {
+      const img = import_node_fs19.default.readFileSync(o.thumbnail);
+      const r2 = await timedFetch(f, `${ep.upload}/thumbnails/set?videoId=${encodeURIComponent(videoId)}`, { method: "POST", headers: { ...auth, "Content-Type": "image/jpeg" }, body: new Uint8Array(img) });
+      if (!r2.ok) warn(`Miniatura no aceptada por YouTube: ${await apiMessage(r2)}`);
+    } catch (e) {
+      warn(`Miniatura no subida: ${e.message}`);
+    }
+  }
+  if (o.playlist) {
+    try {
+      const id = await ensurePlaylist(d, o.playlist);
+      const r2 = await timedFetch(f, `${ep.api}/playlistItems?part=snippet`, {
+        method: "POST",
+        headers: { ...auth, "Content-Type": "application/json" },
+        body: JSON.stringify({ snippet: { playlistId: id, resourceId: { kind: "youtube#video", videoId } } })
+      });
+      if (!r2.ok) warn(`No se pudo a\xF1adir a la lista "${o.playlist}": ${await apiMessage(r2)}`);
+    } catch (e) {
+      warn(`Lista de reproducci\xF3n: ${e.message}`);
+    }
+  }
+  return { videoId };
+}
+function nextOffset(range) {
+  const m = /bytes=0-(\d+)/.exec(range ?? "");
+  return m ? Number(m[1]) + 1 : 0;
+}
+async function listPlaylists(d) {
+  const f = d.fetchFn ?? fetch;
+  const ep = d.endpoints ?? YT_ENDPOINTS;
+  const auth = { Authorization: `Bearer ${await d.token()}` };
+  const out = [];
+  let page = "";
+  for (let i = 0; i < 20; i++) {
+    const r2 = await timedFetch(f, `${ep.api}/playlists?part=snippet&mine=true&maxResults=50${page ? `&pageToken=${encodeURIComponent(page)}` : ""}`, { headers: auth });
+    if (!r2.ok) throw explain(r2, await apiMessage(r2));
+    const j = await r2.json();
+    for (const it of j.items ?? []) out.push({ id: it.id, title: it.snippet?.title ?? "" });
+    if (!j.nextPageToken) break;
+    page = j.nextPageToken;
+  }
+  return out;
+}
+async function ensurePlaylist(d, name) {
+  const found = (await listPlaylists(d)).find((p) => p.title.trim().toLowerCase() === name.trim().toLowerCase());
+  if (found) return found.id;
+  const f = d.fetchFn ?? fetch;
+  const ep = d.endpoints ?? YT_ENDPOINTS;
+  const r2 = await timedFetch(f, `${ep.api}/playlists?part=snippet,status`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ snippet: { title: name }, status: { privacyStatus: "private" } })
+  });
+  if (!r2.ok) throw explain(r2, await apiMessage(r2));
+  const j = await r2.json();
+  if (!j.id) throw new PublishError("YouTube no devolvi\xF3 la lista creada.");
+  return j.id;
+}
+
+// electron/services/social/tiktok.ts
+var import_node_fs20 = __toESM(require("node:fs"));
+var TT_API = "https://open.tiktokapis.com/v2";
+var CHUNK = 10 * 1024 * 1024;
+var POLL_MS = 5e3;
+var POLL_MAX = 72;
+function tiktokFile(o) {
+  if (o.kind === "long") throw new PublishError("TikTok solo admite clips. Este v\xEDdeo largo no se puede publicar ah\xED.");
+  const f = o.files.vertical ?? o.files.horizontal;
+  if (!f) throw new PublishError("El clip no tiene archivo.");
+  return f;
+}
+async function call(d, path21, body) {
+  const f = d.fetchFn ?? fetch;
+  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path21}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
+    body: JSON.stringify(body)
+  });
+  const j = await r2.json().catch(() => ({}));
+  if (r2.status === 401 || j.error?.code === "access_token_invalid") throw new PublishError("TikTok rechaz\xF3 la conexi\xF3n. Vuelve a conectar la cuenta en Conexiones.");
+  if (!r2.ok || j.error?.code && j.error.code !== "ok") {
+    const code = j.error?.code ?? r2.status;
+    if (code === "spam_risk_too_many_posts") throw new PublishError("TikTok limita las publicaciones diarias de tu cuenta. Int\xE9ntalo ma\xF1ana.");
+    throw new PublishError(`TikTok: ${j.error?.message || code}`);
+  }
+  return j.data;
+}
+async function publishTiktok(d, o) {
+  const f = d.fetchFn ?? fetch;
+  const sleep = d.sleep ?? defaultSleep;
+  const file = tiktokFile(o);
+  if (!import_node_fs20.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs20.default.statSync(file).size;
+  if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
+  const info = await call(d, "/post/publish/creator_info/query/", {});
+  const options = info.privacy_level_options ?? [];
+  const wantPublic = o.visibility === "public" && options.includes("PUBLIC_TO_EVERYONE");
+  const privacy = wantPublic ? "PUBLIC_TO_EVERYONE" : options.includes("SELF_ONLY") ? "SELF_ONLY" : options[0];
+  if (!privacy) throw new PublishError("TikTok no ofrece ninguna opci\xF3n de privacidad para esta cuenta.");
+  const chunk = Math.max(d.chunkSize ?? CHUNK, 1);
+  const total = Math.max(1, Math.floor(size / chunk));
+  const init = await call(d, "/post/publish/video/init/", {
+    post_info: { title: o.title.slice(0, 2200), privacy_level: privacy, disable_duet: false, disable_comment: false, disable_stitch: false },
+    source_info: { source: "FILE_UPLOAD", video_size: size, chunk_size: total === 1 ? size : chunk, total_chunk_count: total }
+  });
+  if (!init.publish_id || !init.upload_url) throw new PublishError("TikTok no devolvi\xF3 la direcci\xF3n de subida.");
+  const step = total === 1 ? size : chunk;
+  for (let i = 0; i < total; i++) {
+    const start = i * step;
+    const end = i === total - 1 ? size : start + step;
+    const body = await readChunk(file, start, end);
+    const r2 = await timedFetch(
+      f,
+      init.upload_url,
+      { method: "PUT", headers: { "Content-Type": "video/mp4", "Content-Length": String(body.length), "Content-Range": `bytes ${start}-${end - 1}/${size}` }, body: new Uint8Array(body) },
+      10 * 6e4
+    );
+    if (r2.status !== 206 && r2.status !== 201 && r2.status !== 200) throw new PublishError(`TikTok rechaz\xF3 un trozo del v\xEDdeo: ${await apiMessage(r2)}`);
+  }
+  for (let i = 0; i < POLL_MAX; i++) {
+    const st = await call(d, "/post/publish/status/fetch/", { publish_id: init.publish_id });
+    if (st.status === "PUBLISH_COMPLETE") return { publishId: init.publish_id };
+    if (st.status === "FAILED") throw new PublishError(`TikTok no pudo publicar el v\xEDdeo (${st.fail_reason ?? "motivo desconocido"}).`);
+    await sleep(d.pollMs ?? POLL_MS);
+  }
+  throw new PublishError("TikTok sigue procesando el v\xEDdeo. Comprueba en la app de TikTok antes de reprogramarlo.");
+}
+
+// electron/services/social/instagram.ts
+var import_node_fs21 = __toESM(require("node:fs"));
+var IG_GRAPH = "https://graph.facebook.com/v21.0";
+var POLL_MS2 = 5e3;
+var POLL_MAX2 = 120;
+function instagramFile(o) {
+  if (o.kind === "long") throw new PublishError("Instagram solo admite clips (Reels). Este v\xEDdeo largo no se puede publicar ah\xED.");
+  const f = o.files.vertical;
+  if (!f) throw new PublishError("Instagram necesita la versi\xF3n vertical del clip.");
+  return f;
+}
+async function graphJson(r2) {
+  const j = await r2.json().catch(() => ({}));
+  if (!r2.ok || j.error) {
+    const e = j.error;
+    if (r2.status === 401 || e?.code === 190) throw new PublishError("Instagram rechaz\xF3 la conexi\xF3n. Vuelve a conectar la cuenta en Conexiones.");
+    throw new PublishError(`Instagram: ${e?.message ?? `HTTP ${r2.status}`}`);
+  }
+  return j;
+}
+async function publishInstagram(d, o) {
+  const f = d.fetchFn ?? fetch;
+  const sleep = d.sleep ?? defaultSleep;
+  const graph = d.graph ?? IG_GRAPH;
+  const file = instagramFile(o);
+  if (!import_node_fs21.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs21.default.statSync(file).size;
+  if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
+  const { accessToken, igUserId } = await d.token();
+  if (!igUserId) throw new PublishError("No hay una cuenta de Instagram profesional enlazada. Vuelve a conectar la cuenta en Conexiones.");
+  const create = await graphJson(
+    await timedFetch(f, `${graph}/${encodeURIComponent(igUserId)}/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ media_type: "REELS", upload_type: "resumable", caption: o.title.slice(0, 2200), share_to_feed: "true", access_token: accessToken })
+    })
+  );
+  if (!create.id) throw new PublishError("Instagram no cre\xF3 el contenedor del v\xEDdeo.");
+  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v21.0/${create.id}`;
+  const up = await timedFetch(
+    f,
+    uploadUri,
+    {
+      method: "POST",
+      headers: { Authorization: `OAuth ${accessToken}`, offset: "0", file_size: String(size) },
+      body: import_node_fs21.default.createReadStream(file),
+      // @ts-expect-error opción de Node necesaria para enviar un flujo
+      duplex: "half"
+    },
+    30 * 6e4
+  );
+  await graphJson(up);
+  let status = "";
+  for (let i = 0; i < POLL_MAX2; i++) {
+    const s = await graphJson(
+      await timedFetch(f, `${graph}/${create.id}?fields=status_code,status&access_token=${encodeURIComponent(accessToken)}`, {})
+    );
+    status = s.status_code ?? "";
+    if (status === "FINISHED") break;
+    if (status === "ERROR" || status === "EXPIRED") throw new PublishError(`Instagram no pudo procesar el v\xEDdeo (${s.status ?? status}).`);
+    await sleep(d.pollMs ?? POLL_MS2);
+  }
+  if (status !== "FINISHED") throw new PublishError("Instagram sigue procesando el v\xEDdeo. Comprueba en la app antes de reprogramarlo.");
+  const pub = await graphJson(
+    await timedFetch(f, `${graph}/${encodeURIComponent(igUserId)}/media_publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ creation_id: create.id, access_token: accessToken })
+    })
+  );
+  if (!pub.id) throw new PublishError("Instagram no confirm\xF3 la publicaci\xF3n.");
+  return { mediaId: pub.id };
+}
+
+// electron/domain/cloud.ts
+var WORKFLOW = ".github/workflows/publish.yml";
+var RUNNER = "runner/runner.js";
+var SECRET = "STREAMCLIPS_CREDS";
+function parseRepo(raw) {
+  const m = /^(?:https?:\/\/github\.com\/)?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(raw.trim());
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+async function sealSecret(publicKeyB64, value) {
+  await import_libsodium_wrappers.default.ready;
+  const key = import_libsodium_wrappers.default.from_base64(publicKeyB64, import_libsodium_wrappers.default.base64_variants.ORIGINAL);
+  const enc = import_libsodium_wrappers.default.crypto_box_seal(import_libsodium_wrappers.default.from_string(value), key);
+  return import_libsodium_wrappers.default.to_base64(enc, import_libsodium_wrappers.default.base64_variants.ORIGINAL);
+}
+var CloudService = class {
+  constructor(d) {
+    this.d = d;
+  }
+  timer = null;
+  syncing = false;
+  error = null;
+  credsAt = 0;
+  get st() {
+    return this.d.store.data.cloud;
+  }
+  now() {
+    return (this.d.now ?? Date.now)();
+  }
+  gh() {
+    if (!this.st.repo || !this.st.token) throw new Error("El modo nube no est\xE1 configurado.");
+    return new Github({ token: this.d.secrets.decode(this.st.token), repo: this.st.repo, ...this.d.github });
+  }
+  status() {
+    return {
+      enabled: this.st.enabled,
+      repo: this.st.repo,
+      hasToken: !!this.st.token,
+      lastSync: this.st.lastSync,
+      error: this.error,
+      queued: this.d.store.data.publications.filter((p) => p.cloud && (p.cloud.state === "queued" || p.cloud.state === "publishing")).length,
+      syncing: this.syncing
+    };
+  }
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => void this.sync(), this.d.intervalMs ?? 2 * 6e4);
+    this.timer.unref?.();
+    if (this.st.enabled) void this.sync();
+  }
+  stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+  /** Configura el repositorio: comprueba que es privado, instala el publicador y sube los permisos de tus redes. */
+  async setup(repoRaw, token) {
+    const repo = parseRepo(repoRaw);
+    if (!repo) throw new Error("El repositorio debe ser \xABusuario/nombre\xBB (por ejemplo diego/streamclips-nube).");
+    const tok = token === MASKED_SECRET ? this.d.secrets.decode(this.st.token) : token.trim();
+    if (!tok) throw new Error("Pega el token de GitHub.");
+    const gh = new Github({ token: tok, repo, ...this.d.github });
+    const info = await gh.repoInfo();
+    if (!info.private) throw new Error("El repositorio es P\xDABLICO: tus v\xEDdeos quedar\xEDan a la vista de todos. Crea uno privado y vuelve a intentarlo.");
+    this.st.repo = info.fullName;
+    this.st.token = this.d.secrets.encode(tok);
+    this.st.enabled = true;
+    this.st.workflowCrons = "";
+    this.d.store.save();
+    try {
+      await this.installRunner(gh, info.defaultBranch);
+      await this.syncCreds(gh);
+      this.credsAt = this.now();
+    } catch (e) {
+      this.st.enabled = false;
+      this.d.store.save();
+      throw e;
+    }
+    this.d.log.info(`Modo nube activado en ${this.st.repo}`);
+    await this.sync();
+    return this.status();
+  }
+  async installRunner(gh, branch) {
+    const put = async (p, text, msg) => {
+      const cur = await gh.getContent(p);
+      if (cur?.text === text) return;
+      const sha = await gh.putContent(p, text, msg, cur?.sha);
+      if (!sha) throw new Error(`No se pudo escribir ${p} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    };
+    await put(RUNNER, this.d.runnerSource(), "StreamClips: publicador");
+    await put("README.md", "# StreamClips (nube)\n\nRepositorio privado de StreamClips: cola de v\xEDdeos y publicador. No lo edites a mano.\n", "StreamClips: leeme");
+    await this.syncWorkflow(gh, true);
+  }
+  /** Reescribe el flujo con las horas que hacen falta. */
+  async syncWorkflow(gh, force = false) {
+    const times2 = this.d.store.data.publications.filter((p) => p.cloud?.state === "queued").map((p) => new Date(p.scheduledAt)).filter((d) => d.getTime() > this.now() - 6e4);
+    const a = this.d.store.data.settings.autopilot;
+    for (const hhmm2 of [...a.videoTimes, ...a.clipTimes]) {
+      const [h, m] = hhmm2.split(":").map(Number);
+      const d = new Date(this.now());
+      d.setHours(h, m, 0, 0);
+      times2.push(d);
+    }
+    const crons = cronLines(times2);
+    const key = crons.join("|");
+    if (!force && key === this.st.workflowCrons) return;
+    const text = workflowYaml(crons);
+    const cur = await gh.getContent(WORKFLOW);
+    if (cur?.text !== text) {
+      const sha = await gh.putContent(WORKFLOW, text, "StreamClips: horas de publicaci\xF3n", cur?.sha);
+      if (!sha) throw new Error("No se pudo escribir el flujo de publicaci\xF3n en GitHub.");
+    }
+    this.st.workflowCrons = key;
+    this.d.store.save();
+  }
+  /** Sube las claves de tus redes como secreto cifrado del repositorio. */
+  async syncCreds(gh = this.gh()) {
+    const creds = {};
+    const raw = this.d.store.data.connections;
+    for (const p of ["youtube", "tiktok"]) {
+      const c = raw[p];
+      const t = c?.tokens ? await this.d.connections.accessToken(p) : null;
+      if (c && t?.refreshToken) creds[p] = { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret), refreshToken: t.refreshToken };
+    }
+    const ig = raw.instagram;
+    const igt = ig?.tokens ? await this.d.connections.accessToken("instagram") : null;
+    if (ig && igt?.extra?.igUserId) creds.instagram = { clientId: ig.clientId, clientSecret: this.d.secrets.decode(ig.clientSecret), accessToken: igt.accessToken, igUserId: igt.extra.igUserId };
+    const pk = await gh.publicKey();
+    await gh.putSecret(SECRET, await sealSecret(pk.key, JSON.stringify(creds)), pk.keyId);
+  }
+  filesFor(o, platform) {
+    const video = platform === "youtube" ? youtubeFile(o).file : platform === "tiktok" ? tiktokFile(o) : instagramFile(o);
+    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs22.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
+  }
+  /** Una pasada: sube lo nuevo, trae el estado de lo ya subido y limpia lo cancelado. Nunca lanza. */
+  sync() {
+    if (!this.st.enabled || this.syncing) return Promise.resolve(this.status());
+    return this.d.queue.run(async () => {
+      this.syncing = true;
+      this.error = null;
+      try {
+        const gh = this.gh();
+        if (!this.d.headless && this.now() - this.credsAt > 12 * 36e5) {
+          await this.syncCreds(gh);
+          this.credsAt = this.now();
+        }
+        await this.pull(gh);
+        await this.adopt(gh);
+        await this.push(gh);
+        await this.cleanOrphans(gh);
+        await this.syncWorkflow(gh);
+        this.st.lastSync = new Date(this.now()).toISOString();
+        this.d.store.save();
+      } catch (e) {
+        this.error = e.message;
+        this.d.log.warn(`Nube: ${this.error}`);
+      } finally {
+        this.syncing = false;
+        this.d.notifier.changed();
+      }
+      return this.status();
+    });
+  }
+  /** Trae el estado de lo ya subido. */
+  async pull(gh) {
+    const publishedNow = [];
+    for (const pub of this.d.store.data.publications.filter((p) => p.cloud && (p.cloud.state === "queued" || p.cloud.state === "publishing"))) {
+      const c = await gh.getContent(jobPath(pub.key));
+      const job = c && parseJob(c.text);
+      if (!c || !job) {
+        pub.cloud = void 0;
+        continue;
+      }
+      if (job.status === "published") {
+        pub.status = "published";
+        pub.cloud = { state: "published" };
+        pub.note = void 0;
+        this.d.log.info(`Publicado desde la nube: ${pub.key}`);
+        publishedNow.push(pub.outputId);
+      } else if (job.status === "failed") {
+        pub.status = "failed";
+        pub.cloud = { state: "failed" };
+        pub.note = job.note ?? "Fall\xF3 la publicaci\xF3n desde la nube.";
+        await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => void 0);
+      } else if (job.status === "publishing") {
+        pub.cloud = { state: "publishing" };
+      } else {
+        const o = this.d.store.data.outputs.find((x) => x.id === pub.outputId);
+        let changed = false;
+        if (Date.parse(job.scheduledAt) !== Date.parse(pub.scheduledAt)) {
+          job.scheduledAt = new Date(pub.scheduledAt).toISOString();
+          changed = true;
+        }
+        if (o) {
+          const same = (a, b) => (a ?? "") === (b ?? "");
+          if (job.title !== o.title) {
+            job.title = o.title;
+            changed = true;
+          }
+          if (!same(job.description, o.description)) {
+            job.description = o.description || void 0;
+            changed = true;
+          }
+          if (!same(job.playlist, o.playlist)) {
+            job.playlist = o.playlist || void 0;
+            changed = true;
+          }
+          if (o.visibility !== job.visibility) {
+            job.visibility = o.visibility;
+            changed = true;
+          }
+        }
+        if (changed) {
+          job.updatedAt = new Date(this.now()).toISOString();
+          await gh.putContent(jobPath(pub.key), serializeJob(job), `Cambios: ${pub.key}`, c.sha);
+        }
+      }
+    }
+    this.d.store.save();
+    for (const id of new Set(publishedNow)) {
+      try {
+        this.d.onPublished?.(id);
+      } catch (e) {
+        this.d.log.warn(`Tras publicar desde la nube: ${e.message}`);
+      }
+    }
+    this.d.notifier.changed();
+  }
+  /**
+   * Trae al programa lo que el motor nocturno dejó en la cola mientras el PC estaba apagado: aparece en el calendario
+   * y se puede cambiar (nombre, descripción, hora, redes). Los vídeos viven en la nube; aquí solo están sus datos.
+   */
+  async adopt(gh) {
+    const st = this.d.store.data;
+    const known = new Set(st.publications.map((p) => jobPath(p.key).split("/")[1]));
+    for (const p of st.publications) if (p.cloud && !this.st.known.includes(p.key)) this.st.known.push(p.key);
+    const seen = new Set(this.st.known);
+    let added = 0;
+    for (const f of await gh.listDir("queue")) {
+      if (!f.name.endsWith(".json") || known.has(f.name)) continue;
+      const c = await gh.getContent(`queue/${f.name}`);
+      const job = c && parseJob(c.text);
+      if (!job) continue;
+      const outputId = job.key.slice(0, job.key.lastIndexOf(":"));
+      if (!outputId || st.publications.some((p) => p.key === job.key) || seen.has(job.key)) continue;
+      this.st.known.push(job.key);
+      if (!st.outputs.some((o) => o.id === outputId)) {
+        st.outputs.push({
+          id: outputId,
+          kind: job.kind,
+          title: job.title,
+          ...job.description ? { description: job.description } : {},
+          ...job.playlist ? { playlist: job.playlist } : {},
+          ...job.visibility ? { visibility: job.visibility } : {},
+          files: {},
+          durationSec: 0,
+          createdAt: job.updatedAt,
+          remote: true
+        });
+      }
+      const status = job.status === "published" ? "published" : job.status === "failed" ? "failed" : "scheduled";
+      st.publications.push({
+        key: job.key,
+        outputId,
+        platform: job.platform,
+        scheduledAt: job.scheduledAt,
+        status,
+        ...job.note ? { note: job.note } : {},
+        cloud: { state: job.status }
+      });
+      added++;
+    }
+    if (added) {
+      this.d.log.info(`Nube: ${added} subida(s) preparadas en la nube se han a\xF1adido al programa.`);
+      this.d.store.save();
+      this.d.notifier.changed();
+    }
+  }
+  /** Sube lo programado que aún no está en la nube. */
+  async push(gh) {
+    const todo = this.d.store.data.publications.filter((p) => p.status === "scheduled" && !p.cloud);
+    for (const pub of todo) {
+      const o = this.d.store.data.outputs.find((x) => x.id === pub.outputId);
+      if (!o) continue;
+      if (o.remote) {
+        pub.status = "failed";
+        pub.note = "Este v\xEDdeo vive en la nube y esa red ya no est\xE1 en su cola, as\xED que no se puede volver a a\xF1adir desde aqu\xED.";
+        continue;
+      }
+      let files;
+      try {
+        files = this.filesFor(o, pub.platform);
+      } catch (e) {
+        pub.status = "failed";
+        pub.note = e.message;
+        continue;
+      }
+      if (!import_node_fs22.default.existsSync(files.video)) {
+        pub.status = "failed";
+        pub.note = "El archivo del v\xEDdeo ya no est\xE1 en su sitio.";
+        continue;
+      }
+      const existing = await gh.getContent(jobPath(pub.key));
+      const prev = existing && parseJob(existing.text);
+      if (prev && prev.status !== "failed") {
+        pub.cloud = { state: prev.status };
+        continue;
+      }
+      const task = this.d.tasks.start("cloud", `Subiendo a la nube: ${o.title} (${pub.platform})`);
+      const tag = releaseTag(pub.key);
+      let rel = null;
+      try {
+        rel = await gh.createRelease(tag, `${o.title} (${pub.platform})`).catch(async (e) => {
+          if (e.status !== 422) throw e;
+          throw new GithubError(`Hay una subida anterior a medias de \xAB${o.title}\xBB. Pulsa \xABSincronizar\xBB para reintentar.`, 422);
+        });
+        const size = import_node_fs22.default.statSync(files.video).size;
+        const asset = await gh.uploadAsset(rel.id, import_node_path15.default.basename(files.video), files.video, "video/mp4");
+        task.update(90);
+        const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path15.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
+        const job = {
+          v: 1,
+          key: pub.key,
+          platform: pub.platform,
+          scheduledAt: new Date(pub.scheduledAt).toISOString(),
+          status: "queued",
+          title: o.title,
+          ...o.description ? { description: o.description } : {},
+          ...o.playlist ? { playlist: o.playlist } : {},
+          ...o.visibility ? { visibility: o.visibility } : {},
+          kind: o.kind,
+          releaseId: rel.id,
+          releaseTag: tag,
+          file: { name: import_node_path15.default.basename(files.video), assetId: asset.id, size },
+          ...thumb ? { thumb: { name: import_node_path15.default.basename(files.thumb), assetId: thumb.id } } : {},
+          updatedAt: new Date(this.now()).toISOString()
+        };
+        const sha = await gh.putContent(jobPath(pub.key), serializeJob(job), `En cola: ${pub.key}`, prev ? existing.sha : void 0);
+        if (!sha) throw new Error("No se pudo registrar el trabajo en la cola de GitHub.");
+        pub.cloud = { state: "queued" };
+        pub.note = void 0;
+        if (!this.st.known.includes(pub.key)) this.st.known.push(pub.key);
+        this.d.store.save();
+        task.done("En la cola de la nube");
+        rel = null;
+      } catch (e) {
+        task.fail(e.message);
+        if (rel) await gh.deleteRelease(rel.id, tag).catch(() => void 0);
+        if (e instanceof GithubError && e.status === 422) {
+          pub.status = "failed";
+          pub.note = e.message;
+          this.d.store.save();
+        } else {
+          this.error = e.message;
+          this.d.log.warn(`Nube: ${this.error}`);
+        }
+        continue;
+      }
+      if (Date.parse(pub.scheduledAt) <= this.now() + 6e4) {
+        const info = await gh.repoInfo();
+        await gh.dispatch("publish.yml", info.defaultBranch).catch((e) => this.d.log.warn(`No se pudo lanzar la publicaci\xF3n: ${e.message}`));
+      }
+    }
+  }
+  /** Quita de la nube lo que ya no está programado en el programa. */
+  async cleanOrphans(gh) {
+    const keep = new Set(this.d.store.data.publications.filter((p) => p.cloud && p.cloud.state !== "published").map((p) => jobPath(p.key).split("/")[1]));
+    for (const f of await gh.listDir("queue")) {
+      if (keep.has(f.name) || !f.name.endsWith(".json")) continue;
+      const c = await gh.getContent(`queue/${f.name}`);
+      const job = c && parseJob(c.text);
+      if (!c || !job) continue;
+      if (job.status === "queued" || job.status === "failed") {
+        await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => void 0);
+        await gh.deleteContent(`queue/${f.name}`, c.sha, `Cancelado: ${job.key}`);
+      } else if (job.status === "published") {
+        await gh.deleteContent(`queue/${f.name}`, c.sha, `Archivado: ${job.key}`);
+      }
+    }
+  }
+  /** Quita la copia de la nube de una publicación cancelada o reprogramada. */
+  async forget(pub) {
+    if (!pub.cloud || !this.st.enabled) return;
+    await this.sync();
+  }
+  /** Apaga el modo nube: borra lo subido y deja que el PC publique. */
+  async disable() {
+    if (this.st.enabled) {
+      try {
+        const gh = this.gh();
+        for (const f of await gh.listDir("queue")) {
+          const c = await gh.getContent(`queue/${f.name}`);
+          const job = c && parseJob(c.text);
+          if (!c || !job) continue;
+          if (job.status === "queued" || job.status === "failed") {
+            await gh.deleteRelease(job.releaseId, job.releaseTag).catch(() => void 0);
+            await gh.deleteContent(`queue/${f.name}`, c.sha, `Desactivado: ${job.key}`);
+          }
+        }
+      } catch (e) {
+        this.d.log.warn(`Nube: no se pudo limpiar al desactivar: ${e.message}`);
+      }
+    }
+    for (const p of this.d.store.data.publications) if (p.cloud && (p.cloud.state === "queued" || p.cloud.state === "failed")) p.cloud = void 0;
+    this.st.enabled = false;
+    this.d.store.save();
+    this.d.notifier.changed();
+    return this.status();
+  }
+};
+
+// electron/services/updater.ts
+var HOUR = 60 * 60 * 1e3;
+var UpdateService = class {
+  constructor(d) {
+    this.d = d;
+    this.state = { status: d.updater ? "idle" : "unsupported", currentVersion: d.currentVersion };
+    const u = d.updater;
+    if (!u) return;
+    u.autoDownload = true;
+    u.autoInstallOnAppQuit = true;
+    u.allowPrerelease = false;
+    u.on("checking-for-update", () => {
+      this.busySince = (this.d.now ?? Date.now)();
+      this.set({ status: "checking" });
+    });
+    u.on("update-available", (info) => this.set({ status: "downloading", version: info.version, progress: 0 }));
+    u.on("update-not-available", () => this.set({ status: "idle", version: void 0, progress: void 0, error: void 0 }));
+    u.on("download-progress", (p) => this.set({ status: "downloading", progress: Math.round(p.percent) }));
+    u.on("update-downloaded", (info) => {
+      this.set({ status: "ready", version: info.version, progress: 100 });
+      this.tryRestart();
+    });
+    u.on("error", (e) => {
+      this.d.log.warn(`Actualizaciones: ${e.message}`);
+      this.set({ status: "error", error: friendly(e) });
+    });
+  }
+  timer = null;
+  retry = null;
+  first = null;
+  state;
+  busySince = 0;
+  status() {
+    return { ...this.state };
+  }
+  set(p) {
+    this.state = { ...this.state, ...p };
+    this.d.onStatus(this.status());
+  }
+  start() {
+    if (!this.d.updater || this.timer) return;
+    this.first = setTimeout(() => void this.check(), this.d.firstCheckMs ?? 3e4);
+    this.timer = setInterval(() => void this.check(), this.d.intervalMs ?? HOUR);
+    this.first.unref?.();
+    this.timer.unref?.();
+  }
+  stop() {
+    for (const t of [this.timer, this.retry, this.first]) if (t) clearTimeout(t);
+    this.timer = this.retry = this.first = null;
+  }
+  /** Busca ahora. Nunca lanza. */
+  async check() {
+    const u = this.d.updater;
+    if (!u) return this.status();
+    const stuck = (this.d.now ?? Date.now)() - this.busySince > 15 * 6e4;
+    if (this.state.status === "ready" || (this.state.status === "checking" || this.state.status === "downloading") && !stuck) return this.status();
+    try {
+      await u.checkForUpdates();
+      this.set({ lastCheck: new Date((this.d.now ?? Date.now)()).toISOString() });
+    } catch (e) {
+      this.d.log.warn(`Actualizaciones: ${e.message}`);
+      this.set({ status: "error", error: friendly(e), lastCheck: new Date((this.d.now ?? Date.now)()).toISOString() });
+    }
+    return this.status();
+  }
+  /** Instala y reinicia si no hay trabajo en marcha; si lo hay, lo intenta de nuevo en un minuto. */
+  tryRestart(force = false) {
+    if (this.state.status !== "ready" || !this.d.updater) return false;
+    if (this.retry) clearTimeout(this.retry);
+    this.retry = null;
+    if (force || this.d.canRestart()) {
+      this.d.log.info(`Instalando la versi\xF3n ${this.state.version}.`);
+      this.d.updater.quitAndInstall(true, true);
+      return true;
+    }
+    this.retry = setTimeout(() => this.tryRestart(), this.d.retryRestartMs ?? 6e4);
+    this.retry.unref?.();
+    return false;
+  }
+};
+function friendly(e) {
+  const m = e.message ?? "";
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|net::ERR/i.test(m)) return "Sin conexi\xF3n con GitHub. Se reintentar\xE1 en una hora.";
+  if (/latest\.yml|Cannot find latest/i.test(m)) return "La \xFAltima versi\xF3n de GitHub a\xFAn no tiene su instalador adjunto (se est\xE1 compilando; suele tardar unos 5 minutos). Se volver\xE1 a comprobar sola.";
+  if (/404|No published versions/i.test(m)) return "Todav\xEDa no hay versiones publicadas en GitHub.";
+  if (/403|rate limit/i.test(m)) return "GitHub limit\xF3 las consultas. Se reintentar\xE1 en una hora.";
+  return m.split("\n")[0].slice(0, 200);
+}
+
+// electron/domain/autopilot.ts
+var import_node_fs24 = __toESM(require("node:fs"));
+var import_node_path17 = __toESM(require("node:path"));
+
+// shared/autoEdit.ts
+var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
+function planEdit(words, seg, o = {}) {
+  const minGap = o.minGap ?? 1;
+  const keepBefore = o.keepBefore ?? 0.4;
+  const keepAfter = o.keepAfter ?? 0.3;
+  const spacing = o.punchSpacing ?? 6;
+  const inside = words.filter((w) => w.start >= seg.start && w.end <= seg.end + 0.25).sort((a, b) => a.start - b.start);
+  const dur = seg.end - seg.start;
+  const effects = [];
+  const cuts = [];
+  if (inside.length >= 6 && dur >= 8) {
+    const gaps = [];
+    for (let i = 0; i + 1 < inside.length; i++) {
+      const gap = inside[i + 1].start - inside[i].end;
+      if (gap > minGap) gaps.push({ start: inside[i].end + keepBefore, end: inside[i + 1].start - keepAfter });
+    }
+    gaps.filter((g) => g.end - g.start >= 0.3 && g.start >= seg.start && g.end <= seg.end).sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, o.maxCuts ?? 20).sort((a, b) => a.start - b.start).forEach((g) => cuts.push(g));
+  }
+  const kept = keptRanges(seg.start, seg.end, cuts);
+  const isKept = (t) => kept.some((r2) => t >= r2.start && t <= r2.end);
+  const maxPunch = Math.min(6, Math.floor(dur / 10));
+  const punches = [];
+  for (const w of inside) {
+    if (punches.length >= maxPunch) break;
+    const strong = /[!¡]/.test(w.text) || EMPHASIS.test(w.text);
+    if (!strong) continue;
+    const at = Math.max(seg.start, w.start - 0.1);
+    if (!isKept(at) || !isKept(Math.min(seg.end, at + 1))) continue;
+    if (punches.some((p) => Math.abs(p - at) < spacing)) continue;
+    if (at - seg.start < 1.5 || seg.end - at < 2) continue;
+    punches.push(at);
+  }
+  for (const at of punches) {
+    effects.push({ type: "punch", at, duration: 1, zoom: 1.15 });
+    effects.push({ type: "sfx", at, sound: "hit" });
+  }
+  for (const c of cuts.slice(0, 8)) {
+    const at = c.end + 0.02;
+    if (isKept(at) && at < seg.end - 0.5) effects.push({ type: "sfx", at, sound: "whoosh" });
+  }
+  const fadeBudget = dur > 3;
+  if (fadeBudget) {
+    effects.push({ type: "fadeIn", duration: 0.3 });
+    effects.push({ type: "fadeOut", duration: 0.5 });
+  }
+  effects.push({ type: "polish" });
+  return { cuts, effects: effects.slice(0, MAX_EFFECTS) };
+}
+function planLong(words, segs, o = {}) {
+  const segments = [];
+  const body = [];
+  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  for (const [i, s] of sorted.entries()) {
+    if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3) body.push({ type: "sfx", at: s.start + 0.05, sound: "whoosh" });
+    const p = planEdit(words, s, o);
+    segments.push(...keptRanges(s.start, s.end, p.cuts));
+    body.push(...p.effects.filter((e) => e.type === "punch" || e.type === "sfx"));
+  }
+  const total = segments.reduce((a, r2) => a + (r2.end - r2.start), 0);
+  const effects = body.slice(0, MAX_EFFECTS - 3);
+  if (total > 3) effects.push({ type: "fadeIn", duration: 0.4 }, { type: "fadeOut", duration: 0.8 });
+  effects.push({ type: "polish" });
+  return { segments, effects };
+}
+
+// shared/chapters.ts
+var CHAPTER_MIN = 3;
+var CHAPTER_MIN_SEC = 10;
+var clock2 = (sec) => {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s % 3600 / 60);
+  const r2 = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(r2).padStart(2, "0")}` : `${m}:${String(r2).padStart(2, "0")}`;
+};
+function outputStarts(segs, kept) {
+  return segs.map((s) => kept.filter((k) => k.end <= s.start + 0.01).reduce((a, k) => a + (k.end - k.start), 0));
+}
+function chapterBlock(items, totalSec, firstLabel = "Inicio") {
+  const sorted = [...items].filter((c) => Number.isFinite(c.at) && c.at >= 0 && c.label.trim()).sort((a, b) => a.at - b.at);
+  const out = [];
+  for (const c of sorted) {
+    const prev = out[out.length - 1];
+    if (prev && c.at - prev.at < CHAPTER_MIN_SEC) continue;
+    out.push({ at: out.length === 0 ? 0 : c.at, label: c.label.trim().replace(/\s+/g, " ").slice(0, 60) });
+  }
+  while (out.length > 1 && totalSec - out[out.length - 1].at < CHAPTER_MIN_SEC) out.pop();
+  if (out.length < CHAPTER_MIN) return "";
+  if (out[0].label === "") out[0].label = firstLabel;
+  return out.map((c) => `${clock2(c.at)} ${c.label}`).join("\n");
+}
+
+// electron/services/momentJudge.ts
+var import_node_crypto8 = __toESM(require("node:crypto"));
+var import_node_fs23 = __toESM(require("node:fs"));
+var import_node_path16 = __toESM(require("node:path"));
 
 // electron/services/llm.ts
 var LLM_PROVIDERS = {
@@ -36953,7 +37232,7 @@ var keyOf = (words, c) => import_node_crypto8.default.createHash("sha1").update(
 function loadCache(file) {
   if (!file) return {};
   try {
-    const j = JSON.parse(import_node_fs22.default.readFileSync(file, "utf8"));
+    const j = JSON.parse(import_node_fs23.default.readFileSync(file, "utf8"));
     return typeof j === "object" && j ? j : {};
   } catch {
     return {};
@@ -36962,8 +37241,8 @@ function loadCache(file) {
 function saveCache(file, data) {
   if (!file) return;
   try {
-    import_node_fs22.default.mkdirSync(import_node_path15.default.dirname(file), { recursive: true });
-    import_node_fs22.default.writeFileSync(file, JSON.stringify(data));
+    import_node_fs23.default.mkdirSync(import_node_path16.default.dirname(file), { recursive: true });
+    import_node_fs23.default.writeFileSync(file, JSON.stringify(data));
   } catch {
   }
 }
@@ -37224,7 +37503,7 @@ var Autopilot = class {
       await prev.done.catch(() => void 0);
     }
     if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    const missing = !vod.filePath || !import_node_fs23.default.existsSync(vod.filePath);
+    const missing = !vod.filePath || !import_node_fs24.default.existsSync(vod.filePath);
     if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const ctrl = new AbortController();
     this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
@@ -37300,18 +37579,18 @@ var Autopilot = class {
     }
     if (known) this.d.transcripts.prune(vodId, spans);
     const chat = this.chatFileFor(vod);
-    if (chat) import_node_fs23.default.rmSync(chat, { force: true });
+    if (chat) import_node_fs24.default.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
     return { freedBytes, kept: outs.length };
   }
   /** Archivo con la actividad del chat de este directo, si se guardó. */
   chatFileFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs23.default.existsSync(this.d.chatDir)) return void 0;
+    if (!vod.streamStartedAt || !import_node_fs24.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs23.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs24.default.readdirSync(this.d.chatDir)) {
       try {
-        const full = import_node_path16.default.join(this.d.chatDir, f);
-        const j = JSON.parse(import_node_fs23.default.readFileSync(full, "utf8"));
+        const full = import_node_path17.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs24.default.readFileSync(full, "utf8"));
         if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
@@ -37322,7 +37601,7 @@ var Autopilot = class {
     const f = this.chatFileFor(vod);
     if (!f) return void 0;
     try {
-      return ChatBins.fromArray(JSON.parse(import_node_fs23.default.readFileSync(f, "utf8")).bins).toArray();
+      return ChatBins.fromArray(JSON.parse(import_node_fs24.default.readFileSync(f, "utf8")).bins).toArray();
     } catch {
       return void 0;
     }
@@ -37458,7 +37737,7 @@ var Autopilot = class {
           try {
             const r2 = await judgeCandidates(llmConf, words, pool, {
               fetchFn: this.d.llmFetch,
-              cacheFile: this.d.judgeDir ? import_node_path16.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
+              cacheFile: this.d.judgeDir ? import_node_path17.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
               onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
               signal: () => throwIfCancelled()
             });
@@ -37471,6 +37750,23 @@ var Autopilot = class {
         }
         if (judged) {
           const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
+          if (this.d.prefsFile) {
+            const prefs = loadPrefs(this.d.prefsFile);
+            const act = describePrefs(prefs).filter((x) => x.active);
+            if (prefs.enabled && act.length) {
+              judged = applyPrefs(judged, prefs);
+              notes.push(`Preferencias aprendidas aplicadas: ${act.map((x) => `${x.kind} ${x.bias > 0 ? "+" : ""}${x.bias}`).join(", ")}.`);
+            }
+          }
+          const raw = judged;
+          if (this.d.momentsDir) {
+            const edits = loadEdits(this.d.momentsDir, vod.id);
+            const n = edits.exclude.length + edits.pin.length + Object.keys(edits.trims).length + edits.extra.length;
+            if (n) {
+              judged = applyEdits(judged, edits);
+              notes.push(`Se aplicaron ${n} correcci\xF3n(es) tuyas a la selecci\xF3n de momentos.`);
+            }
+          }
           const textFor = textFn(words);
           const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
           const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
@@ -37479,6 +37775,7 @@ var Autopilot = class {
             clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
             if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota m\xEDnima (${quality}/10); no se rellen\xF3 con momentos flojos.`);
           }
+          if (this.d.momentsDir) saveSnapshot(this.d.momentsDir, vod.id, raw, [...clips?.chosen ?? [], ...sum?.chosen ?? []].map((c) => c.start), quality);
           if (sum && sum.chosen.length) {
             if (sum.totalSec >= MIN_SUMMARY_SEC) {
               summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
@@ -37831,7 +38128,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs23.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs24.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -37873,8 +38170,8 @@ ${text}`,
 };
 
 // electron/domain/channel.ts
-var import_node_fs24 = __toESM(require("node:fs"));
-var import_node_path17 = __toESM(require("node:path"));
+var import_node_fs25 = __toESM(require("node:fs"));
+var import_node_path18 = __toESM(require("node:path"));
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
 var OFFLINE_CONFIRMATIONS = 2;
 var MIN_IMPORT_SEC = 60;
@@ -38034,10 +38331,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs24.default.mkdirSync(c.dir, { recursive: true });
-      const file = import_node_path17.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs24.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs24.default.renameSync(`${file}.tmp`, file);
+      import_node_fs25.default.mkdirSync(c.dir, { recursive: true });
+      const file = import_node_path18.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
+      import_node_fs25.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs25.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -38682,11 +38979,11 @@ var EngineService = class {
   hash(payload, crons) {
     return import_node_crypto9.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
-  async put(gh, path20, text, msg) {
-    const cur = await gh.getContent(path20);
+  async put(gh, path21, text, msg) {
+    const cur = await gh.getContent(path21);
     if (cur?.text === text) return;
-    const sha = await gh.putContent(path20, text, msg, cur?.sha);
-    if (!sha) throw new Error(`No se pudo escribir ${path20} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    const sha = await gh.putContent(path21, text, msg, cur?.sha);
+    if (!sha) throw new Error(`No se pudo escribir ${path21} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
   }
   /** Sube el motor, el flujo y la configuración. */
   async push(gh, payload, crons) {
@@ -39124,6 +39421,7 @@ var AppContext = class {
   library;
   transcripts;
   speakers;
+  moments;
   tasks;
   groups;
   pubs;
@@ -39147,7 +39445,7 @@ var AppContext = class {
   constructor(o) {
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
-    this.log = new Logger(import_node_path18.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
+    this.log = new Logger(import_node_path19.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
       this.log.warn(`data.json estaba da\xF1ado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? " (se recuper\xF3 la \xFAltima copia buena)" : " (se empez\xF3 con datos vac\xEDos)"}`);
@@ -39185,8 +39483,15 @@ var AppContext = class {
       tools,
       source: (id) => this.vods.ensureFile(id),
       segmentationModel: o.diarizationModel ?? "",
-      modelsDir: import_node_path18.default.join(o.userDataDir, "models"),
+      modelsDir: import_node_path19.default.join(o.userDataDir, "models"),
       engine: o.diarizationEngine
+    });
+    this.moments = new MomentsService({
+      dir: import_node_path19.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path19.default.join(o.userDataDir, "preferences.json"),
+      words: (id) => this.transcripts.words(id),
+      duration: (id) => this.store.data.vods.find((v) => v.id === id)?.durationSec,
+      exists: (id) => this.store.data.vods.some((v) => v.id === id)
     });
     this.transcripts.speakerOverlay = (id) => this.speakers.overlay(id);
     const subtitles = { speakerColors: (words) => this.speakers.colorsFor(words), words: (vodId) => this.transcripts.words(vodId), ensure: (vodId, ranges) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
@@ -39208,7 +39513,7 @@ var AppContext = class {
         const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
         return r2.stdout.trim().split("\n")[0] ?? "";
       },
-      chat: { dir: import_node_path18.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
+      chat: { dir: import_node_path19.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
     this.autopilot = new Autopilot({
       store: this.store,
@@ -39223,8 +39528,10 @@ var AppContext = class {
       categories: this.categories,
       library: this.library,
       pubs: this.pubs,
-      chatDir: import_node_path18.default.join(o.userDataDir, "chat"),
-      judgeDir: import_node_path18.default.join(o.userDataDir, "judgements"),
+      chatDir: import_node_path19.default.join(o.userDataDir, "chat"),
+      judgeDir: import_node_path19.default.join(o.userDataDir, "judgements"),
+      momentsDir: import_node_path19.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path19.default.join(o.userDataDir, "preferences.json"),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
@@ -39393,10 +39700,10 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs25.default.mkdtempSync(import_node_path19.default.join(import_node_os7.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs26.default.mkdtempSync(import_node_path20.default.join(import_node_os7.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
-    userDataDir: import_node_path19.default.join(work, "data"),
-    defaultOutputDir: import_node_path19.default.join(work, "out"),
+    userDataDir: import_node_path20.default.join(work, "data"),
+    defaultOutputDir: import_node_path20.default.join(work, "out"),
     cipher: plainCipher,
     notifier: silentNotifier,
     headless: true,
@@ -39462,7 +39769,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs25.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs26.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -39470,7 +39777,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs25.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs26.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -39504,7 +39811,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs25.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs26.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {

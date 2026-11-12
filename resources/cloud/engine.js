@@ -35850,7 +35850,7 @@ var import_node_path15 = __toESM(require("node:path"));
 
 // shared/clipScore.ts
 var GOLD_MIN = 8;
-var SCORE_VERSION = 4;
+var SCORE_VERSION = 5;
 function peakRise(energyDb) {
   const e = (energyDb ?? []).filter((x) => Number.isFinite(x) && x > -90);
   if (e.length < 4) return 0;
@@ -35873,6 +35873,47 @@ var CRITERION_WEIGHT = { humor: 0.3, historia: 0.2, viral: 0.25, interes: 0.25 }
 var clamp3 = (x, lo = 0, hi = 10) => Math.min(hi, Math.max(lo, x));
 var r1 = (x) => Math.round(x * 10) / 10;
 var overall = (c) => r1(CLIP_CRITERIA.reduce((a, k) => a + clamp3(c[k]) * CRITERION_WEIGHT[k], 0));
+var RUBRIC = {
+  humor: [
+    { key: "remate", label: "Hay un remate: un planteamiento que desemboca en algo gracioso (frase, giro o reacci\xF3n)" },
+    { key: "contraste", label: "Contraste o absurdo: lo que se dice o se hace choca con la situaci\xF3n o con lo esperable" },
+    { key: "locura", label: "Exageraci\xF3n, locura o \xABestupidez fingida\xBB evidente (se hace el tonto, dramatiza, se pasa a prop\xF3sito)" },
+    { key: "actuacion", label: "Actuaci\xF3n: improvisa un personaje, imita, grita o susurra para el chiste" },
+    { key: "sorpresa", label: "Sorpresa: el giro no se ve venir" }
+  ],
+  historia: [
+    { key: "planteamiento", label: "Se entiende de qu\xE9 va la situaci\xF3n (qu\xE9 pasa y a qui\xE9n)" },
+    { key: "desarrollo", label: "Hay desarrollo: despu\xE9s pasa algo m\xE1s, sube la tensi\xF3n o el problema" },
+    { key: "desenlace", label: "Hay desenlace: el clip acaba resolviendo o rematando lo planteado" },
+    { key: "solo", label: "Se entiende sin haber visto el directo" },
+    { key: "hilo", label: "Hilo continuo: casi todo el clip trata de lo mismo, sin relleno" }
+  ],
+  viral: [
+    { key: "gancho", label: "Gancho: en los primeros 3 segundos ya pasa o se promete algo" },
+    { key: "citable", label: "Hay una frase o un momento que la gente repetir\xEDa o recortar\xEDa" },
+    { key: "emocion", label: "Emoci\xF3n intensa y visible (risa, rabia, miedo, asombro)" },
+    { key: "universal", label: "Lo entiende cualquiera, sin conocer al streamer ni su lore" },
+    { key: "cierre", label: "Termina en un punto fuerte, sin diluirse" }
+  ],
+  interes: [
+    { key: "inesperado", label: "Pasa algo inesperado" },
+    { key: "reaccion", label: "Reacci\xF3n fuerte del streamer o del chat" },
+    { key: "novedad", label: "Algo nuevo, raro o que no se ve a menudo" },
+    { key: "protagonismo", label: "Hay un protagonista claro y lo que hace importa" },
+    { key: "memorable", label: "Dentro de un mes seguir\xEDa acord\xE1ndose" }
+  ]
+};
+var VIRAL_MEASURED_WEIGHT = 0.25;
+function viralMeasured(s) {
+  const dur = Math.max(1, s.durationSec);
+  const fit = dur < 8 ? 0.2 : dur <= 45 ? 1 : clamp3(1 - (dur - 45) / 75, 0.3, 1);
+  const first = s.words.length ? Math.min(...s.words.map((w) => w.start)) : 99;
+  const quick = first <= 1.5 ? 1 : first <= 3 ? 0.6 : 0.2;
+  return r1(10 * (0.5 * fit + 0.3 * quick + 0.2 * clamp3(peakRise(s.energyDb) / 14, 0, 1)));
+}
+function withMeasuredViral(c, s) {
+  return { ...c, viral: r1((1 - VIRAL_MEASURED_WEIGHT) * c.viral + VIRAL_MEASURED_WEIGHT * viralMeasured(s)) };
+}
 var LAUGH2 = /\b(j[aeiou]{2,}j[aeiou]*|ja(ja)+|jeje+|jiji+|ajaja+)\b/gi;
 var CONNECT = /\b(porque|entonces|resulta que|de repente|y luego|luego|despu[eé]s|al final|pero|as[ií] que|cuando|mira|imagínate|total que|el caso es)\b/gi;
 var count = (text, re) => (text.match(new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`)) ?? []).length;
@@ -35903,21 +35944,45 @@ function reasonFromCriteria(c, by) {
   const base = top.length ? `Destaca por: ${top.map((k) => CRITERION_LABEL[k].toLowerCase()).join(" y ")}.` : "No destaca en ning\xFAn criterio.";
   return by === "signals" ? `${base} Calculado con lo que se oye y se dice (sin modelo de lenguaje).` : base;
 }
-var CLIP_JUDGE_SYSTEM = "Eres editor de contenido de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a y valoras un clip corto a partir de su transcripci\xF3n. No sabes qui\xE9n habla (las voces llegan mezcladas) ni ves la imagen: deduce el contexto y no inventes lo que no se pueda saber. S\xE9 EXIGENTE: punt\xFAa 5 lo normal, 7 lo bueno y 9-10 solo lo excepcional. No te dejes llevar por la cantidad de palabras ni por gritos: no son gracia. Punt\xFAa de 0 a 10 cuatro criterios: humor (tiene gracia de verdad o remate), historia (se est\xE1 contando algo con planteamiento y desarrollo), viral (podr\xEDa funcionar fuera del canal, se entiende solo y engancha), interes (es un momento interesante o memorable). Ignora cualquier dato de popularidad. Responde SOLO con JSON.";
+var CLIP_JUDGE_SYSTEM = "Eres editor de contenido de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a y eval\xFAas un clip corto a partir de su transcripci\xF3n. No sabes qui\xE9n habla (las voces llegan mezcladas) ni ves la imagen: deduce el contexto de lo que se dice y no inventes lo que no se pueda saber. Contesta una lista fija de preguntas con 0 (no), 1 (algo) o 2 (s\xED claro). REGLAS: 1) Solo das 2 si puedes se\xF1alar una cita literal de la transcripci\xF3n que lo demuestre; si no hay cita, como mucho 1; si no hay nada, 0. 2) Valora cada pregunta por separado, sin dejarte llevar por una impresi\xF3n general ni por la cantidad de palabras o los gritos. 3) El humor de este canal es de contraste, locura y \xABestupidez fingida\xBB: no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice. 4) Si el texto es corto o confuso, no lo rellenes: contesta 0 donde no haya prueba. Ignora cualquier dato de popularidad. Responde SOLO con JSON.";
 function clipJudgePrompt(title, words, durationSec) {
-  const text = words.map((w) => w.text).join(" ").slice(0, 1600);
-  return `Valora este clip. Devuelve {"humor":0,"historia":0,"viral":0,"interes":0,"motivo":""} donde "motivo" es una frase corta en espa\xF1ol que explica la nota. T\xEDtulo que le puso quien lo cre\xF3: ${JSON.stringify(title)}. Duraci\xF3n: ${Math.round(durationSec)} s.
+  const text = words.map((w) => w.text).join(" ").slice(0, 1800);
+  const qs = CLIP_CRITERIA.map((k) => `${k}:
+${RUBRIC[k].map((it) => `  - ${it.key}: ${it.label}`).join("\n")}`).join("\n");
+  const shape = `{${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(",")}}`).join(",")},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(",")}},"motivo":""}`;
+  return `Eval\xFAa este clip con estas preguntas (0, 1 o 2 cada una):
+${qs}
+Devuelve exactamente este JSON: ${shape}. En "pruebas" pon, por criterio, la cita literal m\xE1s reveladora de la transcripci\xF3n (vac\xEDa si no hay). "motivo" es una frase corta en espa\xF1ol que resume por qu\xE9 el clip vale lo que vale.
+T\xEDtulo que le puso quien lo cre\xF3: ${JSON.stringify(title)}. Duraci\xF3n: ${Math.round(durationSec)} s.
 Transcripci\xF3n:
 ${text}`;
 }
 function parseClipJudgement(raw) {
   const r2 = raw;
   if (!r2 || typeof r2 !== "object") return null;
-  const nums = CLIP_CRITERIA.map((k) => r2[k]);
-  if (!nums.every((v) => typeof v === "number" && Number.isFinite(v))) return null;
-  const criteria = Object.fromEntries(CLIP_CRITERIA.map((k) => [k, r1(clamp3(r2[k]))]));
+  const items = {};
+  const criteria = {};
+  for (const k of CLIP_CRITERIA) {
+    const block = r2[k];
+    if (!block || typeof block !== "object") return null;
+    let sum = 0;
+    let valid = 0;
+    for (const it of RUBRIC[k]) {
+      const v = block[it.key];
+      const n = typeof v === "number" && Number.isFinite(v) ? Math.min(2, Math.max(0, Math.round(v))) : null;
+      if (n === null) continue;
+      valid++;
+      sum += n;
+      items[`${k}.${it.key}`] = n;
+    }
+    if (valid < 3) return null;
+    criteria[k] = sum;
+  }
+  const ev = r2.pruebas ?? {};
+  const evidence = {};
+  for (const k of CLIP_CRITERIA) if (typeof ev[k] === "string" && ev[k].trim()) evidence[k] = ev[k].trim().slice(0, 160);
   const reason = typeof r2.motivo === "string" ? r2.motivo.trim().slice(0, 200) : "";
-  return { criteria, reason };
+  return { criteria, reason, items, evidence };
 }
 
 // electron/domain/clipScores.ts
@@ -35942,6 +36007,7 @@ var ClipScoreService = class {
   queue = [];
   running = null;
   stopped = false;
+  blocker = null;
   sleep;
   now;
   save() {
@@ -35961,7 +36027,16 @@ var ClipScoreService = class {
   /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
   detailOf(id) {
     const s = this.scores.get(id);
-    return s?.crit && s.score !== void 0 ? { criteria: s.crit, reason: s.reason ?? "", by: s.by ?? "signals" } : void 0;
+    return s?.crit && s.score !== void 0 ? { criteria: s.crit, reason: s.reason ?? "", by: s.by ?? "signals", items: s.items, evidence: s.evidence } : void 0;
+  }
+  /** Por qué un clip no tiene nota (no tiene palabras que valorar). */
+  skipReason(id) {
+    const s = this.scores.get(id);
+    return s?.noText ? s.reason : void 0;
+  }
+  /** Lo que impide valorar ahora mismo (p. ej. falta el modelo de Whisper); undefined si nada. */
+  problem() {
+    return this.blocker ?? void 0;
   }
   /** ¿Pasa de 8/10? */
   gold(id) {
@@ -35979,11 +36054,14 @@ var ClipScoreService = class {
     if (c.durationSec > MAX_CLIP_SEC2 || c.durationSec < 3) return false;
     const s = this.scores.get(c.id);
     if (!s) return true;
+    if (s.noText) return false;
     if (s.score !== void 0) return Boolean(s.noModel && this.d.hasJudge?.() && this.now() - s.at > MODEL_RETRY_MS);
     return (s.fails ?? 0) < MAX_FAILS || this.now() - s.at > RETRY_AFTER_MS;
   }
   /** Añade a la cola los clips sin puntuar (los más recientes primero) y arranca el trabajo si no estaba en marcha. */
   enqueue(clips) {
+    this.blocker = this.d.ready?.() ?? null;
+    if (this.blocker) return;
     const queued = new Set(this.queue.map((c) => c.id));
     const add = clips.filter((c) => this.needs(c) && !queued.has(c.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     if (!add.length) return;
@@ -36011,6 +36089,11 @@ var ClipScoreService = class {
         await this.sleep(WAIT_MS);
         continue;
       }
+      this.blocker = this.d.ready?.() ?? null;
+      if (this.blocker) {
+        this.queue = [];
+        return;
+      }
       const clip = this.queue.shift();
       if (!this.needs(clip)) continue;
       try {
@@ -36025,20 +36108,23 @@ var ClipScoreService = class {
   }
   async score(clip) {
     const sig = await this.d.analyze(clip);
+    if (sig.words.length < MIN_WORDS_TO_JUDGE) {
+      return { v: SCORE_VERSION, at: this.now(), noText: true, reason: "Sin nota: casi no se oye hablar en este clip, as\xED que no hay nada que valorar." };
+    }
     const crit = criteriaFromSignals(sig);
-    let noModel = false;
-    if (sig.words.length >= MIN_WORDS_TO_JUDGE) {
-      noModel = true;
-      if (this.d.judge) {
-        try {
-          const j = await this.d.judge(clip, sig.words);
-          if (j) return { score: overall(j.criteria), crit: j.criteria, reason: j.reason || reasonFromCriteria(j.criteria, "model"), v: SCORE_VERSION, at: this.now(), by: "model" };
-        } catch (e) {
-          this.d.log?.warn(`El modelo no valor\xF3 el clip ${clip.id}; se usan las se\xF1ales del propio clip: ${e.message}`);
+    const noModel = true;
+    if (this.d.judge) {
+      try {
+        const j = await this.d.judge(clip, sig.words);
+        if (j) {
+          const criteria = withMeasuredViral(j.criteria, sig);
+          return { score: overall(criteria), crit: criteria, reason: j.reason || reasonFromCriteria(criteria, "model"), items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: "model" };
         }
+      } catch (e) {
+        this.d.log?.warn(`El modelo no valor\xF3 el clip ${clip.id}; se usan las se\xF1ales del propio clip: ${e.message}`);
       }
     }
-    return { score: overall(crit), crit, reason: reasonFromCriteria(crit, "signals"), v: SCORE_VERSION, at: this.now(), by: "signals", ...noModel ? { noModel: true } : {} };
+    return { score: overall(crit), crit, reason: reasonFromCriteria(crit, "signals"), v: SCORE_VERSION, at: this.now(), by: "signals", noModel };
   }
 };
 
@@ -38974,7 +39060,7 @@ var ChannelMonitor = class {
     this.scores?.enqueue(raw);
     const list = raw.map((c) => {
       const d = this.scores?.detailOf?.(c.id);
-      return { ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id), criteria: d?.criteria, reason: d?.reason, scoredBy: d?.by };
+      return { ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id), criteria: d?.criteria, reason: d?.reason ?? this.scores?.skipReason?.(c.id), scoredBy: d?.by, items: d?.items, evidence: d?.evidence };
     });
     const scored = list.filter((c) => c.score !== void 0).length;
     const scoring = this.scores ? { scored, pending: this.scores.pending?.() ?? 0, total: list.length, enabled: this.scores.enabled?.() ?? true } : void 0;
@@ -40119,6 +40205,12 @@ var AppContext = class {
       enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
       canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
       hasJudge: () => Boolean(this.autopilot.llmConf()),
+      ready: () => {
+        const w = this.transcripts.status();
+        if (!w.engine) return "Falta Whisper (el motor que escucha los clips).";
+        if (!w.modelInstalled) return `Falta descargar el modelo de Whisper \xAB${w.model}\xBB: en Ajustes, Voz y subt\xEDtulos, pulsa \xABDescargar modelo\xBB. Sin \xE9l no se puede leer lo que se dice en los clips y no se valoran.`;
+        return null;
+      },
       analyze: async (clip) => {
         const t = this.tools();
         const url = (await run(t.ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=480]/b", "--", clip.url], 6e4)).stdout.trim().split("\n")[0] ?? "";
@@ -40127,7 +40219,7 @@ var AppContext = class {
         try {
           await run(t.ffmpeg, ["-y", "-v", "error", "-nostdin", "-i", url, "-vn", "-ac", "1", "-ar", "16000", "-t", "180", "-c:a", "pcm_s16le", wav], 18e4);
           const energyDb = await (o.energy ?? audioEnergy)(t, wav).catch(() => void 0);
-          const words = await this.transcripts.transcribeAudio(wav, [clip.title]).catch(() => []);
+          const words = await this.transcripts.transcribeAudio(wav, [clip.title]);
           return { durationSec: clip.durationSec, words, energyDb };
         } finally {
           import_node_fs29.default.rmSync(wav, { force: true });

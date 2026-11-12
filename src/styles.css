@@ -559,3 +559,13 @@ button.btn.danger-text { color: var(--bad); }
 .cv-name { font-weight: 700; }
 .cv-made { margin-top: 14px; max-width: 480px; display: flex; flex-direction: column; gap: 6px; }
 .chip.on { border-color: var(--accent-2); background: rgba(161, 139, 255, .22); color: #fff; }
+
+.crit-why { margin-top: 8px; }
+.crit-why summary { cursor: pointer; color: var(--accent-2); font-weight: 600; font-size: 13px; }
+.crit-group { margin-top: 10px; }
+.crit-group-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.crit-q { display: flex; gap: 8px; font-size: 12.5px; align-items: baseline; padding: 2px 0; }
+.crit-pts { min-width: 40px; text-align: center; border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--muted); }
+.crit-pts.p1 { background: rgba(255, 200, 60, .18); color: #ffd166; }
+.crit-pts.p2 { background: rgba(60, 200, 120, .2); color: #5ee0a0; }
+.crit-proof { margin: 3px 0 0 48px; font-style: italic; }

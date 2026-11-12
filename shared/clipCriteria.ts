@@ -26,6 +26,63 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 
 export const overall = (c: ClipCriteria): number => r1(CLIP_CRITERIA.reduce((a, k) => a + clamp(c[k]) * CRITERION_WEIGHT[k], 0));
 
+/**
+ * Rúbrica objetiva: cada criterio son cinco preguntas de sí/algo/no (2/1/0 puntos). La nota de un criterio es la suma (0 a 10),
+ * así que cualquier nota se puede auditar pregunta a pregunta y con la prueba (cita literal) que dio el modelo.
+ */
+export interface RubricItem { key: string; label: string }
+export const RUBRIC: Record<ClipCriterion, RubricItem[]> = {
+  humor: [
+    { key: 'remate', label: 'Hay un remate: un planteamiento que desemboca en algo gracioso (frase, giro o reacción)' },
+    { key: 'contraste', label: 'Contraste o absurdo: lo que se dice o se hace choca con la situación o con lo esperable' },
+    { key: 'locura', label: 'Exageración, locura o «estupidez fingida» evidente (se hace el tonto, dramatiza, se pasa a propósito)' },
+    { key: 'actuacion', label: 'Actuación: improvisa un personaje, imita, grita o susurra para el chiste' },
+    { key: 'sorpresa', label: 'Sorpresa: el giro no se ve venir' },
+  ],
+  historia: [
+    { key: 'planteamiento', label: 'Se entiende de qué va la situación (qué pasa y a quién)' },
+    { key: 'desarrollo', label: 'Hay desarrollo: después pasa algo más, sube la tensión o el problema' },
+    { key: 'desenlace', label: 'Hay desenlace: el clip acaba resolviendo o rematando lo planteado' },
+    { key: 'solo', label: 'Se entiende sin haber visto el directo' },
+    { key: 'hilo', label: 'Hilo continuo: casi todo el clip trata de lo mismo, sin relleno' },
+  ],
+  viral: [
+    { key: 'gancho', label: 'Gancho: en los primeros 3 segundos ya pasa o se promete algo' },
+    { key: 'citable', label: 'Hay una frase o un momento que la gente repetiría o recortaría' },
+    { key: 'emocion', label: 'Emoción intensa y visible (risa, rabia, miedo, asombro)' },
+    { key: 'universal', label: 'Lo entiende cualquiera, sin conocer al streamer ni su lore' },
+    { key: 'cierre', label: 'Termina en un punto fuerte, sin diluirse' },
+  ],
+  interes: [
+    { key: 'inesperado', label: 'Pasa algo inesperado' },
+    { key: 'reaccion', label: 'Reacción fuerte del streamer o del chat' },
+    { key: 'novedad', label: 'Algo nuevo, raro o que no se ve a menudo' },
+    { key: 'protagonismo', label: 'Hay un protagonista claro y lo que hace importa' },
+    { key: 'memorable', label: 'Dentro de un mes seguiría acordándose' },
+  ],
+};
+/** Puntos de una respuesta: 0 no, 1 algo, 2 sí. */
+export const POINTS_LABEL = ['No', 'Algo', 'Sí'] as const;
+export type RubricItems = Record<string, number>;
+export type Evidence = Partial<Record<ClipCriterion, string>>;
+
+/** Peso de lo medido (duración, arranque rápido, pico de volumen) dentro de «Puede ser viral»; el resto es la rúbrica. */
+export const VIRAL_MEASURED_WEIGHT = 0.25;
+
+/** Lo medible de un clip para la viralidad, de 0 a 10: duración adecuada (8 a 45 s), que se hable pronto y el pico de volumen. */
+export function viralMeasured(s: ClipSignals): number {
+  const dur = Math.max(1, s.durationSec);
+  const fit = dur < 8 ? 0.2 : dur <= 45 ? 1 : clamp(1 - (dur - 45) / 75, 0.3, 1);
+  const first = s.words.length ? Math.min(...s.words.map((w) => w.start)) : 99;
+  const quick = first <= 1.5 ? 1 : first <= 3 ? 0.6 : 0.2;
+  return r1(10 * (0.5 * fit + 0.3 * quick + 0.2 * clamp(peakRise(s.energyDb) / 14, 0, 1)));
+}
+
+/** La nota de viralidad final: rúbrica del modelo más lo medido en el clip. El resto de criterios es la rúbrica tal cual. */
+export function withMeasuredViral(c: ClipCriteria, s: ClipSignals): ClipCriteria {
+  return { ...c, viral: r1((1 - VIRAL_MEASURED_WEIGHT) * c.viral + VIRAL_MEASURED_WEIGHT * viralMeasured(s)) };
+}
+
 /** Nota final sin modelo de lenguaje: la media ponderada de los cuatro criterios sacados de las señales del clip. */
 export const heuristicScore = (s: ClipSignals): number => overall(criteriaFromSignals(s));
 
@@ -72,27 +129,60 @@ export function reasonFromCriteria(c: ClipCriteria, by: 'model' | 'signals'): st
 }
 
 export const CLIP_JUDGE_SYSTEM =
-  'Eres editor de contenido de un streamer de Twitch que habla en español de España y valoras un clip corto a partir de su transcripción. ' +
-  'No sabes quién habla (las voces llegan mezcladas) ni ves la imagen: deduce el contexto y no inventes lo que no se pueda saber. ' +
-  'Sé EXIGENTE: puntúa 5 lo normal, 7 lo bueno y 9-10 solo lo excepcional. No te dejes llevar por la cantidad de palabras ni por gritos: no son gracia. ' +
-  'Puntúa de 0 a 10 cuatro criterios: humor (tiene gracia de verdad o remate), historia (se está contando algo con planteamiento y desarrollo), viral (podría funcionar fuera del canal, se entiende solo y engancha), interes (es un momento interesante o memorable). ' +
+  'Eres editor de contenido de un streamer de Twitch que habla en español de España y evalúas un clip corto a partir de su transcripción. ' +
+  'No sabes quién habla (las voces llegan mezcladas) ni ves la imagen: deduce el contexto de lo que se dice y no inventes lo que no se pueda saber. ' +
+  'Contesta una lista fija de preguntas con 0 (no), 1 (algo) o 2 (sí claro). REGLAS: ' +
+  '1) Solo das 2 si puedes señalar una cita literal de la transcripción que lo demuestre; si no hay cita, como mucho 1; si no hay nada, 0. ' +
+  '2) Valora cada pregunta por separado, sin dejarte llevar por una impresión general ni por la cantidad de palabras o los gritos. ' +
+  '3) El humor de este canal es de contraste, locura y «estupidez fingida»: no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice. ' +
+  '4) Si el texto es corto o confuso, no lo rellenes: contesta 0 donde no haya prueba. ' +
   'Ignora cualquier dato de popularidad. Responde SOLO con JSON.';
 
 export function clipJudgePrompt(title: string, words: Word[], durationSec: number): string {
-  const text = words.map((w) => w.text).join(' ').slice(0, 1600);
+  const text = words.map((w) => w.text).join(' ').slice(0, 1800);
+  const qs = CLIP_CRITERIA.map((k) => `${k}:\n${RUBRIC[k].map((it) => `  - ${it.key}: ${it.label}`).join('\n')}`).join('\n');
+  const shape = `{${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(',')}}`).join(',')},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(',')}},"motivo":""}`;
   return (
-    'Valora este clip. Devuelve {"humor":0,"historia":0,"viral":0,"interes":0,"motivo":""} donde "motivo" es una frase corta en español que explica la nota. ' +
+    `Evalúa este clip con estas preguntas (0, 1 o 2 cada una):\n${qs}\n` +
+    `Devuelve exactamente este JSON: ${shape}. En "pruebas" pon, por criterio, la cita literal más reveladora de la transcripción (vacía si no hay). ` +
+    '"motivo" es una frase corta en español que resume por qué el clip vale lo que vale.\n' +
     `Título que le puso quien lo creó: ${JSON.stringify(title)}. Duración: ${Math.round(durationSec)} s.\nTranscripción:\n${text}`
   );
 }
 
-/** Valida la respuesta del modelo: sin los cuatro números no hay valoración (nunca se inventa una nota). */
-export function parseClipJudgement(raw: unknown): { criteria: ClipCriteria; reason: string } | null {
+export interface ClipJudgement {
+  criteria: ClipCriteria;
+  reason: string;
+  /** Respuesta de cada pregunta de la rúbrica (0, 1 o 2), por «criterio.pregunta». */
+  items: RubricItems;
+  evidence: Evidence;
+}
+
+/** Valida la respuesta del modelo: cada criterio necesita al menos tres respuestas válidas; la nota del criterio es la suma de sus cinco (0 a 10). Nunca se inventa una nota. */
+export function parseClipJudgement(raw: unknown): ClipJudgement | null {
   const r = raw as Record<string, unknown> | null;
   if (!r || typeof r !== 'object') return null;
-  const nums = CLIP_CRITERIA.map((k) => r[k]);
-  if (!nums.every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
-  const criteria = Object.fromEntries(CLIP_CRITERIA.map((k) => [k, r1(clamp(r[k] as number))])) as ClipCriteria;
+  const items: RubricItems = {};
+  const criteria = {} as ClipCriteria;
+  for (const k of CLIP_CRITERIA) {
+    const block = r[k] as Record<string, unknown> | null;
+    if (!block || typeof block !== 'object') return null;
+    let sum = 0;
+    let valid = 0;
+    for (const it of RUBRIC[k]) {
+      const v = block[it.key];
+      const n = typeof v === 'number' && Number.isFinite(v) ? Math.min(2, Math.max(0, Math.round(v))) : null;
+      if (n === null) continue;
+      valid++;
+      sum += n;
+      items[`${k}.${it.key}`] = n;
+    }
+    if (valid < 3) return null;
+    criteria[k] = sum;
+  }
+  const ev = (r.pruebas ?? {}) as Record<string, unknown>;
+  const evidence: Evidence = {};
+  for (const k of CLIP_CRITERIA) if (typeof ev[k] === 'string' && ev[k].trim()) evidence[k] = (ev[k] as string).trim().slice(0, 160);
   const reason = typeof r.motivo === 'string' ? r.motivo.trim().slice(0, 200) : '';
-  return { criteria, reason };
+  return { criteria, reason, items, evidence };
 }

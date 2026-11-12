@@ -420,7 +420,7 @@ export interface ClipsResult {
   loading: boolean;
   warning: string;
   /** Cómo va la valoración en segundo plano de los clips de tu canal (ausente en otros canales). */
-  scoring?: { scored: number; pending: number; total: number; enabled: boolean };
+  scoring?: { scored: number; pending: number; total: number; enabled: boolean; /** Lo que impide valorar ahora (p. ej. falta el modelo de Whisper). */ problem?: string };
 }
 
 export interface TwitchClip {
@@ -444,6 +444,10 @@ export interface TwitchClip {
   reason?: string;
   /** Cómo se valoró: con el modelo de lenguaje o solo con lo que se oye y se dice. */
   scoredBy?: 'model' | 'signals';
+  /** Respuesta (0 no, 1 algo, 2 sí) a cada pregunta de la rúbrica, por «criterio.pregunta»; solo si lo valoró el modelo. */
+  items?: Record<string, number>;
+  /** Cita literal con la que el modelo justifica cada criterio. */
+  evidence?: Partial<Record<'humor' | 'historia' | 'viral' | 'interes', string>>;
 }
 
 /** Estado del vigilante del canal, para el Panel. */

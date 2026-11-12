@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { TwitchClip } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import { isGold, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
-import { criteriaFromSignals, overall, reasonFromCriteria, type ClipCriteria } from '../../shared/clipCriteria';
+import { criteriaFromSignals, overall, reasonFromCriteria, withMeasuredViral, type ClipCriteria, type ClipJudgement, type Evidence, type RubricItems } from '../../shared/clipCriteria';
 
 interface Stored {
   /** Nota 0-10. Ausente si el análisis falló. */
@@ -18,6 +18,11 @@ interface Stored {
   by?: 'model' | 'signals';
   /** Intentos fallidos seguidos. */
   fails?: number;
+  /** Respuestas de la rúbrica y pruebas (citas) del modelo. */
+  items?: RubricItems;
+  evidence?: Evidence;
+  /** El clip no tiene palabras que valorar: no se puntúa (y no se repite). */
+  noText?: boolean;
   /** Se puntuó solo con las señales porque no había modelo (o falló): se repite en cuanto haya uno. */
   noModel?: boolean;
 }
@@ -27,7 +32,9 @@ export interface ClipScoreDeps {
   /** Baja el audio del clip y saca sus palabras y su volumen. Lanza si no se puede. */
   analyze: (clip: TwitchClip) => Promise<ClipSignals>;
   /** Valoración del contenido por el modelo de lenguaje (cuatro criterios y motivo); null si no hay modelo o no respondió. */
-  judge?: (clip: TwitchClip, words: Word[]) => Promise<{ criteria: ClipCriteria; reason: string } | null>;
+  judge?: (clip: TwitchClip, words: Word[]) => Promise<ClipJudgement | null>;
+  /** Texto con lo que falta para poder valorar (p. ej. el modelo de Whisper); null si todo está listo. */
+  ready?: () => string | null;
   /** ¿Hay un modelo de lenguaje configurado ahora? Si lo hay, los clips puntuados sin él se vuelven a valorar. */
   hasJudge?: () => boolean;
   /** Solo se trabaja cuando el equipo está libre (sin directo en marcha ni análisis del piloto). */
@@ -58,6 +65,7 @@ export class ClipScoreService {
   private queue: TwitchClip[] = [];
   private running: Promise<void> | null = null;
   private stopped = false;
+  private blocker: string | null = null;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
 
@@ -90,9 +98,20 @@ export class ClipScoreService {
   }
 
   /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
-  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'signals' } | undefined {
+  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'signals'; items?: RubricItems; evidence?: Evidence } | undefined {
     const s = this.scores.get(id);
-    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'signals' } : undefined;
+    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'signals', items: s.items, evidence: s.evidence } : undefined;
+  }
+
+  /** Por qué un clip no tiene nota (no tiene palabras que valorar). */
+  skipReason(id: string): string | undefined {
+    const s = this.scores.get(id);
+    return s?.noText ? s.reason : undefined;
+  }
+
+  /** Lo que impide valorar ahora mismo (p. ej. falta el modelo de Whisper); undefined si nada. */
+  problem(): string | undefined {
+    return this.blocker ?? undefined;
   }
 
   /** ¿Pasa de 8/10? */
@@ -114,12 +133,15 @@ export class ClipScoreService {
     if (c.durationSec > MAX_CLIP_SEC || c.durationSec < 3) return false;
     const s = this.scores.get(c.id);
     if (!s) return true;
+    if (s.noText) return false;
     if (s.score !== undefined) return Boolean(s.noModel && this.d.hasJudge?.() && this.now() - s.at > MODEL_RETRY_MS);
     return (s.fails ?? 0) < MAX_FAILS || this.now() - s.at > RETRY_AFTER_MS;
   }
 
   /** Añade a la cola los clips sin puntuar (los más recientes primero) y arranca el trabajo si no estaba en marcha. */
   enqueue(clips: TwitchClip[]): void {
+    this.blocker = this.d.ready?.() ?? null;
+    if (this.blocker) return;
     const queued = new Set(this.queue.map((c) => c.id));
     const add = clips.filter((c) => this.needs(c) && !queued.has(c.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     if (!add.length) return;
@@ -151,6 +173,11 @@ export class ClipScoreService {
         await this.sleep(WAIT_MS);
         continue;
       }
+      this.blocker = this.d.ready?.() ?? null;
+      if (this.blocker) {
+        this.queue = [];
+        return;
+      }
       const clip = this.queue.shift()!;
       if (!this.needs(clip)) continue;
       try {
@@ -166,20 +193,23 @@ export class ClipScoreService {
 
   private async score(clip: TwitchClip): Promise<Stored> {
     const sig = await this.d.analyze(clip);
+    // sin palabras no hay nada que valorar: no se inventa una nota (un clip mudo no es «aburrido», es que no se puede leer)
+    if (sig.words.length < MIN_WORDS_TO_JUDGE) {
+      return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip, así que no hay nada que valorar.' };
+    }
     const crit = criteriaFromSignals(sig);
-    // el modelo lee todos los clips con algo que leer: el humor que no sube el volumen solo lo puede ver él
-    let noModel = false;
-    if (sig.words.length >= MIN_WORDS_TO_JUDGE) {
-      noModel = true;
-      if (this.d.judge) {
-        try {
-          const j = await this.d.judge(clip, sig.words);
-          if (j) return { score: overall(j.criteria), crit: j.criteria, reason: j.reason || reasonFromCriteria(j.criteria, 'model'), v: SCORE_VERSION, at: this.now(), by: 'model' };
-        } catch (e) {
-          this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
+    const noModel = true; // se repite con modelo en cuanto lo haya
+    if (this.d.judge) {
+      try {
+        const j = await this.d.judge(clip, sig.words);
+        if (j) {
+          const criteria = withMeasuredViral(j.criteria, sig);
+          return { score: overall(criteria), crit: criteria, reason: j.reason || reasonFromCriteria(criteria, 'model'), items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model' };
         }
+      } catch (e) {
+        this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
       }
     }
-    return { score: overall(crit), crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals', ...(noModel ? { noModel: true } : {}) };
+    return { score: overall(crit), crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals', noModel: noModel };
   }
 }

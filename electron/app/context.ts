@@ -241,6 +241,12 @@ export class AppContext {
       enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
       canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
       hasJudge: () => Boolean(this.autopilot.llmConf()),
+      ready: () => {
+        const w = this.transcripts.status();
+        if (!w.engine) return 'Falta Whisper (el motor que escucha los clips).';
+        if (!w.modelInstalled) return `Falta descargar el modelo de Whisper «${w.model}»: en Ajustes, Voz y subtítulos, pulsa «Descargar modelo». Sin él no se puede leer lo que se dice en los clips y no se valoran.`;
+        return null;
+      },
       analyze: async (clip) => {
         const t = this.tools();
         const url = (await run(t.ytdlp, ['--no-warnings', '--no-playlist', '-g', '-f', 'b[height<=480]/b', '--', clip.url], 60_000)).stdout.trim().split('\n')[0] ?? '';
@@ -249,7 +255,7 @@ export class AppContext {
         try {
           await run(t.ffmpeg, ['-y', '-v', 'error', '-nostdin', '-i', url, '-vn', '-ac', '1', '-ar', '16000', '-t', '180', '-c:a', 'pcm_s16le', wav], 180_000);
           const energyDb = await (o.energy ?? measureEnergy)(t, wav).catch(() => undefined);
-          const words = await this.transcripts.transcribeAudio(wav, [clip.title]).catch(() => []);
+          const words = await this.transcripts.transcribeAudio(wav, [clip.title]);
           return { durationSec: clip.durationSec, words, energyDb };
         } finally {
           fs.rmSync(wav, { force: true });

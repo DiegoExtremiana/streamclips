@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { TwitchClip } from '../shared/types';
 import { ClipScoreService, type ClipScoreDeps } from '../electron/domain/clipScores';
+import type { ClipJudgement } from '../shared/clipCriteria';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -19,6 +20,8 @@ const clip = (id: string, over: Partial<TwitchClip> = {}): TwitchClip => ({ id, 
 const loud = [...Array.from({ length: 24 }, () => -40), ...Array.from({ length: 6 }, () => -14)];
 const phrase = 'no puede ser madre mía jajaja increíble vamos ostia no me lo creo'.split(' ');
 const hype = Array.from({ length: 75 }, (_, i) => ({ text: phrase[i % phrase.length], start: i * 0.4, end: i * 0.4 + 0.3 }));
+
+const judged = (n: number, reason = 'Motivo'): ClipJudgement => ({ criteria: { humor: n, historia: n, viral: n, interes: n }, reason, items: { 'humor.remate': n >= 8 ? 2 : 0 }, evidence: { humor: 'cita' } });
 
 function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
   const analyzed: string[] = [];
@@ -49,7 +52,8 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(svc.gold('c2'), false);
     assert.equal(svc.gold('no-existe'), false);
     assert.ok((svc.scoreOf('good1') ?? 0) >= 8, 'la nota del clip bueno es de 8 o más');
-    assert.ok((svc.scoreOf('c2') ?? 99) < 8);
+    assert.equal(svc.scoreOf('c2'), undefined, 'un clip casi mudo no recibe nota');
+    assert.ok(svc.skipReason('c2'));
     assert.equal(svc.scoreOf('no-existe'), undefined);
     // otra instancia con el mismo archivo no vuelve a analizar nada
     const again = make({}, file);
@@ -106,7 +110,7 @@ describe('puntuación de clips en segundo plano', () => {
 
   it('el modelo lee los clips que tienen algo que leer (no los de una palabra) y su nota manda sobre las señales', async () => {
     const asked: string[] = [];
-    const { svc } = make({ judge: async (c) => { asked.push(c.id); const n = c.id === 'good1' ? 9.5 : 2; return { criteria: { humor: n, historia: n, viral: n, interes: n }, reason: n > 5 ? 'Remate con sorpresa' : 'Charla sin más' }; } });
+    const { svc } = make({ judge: async (c) => { asked.push(c.id); const n = c.id === 'good1' ? 9.5 : 2; return { ...judged(n), reason: n > 5 ? 'Remate con sorpresa' : 'Charla sin más' }; } });
     svc.enqueue([...many(10), clip('good1', { views: 500 }), clip('good2', { views: 500 })]);
     await svc.idle();
     assert.deepEqual(asked.sort(), ['good1', 'good2'], 'sin texto que leer no se gasta modelo');
@@ -116,7 +120,7 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(d.by, 'model');
     assert.equal(d.reason, 'Remate con sorpresa');
     assert.equal(d.criteria.humor, 9.5);
-    assert.equal(svc.scoreOf('good2'), 2);
+    assert.ok((svc.scoreOf('good2') ?? 99) < 4, 'la nota del modelo manda (la viralidad suma un poco de lo medido)');
   });
 
   it('si el modelo falla o no hay, vale la nota por señales', async () => {
@@ -136,7 +140,7 @@ describe('puntuación de clips en segundo plano', () => {
     const quiet = 'el otro día fui a la tienda a comprar pan y me dijeron que era un libro entonces compré el libro'.split(' ').map((text, i) => ({ text, start: i * 0.5, end: i * 0.5 + 0.4 }));
     const { svc } = make({
       analyze: async () => ({ durationSec: 30, words: quiet, energyDb: Array.from({ length: 30 }, () => -40) }),
-      judge: async () => ({ criteria: { humor: 9, historia: 8, viral: 8, interes: 8 }, reason: 'Remate absurdo' }),
+      judge: async () => ({ ...judged(9), reason: 'Remate absurdo' }),
     });
     svc.enqueue([clip('c1')]);
     await svc.idle();
@@ -153,7 +157,7 @@ describe('puntuación de clips en segundo plano', () => {
       hasJudge: () => has,
       judge: async () => {
         asked++;
-        return { criteria: { humor: 6, historia: 6, viral: 6, interes: 6 }, reason: 'Normal' };
+        return judged(6, 'Normal');
       },
     });
     // al principio no hay modelo: judge existe pero la app aún no tiene clave y devuelve null
@@ -162,7 +166,7 @@ describe('puntuación de clips en segundo plano', () => {
     await noKey.svc.idle();
     assert.equal(noKey.svc.detailOf('good1')!.by, 'signals');
     // con el mismo archivo y ya con clave, se vuelve a analizar, pero pasado el tiempo de espera
-    const again = make({ now: () => t, hasJudge: () => true, judge: async () => ({ criteria: { humor: 9, historia: 9, viral: 9, interes: 9 }, reason: 'Muy bueno' }) }, noKey.file);
+    const again = make({ now: () => t, hasJudge: () => true, judge: async () => judged(9, 'Muy bueno') }, noKey.file);
     again.svc.enqueue([clip('good1')]);
     await again.svc.idle();
     assert.equal(again.analyzed.length, 0, 'recién puntuado: aún no insiste');
@@ -174,6 +178,46 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(svc.scoreOf('good1'), undefined);
     assert.equal(asked + analyzed.length, 0);
     has = true;
+  });
+
+  it('un clip sin palabras no se puntúa con ceros: queda sin nota con su motivo y no se repite', async () => {
+    const { svc, analyzed } = make({ analyze: async (c) => { return { durationSec: 30, words: [{ text: 'ah', start: 1, end: 1.2 }], energyDb: loud, ...(c.id ? {} : {}) }; }, judge: async () => judged(9) });
+    svc.enqueue([clip('c1')]);
+    await svc.idle();
+    assert.equal(svc.scoreOf('c1'), undefined);
+    assert.equal(svc.detailOf('c1'), undefined);
+    assert.match(svc.skipReason('c1') ?? '', /no hay nada que valorar/);
+    assert.equal(analyzed.length, 0);
+    svc.enqueue([clip('c1')]);
+    await svc.idle();
+    assert.equal(svc.skipReason('c1') !== undefined, true);
+  });
+
+  it('el modelo guarda las respuestas de la rúbrica y sus pruebas, y la viralidad incluye lo medido', async () => {
+    const { svc } = make({ judge: async () => judged(10) });
+    svc.enqueue([clip('good1')]);
+    await svc.idle();
+    const d = svc.detailOf('good1')!;
+    assert.equal(d.by, 'model');
+    assert.equal(d.items?.['humor.remate'], 2);
+    assert.equal(d.evidence?.humor, 'cita');
+    assert.equal(d.criteria.humor, 10);
+    assert.ok(d.criteria.viral <= 10 && d.criteria.viral > 7.5, String(d.criteria.viral));
+  });
+
+  it('si falta Whisper no se valora ni se descarga nada, y se dice por qué; al arreglarlo sigue', async () => {
+    let problem: string | null = 'Falta el modelo de Whisper';
+    const { svc, analyzed } = make({ ready: () => problem });
+    svc.enqueue([clip('c1'), clip('c2')]);
+    await svc.idle();
+    assert.equal(analyzed.length, 0);
+    assert.equal(svc.problem(), 'Falta el modelo de Whisper');
+    assert.equal(svc.pending(), 0);
+    problem = null;
+    svc.enqueue([clip('c1'), clip('c2')]);
+    await svc.idle();
+    assert.equal(analyzed.length, 2);
+    assert.equal(svc.problem(), undefined);
   });
 
   it('un archivo de puntuaciones estropeado o de otra versión se ignora', async () => {

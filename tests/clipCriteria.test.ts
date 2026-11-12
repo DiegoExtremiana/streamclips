@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIP_CRITERIA, CRITERION_WEIGHT, clipJudgePrompt, criteriaFromSignals, heuristicScore, overall, parseClipJudgement, reasonFromCriteria } from '../shared/clipCriteria';
+import { CLIP_CRITERIA, CRITERION_WEIGHT, RUBRIC, clipJudgePrompt, criteriaFromSignals, heuristicScore, overall, parseClipJudgement, reasonFromCriteria, viralMeasured, withMeasuredViral } from '../shared/clipCriteria';
 
 const speech = (phrase: string, dur: number, perSec = 2.5) => {
   const base = phrase.split(' ');
@@ -40,18 +40,52 @@ describe('criterios de la nota de un clip', () => {
     assert.match(reasonFromCriteria({ humor: 1, historia: 1, viral: 1, interes: 1 }, 'signals'), /No destaca.*sin modelo de lenguaje/);
   });
 
-  it('la respuesta del modelo se valida: sin los cuatro números no hay nota, y se acota de 0 a 10', () => {
-    assert.equal(parseClipJudgement({ humor: 5, historia: 5, viral: 5 }), null);
-    assert.equal(parseClipJudgement({ humor: '8', historia: 5, viral: 5, interes: 5 }), null);
-    assert.equal(parseClipJudgement(null), null);
-    const ok = parseClipJudgement({ humor: 12, historia: -2, viral: 7.26, interes: 5, motivo: '  Buen remate  ' })!;
-    assert.deepEqual(ok.criteria, { humor: 10, historia: 0, viral: 7.3, interes: 5 });
-    assert.equal(ok.reason, 'Buen remate');
+  const answer = (n: number) => Object.fromEntries(CLIP_CRITERIA.map((k) => [k, Object.fromEntries(RUBRIC[k].map((it) => [it.key, n]))]));
+
+  it('la rúbrica tiene cinco preguntas por criterio y la nota del criterio es la suma de sus respuestas (0 a 10)', () => {
+    for (const k of CLIP_CRITERIA) assert.equal(RUBRIC[k].length, 5);
+    const all2 = parseClipJudgement({ ...answer(2), motivo: 'Muy bueno' })!;
+    assert.deepEqual(all2.criteria, { humor: 10, historia: 10, viral: 10, interes: 10 });
+    const all1 = parseClipJudgement(answer(1))!;
+    assert.deepEqual(all1.criteria, { humor: 5, historia: 5, viral: 5, interes: 5 });
+    const mixed = parseClipJudgement({ ...answer(0), humor: { remate: 2, contraste: 2, locura: 1, actuacion: 0, sorpresa: 1 } })!;
+    assert.equal(mixed.criteria.humor, 6);
+    assert.equal(mixed.items['humor.remate'], 2);
+    assert.equal(mixed.items['humor.actuacion'], 0);
   });
 
-  it('el prompt incluye la transcripción y no menciona visualizaciones', () => {
+  it('la respuesta del modelo se valida: sin preguntas suficientes no hay nota y cada respuesta se acota a 0, 1 o 2', () => {
+    assert.equal(parseClipJudgement(null), null);
+    assert.equal(parseClipJudgement({ humor: 5, historia: 5, viral: 5, interes: 5 }), null, 'el formato antiguo de solo números ya no vale');
+    const { viral: _v, ...sinViral } = answer(1) as Record<string, unknown>;
+    assert.equal(parseClipJudgement(sinViral), null);
+    assert.equal(parseClipJudgement({ ...answer(1), humor: { remate: 2, contraste: 1 } }), null, 'con menos de tres respuestas válidas no se acepta');
+    const weird = parseClipJudgement({ ...answer(1), humor: { remate: 9, contraste: -3, locura: '2', actuacion: 1.4, sorpresa: 1 }, pruebas: { humor: '  «no me lo creo»  ', viral: 5 }, motivo: '  Buen remate  ' })!;
+    assert.equal(weird.items['humor.remate'], 2);
+    assert.equal(weird.items['humor.contraste'], 0);
+    assert.equal(weird.items['humor.locura'], undefined, 'una respuesta que no es número se ignora');
+    assert.equal(weird.criteria.humor, 2 + 0 + 1 + 1);
+    assert.equal(weird.evidence.humor, '«no me lo creo»');
+    assert.equal(weird.evidence.viral, undefined);
+    assert.equal(weird.reason, 'Buen remate');
+  });
+
+  it('«puede ser viral» mezcla la rúbrica con lo medido: duración adecuada, que se hable pronto y el pico de volumen', () => {
+    const good = { durationSec: 25, words: speech('hola que tal', 25), energyDb: loud };
+    const bad = { durationSec: 150, words: speech('hola que tal', 150).map((w) => ({ ...w, start: w.start + 20, end: w.end + 20 })), energyDb: quiet };
+    assert.ok(viralMeasured(good) > 7, String(viralMeasured(good)));
+    assert.ok(viralMeasured(bad) < 3, String(viralMeasured(bad)));
+    const base = { humor: 4, historia: 4, viral: 8, interes: 4 };
+    assert.ok(withMeasuredViral(base, good).viral > withMeasuredViral(base, bad).viral);
+    assert.equal(withMeasuredViral(base, good).humor, 4, 'solo cambia la viralidad');
+    assert.ok(withMeasuredViral({ ...base, viral: 0 }, good).viral <= 2.5, 'lo medido por sí solo no da una viralidad alta');
+  });
+
+  it('el prompt incluye la rúbrica, pide citas, la transcripción y no menciona visualizaciones', () => {
     const p = clipJudgePrompt('Mi clip', speech('hola que tal', 4), 4);
     assert.match(p, /Transcripción:\nhola que tal/);
+    for (const k of CLIP_CRITERIA) for (const it of RUBRIC[k]) assert.ok(p.includes(`${it.key}:`), it.key);
+    assert.match(p, /pruebas/);
     assert.ok(!/vistas|visualizaciones/i.test(p.replace('Ignora', '')));
   });
 });

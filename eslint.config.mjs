@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['node_modules', 'dist', 'dist-electron', 'dist-test', 'release', 'tests/e2e/out', 'resources'],
+    ignores: ['node_modules', 'dist', 'dist-electron', 'dist-test', 'release', 'tests/e2e/out', 'resources', '.tmp-*'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

@@ -4,7 +4,7 @@ import type { ClipsResult, OutputItem, TwitchClip, VodJob } from '../../shared/t
 type ClipsResultScoring = NonNullable<ClipsResult['scoring']>;
 import { fmtDate, fmtTime } from '../../shared/time';
 import { clipLibraryState, defaultDir, filterClips, type ClipLibraryState, type ClipSort, type SortDir } from '../../shared/twitchClips';
-import { CLIP_CRITERIA, CRITERION_LABEL } from '../../shared/clipCriteria';
+import { CLIP_CRITERIA, CRITERION_LABEL, POINTS_LABEL, RUBRIC } from '../../shared/clipCriteria';
 
 import { errMsg } from '../lib';
 import { IconPlus, IconSearch, IconSortAsc, IconSortDesc } from '../icons';
@@ -32,6 +32,24 @@ function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
       ))}
       {!compact && clip.reason && <div className="crit-reason">{clip.reason}</div>}
       {!compact && <div className="muted small">{by}</div>}
+      {!compact && clip.items && (
+        <details className="crit-why" data-testid={`why-${clip.id}`}>
+          <summary>Ver por qué, pregunta a pregunta</summary>
+          {CLIP_CRITERIA.map((k) => (
+            <div key={k} className="crit-group">
+              <div className="crit-group-title">{CRITERION_LABEL[k]}: {fmtScore(cr[k])} de 10</div>
+              {RUBRIC[k].map((it) => (
+                <div key={it.key} className="crit-q">
+                  <span className={`crit-pts p${clip.items?.[`${k}.${it.key}`] ?? 0}`}>{POINTS_LABEL[clip.items?.[`${k}.${it.key}`] ?? 0]}</span>
+                  <span>{it.label}</span>
+                </div>
+              ))}
+              {clip.evidence?.[k] && <div className="crit-proof muted small">Prueba: «{clip.evidence[k]}»</div>}
+            </div>
+          ))}
+          <div className="muted small">«Puede ser viral» mezcla estas preguntas (75 %) con lo medido en el clip (25 %): duración adecuada, que se hable pronto y el pico de volumen.</div>
+        </details>
+      )}
     </div>
   );
 }
@@ -57,6 +75,7 @@ function ClipPreview({ clip, state, busy, onAdd, onClose }: { clip: TwitchClip; 
         ) : (
           <div className="muted" role="status" style={{ padding: 30, textAlign: 'center' }}>Cargando el clip desde Twitch…</div>
         )}
+        {clip.score === undefined && clip.reason && <div className="muted small" data-testid="clip-preview-noscore" style={{ marginTop: 8 }}>{clip.reason}</div>}
         {clip.score !== undefined && (
           <div className="clipprev-score" data-testid="clip-preview-score">
             <div className={`bigscore${clip.gold ? ' gold' : ''}`}>{fmtScore(clip.score)}<small>/10</small></div>
@@ -194,7 +213,9 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
       </div>
       {own && scoring && (
         <div className="twscoring" data-testid="scoring-status" role="status">
-          {!scoring.enabled ? (
+          {scoring.problem ? (
+            <span className="small" data-testid="scoring-problem">{scoring.problem}</span>
+          ) : !scoring.enabled ? (
             <span className="muted small">La valoración en segundo plano está desactivada (Ajustes, Piloto automático).</span>
           ) : scoring.pending > 0 ? (
             <>

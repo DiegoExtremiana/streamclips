@@ -48,8 +48,8 @@ export class ChannelMonitor {
   private lastWarn: { msg: string; at: number } = { msg: '', at: 0 };
   private busy = false;
   private stream: TwitchStream | null = null;
-  /** Puntuación interna de los clips del canal (solo se enseña si son «dorados»). */
-  scores?: { gold: (id: string) => boolean; enqueue: (clips: TwitchClip[]) => void };
+  /** Puntuación de los clips del canal: la nota y si son «dorados» (8 o más). */
+  scores?: { gold: (id: string) => boolean; scoreOf?: (id: string) => number | undefined; enqueue: (clips: TwitchClip[]) => void };
   /** Clips de otros canales consultados (se recuerdan unos minutos). */
   private others = new Map<string, { at: number; byId: Map<string, TwitchClip> }>();
   private lastCheck: string | null = null;
@@ -325,7 +325,7 @@ export class ChannelMonitor {
     }
     const raw = [...(this.clipCache?.byId.values() ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     this.scores?.enqueue(raw);
-    const list = raw.map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false }));
+    const list = raw.map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id) }));
     return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning, channel: this.d.creds().login, own: true };
   }
 

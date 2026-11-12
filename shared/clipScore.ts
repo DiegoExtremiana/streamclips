@@ -2,7 +2,7 @@ import type { Word } from './subtitles';
 import { HYPE } from './highlights';
 
 /**
- * Puntuación interna de un clip del canal (0-10). No se enseña: solo decide qué clips salen con el fondo dorado.
+ * Puntuación interna de un clip del canal (0-10). Se enseña en cada clip de tu canal (x/10), se puede ordenar por ella y decide qué clips salen con el fondo dorado.
  * Valora solo el contenido real del clip: nunca las visualizaciones ni la popularidad (un clip con 50 vistas puede ser un 9,5
  * y uno con 100.000 un 5). Con modelo de lenguaje la nota sale de su valoración de lo que pasa y se dice; sin él, de señales
  * medibles del propio clip: reacción en el audio, cuánto se habla, palabras de subidón o risas y duración.

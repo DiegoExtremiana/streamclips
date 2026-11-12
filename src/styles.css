@@ -491,3 +491,5 @@ button.btn.danger-text { color: var(--bad); }
 .twclip.gold { background: linear-gradient(150deg, #4a3a0c 0%, #7a5f12 55%, #5b4710 100%); border-color: #e6b52e; box-shadow: 0 0 0 1px rgba(230, 181, 46, 0.55), 0 4px 18px rgba(230, 181, 46, 0.18); }
 .twclip.gold .tile-title { color: #fff3c4; }
 .twclip.gold .muted { color: #e8d9a0; }
+.twscore { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 12px; font-weight: 700; background: rgba(0, 0, 0, 0.72); color: #fff; }
+.twclip.gold .twscore { background: #e0b43a; color: #1b1400; }

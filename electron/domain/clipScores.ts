@@ -5,7 +5,7 @@ import type { Word } from '../../shared/subtitles';
 import { heuristicScore, isGold, modelScore, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
 
 interface Stored {
-  /** Nota 0-10 (no se enseña). Ausente si el análisis falló. */
+  /** Nota 0-10. Ausente si el análisis falló. */
   score?: number;
   v: number;
   at: number;
@@ -70,7 +70,13 @@ export class ClipScoreService {
     }
   }
 
-  /** ¿Pasa de 8/10? (Lo único que se enseña de la puntuación.) */
+  /** Nota de un clip (0-10, un decimal) si ya está valorado. */
+  scoreOf(id: string): number | undefined {
+    const s = this.scores.get(id)?.score;
+    return typeof s === 'number' ? Math.round(s * 10) / 10 : undefined;
+  }
+
+  /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
     return isGold(this.scores.get(id)?.score);
   }

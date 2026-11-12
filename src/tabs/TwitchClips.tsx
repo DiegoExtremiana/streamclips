@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { OutputItem, TwitchClip, VodJob } from '../../shared/types';
 import { fmtDate, fmtTime } from '../../shared/time';
-import { clipLibraryState, filterClips, type ClipLibraryState } from '../../shared/twitchClips';
+import { clipLibraryState, filterClips, type ClipLibraryState, type ClipSort } from '../../shared/twitchClips';
 
 import { errMsg } from '../lib';
 import { IconPlus, IconSearch } from '../icons';
@@ -59,6 +59,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const [warning, setWarning] = useState('');
   const [query, setQuery] = useState('');
   const [show, setShow] = useState<Show>('all');
+  const [sort, setSort] = useState<ClipSort>('fecha');
   const [limit, setLimit] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
   /** Canal que se está viendo: '' es el propio. */
@@ -117,9 +118,9 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
     return { all: all.length, library: inLib, fresh: all.length - inLib };
   }, [clips, vods, outputs]);
   const matching = useMemo(() => {
-    const byName = filterClips(clips ?? [], query);
+    const byName = filterClips(clips ?? [], query, sort);
     return byName.filter((c) => show === 'all' || (show === 'library') === (clipLibraryState(c.id, vods, outputs) !== 'none'));
-  }, [clips, query, show, vods, outputs]);
+  }, [clips, query, sort, show, vods, outputs]);
   const shown = matching.slice(0, limit);
   const current = clips?.find((c) => c.id === open) ?? null;
 
@@ -166,6 +167,14 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           <IconSearch size={16} />
           <input type="search" aria-label="Buscar clips por nombre" placeholder="Buscar por nombre…" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} />
         </label>
+        <label className="row" style={{ gap: 6 }}>
+          <span className="muted small">Ordenar por</span>
+          <select aria-label="Ordenar clips por" value={sort} onChange={(e) => { setSort(e.target.value as ClipSort); setLimit(PAGE); }}>
+            <option value="fecha">Fecha</option>
+            <option value="nombre">Nombre</option>
+            <option value="nota" disabled={!own}>Nota</option>
+          </select>
+        </label>
         <div className="seg" role="group" aria-label="Qué clips mostrar">
           <button type="button" aria-pressed={show === 'all'} className={`segbtn ${show === 'all' ? 'active' : ''}`} onClick={() => { setShow('all'); setLimit(PAGE); }}>Todos ({counts.all})</button>
           <button type="button" aria-pressed={show === 'new'} className={`segbtn ${show === 'new' ? 'active' : ''}`} onClick={() => { setShow('new'); setLimit(PAGE); }}>Sin añadir ({counts.fresh})</button>
@@ -187,6 +196,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
               <div className="twthumb">
                 {c.thumbnail ? <img src={c.thumbnail} alt="" draggable={false} loading="lazy" /> : null}
                 <span className="twdur">{fmtTime(Math.round(c.durationSec))}</span>
+                {c.score !== undefined && <span className="twscore" data-testid={`twscore-${c.id}`} title="Nota del contenido del clip (no depende de las visualizaciones)">{String(c.score.toFixed(1)).replace('.', ',')}/10</span>}
               </div>
               <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.title}</div>
               <div className="muted small" style={{ padding: '0 3px' }}>{fmtDate(c.createdAt)} · {c.views} vis.</div>

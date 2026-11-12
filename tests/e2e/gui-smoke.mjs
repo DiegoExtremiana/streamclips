@@ -225,6 +225,13 @@ try {
   await page.getByText('Ningún clip se llama así.').waitFor();
   await page.getByLabel('Buscar clips por nombre').fill('');
   assert.equal((await twTitles()).length, 3);
+  await page.getByLabel('Ordenar clips por').selectOption('nombre');
+  assert.deepEqual(await twTitles(), ['Fallo épico', 'Pentakill increíble', 'Susto en la cueva'], 'ordenados por nombre de la A a la Z');
+  await page.getByLabel('Ordenar clips por').selectOption('nota');
+  assert.equal((await twTitles()).length, 3, 'ordenar por nota no pierde clips (aún sin valorar quedan por fecha)');
+  await page.getByLabel('Ordenar clips por').selectOption('fecha');
+  assert.deepEqual(await twTitles(), ['Fallo épico', 'Susto en la cueva', 'Pentakill increíble'], 'por defecto y al volver, por fecha');
+  log('clips: se ordenan por Fecha (por defecto), Nombre o Nota');
   await shot(page, '3a-clips-canal');
   await page.getByTestId('twclip-c-mid').click();
   const prev = page.getByTestId('clip-preview');

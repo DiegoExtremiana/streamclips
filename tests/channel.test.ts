@@ -347,18 +347,19 @@ describe('clips del canal', () => {
     assert.equal(job.twitchId, 'ajeno');
   });
 
-  it('los clips del canal propio salen con «gold» según la puntuación, sin enseñar la nota', async () => {
+  it('los clips del canal propio salen con «gold» según la puntuación y con su nota', async () => {
     const { e, twitch } = setup();
     twitch.clipList = [clip('a'), clip('b')];
     const queued: string[] = [];
-    e.ctx.channel.scores = { gold: (id) => id === 'a', enqueue: (cs) => queued.push(...cs.map((c) => c.id)) };
+    e.ctx.channel.scores = { gold: (id) => id === 'a', scoreOf: (id) => (id === 'a' ? 8.4 : undefined), enqueue: (cs) => queued.push(...cs.map((c) => c.id)) };
     const r = await e.ctx.channel.clips();
     assert.deepEqual(r.clips.map((c) => [c.id, c.gold]).sort(), [['a', true], ['b', false]]);
+    assert.deepEqual(r.clips.map((c) => [c.id, c.score]).sort(), [['a', 8.4], ['b', undefined]], 'la nota sale en cada clip valorado');
     assert.ok(queued.includes('a') && queued.includes('b'));
-    assert.ok(!JSON.stringify(r).includes('score'));
     // en otro canal no hay puntuación
     twitch.clipImpl = async () => [clip('z')];
     const o = await e.ctx.channel.clipsOf('otro');
     assert.equal(o.clips[0].gold, undefined);
+    assert.equal(o.clips[0].score, undefined);
   });
 });

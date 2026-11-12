@@ -430,8 +430,10 @@ export interface TwitchClip {
   thumbnail: string;
   /** Ya está en la Biblioteca (o descargándose). */
   imported?: boolean;
-  /** El programa lo valora muy bien (la nota es interna y no se enseña). Solo se puntúan los clips de tu canal. */
+  /** El programa lo valora muy bien (nota de 8 o más): sale con el fondo dorado. Solo se puntúan los clips de tu canal. */
   gold?: boolean;
+  /** Nota del contenido del clip, de 0 a 10 con un decimal; ausente si aún no se ha valorado. Nunca depende de las visualizaciones. */
+  score?: number;
 }
 
 /** Estado del vigilante del canal, para el Panel. */

@@ -48,6 +48,9 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(svc.gold('good1'), true);
     assert.equal(svc.gold('c2'), false);
     assert.equal(svc.gold('no-existe'), false);
+    assert.ok((svc.scoreOf('good1') ?? 0) >= 8, 'la nota del clip bueno es de 8 o más');
+    assert.ok((svc.scoreOf('c2') ?? 99) < 8);
+    assert.equal(svc.scoreOf('no-existe'), undefined);
     // otra instancia con el mismo archivo no vuelve a analizar nada
     const again = make({}, file);
     again.svc.enqueue(clips);

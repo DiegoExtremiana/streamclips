@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.24.1
+
+- **Ordenar los clips** (pestaña Clips): por **Fecha** (por defecto, los más recientes arriba), por **Nombre** (de la A a la Z, sin importar tildes) o por **Nota** (de mayor a menor; los que aún no tienen nota quedan al final). La búsqueda por nombre sigue funcionando con cualquier orden.
+- **La nota de cada clip se enseña** como dato individual (por ejemplo 8,4/10) en los clips de tu canal ya valorados; los de 8 o más siguen con el fondo dorado. Cambia lo dicho en la v0.24, donde la nota era interna. **La nota sigue sin depender de las visualizaciones.** En los clips de otros canales no hay nota, y por eso ordenar por Nota solo está disponible en tu canal.
+
+Límites: la nota aparece cuando el programa ha analizado el clip, y el análisis en segundo plano va poco a poco (solo con el equipo libre), así que al principio muchos clips no tendrán nota; los umbrales siguen sin calibrar con tus clips reales.
+
 ## Novedades de la v0.24
 
 - **Clips: buscar otros canales** (pestaña Clips): por defecto sale tu canal; escribe el nombre de otro canal de Twitch para ver sus clips de los últimos 12 meses y vuelve a tu canal cuando quieras.

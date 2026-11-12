@@ -31,4 +31,18 @@ describe('clips de Twitch en la interfaz', () => {
     assert.equal(clipLibraryState('x', [vod('v1', 'x', 'error')], []), 'none');
     assert.equal(clipLibraryState('x', [vod('v1', 'x', 'downloaded', 'live')], [out('o1', 'v1')]), 'none');
   });
+
+  it('se ordenan por fecha (por defecto), por nombre o por nota, con los sin valorar al final', () => {
+    const sc = (c: TwitchClip, score?: number): TwitchClip => ({ ...c, score });
+    const src = [
+      sc(clip('a', 'Zorro épico', '2026-10-01T00:00:00Z'), 7.5),
+      sc(clip('b', 'álbum', '2026-10-03T00:00:00Z'), 9.1),
+      sc(clip('c', 'Mono', '2026-10-02T00:00:00Z')),
+      sc(clip('d', 'Cebra', '2026-10-04T00:00:00Z'), 7.5),
+    ];
+    assert.deepEqual(filterClips(src, '').map((c) => c.id), ['d', 'b', 'c', 'a'], 'por defecto, fecha');
+    assert.deepEqual(filterClips(src, '', 'nombre').map((c) => c.id), ['b', 'd', 'c', 'a'], 'A a Z sin importar tildes');
+    assert.deepEqual(filterClips(src, '', 'nota').map((c) => c.id), ['b', 'd', 'a', 'c'], 'mayor nota primero, empates por fecha, sin valorar al final');
+    assert.deepEqual(filterClips(src, 'o', 'nota').map((c) => c.id), ['a', 'c'], 'el filtro por nombre sigue valiendo');
+  });
 });

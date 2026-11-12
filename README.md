@@ -2,6 +2,14 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.24
+
+- **Clips: buscar otros canales** (pestaña Clips): por defecto sale tu canal; escribe el nombre de otro canal de Twitch para ver sus clips de los últimos 12 meses y vuelve a tu canal cuando quieras.
+- **Nota interna y fondo dorado**: el programa analiza los clips de tu canal en segundo plano (lo que se dice y la reacción en el audio, y con una clave gratuita de Gemini o Groq, la valoración del modelo) y les da una nota de 0 a 10 que **no se enseña**. Los que superan el 8 salen con el fondo dorado. **La nota no tiene en cuenta visualizaciones ni popularidad, solo el contenido.** Solo trabaja cuando no hay un directo en curso ni el Piloto está ocupado, y se puede apagar en Piloto automático.
+- **Tamaño de cada ventana en la versión vertical** (editor de clips): arrastra la línea entre dos ventanas de la vista previa vertical (o usa las flechas del teclado, con Mayús para saltos grandes) y la otra ventana se adapta, como en el editor de clips de Twitch. También hay deslizadores de alto y ancho en el editor de diseño, además de las disposiciones predeterminadas.
+
+Límites: los umbrales del dorado sin modelo de lenguaje **no están calibrados con tus clips reales** (se probó la lógica con datos sintéticos); el análisis en segundo plano transcribe cada clip y en tu equipo puede tardar, sin medir; la búsqueda de otros canales no analiza sus clips.
+
 ## Novedades de la v0.23
 
 - **Revisar momentos** (Panel, en cada directo analizado): ves la nota de 0 a 10, el tipo, el motivo que dio el modelo y lo que se dice en cada candidato, también los que no entraron. Puedes **descartar**, **incluir** uno que se quedó fuera (aunque no llegue a la nota mínima), **ajustar dónde empieza y acaba** (minutos:segundos) y **añadir un tramo tuyo**. «Aplicar y regenerar» vuelve a montar los vídeos con tus cambios **sin volver a transcribir ni a preguntar al modelo** (usa lo guardado). Tus cambios se guardan aparte de la valoración del modelo y «Deshacer mis cambios» los quita.

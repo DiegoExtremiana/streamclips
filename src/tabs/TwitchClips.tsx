@@ -188,7 +188,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
                 {c.thumbnail ? <img src={c.thumbnail} alt="" draggable={false} loading="lazy" /> : null}
                 <span className="twdur">{fmtTime(Math.round(c.durationSec))}</span>
               </div>
-              <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.gold ? '★ ' : ''}{c.title}</div>
+              <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.title}</div>
               <div className="muted small" style={{ padding: '0 3px' }}>{fmtDate(c.createdAt)} · {c.views} vis.</div>
               <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
                 <span className={`badge twstate ${st}`} data-testid={`twstate-${c.id}`}>{STATE_LABEL[st]}</span>

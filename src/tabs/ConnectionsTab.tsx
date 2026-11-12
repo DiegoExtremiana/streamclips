@@ -5,6 +5,13 @@ import NetworksCard from './NetworksCard';
 import PanelTab from './PanelTab';
 import type { OutputItem, Publication, VodJob } from '../../shared/types';
 import type { TabId } from '../App';
+import { SideNav, useSubTab } from '../SubTabs';
+
+const SECTIONS = [
+  { id: 'estado', label: 'Estado y primeros pasos', hint: 'Cómo está tu canal y qué falta para que todo funcione solo.' },
+  { id: 'twitch', label: 'Twitch', hint: 'Tu canal y la aplicación gratuita de Twitch con la que el programa lee tus directos y clips.' },
+  { id: 'redes', label: 'Redes sociales', hint: 'YouTube, TikTok e Instagram: conecta las cuentas donde se publica.' },
+];
 
 export default function ConnectionsTab(props: { vods: VodJob[]; outputs: OutputItem[]; pubs: Publication[]; onChanged: () => Promise<void>; onNavigate: (tab: TabId) => void }) {
   const [clientId, setClientId] = useState('');
@@ -12,6 +19,7 @@ export default function ConnectionsTab(props: { vods: VodJob[]; outputs: OutputI
   const [login, setLogin] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sub, setSub] = useSubTab('streamclips.connections.sec', SECTIONS.map((x) => x.id));
 
   useEffect(() => {
     window.api
@@ -55,9 +63,12 @@ export default function ConnectionsTab(props: { vods: VodJob[]; outputs: OutputI
   }
 
   return (
-    <div className="grid">
+    <SideNav label="Conexiones" tabs={SECTIONS} value={sub} onChange={setSub}>
+      {sub === 'estado' && <div className="grid">
       <PanelTab vods={props.vods} outputs={props.outputs} pubs={props.pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="status" />
       <PanelTab vods={props.vods} outputs={props.outputs} pubs={props.pubs} onChanged={props.onChanged} onNavigate={props.onNavigate} part="guide" />
+      </div>}
+      {sub === 'twitch' && <div className="grid">
       <section className="card">
         <div className="row" style={{ gap: 10 }}>
           <h2>Twitch</h2>
@@ -92,8 +103,8 @@ export default function ConnectionsTab(props: { vods: VodJob[]; outputs: OutputI
         </div>
         {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
       </section>
-
-      <NetworksCard />
-    </div>
+      </div>}
+      {sub === 'redes' && <div className="grid"><NetworksCard /></div>}
+    </SideNav>
   );
 }

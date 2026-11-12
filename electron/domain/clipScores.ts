@@ -37,6 +37,8 @@ export interface ClipScoreDeps {
   ready?: () => string | null;
   /** ¿Hay un modelo de lenguaje configurado ahora? Si lo hay, los clips puntuados sin él se vuelven a valorar. */
   hasJudge?: () => boolean;
+  /** Por qué ahora no se trabaja (directo en marcha, análisis del piloto…); null si se puede. Solo para informar. */
+  waitReason?: () => string | null;
   /** Solo se trabaja cuando el equipo está libre (sin directo en marcha ni análisis del piloto). */
   canRun: () => boolean;
   /** ¿Está activado puntuar en segundo plano? (Solo para informar a la interfaz.) */
@@ -66,6 +68,7 @@ export class ClipScoreService {
   private running: Promise<void> | null = null;
   private stopped = false;
   private blocker: string | null = null;
+  private lastError: string | null = null;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
 
@@ -107,6 +110,14 @@ export class ClipScoreService {
   skipReason(id: string): string | undefined {
     const s = this.scores.get(id);
     return s?.noText ? s.reason : undefined;
+  }
+
+  /** Cómo está la cola ahora: por qué espera, cuántos clips han fallado y el último error. */
+  diagnostics(): { waiting?: string; failed: number; lastError?: string } {
+    let failed = 0;
+    for (const v of this.scores.values()) if (v.score === undefined && !v.noText && (v.fails ?? 0) > 0) failed++;
+    const waiting = this.queue.length && !this.d.canRun() ? (this.d.waitReason?.() ?? 'el equipo está ocupado') : undefined;
+    return { ...(waiting ? { waiting } : {}), failed, ...(this.lastError ? { lastError: this.lastError } : {}) };
   }
 
   /** Lo que impide valorar ahora mismo (p. ej. falta el modelo de Whisper); undefined si nada. */
@@ -182,9 +193,11 @@ export class ClipScoreService {
       if (!this.needs(clip)) continue;
       try {
         this.scores.set(clip.id, await this.score(clip));
+        this.lastError = null;
       } catch (e) {
         const prev = this.scores.get(clip.id);
         this.scores.set(clip.id, { v: SCORE_VERSION, at: this.now(), fails: (prev?.fails ?? 0) + 1 });
+        this.lastError = (e as Error).message.slice(0, 240);
         this.d.log?.warn(`No se pudo puntuar el clip ${clip.id}: ${(e as Error).message}`);
       }
       this.save();

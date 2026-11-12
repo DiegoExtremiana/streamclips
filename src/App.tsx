@@ -13,13 +13,13 @@ import Toasts from './Toasts';
 
 export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'portadas' | 'conexiones' | 'ajustes';
 
-const TABS: { id: TabId; label: string; hint: string; icon: ReactNode }[] = [
-  { id: 'programacion', label: 'Inicio', hint: 'Tus últimos clips y vídeos a la izquierda: arrástralos a un día (o una hora, en la línea de tiempo) del calendario y configura ahí su publicación.', icon: <IconPanel /> },
-  { id: 'biblioteca', label: 'Biblioteca', hint: 'Tus clips y vídeos: edítalos, ordénalos en carpetas y programa su publicación.', icon: <IconLibrary /> },
-  { id: 'clips', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, las herramientas para crear los tuyos a partir de un directo y los directos recogidos.', icon: <IconScissors /> },
-  { id: 'portadas', label: 'Portadas', hint: 'Tus piezas (PNG, fondos, fotos, documentos) con el nombre que quieras y las portadas que se componen con ellas.', icon: <IconImage /> },
-  { id: 'conexiones', label: 'Conexiones', hint: 'Estado de tu canal de Twitch, primeros pasos y tus redes sociales.', icon: <IconLink /> },
-  { id: 'ajustes', label: 'Ajustes', hint: 'Todo en un sitio, por secciones: carpetas y herramientas, inteligencia artificial, piloto automático, voz y subtítulos, tu estilo y publicar con el PC apagado.', icon: <IconSettings /> },
+const TABS: { id: TabId; label: string; blurb: string; hint: string; icon: ReactNode }[] = [
+  { id: 'programacion', blurb: 'Tu semana de subidas', label: 'Inicio', hint: 'Tus últimos clips y vídeos a la izquierda: arrástralos a un día (o una hora, en la línea de tiempo) del calendario y configura ahí su publicación.', icon: <IconPanel /> },
+  { id: 'biblioteca', blurb: 'Lo que has creado', label: 'Biblioteca', hint: 'Tus clips y vídeos: edítalos, ordénalos en carpetas y programa su publicación.', icon: <IconLibrary /> },
+  { id: 'clips', blurb: 'Tu canal y creación', label: 'Clips y publicación', hint: 'Los clips de tu canal de Twitch, las herramientas para crear los tuyos a partir de un directo y los directos recogidos.', icon: <IconScissors /> },
+  { id: 'portadas', blurb: 'Piezas y diseños', label: 'Portadas', hint: 'Tus piezas (PNG, fondos, fotos, documentos) con el nombre que quieras y las portadas que se componen con ellas.', icon: <IconImage /> },
+  { id: 'conexiones', blurb: 'Cuentas conectadas', label: 'Conexiones', hint: 'Estado de tu canal de Twitch, primeros pasos y tus redes sociales.', icon: <IconLink /> },
+  { id: 'ajustes', blurb: 'Todas las opciones', label: 'Ajustes', hint: 'Todo en un sitio, por secciones: carpetas y herramientas, inteligencia artificial, piloto automático, voz y subtítulos, tu estilo y publicar con el PC apagado.', icon: <IconSettings /> },
 ];
 
 export default function App() {
@@ -107,9 +107,9 @@ export default function App() {
         >
           <div className="nav-label">Menú</div>
           {TABS.map((t) => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1} className="navbtn" title={`${t.label} (Ctrl+${TABS.indexOf(t) + 1})`} onClick={() => setTab(t.id)}>
+            <button key={t.id} role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1} className="navbtn" title={`${t.hint} (Ctrl+${TABS.indexOf(t) + 1})`} onClick={() => setTab(t.id)}>
               {t.icon}
-              {t.label}
+              <span className="navtext"><span className="navname">{t.label}</span><span className="navblurb">{t.blurb}</span></span>
               {attention[t.id] ? <span className="navcount" aria-label={`${attention[t.id]} pendiente(s)`}>{attention[t.id]}</span> : null}
             </button>
           ))}

@@ -420,7 +420,7 @@ export interface ClipsResult {
   loading: boolean;
   warning: string;
   /** Cómo va la valoración en segundo plano de los clips de tu canal (ausente en otros canales). */
-  scoring?: { scored: number; pending: number; total: number; enabled: boolean; /** Lo que impide valorar ahora (p. ej. falta el modelo de Whisper). */ problem?: string };
+  scoring?: { scored: number; pending: number; total: number; enabled: boolean; /** Lo que impide valorar ahora (p. ej. falta el modelo de Whisper). */ problem?: string; /** Por qué espera ahora (directo en marcha…). */ waiting?: string; /** Clips que han fallado al valorarse. */ failed?: number; /** Último error al valorar un clip. */ lastError?: string };
 }
 
 export interface TwitchClip {

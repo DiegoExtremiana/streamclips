@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.25.1
+
+- **Los menús se parecen a los de Ajustes:** «Clips y publicación» (Clips de tu canal, Crear desde un VOD, Directos y actividad) y «Conexiones» (Estado y primeros pasos, Twitch, Redes sociales) pasan a un menú lateral con su explicación, y cada botón del menú principal lleva una línea que dice qué hay dentro. La Biblioteca y el calendario de Inicio mantienen sus interruptores de vista, que no son menús.
+- **Clips: se ve por qué no se están valorando.** Aviso de lo que falta (Whisper), «En pausa: hay un directo en marcha…» y, si algún clip falla, cuántos y el último error.
+
 ## Novedades de la v0.25.0
 
 - **Rúbrica objetiva para la nota.** Cada criterio (humor, se cuenta algo, puede ser viral, momento interesante) son **cinco preguntas** de sí / algo / no (2, 1 o 0 puntos); la nota del criterio es la suma (0 a 10) y la nota final, la media ponderada (humor 30 %, viral 25 %, interesante 25 %, se cuenta algo 20 %). El modelo solo puede dar un «sí» si cita una frase literal del clip; esa **prueba** y las 20 respuestas se ven en «Ver por qué, pregunta a pregunta». «Puede ser viral» mezcla su rúbrica (75 %) con tres cosas medidas en el clip (25 %): duración adecuada (8 a 45 s), que se hable pronto y el pico de volumen. La viralidad real no se puede medir de antemano: es una estimación con factores conocidos y nunca usa visualizaciones.

@@ -220,6 +220,20 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(svc.problem(), undefined);
   });
 
+  it('el diagnóstico dice por qué espera, cuántos fallaron y el último error', async () => {
+    let free = false;
+    let sleeps = 0;
+    const { svc } = make({ canRun: () => free, waitReason: () => 'hay un directo en marcha', sleep: async () => { if (++sleeps === 2) free = true; } });
+    svc.enqueue([clip('c1')]);
+    assert.equal(svc.diagnostics().waiting, 'hay un directo en marcha');
+    await svc.idle();
+    assert.equal(svc.diagnostics().waiting, undefined);
+    const bad = make({ analyze: async () => { throw new Error('yt-dlp no encontrado'); } });
+    bad.svc.enqueue([clip('c1'), clip('c2')]);
+    await bad.svc.idle();
+    assert.deepEqual(bad.svc.diagnostics(), { failed: 2, lastError: 'yt-dlp no encontrado' });
+  });
+
   it('un archivo de puntuaciones estropeado o de otra versión se ignora', async () => {
     const file = tmp();
     fs.writeFileSync(file, '{"c1":{"score":9,"v":0,"at":1},"c2":{');

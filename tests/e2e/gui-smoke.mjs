@@ -82,13 +82,19 @@ try {
   log('el puente seguro (window.api) funciona y la página no tiene acceso a Node');
 
   // ── las cuatro pestañas ──
-  for (const [name, heading] of [['Inicio', 'Próximas subidas'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Twitch'], ['Ajustes', 'Carpeta de salida']]) {
+  for (const [name, heading] of [['Inicio', 'Próximas subidas'], ['Clips y publicación', 'Clips de tu canal de Twitch'], ['Conexiones', 'Primeros pasos'], ['Ajustes', 'Carpeta de salida']]) {
     await tab(page, name);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
   }
   await tab(page, 'Biblioteca');
   await page.getByRole('tab', { name: 'Vídeos', exact: true }).waitFor();
   log('las seis pestañas se muestran');
+  await tab(page, 'Conexiones');
+  for (const name of ['Twitch', 'Redes sociales', 'Estado y primeros pasos']) await sub(page, name);
+  await tab(page, 'Clips y publicación');
+  for (const name of ['Crear desde un VOD', 'Directos y actividad', 'Clips de tu canal']) await sub(page, name);
+  assert.ok((await page.locator('.navblurb').count()) === 6, 'cada botón del menú lleva su explicación');
+  log('los menús de Clips y de Conexiones son laterales, como Ajustes, y el menú principal explica cada sección');
 
   // ── Inicio: últimos clips, últimos vídeos y calendario alineados en horizontal, sin scroll general ──
   await tab(page, 'Inicio');
@@ -200,6 +206,7 @@ try {
 
   // ── Conexiones ──
   await tab(page, 'Conexiones');
+  await sub(page, 'Twitch');
   await page.locator('#tw-login').fill('no válido!');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
   assert.match(await alertText(page), /nombre de canal no es válido/);

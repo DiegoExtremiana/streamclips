@@ -219,11 +219,12 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
             <span className="muted small">La valoración en segundo plano está desactivada (Ajustes, Piloto automático).</span>
           ) : scoring.pending > 0 ? (
             <>
+              {scoring.waiting && <span className="small" data-testid="scoring-waiting">En pausa: {scoring.waiting}. Seguirá solo cuando termine.</span>}
               <span className="small">Valorando tus clips en segundo plano: {scoring.scored} de {scoring.total}. Solo trabaja cuando no hay directo ni análisis en marcha.</span>
               <div className="progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${progress}%` }} /></div>
             </>
           ) : (
-            <span className="muted small">La nota sale del contenido: humor, si se cuenta algo, si puede ser viral y si es un momento interesante. No mira visualizaciones.</span>
+            <span className="muted small">{scoring.failed ? `${scoring.failed} clip(s) no se han podido valorar${scoring.lastError ? `: ${scoring.lastError}` : ''}. ` : ''}La nota sale del contenido: humor, si se cuenta algo, si puede ser viral y si es un momento interesante. No mira visualizaciones.</span>
           )}
         </div>
       )}

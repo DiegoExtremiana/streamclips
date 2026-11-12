@@ -240,6 +240,7 @@ export class AppContext {
       log: this.log,
       enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
       canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
+      waitReason: () => (this.channel.isLive() ? 'hay un directo en marcha' : this.autopilot.isBusy() ? 'el piloto automático está analizando un directo' : null),
       hasJudge: () => Boolean(this.autopilot.llmConf()),
       ready: () => {
         const w = this.transcripts.status();

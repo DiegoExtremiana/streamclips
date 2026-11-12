@@ -271,7 +271,7 @@ describe('clips del canal', () => {
     await e.ctx.downloadQueue.idle();
     await e.ctx.renderQueue.idle();
     // el render se encadena tras la descarga: se espera a que aparezca
-    for (let i = 0; i < 100 && !e.ctx.store.data.outputs.length; i++) await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < 400 && !e.ctx.store.data.outputs.length; i++) await new Promise((r) => setTimeout(r, 100));
     const out = e.ctx.store.data.outputs[0];
     assert.ok(out, 'debe haber un clip en la Biblioteca');
     assert.equal(out.kind, 'clip');

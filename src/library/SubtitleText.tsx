@@ -44,7 +44,7 @@ export default function SubtitleText(props: {
         changed.map(([i, t]) => ({ start: lines[Number(i)].start, end: lines[Number(i)].end, text: t.trim() })),
       );
       setEdits({});
-      const learned = r.learned.length ? ` Aprendido: ${r.learned.slice(0, 5).map((l) => `«${l.from}» → «${l.to}»`).join(', ')}${r.learned.length > 5 ? '…' : ''}.` : '';
+      const learned = r.learned.length ? ` Aprendido: ${r.learned.slice(0, 5).map((l) => `«${l.from}» por «${l.to}»`).join(', ')}${r.learned.length > 5 ? '…' : ''}.` : '';
       setMsg({ ok: true, text: `${r.changed} línea${r.changed === 1 ? '' : 's'} corregida${r.changed === 1 ? '' : 's'}.${learned}` });
       await props.onSaved(rerender);
     } catch (e) {

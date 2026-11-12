@@ -314,4 +314,51 @@ describe('clips del canal', () => {
     assert.equal(downloads.length, 0);
     assert.equal(e.ctx.store.data.vods.filter((v) => v.origin === 'clip').length, 0);
   });
+
+  it('buscar otro canal: pide sus clips con ese nombre, recuerda el resultado y no mezcla con los tuyos', async () => {
+    const { e, twitch } = setup();
+    const seen: { login: string; maxWindows?: number }[] = [];
+    twitch.clipImpl = async (c, o) => {
+      seen.push({ login: c.login, maxWindows: o?.maxWindows });
+      return c.login === 'otro_canal' ? [clip('x1'), clip('x2')] : [clip('mio')];
+    };
+    const own = await e.ctx.channel.clips();
+    assert.deepEqual([own.own, own.channel, own.clips.map((c) => c.id)], [true, 'canal', ['mio']]);
+    const r = await e.ctx.channel.clipsOf('@Otro_Canal');
+    assert.deepEqual([r.own, r.channel, r.clips.map((c) => c.id).sort()], [false, 'otro_canal', ['x1', 'x2']]);
+    assert.deepEqual(seen.find((x) => x.login === 'otro_canal'), { login: 'otro_canal', maxWindows: 4 });
+    const n = seen.length;
+    await e.ctx.channel.clipsOf('otro_canal');
+    assert.equal(seen.length, n, 'se recuerda unos minutos');
+    await e.ctx.channel.clipsOf('otro_canal', true);
+    assert.equal(seen.length, n + 1, 'forzar vuelve a pedir');
+    // pedir tu propio canal por su nombre da el tuyo
+    const mine = await e.ctx.channel.clipsOf('CANAL');
+    assert.deepEqual([mine.own, mine.clips.map((c) => c.id)], [true, ['mio']]);
+    await assert.rejects(() => e.ctx.channel.clipsOf('no válido!'), /no es válido/);
+  });
+
+  it('se puede añadir a la Biblioteca un clip de otro canal', async () => {
+    const { e, twitch } = setup();
+    twitch.clipImpl = async (c) => (c.login === 'otro' ? [clip('ajeno')] : []);
+    await e.ctx.channel.clipsOf('otro');
+    const job = await e.ctx.channel.importClip('ajeno');
+    assert.equal(job.origin, 'clip');
+    assert.equal(job.twitchId, 'ajeno');
+  });
+
+  it('los clips del canal propio salen con «gold» según la puntuación, sin enseñar la nota', async () => {
+    const { e, twitch } = setup();
+    twitch.clipList = [clip('a'), clip('b')];
+    const queued: string[] = [];
+    e.ctx.channel.scores = { gold: (id) => id === 'a', enqueue: (cs) => queued.push(...cs.map((c) => c.id)) };
+    const r = await e.ctx.channel.clips();
+    assert.deepEqual(r.clips.map((c) => [c.id, c.gold]).sort(), [['a', true], ['b', false]]);
+    assert.ok(queued.includes('a') && queued.includes('b'));
+    assert.ok(!JSON.stringify(r).includes('score'));
+    // en otro canal no hay puntuación
+    twitch.clipImpl = async () => [clip('z')];
+    const o = await e.ctx.channel.clipsOf('otro');
+    assert.equal(o.clips[0].gold, undefined);
+  });
 });

@@ -67,6 +67,7 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
     if (!Array.isArray(p.speakerColors) || p.speakerColors.length > 12 || p.speakerColors.some((c) => typeof c !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(c))) throw new Error('Los colores de los hablantes deben ser #RRGGBB (hasta 12).');
     n.speakerColors = p.speakerColors.map((c) => c.toUpperCase());
   }
+  if (p.scoreClips !== undefined) n.scoreClips = bool(p.scoreClips, 'La puntuación de clips');
   if (p.smartSelect !== undefined) n.smartSelect = bool(p.smartSelect, 'La selección inteligente');
   if (p.styledCovers !== undefined) n.styledCovers = bool(p.styledCovers, 'El estilo de las portadas');
   if (p.cleanup !== undefined) n.cleanup = bool(p.cleanup, 'La limpieza del directo');

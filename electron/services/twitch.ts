@@ -143,7 +143,7 @@ export class TwitchClient {
    * por ventanas de fechas, así que se piden por tramos de fechas y con paginación hasta tenerlos todos.
    * Con `sinceMs` solo se piden los de desde esa fecha (para refrescar lo reciente sin repasar todo el historial).
    */
-  async listClips(c: TwitchCreds, o: { sinceMs?: number; onProgress?: (clips: TwitchClip[]) => void; onWarning?: (msg: string) => void } = {}): Promise<TwitchClip[]> {
+  async listClips(c: TwitchCreds, o: { sinceMs?: number; /** Cuántos tramos de 90 días mirar hacia atrás como mucho (por defecto, todo el historial). */ maxWindows?: number; onProgress?: (clips: TwitchClip[]) => void; onWarning?: (msg: string) => void } = {}): Promise<TwitchClip[]> {
     this.needCreds(c);
     const u = await this.userId(c);
     const seen = new Map<string, TwitchClip>();
@@ -172,7 +172,7 @@ export class TwitchClient {
       // por tramos de 90 días hacia atrás; se para tras un año entero sin ningún clip (y nunca más allá de 8 años)
       let to = end;
       let emptyDays = 0;
-      for (let w = 0; w < CLIP_MAX_WINDOWS; w++) {
+      for (let w = 0; w < Math.min(CLIP_MAX_WINDOWS, o.maxWindows ?? Infinity); w++) {
         const from = to - CLIP_WINDOW_MS;
         let n: number;
         try {

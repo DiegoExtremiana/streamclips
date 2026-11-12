@@ -27,7 +27,7 @@ export interface FindOpts {
   gap?: number;
 }
 
-const HYPE = /\b(no puede ser|increíble|brutal|joder|madre mía|vamos|por fin|qué|cómo|socorro|jajaja|ostia|wow|guau|no me lo creo|ayuda|nooo+|siii+)\b/i;
+export const HYPE = /\b(no puede ser|increíble|brutal|joder|madre mía|vamos|por fin|qué|cómo|socorro|jajaja|ostia|wow|guau|no me lo creo|ayuda|nooo+|siii+)\b/i;
 
 const median = (xs: number[]): number => {
   if (!xs.length) return 0;

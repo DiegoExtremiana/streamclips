@@ -68,6 +68,8 @@ export interface AutopilotSettings {
   smartSelect?: boolean;
   /** Nota mínima (0-10) para que un momento entre en un vídeo o clip; el modelo puntúa 5 lo normal y 7 lo bueno. Por defecto 6,5. */
   minQuality?: number;
+  /** Puntuar en segundo plano los clips de tu canal (con el equipo libre y sin directo) para marcar los mejores en dorado. Por defecto sí. */
+  scoreClips?: boolean;
   /** Identificar quién habla y colorear los subtítulos por voz (necesita el módulo de diarización; descarga un modelo de 40 MB la primera vez). */
   speakers?: boolean;
   /** Colores de las voces (#RRGGBB): el primero es el del propio streamer. */
@@ -409,6 +411,10 @@ export interface AutoNameResult {
 /** Clips del canal: `loading` es verdadero mientras sigue leyéndose el historial antiguo; `warning` avisa si no se pudo leer entero. */
 export interface ClipsResult {
   clips: TwitchClip[];
+  /** Canal al que pertenecen (el tuyo si no se pidió otro). */
+  channel: string;
+  /** Es el canal propio. */
+  own: boolean;
   loading: boolean;
   warning: string;
 }
@@ -424,6 +430,8 @@ export interface TwitchClip {
   thumbnail: string;
   /** Ya está en la Biblioteca (o descargándose). */
   imported?: boolean;
+  /** El programa lo valora muy bien (la nota es interna y no se enseña). Solo se puntúan los clips de tu canal. */
+  gold?: boolean;
 }
 
 /** Estado del vigilante del canal, para el Panel. */
@@ -463,7 +471,7 @@ export interface Api {
   /** Analiza ya un directo de Twitch (id del VOD): lo descarga si hace falta y lanza el piloto automático, aunque esté desactivado. */
   channelAnalyze(twitchId: string): Promise<VodJob>;
   /** Todos los clips del canal, más recientes primero. `force` vuelve a pedir todo el historial a Twitch. */
-  channelClips(force?: boolean): Promise<ClipsResult>;
+  channelClips(force?: boolean, login?: string): Promise<ClipsResult>;
   /** Descarga el clip de Twitch y lo deja en la Biblioteca (vertical y horizontal). */
   channelImportClip(clipId: string): Promise<VodJob>;
   /** Dirección directa para ver un clip de Twitch sin descargarlo. */

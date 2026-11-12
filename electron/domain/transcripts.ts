@@ -259,6 +259,27 @@ export class TranscriptService {
     return this.save(vod, words, 'import');
   }
 
+  /**
+   * Transcribe un audio suelto (por ejemplo el de un clip del canal que no está en la Biblioteca) sin crear nada ni mostrar
+   * tareas. No descarga el modelo: si no está instalado o no hay Whisper, falla y quien lo pide se las arregla sin transcripción.
+   */
+  async transcribeAudio(file: string, context: string[] = []): Promise<Word[]> {
+    const exe = this.d.whisperExe();
+    const s = this.d.store.data.settings;
+    if (!exe) throw new Error('No se encuentra Whisper.');
+    if (!isKnownModel(s.whisperModel) || !modelInstalled(this.modelsDir, s.whisperModel)) throw new Error('El modelo de Whisper no está descargado.');
+    const words = await this.d.queue.run(() =>
+      transcribeVideo(this.d.tools(), file, {
+        exe,
+        model: modelPath(this.modelsDir, s.whisperModel),
+        language: s.whisperLanguage,
+        prompt: whisperPrompt(this.vocabulary(), context, looksLikePokemon(context) ? POKEMON_PROMPT_TERMS : []),
+        ...this.share(),
+      }),
+    );
+    return dropLoops(applyVocabulary(words, this.vocabulary())).words;
+  }
+
   private get modelsDir(): string {
     return path.join(path.dirname(this.d.store.file), 'models');
   }

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../services/store';
 import { Logger } from '../services/logger';
@@ -16,6 +18,9 @@ import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
 import { SpeakerService } from '../domain/speakers';
 import { MomentsService } from '../domain/moments';
+import { ClipScoreService } from '../domain/clipScores';
+import { judgeCandidates } from '../services/momentJudge';
+import { audioEnergy as measureEnergy } from '../services/audioEnergy';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
@@ -102,6 +107,7 @@ export class AppContext {
   readonly transcripts: TranscriptService;
   readonly speakers: SpeakerService;
   readonly moments: MomentsService;
+  readonly clipScores: ClipScoreService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -221,6 +227,32 @@ export class AppContext {
       restore: (id) => this.vods.ensureFile(id),
       discardSource: (id) => this.vods.discardSource(id),
     });
+    this.clipScores = new ClipScoreService({
+      file: path.join(o.userDataDir, 'clip-scores.json'),
+      log: this.log,
+      canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
+      analyze: async (clip) => {
+        const t = this.tools();
+        const url = (await run(t.ytdlp, ['--no-warnings', '--no-playlist', '-g', '-f', 'b[height<=480]/b', '--', clip.url], 60_000)).stdout.trim().split('\n')[0] ?? '';
+        if (!/^https?:\/\//.test(url)) throw new Error('Twitch no dio una dirección válida para el clip.');
+        const wav = path.join(os.tmpdir(), `streamclips-score-${clip.id.replace(/[^A-Za-z0-9_-]/g, '_')}.wav`);
+        try {
+          await run(t.ffmpeg, ['-y', '-v', 'error', '-nostdin', '-i', url, '-vn', '-ac', '1', '-ar', '16000', '-t', '180', '-c:a', 'pcm_s16le', wav], 180_000);
+          const energyDb = await (o.energy ?? measureEnergy)(t, wav).catch(() => undefined);
+          const words = await this.transcripts.transcribeAudio(wav, [clip.title]).catch(() => []);
+          return { durationSec: clip.durationSec, words, energyDb };
+        } finally {
+          fs.rmSync(wav, { force: true });
+        }
+      },
+      judge: async (clip, words) => {
+        const conf = this.autopilot.llmConf();
+        if (!conf) return null;
+        const r = await judgeCandidates(conf, words, [{ id: 'clip', start: 0, end: Math.max(clip.durationSec, words[words.length - 1]?.end ?? 0), signal: 0 }]);
+        return r.judged[0] && !r.judged[0].judgement.discard ? r.judged[0].total : r.judged[0] ? Math.min(r.judged[0].total, 4) : null;
+      },
+    });
+    this.channel.scores = this.clipScores;
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
     this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error('Piloto automático', e)));
     this.transcripts.onSaved = (vodId) => void this.autopilot.autoNameLibrary(vodId, { generic: false }).catch((e) => this.log.warn(`Nombres automáticos: ${(e as Error).message}`));

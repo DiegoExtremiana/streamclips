@@ -623,7 +623,13 @@ export class Autopilot {
   }
 
   /** Configuración del modelo de lenguaje si hay uno elegido y con clave; si no, null. */
-  private llmConf(): LlmConfig | null {
+  /** ¿Está analizando algún directo? (El trabajo en segundo plano se aparta mientras tanto.) */
+  isBusy(): boolean {
+    return this.running.size > 0;
+  }
+
+  /** Modelo de lenguaje configurado (clave incluida), o null si no hay. */
+  llmConf(): LlmConfig | null {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === 'none' || !key) return null;

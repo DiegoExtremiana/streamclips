@@ -1,3 +1,4 @@
+import { normalizeLogin } from '../services/twitch';
 import type { ChannelStatus, ClipsResult, OutputItem, TwitchClip, TwitchStream, VodJob } from '../../shared/types';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
@@ -25,6 +26,10 @@ export interface ChannelDeps {
   chat?: { dir: string; enabled: () => boolean; host?: string; port?: number };
 }
 
+/** Clips de otros canales: cuánto se recuerdan y cuántos tramos de 90 días se leen (12 meses). */
+const OTHER_CLIPS_MS = 10 * 60_000;
+const OTHER_CLIP_WINDOWS = 4;
+
 /** Margen para reconocer el VOD del directo en curso: Twitch lo crea unos segundos antes que `started_at`. */
 const LIVE_VOD_SLACK_MS = 5 * 60_000;
 /** Lecturas seguidas «sin directo» antes de recoger el VOD (evita recoger a medias si se corta un momento la conexión). */
@@ -43,6 +48,10 @@ export class ChannelMonitor {
   private lastWarn: { msg: string; at: number } = { msg: '', at: 0 };
   private busy = false;
   private stream: TwitchStream | null = null;
+  /** Puntuación interna de los clips del canal (solo se enseña si son «dorados»). */
+  scores?: { gold: (id: string) => boolean; enqueue: (clips: TwitchClip[]) => void };
+  /** Clips de otros canales consultados (se recuerdan unos minutos). */
+  private others = new Map<string, { at: number; byId: Map<string, TwitchClip> }>();
   private lastCheck: string | null = null;
   private error: string | null = null;
   private offlineStreak = 0;
@@ -314,13 +323,42 @@ export class ChannelMonitor {
     } else if (!this.clipCache && this.clipLoad) {
       await this.clipLoad;
     }
-    const list = [...(this.clipCache?.byId.values() ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
-    return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning };
+    const raw = [...(this.clipCache?.byId.values() ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    this.scores?.enqueue(raw);
+    const list = raw.map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false }));
+    return { clips: list, loading: this.clipLoad !== null, warning: this.clipWarning, channel: this.d.creds().login, own: true };
+  }
+
+  /** Estado actual de la transmisión: el análisis en segundo plano espera a que acabe el directo. */
+  isLive(): boolean {
+    return Boolean(this.stream?.live);
+  }
+
+  /**
+   * Clips de otro canal (últimos 12 meses, los más recientes primero). Se recuerdan 10 minutos. Para esos clips no hay
+   * puntuación interna: solo se puntúan los del canal propio.
+   */
+  async clipsOf(loginRaw: string, force = false): Promise<ClipsResult> {
+    const login = normalizeLogin(loginRaw);
+    if (!login) throw new Error('El nombre de canal no es válido (solo letras, números y guion bajo).');
+    if (login === normalizeLogin(this.d.creds().login)) return this.clips(force);
+    const hit = this.others.get(login);
+    if (!force && hit && this.now - hit.at < OTHER_CLIPS_MS) return this.otherResult(login, hit.byId);
+    const list = await this.d.twitch.listClips({ ...this.d.creds(), login }, { maxWindows: OTHER_CLIP_WINDOWS });
+    const byId = new Map(list.map((c) => [c.id, c]));
+    this.others.set(login, { at: this.now, byId });
+    if (this.others.size > 8) this.others.delete(this.others.keys().next().value as string);
+    return this.otherResult(login, byId);
+  }
+
+  private otherResult(login: string, byId: Map<string, TwitchClip>): ClipsResult {
+    const clips = [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => ({ ...c, imported: this.state.importedClipIds.includes(c.id) }));
+    return { clips, loading: false, warning: clips.length >= 100 * 4 ? 'De canales ajenos se leen los clips de los últimos 12 meses.' : '', channel: login, own: false };
   }
 
   private async clipById(clipId: string): Promise<TwitchClip | undefined> {
-    const known = this.clipCache?.byId.get(clipId) ?? (await this.clips()).clips.find((c) => c.id === clipId);
-    return known;
+    const known = this.clipCache?.byId.get(clipId) ?? [...this.others.values()].map((o) => o.byId.get(clipId)).find(Boolean);
+    return known ?? (await this.clips()).clips.find((c) => c.id === clipId);
   }
 
   /** Dirección directa para ver un clip en el programa sin descargarlo ni añadirlo a la Biblioteca. */

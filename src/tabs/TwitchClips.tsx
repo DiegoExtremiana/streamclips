@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { OutputItem, TwitchClip, VodJob } from '../../shared/types';
 import { fmtDate, fmtTime } from '../../shared/time';
 import { clipLibraryState, filterClips, type ClipLibraryState } from '../../shared/twitchClips';
@@ -61,27 +61,54 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const [show, setShow] = useState<Show>('all');
   const [limit, setLimit] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
+  /** Canal que se está viendo: '' es el propio. */
+  const [channel, setChannel] = useState('');
+  const [channelInput, setChannelInput] = useState('');
+  const [own, setOwn] = useState(true);
+  const [shownChannel, setShownChannel] = useState('');
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
 
-  const load = useCallback(async (force = false) => {
-    setLoading(true);
-    try {
-      const r = await window.api.channelClips(force);
-      setClips(r.clips);
-      setHistory(r.loading);
-      setWarning(r.warning);
-      setError('');
-    } catch (e) {
-      setError(`${errMsg(e)}`);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (force = false) => {
+      setLoading(true);
+      const asked = channel;
+      try {
+        const r = await window.api.channelClips(force, asked || undefined);
+        // si mientras tanto se cambió de canal, esta respuesta ya no vale
+        if (asked !== channelRef.current) return;
+        setClips(r.clips);
+        setHistory(r.loading);
+        setWarning(r.warning);
+        setOwn(r.own);
+        setShownChannel(r.channel);
+        setError('');
+      } catch (e) {
+        setError(`${errMsg(e)}`);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [channel],
+  );
 
   useEffect(() => {
     void load();
+    // el canal propio se refresca solo; el de otro canal solo cuando se pide (cada lectura son varias peticiones a Twitch)
+    if (channel) return undefined;
     const t = setInterval(() => void load(), history ? LOADING_MS : REFRESH_MS);
     return () => clearInterval(t);
-  }, [load, history]);
+  }, [load, history, channel]);
+
+  function goTo(login: string) {
+    setClips(null);
+    setError('');
+    setWarning('');
+    setQuery('');
+    setShow('all');
+    setLimit(PAGE);
+    setChannel(login);
+  }
 
   const stateOf = (c: TwitchClip) => clipLibraryState(c.id, vods, outputs);
   const counts = useMemo(() => {
@@ -111,12 +138,29 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   return (
     <section className="card" aria-label="Clips de tu canal de Twitch">
       <div className="row" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <h2>Clips de tu canal de Twitch</h2>
+        <h2>{own ? 'Clips de tu canal de Twitch' : `Clips del canal ${shownChannel}`}</h2>
         <button className="btn ghost small" disabled={loading} onClick={() => void load(true)} title="Vuelve a pedir todos los clips a Twitch">{loading ? 'Actualizando…' : 'Actualizar'}</button>
       </div>
       <div className="muted small">
-        Todos los clips de tu canal, del más reciente al más antiguo. Pulsa uno para verlo aquí sin descargarlo; «Añadir» lo descarga y lo deja en la Biblioteca en vertical y horizontal.
+        {own
+          ? 'Todos los clips de tu canal, del más reciente al más antiguo. Pulsa uno para verlo aquí sin descargarlo; «Añadir» lo descarga y lo deja en la Biblioteca en vertical y horizontal. Los que el programa valora muy bien salen con el fondo dorado.'
+          : 'Clips de los últimos 12 meses de este canal, del más reciente al más antiguo. Puedes verlos y añadirlos a la Biblioteca; solo los clips de tu canal se puntúan (fondo dorado).'}
       </div>
+      <form
+        className="row"
+        style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (channelInput.trim()) goTo(channelInput.trim());
+        }}
+      >
+        <label className="searchbox">
+          <IconSearch size={16} />
+          <input type="text" aria-label="Buscar otro canal de Twitch" placeholder="Ver los clips de otro canal…" value={channelInput} onChange={(e) => setChannelInput(e.target.value)} />
+        </label>
+        <button className="btn small" type="submit" disabled={!channelInput.trim() || loading}>Ver canal</button>
+        {!own && <button className="btn ghost small" type="button" onClick={() => { setChannelInput(''); goTo(''); }}>Volver a mi canal</button>}
+      </form>
       <div className="row twtools" style={{ gap: 12, flexWrap: 'wrap' }}>
         <label className="searchbox">
           <IconSearch size={16} />
@@ -131,20 +175,20 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
       {history && clips && <div className="muted small" role="status" style={{ marginTop: 6 }}>Leyendo el resto del historial de tu canal… ya puedes ver y usar los clips que han salido.</div>}
       {warning && <div className="msg warn" role="status">{warning}</div>}
       {error && <div className="msg bad" role="alert">{error} (revisa la pestaña Conexiones)</div>}
-      {!clips && !error && <div className="muted" role="status">Cargando los clips de tu canal (la primera vez puede tardar unos segundos)…</div>}
-      {clips && clips.length === 0 && !error && <div className="muted" style={{ marginTop: 8 }}>Tu canal no tiene clips todavía.</div>}
+      {!clips && !error && <div className="muted" role="status">Cargando los clips de {own ? 'tu canal' : 'ese canal'} (la primera vez puede tardar unos segundos)…</div>}
+      {clips && clips.length === 0 && !error && <div className="muted" style={{ marginTop: 8 }}>{own ? 'Tu canal no tiene clips todavía.' : 'Este canal no tiene clips en los últimos 12 meses.'}</div>}
       {clips && clips.length > 0 && matching.length === 0 && <div className="muted" style={{ marginTop: 8 }}>{query.trim() ? 'Ningún clip se llama así.' : 'No hay clips en esta lista.'}</div>}
       <div className="tiles twclips" data-testid="twitch-clips">
         {shown.map((c) => {
           const st = stateOf(c);
           return (
-            <div key={c.id} className="tile twclip" data-testid={`twclip-${c.id}`} data-state={st} role="button" tabIndex={0} aria-label={`Ver ${c.title}`}
+            <div key={c.id} className={`tile twclip${c.gold ? ' gold' : ''}`} data-testid={`twclip-${c.id}`} data-state={st} data-gold={c.gold ? 'true' : 'false'} role="button" tabIndex={0} aria-label={`Ver ${c.title}${c.gold ? ' (clip destacado)' : ''}`}
               onClick={() => setOpen(c.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(c.id); } }}>
               <div className="twthumb">
                 {c.thumbnail ? <img src={c.thumbnail} alt="" draggable={false} loading="lazy" /> : null}
                 <span className="twdur">{fmtTime(Math.round(c.durationSec))}</span>
               </div>
-              <div className="tile-title title-ellipsis" title={c.title}>{c.title}</div>
+              <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.gold ? '★ ' : ''}{c.title}</div>
               <div className="muted small" style={{ padding: '0 3px' }}>{fmtDate(c.createdAt)} · {c.views} vis.</div>
               <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
                 <span className={`badge twstate ${st}`} data-testid={`twstate-${c.id}`}>{STATE_LABEL[st]}</span>

@@ -13,7 +13,7 @@ export const clock = (s: number): string => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 };
 
-/** «1:02:03», «12:30» o «750» → segundos; null si no se entiende. */
+/** «1:02:03», «12:30» o «750» a segundos; null si no se entiende. */
 export function parseClock(v: string): number | null {
   const p = v.trim().split(':');
   if (p.length > 3 || p.some((x) => !/^\d+(\.\d+)?$/.test(x))) return null;

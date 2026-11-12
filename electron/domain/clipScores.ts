@@ -18,6 +18,8 @@ interface Stored {
   by?: 'model' | 'signals';
   /** Intentos fallidos seguidos. */
   fails?: number;
+  /** Se puntuó solo con las señales porque no había modelo (o falló): se repite en cuanto haya uno. */
+  noModel?: boolean;
 }
 
 export interface ClipScoreDeps {
@@ -26,6 +28,8 @@ export interface ClipScoreDeps {
   analyze: (clip: TwitchClip) => Promise<ClipSignals>;
   /** Valoración del contenido por el modelo de lenguaje (cuatro criterios y motivo); null si no hay modelo o no respondió. */
   judge?: (clip: TwitchClip, words: Word[]) => Promise<{ criteria: ClipCriteria; reason: string } | null>;
+  /** ¿Hay un modelo de lenguaje configurado ahora? Si lo hay, los clips puntuados sin él se vuelven a valorar. */
+  hasJudge?: () => boolean;
   /** Solo se trabaja cuando el equipo está libre (sin directo en marcha ni análisis del piloto). */
   canRun: () => boolean;
   /** ¿Está activado puntuar en segundo plano? (Solo para informar a la interfaz.) */
@@ -35,10 +39,12 @@ export interface ClipScoreDeps {
   now?: () => number;
 }
 
-/** Nota por señales a partir de la cual merece la pena preguntar al modelo de lenguaje. */
-const PRE_JUDGE_MIN = 3.5;
+/** Con menos palabras que esto no hay nada que leer para el modelo. */
+const MIN_WORDS_TO_JUDGE = 4;
 const MAX_FAILS = 2;
 const RETRY_AFTER_MS = 24 * 3600_000;
+/** Un clip valorado sin modelo se repite con modelo, pero no más a menudo que esto (límites gratuitos). */
+const MODEL_RETRY_MS = 30 * 60_000;
 const WAIT_MS = 60_000;
 /** Más largos que esto no son «clips» normales y no se analizan. */
 const MAX_CLIP_SEC = 180;
@@ -108,7 +114,7 @@ export class ClipScoreService {
     if (c.durationSec > MAX_CLIP_SEC || c.durationSec < 3) return false;
     const s = this.scores.get(c.id);
     if (!s) return true;
-    if (s.score !== undefined) return false;
+    if (s.score !== undefined) return Boolean(s.noModel && this.d.hasJudge?.() && this.now() - s.at > MODEL_RETRY_MS);
     return (s.fails ?? 0) < MAX_FAILS || this.now() - s.at > RETRY_AFTER_MS;
   }
 
@@ -161,16 +167,19 @@ export class ClipScoreService {
   private async score(clip: TwitchClip): Promise<Stored> {
     const sig = await this.d.analyze(clip);
     const crit = criteriaFromSignals(sig);
-    const base = overall(crit);
-    // el modelo (límite gratuito diario) solo se gasta en los que no son claramente flojos: confirma o rebaja
-    if (this.d.judge && sig.words.length >= 4 && base >= PRE_JUDGE_MIN) {
-      try {
-        const j = await this.d.judge(clip, sig.words);
-        if (j) return { score: overall(j.criteria), crit: j.criteria, reason: j.reason || reasonFromCriteria(j.criteria, 'model'), v: SCORE_VERSION, at: this.now(), by: 'model' };
-      } catch (e) {
-        this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
+    // el modelo lee todos los clips con algo que leer: el humor que no sube el volumen solo lo puede ver él
+    let noModel = false;
+    if (sig.words.length >= MIN_WORDS_TO_JUDGE) {
+      noModel = true;
+      if (this.d.judge) {
+        try {
+          const j = await this.d.judge(clip, sig.words);
+          if (j) return { score: overall(j.criteria), crit: j.criteria, reason: j.reason || reasonFromCriteria(j.criteria, 'model'), v: SCORE_VERSION, at: this.now(), by: 'model' };
+        } catch (e) {
+          this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
+        }
       }
     }
-    return { score: base, crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals' };
+    return { score: overall(crit), crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals', ...(noModel ? { noModel: true } : {}) };
   }
 }

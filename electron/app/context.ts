@@ -237,6 +237,7 @@ export class AppContext {
       log: this.log,
       enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
       canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
+      hasJudge: () => Boolean(this.autopilot.llmConf()),
       analyze: async (clip) => {
         const t = this.tools();
         const url = (await run(t.ytdlp, ['--no-warnings', '--no-playlist', '-g', '-f', 'b[height<=480]/b', '--', clip.url], 60_000)).stdout.trim().split('\n')[0] ?? '';

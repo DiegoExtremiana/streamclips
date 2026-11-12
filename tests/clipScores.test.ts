@@ -104,12 +104,12 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(calls, 3, 'pasado un día lo vuelve a intentar');
   });
 
-  it('el modelo solo se consulta para los que pueden ser dorados y su nota manda sobre las señales', async () => {
+  it('el modelo lee los clips que tienen algo que leer (no los de una palabra) y su nota manda sobre las señales', async () => {
     const asked: string[] = [];
     const { svc } = make({ judge: async (c) => { asked.push(c.id); const n = c.id === 'good1' ? 9.5 : 2; return { criteria: { humor: n, historia: n, viral: n, interes: n }, reason: n > 5 ? 'Remate con sorpresa' : 'Charla sin más' }; } });
     svc.enqueue([...many(10), clip('good1', { views: 500 }), clip('good2', { views: 500 })]);
     await svc.idle();
-    assert.deepEqual(asked.sort(), ['good1', 'good2'], 'los aburridos no gastan modelo');
+    assert.deepEqual(asked.sort(), ['good1', 'good2'], 'sin texto que leer no se gasta modelo');
     assert.equal(svc.gold('good1'), true);
     assert.equal(svc.gold('good2'), false, 'el modelo lo rebaja');
     const d = svc.detailOf('good1')!;
@@ -130,6 +130,50 @@ describe('puntuación de clips en segundo plano', () => {
     s2.enqueue([...many(10), clip('good1', { views: 500 })]);
     await s2.idle();
     assert.equal(s2.gold('good1'), true);
+  });
+
+  it('un chiste tranquilo (sin gritos ni risas) lo valora el modelo aunque las señales lo vean flojo', async () => {
+    const quiet = 'el otro día fui a la tienda a comprar pan y me dijeron que era un libro entonces compré el libro'.split(' ').map((text, i) => ({ text, start: i * 0.5, end: i * 0.5 + 0.4 }));
+    const { svc } = make({
+      analyze: async () => ({ durationSec: 30, words: quiet, energyDb: Array.from({ length: 30 }, () => -40) }),
+      judge: async () => ({ criteria: { humor: 9, historia: 8, viral: 8, interes: 8 }, reason: 'Remate absurdo' }),
+    });
+    svc.enqueue([clip('c1')]);
+    await svc.idle();
+    assert.equal(svc.detailOf('c1')!.by, 'model');
+    assert.ok((svc.scoreOf('c1') ?? 0) >= 8);
+  });
+
+  it('lo valorado sin modelo se repite con modelo en cuanto lo hay, sin insistir a cada rato', async () => {
+    let t = 1_000_000;
+    let has = false;
+    let asked = 0;
+    const { svc, analyzed } = make({
+      now: () => t,
+      hasJudge: () => has,
+      judge: async () => {
+        asked++;
+        return { criteria: { humor: 6, historia: 6, viral: 6, interes: 6 }, reason: 'Normal' };
+      },
+    });
+    // al principio no hay modelo: judge existe pero la app aún no tiene clave y devuelve null
+    const noKey = make({ now: () => t, hasJudge: () => has, judge: async () => null });
+    noKey.svc.enqueue([clip('good1')]);
+    await noKey.svc.idle();
+    assert.equal(noKey.svc.detailOf('good1')!.by, 'signals');
+    // con el mismo archivo y ya con clave, se vuelve a analizar, pero pasado el tiempo de espera
+    const again = make({ now: () => t, hasJudge: () => true, judge: async () => ({ criteria: { humor: 9, historia: 9, viral: 9, interes: 9 }, reason: 'Muy bueno' }) }, noKey.file);
+    again.svc.enqueue([clip('good1')]);
+    await again.svc.idle();
+    assert.equal(again.analyzed.length, 0, 'recién puntuado: aún no insiste');
+    t += 31 * 60_000;
+    again.svc.enqueue([clip('good1')]);
+    await again.svc.idle();
+    assert.equal(again.analyzed.length, 1);
+    assert.equal(again.svc.detailOf('good1')!.by, 'model');
+    assert.equal(svc.scoreOf('good1'), undefined);
+    assert.equal(asked + analyzed.length, 0);
+    has = true;
   });
 
   it('un archivo de puntuaciones estropeado o de otra versión se ignora', async () => {

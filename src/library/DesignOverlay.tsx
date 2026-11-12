@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type RefObject } from 'react';
 import type { FramingPreview } from '../../shared/types';
-import { moveSrc, resizeFromCorner, resizeSrc, type Rect, type VerticalLayout } from '../../shared/layout';
+import { dividers, moveDivider, moveSrc, resizeFromCorner, resizeSrc, type Divider, type Rect, type VerticalLayout } from '../../shared/layout';
 import { COMPOSITION_H, COMPOSITION_W, drawComposition } from './VerticalEditor';
 
 export const WINDOW_COLORS = ['#ff4fa3', '#22d3ee', '#facc15'];
@@ -105,10 +105,73 @@ export function WindowsOverlay({ design, selected, onSelect }: { design: DesignS
   );
 }
 
+/**
+ * Líneas entre ventanas sobre la vista previa vertical: se arrastran para cambiar el tamaño de una ventana y las demás se
+ * adaptan (como en el editor de clips de Twitch). También con el teclado: flechas (Mayús para más).
+ */
+function Dividers({ design, boxRef }: { design: DesignState; boxRef: RefObject<HTMLDivElement> }) {
+  const { layout, framing, onChange } = design;
+  const aspect = framing.width / framing.height;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const active = useRef<number | null>(null);
+  const list = dividers(layout);
+  const posOf = (e: { clientX: number; clientY: number }, d: Divider): number | null => {
+    const r = boxRef.current?.getBoundingClientRect();
+    if (!r || r.width === 0 || r.height === 0) return null;
+    return d.kind === 'h' ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+  };
+  const move = (e: RPointerEvent, k: number) => {
+    if (active.current !== k || e.buttons !== 1) return;
+    const d = dividers(layoutRef.current)[k];
+    const p = d && posOf(e, d);
+    if (d && p !== null) onChange(moveDivider(layoutRef.current, d, p, aspect));
+  };
+  return (
+    <>
+      {list.map((d, k) => {
+        const horizontal = d.kind === 'h';
+        return (
+          <div
+            key={`${d.kind}${k}`}
+            className={`vdiv ${horizontal ? 'h' : 'v'}`}
+            data-testid={`vdiv-${k}`}
+            role="slider"
+            tabIndex={0}
+            aria-orientation={horizontal ? 'horizontal' : 'vertical'}
+            aria-label={`Tamaño de la ventana ${d.before + 1} (la ${d.after + 1} se adapta)`}
+            aria-valuemin={10}
+            aria-valuemax={90}
+            aria-valuenow={Math.round((horizontal ? d.pos - layout.windows[d.before].dst.y : d.pos - layout.windows[d.before].dst.x) * 100)}
+            style={horizontal ? { top: `${d.pos * 100}%` } : { left: `${d.pos * 100}%`, top: `${d.from * 100}%`, height: `${(d.to - d.from) * 100}%` }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              active.current = k;
+            }}
+            onPointerMove={(e) => move(e, k)}
+            onPointerUp={() => (active.current = null)}
+            onPointerCancel={() => (active.current = null)}
+            onKeyDown={(e) => {
+              const step = e.shiftKey ? 0.05 : 0.01;
+              const dir = horizontal ? (e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0) : e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+              if (!dir) return;
+              e.preventDefault();
+              onChange(moveDivider(layoutRef.current, d, d.pos + dir * step, aspect));
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 /** La versión vertical tal como quedará, dibujada en directo con el vídeo horizontal que se está reproduciendo. */
 export function LivePreview({ design, video, selected, onSelect }: { design: DesignState; video: RefObject<HTMLVideoElement>; selected: number; onSelect: (i: number) => void }) {
   const { framing, layout } = design;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -132,7 +195,7 @@ export function LivePreview({ design, video, selected, onSelect }: { design: Des
   }, [video]);
 
   return (
-    <div className="vpreview" data-testid="vpreview">
+    <div ref={boxRef} className="vpreview" data-testid="vpreview">
       <canvas ref={canvasRef} width={COMPOSITION_W} height={COMPOSITION_H} aria-label="Vista previa del vídeo vertical" />
       <img ref={imgRef} src={framing.dataUrl} alt="" aria-hidden="true" style={{ display: 'none' }} />
       {layout.windows.map((w, i) => (
@@ -147,6 +210,7 @@ export function LivePreview({ design, video, selected, onSelect }: { design: Des
           <span className="vbadge" style={{ background: WINDOW_COLORS[i] }}>{i + 1}</span>
         </button>
       ))}
+      <Dividers design={design} boxRef={boxRef} />
     </div>
   );
 }

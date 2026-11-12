@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type RefObject } from 'react';
 import type { FramingPreview } from '../../shared/types';
 import {
-  applyPresetKeeping, defaultPreset, layoutFromPreset, moveSrc, presetsFor, resizeFromCorner, resizeSrc,
+  applyPresetKeeping, defaultPreset, layoutFromPreset, moveSrc, presetsFor, resizeFromCorner, resizeSrc, rowsOf, setWindowHeight, setWindowWidth,
   OUT_H, OUT_W, type Rect, type VerticalLayout,
 } from '../../shared/layout';
 import { fmtTime } from '../../shared/time';
@@ -196,8 +196,8 @@ export default function VerticalEditor(props: {
               <button
                 key={p.id}
                 type="button"
-                className={`presetbtn ${layout.preset === p.id ? 'active' : ''}`}
-                aria-pressed={layout.preset === p.id}
+                className={`presetbtn ${layout.preset === p.id && !layout.custom ? "active" : ""}`}
+                aria-pressed={layout.preset === p.id && !layout.custom}
                 title={p.label}
                 onClick={() => onChange(applyPresetKeeping(layout, p, aspect))}
               >
@@ -215,6 +215,49 @@ export default function VerticalEditor(props: {
           Restablecer posiciones
         </button>
       </div>
+      {count > 1 && (
+        <div className="vsizes" data-testid="vsizes" role="group" aria-label="Tamaño de cada ventana">
+          <div className="muted small">
+            Tamaño de cada ventana{layout.custom ? ' (personalizado)' : ''}: al cambiar una, las demás se adaptan. También puedes arrastrar las líneas entre ventanas en la vista previa vertical.
+          </div>
+          {layout.windows.map((w, i) => {
+            const shareRow = rowsOf(layout).find((r) => r.items.includes(i))!.items.length > 1;
+            return (
+              <div className="row" key={i} style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="vbadge" style={{ background: COLORS[i], position: 'static' }}>{i + 1}</span>
+                <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  Alto
+                  <input
+                    type="range"
+                    min={10}
+                    max={90}
+                    step={1}
+                    aria-label={`Alto de la ventana ${i + 1}`}
+                    value={Math.round(w.dst.h * 100)}
+                    onChange={(e) => onChange(setWindowHeight(layout, i, Number(e.target.value) / 100, aspect))}
+                  />
+                  <span className="mono muted">{Math.round(w.dst.h * 100)} %</span>
+                </label>
+                {shareRow && (
+                  <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    Ancho
+                    <input
+                      type="range"
+                      min={10}
+                      max={90}
+                      step={1}
+                      aria-label={`Ancho de la ventana ${i + 1}`}
+                      value={Math.round(w.dst.w * 100)}
+                      onChange={(e) => onChange(setWindowWidth(layout, i, Number(e.target.value) / 100, aspect))}
+                    />
+                    <span className="mono muted">{Math.round(w.dst.w * 100)} %</span>
+                  </label>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {!props.controlsOnly && <div className="vmain">
         <div className="vsourcecol">

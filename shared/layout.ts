@@ -16,6 +16,8 @@ export interface VerticalLayout {
   windows: LayoutWindow[];
   /** Disposición de partida elegida (solo informativa: lo que cuenta son los rectángulos). */
   preset?: string;
+  /** Los tamaños de las ventanas se han ajustado a mano respecto a la disposición de partida. */
+  custom?: boolean;
 }
 
 export const OUT_W = 1080;
@@ -149,7 +151,7 @@ export function validateLayout(l: unknown): string | null {
 export function normalizeLayout(l: VerticalLayout): VerticalLayout {
   const q = (n: number) => Math.round(n * 10000) / 10000;
   const nr = (rc: Rect): Rect => ({ x: q(clamp(rc.x, 0, 1)), y: q(clamp(rc.y, 0, 1)), w: q(rc.w), h: q(rc.h) });
-  return { ...(l.preset ? { preset: l.preset } : {}), windows: l.windows.map((w) => ({ src: nr(w.src), dst: nr(w.dst) })) };
+  return { ...(l.preset ? { preset: l.preset } : {}), ...(l.custom ? { custom: true } : {}), windows: l.windows.map((w) => ({ src: nr(w.src), dst: nr(w.dst) })) };
 }
 
 /** Rectángulo en píxeles del lienzo de salida, con bordes pares y sin huecos entre ventanas contiguas. */
@@ -172,4 +174,127 @@ export function resizeFromCorner(src: Rect, dst: Rect, px: number, py: number, f
   const maxH = Math.max(MIN_SRC, Math.min(1 - src.y, (1 - src.x) / w1));
   const h = clamp(wanted, MIN_SRC, maxH);
   return { x: src.x, y: src.y, w: h * w1, h };
+}
+
+/* ---- Tamaño de cada ventana (como en el editor de clips de Twitch): al cambiar una, las demás se adaptan ---- */
+
+const SAME = 0.002;
+export interface LayoutRow {
+  /** Posición y alto de la franja (0..1 del lienzo vertical). */
+  top: number;
+  h: number;
+  /** Índices de las ventanas de la franja, de izquierda a derecha. */
+  items: number[];
+}
+
+/** Franjas horizontales del lienzo: las ventanas que empiezan a la misma altura forman una franja. */
+export function rowsOf(layout: VerticalLayout): LayoutRow[] {
+  const rows: LayoutRow[] = [];
+  layout.windows.forEach((w, i) => {
+    const row = rows.find((q) => Math.abs(q.top - w.dst.y) < SAME);
+    if (row) row.items.push(i);
+    else rows.push({ top: w.dst.y, h: w.dst.h, items: [i] });
+  });
+  for (const row of rows) row.items.sort((a, b) => layout.windows[a].dst.x - layout.windows[b].dst.x);
+  return rows.sort((a, b) => a.top - b.top);
+}
+
+/** Reparte `total` entre tamaños con los pesos dados, sin bajar de `min` (si hay que subir alguno, se le quita a los demás). */
+function distribute(weights: number[], total: number, min: number): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0) || weights.length;
+  let sizes = weights.map((w) => ((w || 1) / sum) * total);
+  for (let pass = 0; pass < 4; pass++) {
+    const low = sizes.map((x) => x < min);
+    if (!low.some(Boolean)) break;
+    const fixed = low.reduce((a, l) => a + (l ? min : 0), 0);
+    const freeSum = sizes.reduce((a, x, i) => a + (low[i] ? 0 : x), 0) || 1;
+    sizes = sizes.map((x, i) => (low[i] ? min : (x / freeSum) * (total - fixed)));
+  }
+  return sizes;
+}
+
+/** Cada ventana conserva lo que recoge (centro y alto) al cambiar su hueco; la anchura sale de la proporción nueva. */
+function rebuild(layout: VerticalLayout, dsts: Rect[], aspect: number): VerticalLayout {
+  return {
+    ...layout,
+    custom: true,
+    windows: layout.windows.map((w, i) => ({ dst: dsts[i], src: fitSrc(dsts[i], w.src.x + w.src.w / 2, w.src.y + w.src.h / 2, w.src.h, aspect) })),
+  };
+}
+
+/** Huecos nuevos a partir de las alturas de las franjas (contiguas desde arriba) y los anchos de las ventanas de cada una. */
+function layoutDsts(layout: VerticalLayout, rows: LayoutRow[], heights: number[], widths: Map<number, number>): Rect[] {
+  const out = layout.windows.map((w) => ({ ...w.dst }));
+  let y = rows[0]?.top ?? 0;
+  rows.forEach((row, ri) => {
+    let x = layout.windows[row.items[0]].dst.x;
+    for (const i of row.items) {
+      const w = widths.get(i) ?? layout.windows[i].dst.w;
+      out[i] = { x, y, w, h: heights[ri] };
+      x += w;
+    }
+    y += heights[ri];
+  });
+  return out;
+}
+
+/** Alto de la ventana `index` (0..1 del lienzo): las demás franjas se reparten lo que sobra en proporción a lo que ya ocupaban. */
+export function setWindowHeight(layout: VerticalLayout, index: number, h: number, aspect: number): VerticalLayout {
+  const rows = rowsOf(layout);
+  const ri = rows.findIndex((r) => r.items.includes(index));
+  if (ri < 0 || rows.length < 2) return layout;
+  const total = rows.reduce((a, r) => a + r.h, 0);
+  const mine = clamp(h, MIN_DST, total - MIN_DST * (rows.length - 1));
+  const others = distribute(rows.filter((_, k) => k !== ri).map((r) => r.h), total - mine, MIN_DST);
+  let k = 0;
+  const heights = rows.map((_, q) => (q === ri ? mine : others[k++]));
+  return rebuild(layout, layoutDsts(layout, rows, heights, new Map()), aspect);
+}
+
+/** Ancho de la ventana `index` dentro de su franja (0..1 del lienzo): las otras de la franja se adaptan. */
+export function setWindowWidth(layout: VerticalLayout, index: number, w: number, aspect: number): VerticalLayout {
+  const rows = rowsOf(layout);
+  const row = rows.find((r) => r.items.includes(index));
+  if (!row || row.items.length < 2) return layout;
+  const total = row.items.reduce((a, i) => a + layout.windows[i].dst.w, 0);
+  const mine = clamp(w, MIN_DST, total - MIN_DST * (row.items.length - 1));
+  const rest = row.items.filter((i) => i !== index);
+  const others = distribute(rest.map((i) => layout.windows[i].dst.w), total - mine, MIN_DST);
+  const widths = new Map<number, number>([[index, mine]]);
+  rest.forEach((i, k) => widths.set(i, others[k]));
+  return rebuild(layout, layoutDsts(layout, rows, rows.map((r) => r.h), widths), aspect);
+}
+
+export interface Divider {
+  /** `h` separa dos franjas (se arrastra arriba y abajo); `v` separa dos ventanas de una franja (a izquierda y derecha). */
+  kind: 'h' | 'v';
+  /** Posición actual (0..1 del lienzo) y tramo que ocupa la línea sobre el otro eje. */
+  pos: number;
+  from: number;
+  to: number;
+  /** Ventana que queda antes del divisor: arrastrarlo cambia su tamaño y la siguiente se adapta. */
+  before: number;
+  after: number;
+}
+
+/** Líneas que se pueden arrastrar para cambiar el tamaño de las ventanas. */
+export function dividers(layout: VerticalLayout): Divider[] {
+  const rows = rowsOf(layout);
+  const out: Divider[] = [];
+  rows.forEach((row, ri) => {
+    row.items.slice(1).forEach((i, k) => {
+      const prev = row.items[k];
+      out.push({ kind: 'v', pos: layout.windows[i].dst.x, from: row.top, to: row.top + row.h, before: prev, after: i });
+    });
+    const next = rows[ri + 1];
+    if (next) out.push({ kind: 'h', pos: next.top, from: 0, to: 1, before: row.items[0], after: next.items[0] });
+  });
+  return out;
+}
+
+/** Mueve un divisor a la posición `pos` (0..1 del lienzo): la ventana anterior crece o encoge y la siguiente se adapta. */
+export function moveDivider(layout: VerticalLayout, d: Divider, pos: number, aspect: number): VerticalLayout {
+  const a = layout.windows[d.before].dst;
+  if (d.kind === 'h') return setWindowHeight(layout, d.before, pos - a.y, aspect);
+  return setWindowWidth(layout, d.before, pos - a.x, aspect);
 }

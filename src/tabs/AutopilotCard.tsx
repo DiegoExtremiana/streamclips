@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, styledCovers: a.styledCovers !== false, fastAnalysis: a.fastAnalysis !== false, smartSelect: a.smartSelect !== false, parallel: a.parallel ?? 2,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, styledCovers: a.styledCovers !== false, fastAnalysis: a.fastAnalysis !== false, smartSelect: a.smartSelect !== false, minQuality: a.minQuality ?? 6.5, parallel: a.parallel ?? 2,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -103,6 +103,10 @@ export default function AutopilotCard() {
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="ap-sum">Resumen (minutos)</label>
           <input id="ap-sum" type="text" inputMode="numeric" value={a.summaryMinutes} onChange={(e) => up({ summaryMinutes: num(e.target.value, a.summaryMinutes) })} />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ap-q">Nota mínima (3 a 9,5)</label>
+          <input id="ap-q" type="text" inputMode="decimal" value={a.minQuality ?? 6.5} onChange={(e) => up({ minQuality: Number(e.target.value.replace(',', '.')) || (a.minQuality ?? 6.5) })} title="Solo entran momentos con esta nota o más. Más alta: menos vídeos pero mejores; más baja: más material." />
         </div>
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="ap-main">Vídeo principal (minutos)</label>

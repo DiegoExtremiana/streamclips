@@ -5,6 +5,8 @@ export interface Word {
   text: string;
   start: number;
   end: number;
+  /** Quién habla (identidad de la lista de hablantes). Ausente si no se sabe con seguridad: nunca se inventa. */
+  spk?: number;
 }
 
 export const SUBTITLE_STYLE_IDS = ['clasico', 'karaoke', 'pop', 'minimal'] as const;
@@ -136,11 +138,13 @@ export function buildCues(words: Word[], style: SubtitleStyle): Cue[] {
   for (const w of words) {
     if (!w.text.trim()) continue;
     const prev = cur[cur.length - 1];
-    if (prev && w.start - prev.end > MAX_GAP_SEC) {
+    // otro hablante (los dos conocidos) abre un subtítulo nuevo, para no mezclar voces en la misma línea
+    const changed = prev !== undefined && prev.spk !== undefined && w.spk !== undefined && prev.spk !== w.spk;
+    if (prev && (w.start - prev.end > MAX_GAP_SEC || changed)) {
       sentences.push(cur);
       cur = [];
     }
-    cur.push({ text: w.text.trim(), start: w.start, end: Math.max(w.end, w.start + 0.05) });
+    cur.push({ text: w.text.trim(), start: w.start, end: Math.max(w.end, w.start + 0.05), ...(w.spk !== undefined ? { spk: w.spk } : {}) });
     if (SENTENCE_END.test(w.text.trim())) {
       sentences.push(cur);
       cur = [];
@@ -167,7 +171,7 @@ export function wordsForOutput(words: Word[], ranges: Range[]): Word[] {
     const t = toOutputTime(mid, ranges);
     if (t === null) continue;
     const len = Math.max(0.05, w.end - w.start);
-    out.push({ text: w.text, start: Math.max(0, t - len / 2), end: t + len / 2 });
+    out.push({ text: w.text, start: Math.max(0, t - len / 2), end: t + len / 2, ...(w.spk !== undefined ? { spk: w.spk } : {}) });
   }
   return out;
 }
@@ -222,7 +226,7 @@ export function assEscape(t: string): string {
 }
 
 /** Archivo ASS (libass lo graba en el vídeo). Las palabras ya vienen en el tiempo del vídeo resultante. */
-export function buildAss(words: Word[], style: SubtitleStyle, w: number, h: number): string {
+export function buildAss(words: Word[], style: SubtitleStyle, w: number, h: number, speakerColors?: Record<number, string>): string {
   const L = captionLayout(style, w, h);
   const bold = style.bold ? -1 : 0;
   const primary = assColor(style.color);
@@ -243,7 +247,12 @@ export function buildAss(words: Word[], style: SubtitleStyle, w: number, h: numb
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ];
   for (const cue of buildCues(words, style)) {
-    const texts = cue.words.map((x) => assEscape(displayText(x.text, style)));
+    // con hablantes identificados, cada palabra lleva el color de quien la dice (las de hablante desconocido, el del estilo)
+    const base = cue.words.map((x) => (speakerColors && x.spk !== undefined && speakerColors[x.spk] ? assColor(speakerColors[x.spk]) : primary));
+    const texts = cue.words.map((x, j) => {
+      const t = assEscape(displayText(x.text, style));
+      return base[j] === primary ? t : `{\\1c${base[j]}}${t}{\\1c${primary}}`;
+    });
     if (!style.highlight) {
       lines.push(`Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Default,,0,0,0,,${texts.join(' ')}`);
       continue;
@@ -254,7 +263,7 @@ export function buildAss(words: Word[], style: SubtitleStyle, w: number, h: numb
       const to = i === cue.words.length - 1 ? cue.end : cue.words[i + 1].start;
       if (to <= from) return;
       const text = texts
-        .map((t, j) => (j === i ? `{\\1c${assColor(style.highlight!)}}${t}{\\1c${primary}}` : t))
+        .map((t, j) => (j === i ? `{\\1c${assColor(style.highlight!)}}${assEscape(displayText(cue.words[j].text, style))}{\\1c${base[j]}}` : t))
         .join(' ');
       lines.push(`Dialogue: 0,${assTime(from)},${assTime(to)},Default,,0,0,0,,${text}`);
     });

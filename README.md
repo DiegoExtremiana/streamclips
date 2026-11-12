@@ -2,6 +2,14 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.22
+
+- **Hablantes (diarización local y gratuita)**: tras elegir los momentos, el Piloto automático identifica quién habla en lo elegido (modelo pyannote + embeddings 3D-Speaker con sherpa-onnx, todo en tu PC, ~0,2× tiempo real). Las voces se recuerdan **entre directos** en un «libro de voces»: puedes ponerles nombre, marcar cuál eres tú y unir dos voces que sean la misma, en Ajustes → Hablantes. Lo ya analizado no se repite.
+- **Subtítulos por hablante**: cada voz tiene su color (la tuya, en blanco) y un cambio de hablante abre subtítulo nuevo. Con una sola voz en el vídeo no se colorea. La transcripción guardada no se modifica: los hablantes se aplican como capa aparte.
+- **Nota mínima configurable** (3 a 9,5), nombres de momento usados como capítulos, transiciones con «whoosh» entre momentos separados, filtro de bucles de Whisper y modelo Gemini vigente (`gemini-3.5-flash-lite`).
+
+Límites: los umbrales de voz **no están calibrados con audio en español de Discord** (solo se probó con una muestra de 4 voces, bien separada); si dos personas hablan a la vez, esas palabras quedan sin atribuir; el módulo nativo (opcional) y la descarga del modelo de ~40 MB (con comprobación sha256) no se han podido probar en Windows desde aquí. Si el módulo no está, el análisis sigue sin colores y lo avisa.
+
 ## Novedades de la v0.21
 
 - **Selección inteligente de momentos** (Piloto automático, activada por defecto; necesita la clave gratuita de Groq o Gemini): en vez de fiarse solo del volumen, el chat y las palabras por segundo, se buscan más candidatos de los necesarios y un modelo de lenguaje lee la transcripción de cada uno y puntúa de 0 a 10 **humor, originalidad, interacción, reacción, contexto y si se entiende solo**, indica de qué tipo es (gracia, fail, reacción, discusión, historia, épico), dónde empieza y acaba de verdad la situación y por qué le pone esa nota. La nota final pesa los criterios y deja a las señales de audio y chat un 15 %.

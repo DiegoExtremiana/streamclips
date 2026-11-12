@@ -4,6 +4,7 @@ import { errMsg } from '../lib';
 import AutopilotCard from './AutopilotCard';
 import UpdatesCard from './UpdatesCard';
 import VocabularyCard from './VocabularyCard';
+import SpeakersCard from './SpeakersCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
 import { SubTabs, useSubTab } from '../SubTabs';
@@ -205,6 +206,7 @@ export default function SettingsTab() {
       </section>
 
       <VocabularyCard />
+      <SpeakersCard />
 
       </div>}
 

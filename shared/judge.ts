@@ -27,6 +27,8 @@ export interface Judgement {
   scores: Record<Criterion, number>;
   kind: MomentKind;
   reason: string;
+  /** Nombre corto del momento (2-5 palabras), para capítulos y títulos. */
+  title?: string;
   /** El modelo no lo recomienda (no se entiende solo, es charla sin gracia…). */
   discard: boolean;
   /** Dónde empieza y acaba de verdad la situación (segundos del directo), dentro del candidato. */
@@ -75,12 +77,12 @@ export const JUDGE_SYSTEM =
   'Sé EXIGENTE y no te dejes llevar por el volumen: una conversación larga o gritos no son gracia. La media de un directo es mediocre: puntúa 5 lo normal, 7 lo bueno y 9-10 solo lo realmente excepcional. ' +
   'Cada criterio es de 0 a 10: humor (gracia o potencial humorístico), originalidad (algo que no se ve siempre), interaccion (calidad del intercambio entre personas), reaccion (reacciones espontáneas), contexto (tiene planteamiento y desenlace claros dentro del fragmento), autonomia (se entiende sin haber visto el directo). ' +
   '"tipo" es uno de: gracia, fail, reaccion, discusion, historia, epico, otro. "descartar" es true si no merece un vídeo (charla sin interés, silencios, se entiende solo con contexto que falta, o la transcripción es ininteligible). ' +
-  '"inicio" y "fin" son los segundos (relativos al inicio del fragmento, como las marcas [Ns]) donde empieza y acaba de verdad la situación: sin relleno antes ni después, pero incluyendo planteamiento y remate. "motivo" es una frase corta en castellano que explica la nota. Responde SOLO con JSON.';
+  '"inicio" y "fin" son los segundos (relativos al inicio del fragmento, como las marcas [Ns]) donde empieza y acaba de verdad la situación: sin relleno antes ni después, pero incluyendo planteamiento y remate. "titulo" es un nombre corto del momento en castellano (2 a 5 palabras, máximo 40 caracteres, sin emojis ni clickbait falso). "motivo" es una frase corta en castellano que explica la nota. Responde SOLO con JSON.';
 
 export function judgePrompt(words: Word[], cands: Candidate[]): string {
   const items = cands.map((c) => ({ id: c.id, duracion: Math.round(c.end - c.start), texto: judgeText(words, c) }));
   return (
-    'Valora cada fragmento. Devuelve {"juicios":[{"id":"","humor":0,"originalidad":0,"interaccion":0,"reaccion":0,"contexto":0,"autonomia":0,"tipo":"","descartar":false,"inicio":0,"fin":0,"motivo":""}]} con un juicio por fragmento.\n' +
+    'Valora cada fragmento. Devuelve {"juicios":[{"id":"","humor":0,"originalidad":0,"interaccion":0,"reaccion":0,"contexto":0,"autonomia":0,"tipo":"","descartar":false,"inicio":0,"fin":0,"titulo":"","motivo":""}]} con un juicio por fragmento.\n' +
     `Fragmentos:\n${JSON.stringify(items)}`
   );
 }
@@ -110,7 +112,8 @@ export function parseJudgements(raw: unknown, cands: Candidate[]): Judgement[] {
       // solo se acepta un recorte razonable: al menos 10 s y sin comerse más de la mitad del candidato
       if (b - a >= 10 && b - a >= len * 0.5) trim = { start: c.start + a, end: c.start + b };
     }
-    out.push({ id, scores, kind, reason, discard: r.descartar === true, trim });
+    const title = typeof r.titulo === 'string' ? r.titulo.replace(/[<>"]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+    out.push({ id, scores, kind, reason, title: title.length >= 3 ? title : undefined, discard: r.descartar === true, trim });
   }
   return out;
 }

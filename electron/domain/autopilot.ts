@@ -21,6 +21,7 @@ import type { SerialQueue } from '../services/queue';
 import type { Notifier } from './notifier';
 import type { TaskTracker } from './tasks';
 import type { TranscriptService } from './transcripts';
+import type { SpeakerService } from './speakers';
 import type { ClipService } from './clips';
 import type { CategoryService } from './categories';
 import { categoryOf, dominantCategory, fitToCategory, hasCategoryLine, withCategoryLine } from '../../shared/categories';
@@ -35,6 +36,7 @@ export interface AutopilotDeps {
   queue: SerialQueue;
   tools: () => ToolPaths;
   transcripts: TranscriptService;
+  speakers: SpeakerService;
   clips: ClipService;
   categories: CategoryService;
   library: LibraryService;
@@ -57,8 +59,7 @@ export interface AutopilotDeps {
 }
 
 /** Notas mínimas (0-10) para que un momento entre: el modelo puntúa 5 lo normal, 7 lo bueno. Antes un vídeo corto y bueno que uno largo con relleno. */
-const QUALITY_CLIP = 6.5;
-const QUALITY_SUMMARY = 6.5;
+const DEFAULT_QUALITY = 6.5;
 /** Un resumen de menos de esto no merece publicarse. */
 const MIN_SUMMARY_SEC = 150;
 
@@ -335,6 +336,8 @@ export class Autopilot {
         moments = [];
         summary = [];
       }
+      /** Nombre que dio el modelo a cada momento del resumen (por su inicio), para los capítulos. */
+      const chapterLabels = new Map<number, string>();
       let summaryMeta: { score: number; kind: string; reason: string } | undefined;
       const meta = new Map<Seg, { score: number; kind: string; reason: string }>();
       if (!moments.length && !summary.length && !mains.length && !pool.length) {
@@ -387,13 +390,14 @@ export class Autopilot {
           }
         }
         if (judged) {
+          const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
           const textFor = textFn(words);
-          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: QUALITY_CLIP, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
-          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: QUALITY_SUMMARY, maxLen: 90, minGap: 20, textFor }) : null;
+          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
           if (clips) {
             moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
             clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
-            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota mínima (${QUALITY_CLIP}/10); no se rellenó con momentos flojos.`);
+            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota mínima (${quality}/10); no se rellenó con momentos flojos.`);
           }
           if (sum && sum.chosen.length) {
             if (sum.totalSec >= MIN_SUMMARY_SEC) {
@@ -405,9 +409,10 @@ export class Autopilot {
                 if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
                 summary = dom.segs;
               }
+              for (const c of sum.chosen) if (c.judgement.title) chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
               summaryMeta = { score: avg, kind: 'resumen', reason: kindSummary(sum) };
-            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${QUALITY_SUMMARY}/10).`);
-          } else if (sum) notes.push(`Ningún momento supera la nota mínima del resumen (${QUALITY_SUMMARY}/10).`);
+            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
+          } else if (sum) notes.push(`Ningún momento supera la nota mínima del resumen (${quality}/10).`);
         } else {
           // el modelo no estuvo disponible: selección por señales de siempre, transcribiendo lo que haga falta
           ({ moments, summary } = legacy);
@@ -425,8 +430,30 @@ export class Autopilot {
         }
       }
 
+      // 3d) hablantes: quién habla en lo elegido (para colorear los subtítulos por voz)
+      if (this.cfg.speakers !== false && words.length) {
+        const avail = this.d.speakers.available();
+        if (!avail.ok) notes.push(`Hablantes sin identificar: ${avail.reason}`);
+        else {
+          const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
+          const need = this.d.speakers.pendingSeconds(vod.id, spans);
+          if (need > 0) {
+            task.update(60, 'Identificando hablantes…');
+            try {
+              const ts = Date.now();
+              const r = await this.d.speakers.diarize(vod.id, spans, (done, total) => task.update(60 + (total ? (done / total) * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total / 60)} min)…`));
+              words = this.d.transcripts.words(vod.id);
+              notes.push(`Hablantes: ${r.voices} voz/voces en ${Math.round(r.sec / 60)} min de audio (${lap(ts)}).`);
+            } catch (e) {
+              if (isCancelled(e)) throw e;
+              notes.push(`Hablantes sin identificar: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
+
       // 4) títulos
-      task.update(55, 'Poniendo títulos…');
+      task.update(75, 'Poniendo títulos…');
       const titles = await this.titles(vod, words, moments, mains, notes);
       // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
       const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
@@ -467,7 +494,7 @@ export class Autopilot {
           if (isCancelled(e)) throw e;
           errors.push(`${label}: ${(e as Error).message}`);
         }
-        task.update(55 + (++doneCount / total) * 40, `Montando (${doneCount}/${total})…`);
+        task.update(76 + (++doneCount / total) * 19, `Montando (${doneCount}/${total})…`);
       };
       const pro = this.cfg.proEdit !== false && words.length > 0;
       if (this.cfg.proEdit !== false && !words.length) notes.push('Edición profesional omitida: no hay transcripción.');
@@ -496,7 +523,7 @@ export class Autopilot {
           try {
             const starts = outputStarts(segs, item.segments ?? segs);
             const block = chapterBlock(
-              segs.map((g, i) => ({ at: starts[i], label: i === 0 ? 'Inicio' : shortTitle(words, g, i) || `Momento ${i + 1}` })),
+              segs.map((g, i) => ({ at: starts[i], label: chapterLabels.get(Math.round(g.start)) ?? (i === 0 ? 'Inicio' : shortTitle(words, g, i) || `Momento ${i + 1}`) })),
               item.durationSec,
             );
             if (block) chapterOf.set(item.id, block);

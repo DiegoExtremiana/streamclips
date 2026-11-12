@@ -6,6 +6,7 @@ import type { Word } from '../../shared/subtitles';
 import type { Range } from '../../shared/timeline';
 import { parseTranscript } from '../../shared/transcript';
 import { dropLoops } from '../../shared/loops';
+import { assignSpeakers, type SpeakerSeg } from '../../shared/speakers';
 import { applyVocabulary, cleanVocabulary, learnCorrections, mergeCorrections, normToken, whisperPrompt, type Vocabulary } from '../../shared/vocab';
 import { applyLineChanges, type LineChange } from '../../shared/subtitleEdit';
 import { looksLikePokemon, POKEMON_PROMPT_TERMS } from '../../shared/vocabPokemon';
@@ -43,6 +44,8 @@ export class TranscriptService {
   private dir: string;
   /** Lo llama al guardar una transcripción nueva (p. ej. para poner nombres cortos a lo ya creado). */
   onSaved?: (vodId: string) => void;
+  /** Tramos de cada voz de un directo (los pone el servicio de hablantes). */
+  speakerOverlay?: (vodId: string) => { segs: SpeakerSeg[]; version: number } | null;
 
   constructor(private d: TranscriptDeps) {
     this.dir = path.join(path.dirname(d.store.file), 'transcripts');
@@ -89,11 +92,14 @@ export class TranscriptService {
     } catch {
       /* sin archivo */
     }
-    const key = `${this.vocabVersion}:${mtime}:${raw.length}`;
+    const ov = this.speakerOverlay?.(vodId);
+    const key = `${this.vocabVersion}:${mtime}:${raw.length}:${ov ? ov.version : 0}`;
     const hit = this.corrected.get(vodId);
     if (hit?.key === key) return hit.words;
     // sin los bucles de Whisper (frases repetidas decenas de veces que no se dijeron) y con el vocabulario aplicado
-    const words = applyVocabulary(dropLoops(raw).words, v);
+    let words = applyVocabulary(dropLoops(raw).words, v);
+    // quién habla cada palabra (si se han identificado los hablantes de este directo); lo guardado en disco no cambia
+    if (ov?.segs.length) words = assignSpeakers(words, ov.segs);
     this.corrected.set(vodId, { key, words });
     if (this.corrected.size > 4) this.corrected.delete(this.corrected.keys().next().value as string);
     return words;
@@ -124,7 +130,7 @@ export class TranscriptService {
     if (!r.changed.length) return { changed: 0, learned: [] };
     fs.mkdirSync(this.dir, { recursive: true });
     const file = this.file(vodId);
-    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ words: r.words, ...(cur.covered ? { covered: cur.covered } : {}) }));
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ words: r.words.map(({ spk: _s, ...w }) => (void _s, w)), ...(cur.covered ? { covered: cur.covered } : {}) }));
     fs.renameSync(`${file}.tmp`, file);
     const vod = this.vod(vodId);
     vod.transcript = { ...(vod.transcript ?? { source: 'whisper', at: new Date().toISOString() }), words: r.words.length, at: new Date().toISOString() } as TranscriptInfo;

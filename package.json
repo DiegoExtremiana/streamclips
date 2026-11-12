@@ -1,6 +1,6 @@
 {
   "name": "streamclips",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/DiegoExtremiana/streamclips.git"
@@ -67,6 +67,7 @@
       "!**/node_modules/ffprobe-static/bin/win32/ia32/**"
     ],
     "asarUnpack": [
+      "node_modules/sherpa-onnx-*/**",
       "node_modules/ffmpeg-static/**",
       "node_modules/ffprobe-static/**"
     ],
@@ -83,6 +84,14 @@
       {
         "from": "resources/fonts",
         "to": "fonts"
+      },
+      {
+        "from": "resources/models",
+        "to": "models",
+        "filter": [
+          "*.onnx",
+          "*LICENSE*"
+        ]
       },
       {
         "from": "resources/cloud",

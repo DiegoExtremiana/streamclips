@@ -126,6 +126,12 @@ export function applyVocabulary(words: Word[], v: Vocabulary): Word[] {
   const keys = cores.map((c) => normToken(c.core));
   const out: Word[] = [];
   let changed = false;
+  /** El hablante se conserva si las palabras unidas son todas del mismo. */
+  const spkOf = (i: number, n: number): { spk?: number } => {
+    const s = words[i].spk;
+    for (let k = 1; k < n; k++) if (words[i + k].spk !== s) return {};
+    return s === undefined ? {} : { spk: s };
+  };
   for (let i = 0; i < words.length; ) {
     let done = false;
     // correcciones exactas, de la frase más larga a la más corta
@@ -133,7 +139,7 @@ export function applyVocabulary(words: Word[], v: Vocabulary): Word[] {
       if (keys.slice(i, i + n).some((k) => !k)) continue;
       const to = exact.get(keys.slice(i, i + n).join(' '));
       if (to === undefined) continue;
-      out.push({ text: `${cores[i].pre}${to}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
+      out.push({ text: `${cores[i].pre}${to}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end, ...spkOf(i, n) });
       i += n;
       done = true;
       changed = true;
@@ -155,7 +161,7 @@ export function applyVocabulary(words: Word[], v: Vocabulary): Word[] {
         }
         // si ya está bien escrita, no se toca; si es una palabra corriente del idioma, tampoco
         if (!best || normToken(best.term) === joined) continue;
-        out.push({ text: `${cores[i].pre}${best.term}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
+        out.push({ text: `${cores[i].pre}${best.term}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end, ...spkOf(i, n) });
         i += n;
         done = true;
         changed = true;

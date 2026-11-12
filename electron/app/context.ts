@@ -14,6 +14,9 @@ import { CategoryService } from '../domain/categories';
 import type { Chapter } from '../../shared/categories';
 import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
+import { SpeakerService } from '../domain/speakers';
+import type { DiarizeEngine } from '../services/diarize';
+import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
 import { TaskTracker } from '../domain/tasks';
 import { CloudService } from '../domain/cloud';
@@ -48,6 +51,10 @@ export interface ContextOptions {
   bundled?: BundledTools;
   /** Carpeta con las fuentes que usan los subtítulos grabados. */
   fontsDir?: string;
+  /** Modelo de segmentación de voces (incluido con el programa). */
+  diarizationModel?: string;
+  /** Solo pruebas: motor de diarización de mentira. */
+  diarizationEngine?: () => DiarizeEngine;
   /** Solo para pruebas: servidor de modelos de Whisper. */
   modelBaseUrl?: string;
   /** Solo para pruebas: servidor del modelo de lenguaje. */
@@ -92,6 +99,7 @@ export class AppContext {
   readonly categories: CategoryService;
   readonly library: LibraryService;
   readonly transcripts: TranscriptService;
+  readonly speakers: SpeakerService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -148,7 +156,18 @@ export class AppContext {
       modelBaseUrl: o.modelBaseUrl,
       source: (id) => this.vods.ensureFile(id),
     });
-    const subtitles = { words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string, ranges?: { start: number; end: number }[]) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
+    this.speakers = new SpeakerService({
+      store: this.store,
+      log: this.log,
+      notifier: o.notifier,
+      tools,
+      source: (id) => this.vods.ensureFile(id),
+      segmentationModel: o.diarizationModel ?? '',
+      modelsDir: path.join(o.userDataDir, 'models'),
+      engine: o.diarizationEngine,
+    });
+    this.transcripts.speakerOverlay = (id) => this.speakers.overlay(id);
+    const subtitles = { speakerColors: (words: Word[]) => this.speakers.colorsFor(words), words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string, ranges?: { start: number; end: number }[]) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
     this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes, source: (id) => this.vods.ensureFile(id) });
     this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, source: (id) => this.vods.ensureFile(id) });
@@ -177,6 +196,7 @@ export class AppContext {
       queue: this.autopilotQueue,
       tools,
       transcripts: this.transcripts,
+      speakers: this.speakers,
       clips: this.clips,
       categories: this.categories,
       library: this.library,

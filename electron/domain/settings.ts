@@ -58,6 +58,15 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   }
   if (p.purgePublished !== undefined) n.purgePublished = bool(p.purgePublished, 'El borrado tras publicar');
   if (p.fastAnalysis !== undefined) n.fastAnalysis = bool(p.fastAnalysis, 'El análisis rápido');
+  if (p.minQuality !== undefined) {
+    if (typeof p.minQuality !== 'number' || !Number.isFinite(p.minQuality) || p.minQuality < 3 || p.minQuality > 9.5) throw new Error('La nota mínima debe estar entre 3 y 9,5.');
+    n.minQuality = Math.round(p.minQuality * 2) / 2;
+  }
+  if (p.speakers !== undefined) n.speakers = bool(p.speakers, 'La identificación de hablantes');
+  if (p.speakerColors !== undefined) {
+    if (!Array.isArray(p.speakerColors) || p.speakerColors.length > 12 || p.speakerColors.some((c) => typeof c !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(c))) throw new Error('Los colores de los hablantes deben ser #RRGGBB (hasta 12).');
+    n.speakerColors = p.speakerColors.map((c) => c.toUpperCase());
+  }
   if (p.smartSelect !== undefined) n.smartSelect = bool(p.smartSelect, 'La selección inteligente');
   if (p.styledCovers !== undefined) n.styledCovers = bool(p.styledCovers, 'El estilo de las portadas');
   if (p.cleanup !== undefined) n.cleanup = bool(p.cleanup, 'La limpieza del directo');

@@ -66,6 +66,12 @@ export interface AutopilotSettings {
   fastAnalysis?: boolean;
   /** Valorar los candidatos con el modelo de lenguaje (humor, originalidad, contexto…) en vez de fiarse solo del volumen. Por defecto sí, si hay modelo configurado. */
   smartSelect?: boolean;
+  /** Nota mínima (0-10) para que un momento entre en un vídeo o clip; el modelo puntúa 5 lo normal y 7 lo bueno. Por defecto 6,5. */
+  minQuality?: number;
+  /** Identificar quién habla y colorear los subtítulos por voz (necesita el módulo de diarización; descarga un modelo de 40 MB la primera vez). */
+  speakers?: boolean;
+  /** Colores de las voces (#RRGGBB): el primero es el del propio streamer. */
+  speakerColors?: string[];
   /** Portadas con estilo de los canales grandes: fotograma más vivo y expresivo, frase corta grande y número de episodio. Por defecto sí. */
   styledCovers?: boolean;
   /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */
@@ -536,6 +542,13 @@ export interface Api {
   editTranscript(vodId: string, changes: { start: number; end: number; text: string }[]): Promise<{ changed: number; learned: { from: string; to: string }[] }>;
   /** Palabras propias y correcciones aprendidas. */
   getVocabulary(): Promise<Vocabulary>;
+  /** Hablantes conocidos (voces) y si se pueden identificar en este equipo. */
+  getSpeakers(): Promise<{ available: { ok: boolean; reason?: string }; profiles: { id: number; alias: string; self: boolean; named: boolean }[] }>;
+  renameSpeaker(id: number, alias: string): Promise<void>;
+  /** Marca qué voz es la tuya (null = ninguna): sale en el primer color (blanco). */
+  setSelfSpeaker(id: number | null): Promise<void>;
+  /** Une dos hablantes que son la misma persona. */
+  mergeSpeakers(from: number, into: number): Promise<void>;
   setVocabulary(v: Vocabulary): Promise<Vocabulary>;
   /** Título provisional de un tramo a partir de lo que se dice en él (null si no hay transcripción de ese tramo). */
   /** Duración del directo de origen de un clip (null si el archivo ya no está), para la línea de tiempo del recorte. */
@@ -628,6 +641,10 @@ export const CHANNELS = {
   transcriptRun: 'transcript:run',
   transcriptEdit: 'transcript:edit',
   vocabGet: 'vocab:get',
+  speakersGet: 'speakers:get',
+  speakersRename: 'speakers:rename',
+  speakersSelf: 'speakers:self',
+  speakersMerge: 'speakers:merge',
   vocabSet: 'vocab:set',
   suggestTitle: 'title:suggest',
   autoName: 'title:auto',

@@ -222,6 +222,11 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.momentsAdd, (v, a, b, t) => ctx.moments.add(str(v, 'vodId'), num(a, 'start'), num(b, 'end'), typeof t === 'string' ? t : undefined));
   handle(CHANNELS.momentsRemove, (v, k) => ctx.moments.remove(str(v, 'vodId'), str(k, 'key')));
   handle(CHANNELS.momentsClear, (v) => ctx.moments.clear(str(v, 'vodId')));
+  handle(CHANNELS.styleGet, () => ctx.style.get());
+  handle(CHANNELS.styleSet, (p) => ctx.style.set(p));
+  handle(CHANNELS.styleAddLore, (n, note, tr) => ctx.style.addLore(str(n, 'name'), typeof note === 'string' ? note : '', Array.isArray(tr) ? tr.filter((x): x is string => typeof x === 'string') : []));
+  handle(CHANNELS.styleRemoveLore, (id) => ctx.style.removeLore(str(id, 'id')));
+  handle(CHANNELS.styleReset, () => ctx.style.reset());
   handle(CHANNELS.prefsGet, () => ctx.moments.prefs());
   handle(CHANNELS.prefsEnabled, (on) => ctx.moments.setPrefsEnabled(on === true));
   handle(CHANNELS.prefsReset, () => ctx.moments.resetPrefs());

@@ -22,6 +22,7 @@ import { ClipScoreService } from '../domain/clipScores';
 import { askJson } from '../services/llm';
 import { CLIP_JUDGE_SYSTEM, clipJudgePrompt, parseClipJudgement } from '../../shared/clipCriteria';
 import { audioEnergy as measureEnergy } from '../services/audioEnergy';
+import { StyleService } from '../domain/style';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
@@ -109,6 +110,7 @@ export class AppContext {
   readonly speakers: SpeakerService;
   readonly moments: MomentsService;
   readonly clipScores: ClipScoreService;
+  readonly style: StyleService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -175,6 +177,7 @@ export class AppContext {
       modelsDir: path.join(o.userDataDir, 'models'),
       engine: o.diarizationEngine,
     });
+    this.style = new StyleService(path.join(o.userDataDir, 'style-profile.json'));
     this.moments = new MomentsService({
       dir: path.join(o.userDataDir, 'moments'),
       prefsFile: path.join(o.userDataDir, 'preferences.json'),
@@ -221,6 +224,7 @@ export class AppContext {
       judgeDir: path.join(o.userDataDir, 'judgements'),
       momentsDir: path.join(o.userDataDir, 'moments'),
       prefsFile: path.join(o.userDataDir, 'preferences.json'),
+      style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,

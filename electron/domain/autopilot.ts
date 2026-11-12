@@ -5,6 +5,8 @@ import type { Word } from '../../shared/subtitles';
 import { planEdit, planLong } from '../../shared/autoEdit';
 import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
+import { judgeCandidates } from '../services/momentJudge';
+import { kindSummary, selectBest, textFn, type Candidate, type Judged } from '../../shared/judge';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
@@ -38,6 +40,8 @@ export interface AutopilotDeps {
   library: LibraryService;
   pubs: PublicationService;
   chatDir: string;
+  /** Carpeta donde se guardan las valoraciones del modelo (para no repetirlas al regenerar un directo). */
+  judgeDir?: string;
   llmKey: () => string;
   /** Solo pruebas. */
   llmBaseUrl?: string;
@@ -51,6 +55,12 @@ export interface AutopilotDeps {
   /** Motor nocturno: devuelve el motivo si no hay tiempo para transcribir un directo de esta duración. */
   canTranscribe?: (durationSec: number) => string | null;
 }
+
+/** Notas mínimas (0-10) para que un momento entre: el modelo puntúa 5 lo normal, 7 lo bueno. Antes un vídeo corto y bueno que uno largo con relleno. */
+const QUALITY_CLIP = 6.5;
+const QUALITY_SUMMARY = 6.5;
+/** Un resumen de menos de esto no merece publicarse. */
+const MIN_SUMMARY_SEC = 150;
 
 interface Titles {
   title: string;
@@ -309,7 +319,25 @@ export class Autopilot {
         summary = dom.segs;
         if (before !== moments.length + mains.length) notes.push('Algunos momentos se recortaron o descartaron para no mezclar categorías.');
       }
-      if (!moments.length && !summary.length && !mains.length) {
+      // Selección inteligente: más candidatos de los necesarios, para que el modelo de lenguaje elija los buenos de verdad
+      const llmConf = this.llmConf();
+      let pool: Candidate[] = [];
+      if (llmConf && this.cfg.smartSelect !== false && (this.cfg.maxClips > 0 || this.cfg.maxVideos > 0)) {
+        const need = this.cfg.maxClips + (this.cfg.maxVideos ? Math.ceil((this.cfg.summaryMinutes * 60) / 40) : 0);
+        pool = findMoments(sig, { count: Math.min(60, Math.max(16, need * 2)), minLen: 25, maxLen: 75, gap: 45 }).flatMap((m, i) => {
+          const f = new Set(cats.map((c) => c.title)).size > 1 ? fitToCategory(m, cats, 15) : { start: m.start, end: m.end };
+          return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
+        });
+      }
+      const legacy = { moments, summary, mains };
+      if (pool.length) {
+        // lo que se transcribe es el conjunto de candidatos; la selección por señales solo se transcribe si el modelo falla
+        moments = [];
+        summary = [];
+      }
+      let summaryMeta: { score: number; kind: string; reason: string } | undefined;
+      const meta = new Map<Seg, { score: number; kind: string; reason: string }>();
+      if (!moments.length && !summary.length && !mains.length && !pool.length) {
         this.mark(vod, 'skipped', ['No se encontraron momentos que destaquen en este directo.', ...notes].join(' '));
         task.done('Sin momentos destacados');
         return vod;
@@ -317,7 +345,7 @@ export class Autopilot {
 
       // 3b) análisis rápido: se transcribe solo lo elegido (tramos de clips, resumen y vídeos)
       if (deferTranscribe) {
-        const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
+        const spans = [...moments, ...summary, ...mains, ...pool].map((g) => ({ start: g.start, end: g.end }));
         this.mark(vod, 'transcribing');
         task.update(40, 'Transcribiendo solo lo elegido…');
         try {
@@ -336,6 +364,65 @@ export class Autopilot {
           notes.push(`Sin transcripción: ${(e as Error).message}`);
         }
         this.mark(vod, 'analyzing');
+      }
+
+      // 3c) valoración con el modelo de lenguaje
+      if (pool.length) {
+        task.update(56, 'Valorando los momentos candidatos…');
+        let judged: Judged[] | null = null;
+        if (!words.length) notes.push('Selección inteligente omitida: no hay transcripción.');
+        else {
+          try {
+            const r = await judgeCandidates(llmConf!, words, pool, {
+              fetchFn: this.d.llmFetch,
+              cacheFile: this.d.judgeDir ? path.join(this.d.judgeDir, `${vod.id}.json`) : undefined,
+              onProgress: (done, total) => task.update(56 + (total ? (done / total) * 4 : 4), `Valorando candidatos (${done}/${total})…`),
+              signal: () => throwIfCancelled(),
+            });
+            judged = r.judged;
+            notes.push(`Selección inteligente: ${r.judged.length} candidatos valorados${r.cached ? ` (${r.cached} ya estaban guardados)` : ''}${r.failedChunks ? `, ${r.failedChunks} lote(s) sin respuesta` : ''}.`);
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+            notes.push(`Selección inteligente no disponible (${(e as Error).message}); se usó el volumen y el chat.`);
+          }
+        }
+        if (judged) {
+          const textFor = textFn(words);
+          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: QUALITY_CLIP, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: QUALITY_SUMMARY, maxLen: 90, minGap: 20, textFor }) : null;
+          if (clips) {
+            moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
+            clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
+            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota mínima (${QUALITY_CLIP}/10); no se rellenó con momentos flojos.`);
+          }
+          if (sum && sum.chosen.length) {
+            if (sum.totalSec >= MIN_SUMMARY_SEC) {
+              summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
+              const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
+              notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < this.cfg.summaryMinutes * 60 * 0.85 ? ' Más corto de lo configurado: no había más momentos buenos.' : ''}`);
+              if (new Set(cats.map((c) => c.title)).size > 1) {
+                const dom = dominantCategory(summary, cats, 8);
+                if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
+                summary = dom.segs;
+              }
+              summaryMeta = { score: avg, kind: 'resumen', reason: kindSummary(sum) };
+            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${QUALITY_SUMMARY}/10).`);
+          } else if (sum) notes.push(`Ningún momento supera la nota mínima del resumen (${QUALITY_SUMMARY}/10).`);
+        } else {
+          // el modelo no estuvo disponible: selección por señales de siempre, transcribiendo lo que haga falta
+          ({ moments, summary } = legacy);
+          try {
+            await this.d.transcripts.ensure(vod.id, [...moments, ...summary].map((g) => ({ start: g.start, end: g.end })));
+            words = this.d.transcripts.words(vod.id);
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+          }
+        }
+        if (!moments.length && !summary.length && !mains.length) {
+          this.mark(vod, 'skipped', ['Ningún momento supera la nota mínima de calidad: no se genera nada para no publicar relleno.', ...notes].join(' '));
+          task.done('Sin momentos con la calidad mínima');
+          return vod;
+        }
       }
 
       // 4) títulos
@@ -363,10 +450,10 @@ export class Autopilot {
       const errors: string[] = [];
       const total = (summary.length ? 1 : 0) + mains.length + moments.length;
       let doneCount = 0;
-      const step = async (role: AutoRole, label: string, fn: () => Promise<OutputItem>, t: Titles) => {
+      const step = async (role: AutoRole, label: string, fn: () => Promise<OutputItem>, t: Titles, m?: { score: number; kind: string; reason: string }) => {
         try {
           const item = await fn();
-          item.auto = { role, review: 'pending' };
+          item.auto = { role, review: 'pending', ...(m ? { score: Math.round(m.score * 10) / 10, kind: m.kind, reason: m.reason } : {}) };
           item.titleSource = 'auto';
           item.visibility = this.cfg.visibility;
           const ch = chapterOf.get(item.id);
@@ -419,7 +506,7 @@ export class Autopilot {
         }
         return item;
       };
-      if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary, true), titles.summary);
+      if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary, true), titles.summary, summaryMeta);
       for (const [i, m] of mains.entries()) {
         const t = titles.mains[i];
         await step('main', `vídeo ${i + 1}`, () => longMake(t.title, [m]), t);
@@ -427,7 +514,7 @@ export class Autopilot {
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
         const e = pro ? planEdit(words, m) : null;
-        await step('clip', `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e!.cuts, effects: e!.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t);
+        await step('clip', `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e!.cuts, effects: e!.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, meta.get(m));
       }
       if (!created.length) throw new Error(`No se pudo montar ningún vídeo. ${errors.join(' ')}`);
 
@@ -481,6 +568,14 @@ export class Autopilot {
       this.d.log.error('Piloto automático fallido', e);
       throw e;
     }
+  }
+
+  /** Configuración del modelo de lenguaje si hay uno elegido y con clave; si no, null. */
+  private llmConf(): LlmConfig | null {
+    const llm = this.cfg.llm;
+    const key = this.d.llmKey();
+    if (llm.provider === 'none' || !key) return null;
+    return { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
   }
 
   private async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]) {

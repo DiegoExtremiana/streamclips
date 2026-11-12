@@ -16,6 +16,8 @@ export interface LlmConfig {
 export interface LlmDeps {
   fetchFn?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  /** Por defecto 0.4; para valorar se usa algo más bajo (respuestas más estables). */
+  temperature?: number;
 }
 
 const TIMEOUT_MS = 90_000;
@@ -48,7 +50,7 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
   const url = `${cfg.baseUrl ?? LLM_PROVIDERS[cfg.provider].baseUrl}/chat/completions`;
   const body = JSON.stringify({
     model: cfg.model,
-    temperature: 0.4,
+    temperature: d.temperature ?? 0.4,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: system },

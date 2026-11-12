@@ -182,6 +182,7 @@ export class AppContext {
       library: this.library,
       pubs: this.pubs,
       chatDir: path.join(o.userDataDir, 'chat'),
+      judgeDir: path.join(o.userDataDir, 'judgements'),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,

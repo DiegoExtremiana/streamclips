@@ -64,6 +64,8 @@ export interface AutopilotSettings {
   purgePublished?: boolean;
   /** Análisis rápido: se eligen los momentos por volumen y chat y SOLO se transcribe lo elegido (en vez de todo el directo). Por defecto sí. */
   fastAnalysis?: boolean;
+  /** Valorar los candidatos con el modelo de lenguaje (humor, originalidad, contexto…) en vez de fiarse solo del volumen. Por defecto sí, si hay modelo configurado. */
+  smartSelect?: boolean;
   /** Portadas con estilo de los canales grandes: fotograma más vivo y expresivo, frase corta grande y número de episodio. Por defecto sí. */
   styledCovers?: boolean;
   /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */
@@ -245,7 +247,7 @@ export interface OutputItem {
   /** Categoría de Twitch (juego o actividad) en el momento de este clip o vídeo. */
   category?: string;
   /** Creado por el piloto automático. */
-  auto?: { role: AutoRole; review: 'pending' | 'approved' };
+  auto?: { role: AutoRole; review: 'pending' | 'approved'; /** Nota de entretenimiento (0-10) y motivo de la valoración, si la hizo el modelo. */ score?: number; kind?: string; reason?: string };
 }
 
 export type Visibility = 'public' | 'private';

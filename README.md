@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.21
+
+- **Selección inteligente de momentos** (Piloto automático, activada por defecto; necesita la clave gratuita de Groq o Gemini): en vez de fiarse solo del volumen, el chat y las palabras por segundo, se buscan más candidatos de los necesarios y un modelo de lenguaje lee la transcripción de cada uno y puntúa de 0 a 10 **humor, originalidad, interacción, reacción, contexto y si se entiende solo**, indica de qué tipo es (gracia, fail, reacción, discusión, historia, épico), dónde empieza y acaba de verdad la situación y por qué le pone esa nota. La nota final pesa los criterios y deja a las señales de audio y chat un 15 %.
+- **Variedad, sin repetidos y sin relleno**: se resta nota al tipo de momento que ya se ha elegido, no entran dos tramos que hablan de lo mismo ni pegados, y **solo entra lo que llega a 6,5/10**. Si no hay suficientes momentos buenos el resumen sale más corto (por debajo de 2,5 min no se genera) y los clips son menos: «prefiero un vídeo de 7 minutos excelente a uno de 15 con relleno». Cada vídeo creado guarda su nota, su tipo y el motivo.
+- Las valoraciones se guardan por contenido: al volver a analizar o regenerar un directo **no se vuelve a preguntar** por lo ya valorado. Si el modelo falla (clave, límite gratuito, red), se usa la selección por volumen y chat de siempre y se avisa en la nota. Sin clave todo funciona como antes.
+- **Vocabulario de Pokémon y competitivo** incorporado (VGC, competitivo, locke, nuzlocke, speed tie, Trick Room, Archaludon, Pelipper, Torkoal…): no está en tu lista, así que no la pisa ni se desordena; corrige por sonido con un umbral más exigente y con correcciones exactas («be ge ce» → VGC), y se manda a Whisper solo cuando el título o el juego del directo parecen de Pokémon.
+
+Límites: la calidad de la selección depende del modelo gratuito (no se ha medido con directos reales tuyos; las pruebas usan un modelo de mentira que comprueba la lógica, no el criterio); el juez solo ve texto, no imagen; no distingue hablantes (diarización pendiente); lo que más tarda sigue siendo transcribir, y ahora se transcriben más candidatos (hasta 2× lo necesario) para poder elegir entre ellos.
+
 ## Novedades de la v0.20
 
 - **Análisis rápido** (Piloto automático, activado por defecto): el programa elige los momentos con el volumen del audio y el chat, y **solo transcribe lo elegido** (resumen, vídeos y clips) en vez de las horas del directo entero, que era casi todo el tiempo. Varios tramos se transcriben a la vez. La nota del directo indica cuántos minutos se transcribieron. Si lo desactivas, vuelve a transcribir todo antes de elegir (y los momentos también cuentan por lo que se dice). Límite: sin las palabras, la elección se basa solo en volumen y chat.

@@ -34,7 +34,7 @@ export default function AutopilotCard() {
       const s = await window.api.setSettings({
         autopilot: {
           enabled: a.enabled, requireApproval: a.requireApproval, maxClips: a.maxClips, subtitles: a.subtitles, platforms: a.platforms,
-          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, styledCovers: a.styledCovers !== false, fastAnalysis: a.fastAnalysis !== false, parallel: a.parallel ?? 2,
+          visibility: a.visibility, series: a.series, maxVideos: a.maxVideos, videoTimes: parseTimes(timesText.video), clipTimes: parseTimes(timesText.clip), summaryMinutes: a.summaryMinutes, mainMinutes: a.mainMinutes, chatCapture: a.chatCapture, proEdit: a.proEdit !== false, cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, styledCovers: a.styledCovers !== false, fastAnalysis: a.fastAnalysis !== false, smartSelect: a.smartSelect !== false, parallel: a.parallel ?? 2,
           llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key },
         },
       });
@@ -68,6 +68,9 @@ export default function AutopilotCard() {
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.fastAnalysis !== false} onChange={(e) => up({ fastAnalysis: e.target.checked })} /> Análisis rápido: elige los momentos por volumen y chat y solo transcribe lo elegido (mucho más rápido que transcribir el directo entero; si lo desactivas, se transcribe todo antes de elegir y los momentos también cuentan por lo que se dice)
+      </label>
+      <label className="row" style={{ gap: 8 }}>
+        <input type="checkbox" checked={a.smartSelect !== false} onChange={(e) => up({ smartSelect: e.target.checked })} /> Selección inteligente: el modelo de lenguaje (Groq o Gemini, gratis) lee cada candidato y puntúa humor, originalidad, interacción, reacción, contexto y si se entiende solo; elige con variedad y no rellena con momentos flojos. Necesita la clave del modelo de lenguaje; sin ella se usa el volumen y el chat
       </label>
       <label className="row" style={{ gap: 8 }}>
         <input type="checkbox" checked={a.styledCovers !== false} onChange={(e) => up({ styledCovers: e.target.checked })} /> Portadas con estilo de los canales grandes: el fotograma más vivo y expresivo, una frase corta grande con contorno y el número del episodio

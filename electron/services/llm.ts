@@ -2,8 +2,19 @@ export type LlmProvider = 'groq' | 'gemini';
 
 export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string }> = {
   groq: { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile' },
-  gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
+  gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.5-flash-lite' },
 };
+
+/** Modelos que ya no existen: se sustituyen por el recomendado (Google retiró los Gemini 1.5 y 2.0 en 2026). */
+export function resolveModel(provider: LlmProvider, model: string): string {
+  const m = model.trim();
+  if (!m) return LLM_PROVIDERS[provider].defaultModel;
+  if (provider === 'gemini' && /^gemini-(1\.5|2\.0)/.test(m)) return LLM_PROVIDERS.gemini.defaultModel;
+  return m;
+}
+
+/** Pausa mínima entre dos peticiones seguidas para no pasar el límite gratuito por minuto (Groq: 12.000 tokens/min en el modelo grande). */
+export const MIN_INTERVAL_MS: Record<LlmProvider, number> = { groq: 14_000, gemini: 4_000 };
 
 export interface LlmConfig {
   provider: LlmProvider;
@@ -77,6 +88,7 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
     }
     if (res.status === 401 || res.status === 403) throw new Error('El modelo de lenguaje rechazó la clave. Revísala en Ajustes.');
     if (res.status === 429) throw new Error('Se agotó el límite gratuito del modelo de lenguaje. Se reintentará en el próximo directo.');
+    if (res.status === 404) throw new Error(`El modelo «${cfg.model}» no existe o ya no está disponible. Cámbialo en Ajustes › Piloto automático.`);
     if (!res.ok) throw new Error(`Error del modelo de lenguaje (${res.status}).`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content;

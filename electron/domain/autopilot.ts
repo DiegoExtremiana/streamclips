@@ -13,7 +13,7 @@ import { ChatBins } from '../services/chatlog';
 import { CancelledError, isCancelled, throwIfCancelled, withAbort } from '../services/abort';
 import type { Range } from '../../shared/timeline';
 import { audioEnergy } from '../services/audioEnergy';
-import { LLM_PROVIDERS, askJson, type LlmConfig } from '../services/llm';
+import { askJson, resolveModel, type LlmConfig } from '../services/llm';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
 import type { ToolPaths } from '../services/tools';
@@ -575,7 +575,7 @@ export class Autopilot {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === 'none' || !key) return null;
-    return { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
   }
 
   private async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]) {
@@ -596,7 +596,7 @@ export class Autopilot {
       uniq();
       return base;
     }
-    const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+    const conf: LlmConfig = { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
     const items = [
       ...mains.map((m, i) => ({ id: `video${i + 1}`, texto: textOf(words, m.start, Math.min(m.end, m.start + 240), 900) })),
       ...moments.map((m, i) => ({ id: `clip${i + 1}`, texto: textOf(words, m.start, m.end, 600) })),
@@ -650,7 +650,7 @@ export class Autopilot {
     const key = this.d.llmKey();
     if (llm.provider !== 'none' && key) {
       try {
-        const conf: LlmConfig = { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
+        const conf: LlmConfig = { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
         const text = segs.map((g) => textOf(words, g.start, Math.min(g.end, g.start + 240), 900)).join(' / ').slice(0, 1400);
         const raw = (await askJson(
           conf,

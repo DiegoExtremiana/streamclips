@@ -101,3 +101,28 @@ test('similarityOfText: lo parecido sube y lo distinto es 0', () => {
   assert.equal(similarityOfText('pizza hawaiana', 'cohetes espaciales'), 0);
   assert.equal(similarityOfText('', 'algo'), 0);
 });
+
+test('resolveModel: sustituye los Gemini retirados y respeta el modelo elegido', async () => {
+  const { resolveModel, LLM_PROVIDERS } = await import('../electron/services/llm');
+  assert.equal(resolveModel('gemini', ''), LLM_PROVIDERS.gemini.defaultModel);
+  assert.equal(resolveModel('gemini', 'gemini-2.0-flash'), LLM_PROVIDERS.gemini.defaultModel);
+  assert.equal(resolveModel('gemini', 'gemini-1.5-flash'), LLM_PROVIDERS.gemini.defaultModel);
+  assert.equal(resolveModel('gemini', 'gemini-3.8-flash'), 'gemini-3.8-flash');
+  assert.equal(resolveModel('groq', 'llama-3.1-8b-instant'), 'llama-3.1-8b-instant');
+});
+
+test('judgeCandidates espera entre lotes para no pasar el límite gratuito', async () => {
+  const { judgeCandidates } = await import('../electron/services/momentJudge');
+  const cands = Array.from({ length: 13 }, (_, i) => cand(`c${i}`, i * 200, i * 200 + 60));
+  const words: Word[] = cands.flatMap((c) => [W(`texto${c.id}`, c.start + 1), W('más', c.start + 2)]);
+  const waits: number[] = [];
+  const fetchFn = (async (_u: unknown, init: { body: string }) => {
+    const ids = [...JSON.parse(init.body).messages[1].content.matchAll(/"id":"(c\d+)"/g)].map((m) => m[1]);
+    const juicios = ids.map((id) => raw(id, 7));
+    return { ok: true, status: 200, headers: new Headers(), json: async () => ({ choices: [{ message: { content: JSON.stringify({ juicios }) } }] }) };
+  }) as unknown as typeof fetch;
+  const r = await judgeCandidates({ provider: 'groq', model: 'x', apiKey: 'k' }, words, cands, { fetchFn, sleep: async (ms) => void waits.push(ms) });
+  assert.equal(r.chunks, 3);
+  assert.equal(r.judged.length, 13);
+  assert.deepEqual(waits, [14_000, 14_000], 'no espera antes del primero');
+});

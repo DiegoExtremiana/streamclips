@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Word } from '../../shared/subtitles';
 import { JUDGE_SYSTEM, judgePrompt, judgeText, parseJudgements, toJudged, type Candidate, type Judged, type Judgement } from '../../shared/judge';
-import { askJson, type LlmConfig } from './llm';
+import { MIN_INTERVAL_MS, askJson, type LlmConfig } from './llm';
 
 const VERSION = 'v1';
 const CHUNK = 6;
@@ -56,7 +56,7 @@ export async function judgeCandidates(
   conf: LlmConfig,
   words: Word[],
   cands: Candidate[],
-  d: { fetchFn?: typeof fetch; sleep?: (ms: number) => Promise<void>; cacheFile?: string; onProgress?: (done: number, total: number) => void; signal?: () => void } = {},
+  d: { fetchFn?: typeof fetch; sleep?: (ms: number) => Promise<void>; cacheFile?: string; /** Pausa entre peticiones (ms); por defecto la del proveedor. */ paceMs?: number; onProgress?: (done: number, total: number) => void; signal?: () => void } = {},
 ): Promise<JudgeResult> {
   const cache = loadCache(d.cacheFile);
   const found: Judgement[] = [];
@@ -73,6 +73,7 @@ export async function judgeCandidates(
   let lastError: Error | null = null;
   for (const [n, chunk] of chunks.entries()) {
     d.signal?.();
+    if (n > 0) await (d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(d.paceMs ?? MIN_INTERVAL_MS[conf.provider]);
     try {
       const raw = await askJson(conf, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
       const js = parseJudgements(raw, chunk);

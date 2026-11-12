@@ -41,10 +41,14 @@ function llm(mode: 'normal' | 'fail' | 'low' = 'normal'): Promise<Server> {
       const isJudge = /EXIGENTE/.test(body.messages[0].content);
       if (!isJudge) {
         state.titleCalls++;
-        return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { content: '{}' } }] }));
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { content: '{}' } }] }));
+        return;
       }
       state.judgeCalls++;
-      if (mode === 'fail') return res.writeHead(500).end('{}');
+      if (mode === 'fail') {
+        res.writeHead(500).end('{}');
+        return;
+      }
       const items = JSON.parse(/Fragmentos:\n(.*)$/s.exec(body.messages[1].content)![1]) as { id: string; texto: string }[];
       const juicios = items.map((it) => {
         const n = mode === 'low' ? 3 : /jugada/.test(it.texto) ? 9 : 3;
@@ -58,7 +62,7 @@ function llm(mode: 'normal' | 'fail' | 'low' = 'normal'): Promise<Server> {
       const s = Object.defineProperties({ url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, close: () => srv.close() }, {
         judgeCalls: { get: () => state.judgeCalls },
         titleCalls: { get: () => state.titleCalls },
-      }) as Server;
+      }) as unknown as Server;
       ok(s);
     }),
   );

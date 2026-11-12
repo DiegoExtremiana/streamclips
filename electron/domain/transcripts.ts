@@ -5,6 +5,7 @@ import type { TranscriptInfo, VodJob, WhisperStatus } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import type { Range } from '../../shared/timeline';
 import { parseTranscript } from '../../shared/transcript';
+import { dropLoops } from '../../shared/loops';
 import { applyVocabulary, cleanVocabulary, learnCorrections, mergeCorrections, normToken, whisperPrompt, type Vocabulary } from '../../shared/vocab';
 import { applyLineChanges, type LineChange } from '../../shared/subtitleEdit';
 import { looksLikePokemon, POKEMON_PROMPT_TERMS } from '../../shared/vocabPokemon';
@@ -81,7 +82,7 @@ export class TranscriptService {
   words(vodId: string): Word[] {
     const raw = this.raw(vodId).words;
     const v = this.vocabulary();
-    if (!raw.length || (!v.terms.length && !v.corrections.length)) return raw;
+    if (!raw.length) return raw;
     let mtime = 0;
     try {
       mtime = fs.statSync(this.file(vodId)).mtimeMs;
@@ -91,7 +92,8 @@ export class TranscriptService {
     const key = `${this.vocabVersion}:${mtime}:${raw.length}`;
     const hit = this.corrected.get(vodId);
     if (hit?.key === key) return hit.words;
-    const words = applyVocabulary(raw, v);
+    // sin los bucles de Whisper (frases repetidas decenas de veces que no se dijeron) y con el vocabulario aplicado
+    const words = applyVocabulary(dropLoops(raw).words, v);
     this.corrected.set(vodId, { key, words });
     if (this.corrected.size > 4) this.corrected.delete(this.corrected.keys().next().value as string);
     return words;

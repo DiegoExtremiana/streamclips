@@ -93,10 +93,10 @@ var init_twitch = __esm({
         this.token = { clientId: c.clientId, value: j.access_token, expiresAt: this.now() + (j.expires_in ?? 3600) * 1e3 };
         return j.access_token;
       }
-      async helix(path17, c) {
+      async helix(path18, c) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const token = await this.appToken(c, attempt > 0);
-          const res = await this.request(`https://api.twitch.tv/helix/${path17}`, {
+          const res = await this.request(`https://api.twitch.tv/helix/${path18}`, {
             headers: { "Client-Id": c.clientId, Authorization: `Bearer ${token}` }
           });
           if (res.status === 401) {
@@ -243,9 +243,9 @@ var require_libsodium = __commonJS({
             Module.getRandomValue = randomValuesStandard;
           } catch (e) {
             try {
-              var crypto9 = require("crypto");
+              var crypto10 = require("crypto");
               var randomValueNodeJS = function() {
-                var buf = crypto9["randomBytes"](4);
+                var buf = crypto10["randomBytes"](4);
                 return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
               };
               randomValueNodeJS();
@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs24 = require("fs");
+                var fs25 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs24.readFileSync(filename);
+                  var ret = fs25.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs24.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs25.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27147,7 +27147,7 @@ var require_libsodium = __commonJS({
                   try {
                     var window_2 = "object" === typeof window ? window : self;
                     var crypto_2 = typeof window_2.crypto !== "undefined" ? window_2.crypto : window_2.msCrypto;
-                    crypto_2 = crypto_2 === void 0 ? crypto10 : crypto_2;
+                    crypto_2 = crypto_2 === void 0 ? crypto11 : crypto_2;
                     var randomValuesStandard2 = function() {
                       var buf = new Uint32Array(1);
                       crypto_2.getRandomValues(buf);
@@ -27157,9 +27157,9 @@ var require_libsodium = __commonJS({
                     Module3.getRandomValue = randomValuesStandard2;
                   } catch (e) {
                     try {
-                      var crypto10 = require("crypto");
+                      var crypto11 = require("crypto");
                       var randomValueNodeJS2 = function() {
-                        var buf = crypto10["randomBytes"](4);
+                        var buf = crypto11["randomBytes"](4);
                         return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
                       };
                       randomValueNodeJS2();
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs23 = require("fs");
+            var fs24 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs23.readFileSync(filename);
+              var ret = fs24.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs23.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs24.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -27805,7 +27805,7 @@ var require_libsodium = __commonJS({
               try {
                 var window_2 = "object" === typeof window ? window : self;
                 var crypto_2 = typeof window_2.crypto !== "undefined" ? window_2.crypto : window_2.msCrypto;
-                crypto_2 = crypto_2 === void 0 ? crypto10 : crypto_2;
+                crypto_2 = crypto_2 === void 0 ? crypto11 : crypto_2;
                 var randomValuesStandard2 = function() {
                   var buf = new Uint32Array(1);
                   crypto_2.getRandomValues(buf);
@@ -27815,9 +27815,9 @@ var require_libsodium = __commonJS({
                 Module2.getRandomValue = randomValuesStandard2;
               } catch (e) {
                 try {
-                  var crypto10 = require("crypto");
+                  var crypto11 = require("crypto");
                   var randomValueNodeJS2 = function() {
-                    var buf = crypto10["randomBytes"](4);
+                    var buf = crypto11["randomBytes"](4);
                     return (buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3]) >>> 0;
                   };
                   randomValueNodeJS2();
@@ -30686,12 +30686,392 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs22 = __toESM(require("node:fs"));
+var import_node_fs23 = __toESM(require("node:fs"));
 var import_node_os6 = __toESM(require("node:os"));
-var import_node_path16 = __toESM(require("node:path"));
+var import_node_path17 = __toESM(require("node:path"));
 
 // electron/app/context.ts
-var import_node_path15 = __toESM(require("node:path"));
+var import_node_path16 = __toESM(require("node:path"));
+
+// shared/vocabPokemon.ts
+var COMPETITIVE_TERMS = [
+  "VGC",
+  "competitivo",
+  "locke",
+  "nuzlocke",
+  "Nuzlocke",
+  "speed tie",
+  "Trick Room",
+  "Tailwind",
+  "Fake Out",
+  "Protect",
+  "Intimidate",
+  "Terastal",
+  "teratipo",
+  "Teracristalizaci\xF3n",
+  "Dynamax",
+  "Gigamax",
+  "Mega Evoluci\xF3n",
+  "Choice Scarf",
+  "Choice Band",
+  "Choice Specs",
+  "Assault Vest",
+  "Focus Sash",
+  "Life Orb",
+  "Leftovers",
+  "Booster Energy",
+  "Sitrus Berry",
+  "EVs",
+  "IVs",
+  "Smogon",
+  "Showdown",
+  "Pok\xE9mon Showdown",
+  "Pok\xE9dex",
+  "Pok\xE9ball",
+  "shiny",
+  "Worlds",
+  "Regional",
+  "Internacional",
+  "Regulaci\xF3n",
+  "doubles",
+  "Tier List",
+  "Pok\xE9mon Espada y Escudo",
+  "Pok\xE9mon Escarlata y P\xFArpura",
+  "Pok\xE9mon Go"
+];
+var POKEMON_NAMES = [
+  "Archaludon",
+  "Pelipper",
+  "Torkoal",
+  "Incineroar",
+  "Rillaboom",
+  "Urshifu",
+  "Flutter Mane",
+  "Iron Hands",
+  "Amoonguss",
+  "Farigiraf",
+  "Indeedee",
+  "Gholdengo",
+  "Landorus",
+  "Tornadus",
+  "Thundurus",
+  "Raging Bolt",
+  "Iron Bundle",
+  "Chien-Pao",
+  "Chi-Yu",
+  "Ting-Lu",
+  "Wo-Chien",
+  "Ogerpon",
+  "Terapagos",
+  "Calyrex",
+  "Miraidon",
+  "Koraidon",
+  "Kyogre",
+  "Groudon",
+  "Rayquaza",
+  "Zacian",
+  "Zamazenta",
+  "Eternatus",
+  "Dragonite",
+  "Garchomp",
+  "Tyranitar",
+  "Hydreigon",
+  "Dragapult",
+  "Baxcalibur",
+  "Kingambit",
+  "Annihilape",
+  "Palafin",
+  "Whimsicott",
+  "Grimmsnarl",
+  "Sinistcha",
+  "Hatterene",
+  "Dondozo",
+  "Tatsugiri",
+  "Ursaluna",
+  "Heatran",
+  "Volcarona",
+  "Primarina",
+  "Basculegion",
+  "Gastrodon",
+  "Corviknight",
+  "Excadrill",
+  "Scizor",
+  "Gyarados",
+  "Salamence",
+  "Metagross",
+  "Lucario",
+  "Blaziken",
+  "Gardevoir",
+  "Gallade",
+  "Pikachu",
+  "Charizard",
+  "Venusaur",
+  "Blastoise",
+  "Greninja",
+  "Mimikyu",
+  "Tinkaton",
+  "Armarouge",
+  "Ceruledge",
+  "Lokix",
+  "Pawmot",
+  "Kommo-o",
+  "Bronzong",
+  "Rotom",
+  "Latios",
+  "Latias",
+  "Meowscarada",
+  "Skeledirge",
+  "Quaquaval",
+  "Sylveon",
+  "Umbreon",
+  "Espeon",
+  "Glimmora",
+  "Houndstone",
+  "Maushold",
+  "Sneasler",
+  "Typhlosion",
+  "Samurott",
+  "Decidueye",
+  "Zoroark",
+  "Goodra",
+  "Avalugg",
+  "Cinderace",
+  "Inteleon",
+  "Dubwool",
+  "Toxtricity",
+  "Morpeko",
+  "Eiscue",
+  "Sirfetch'd",
+  "Obstagoon",
+  "Perrserker",
+  "Cursola",
+  "Runerigus",
+  "Mr. Rime",
+  "Copperajah",
+  "Drednaw",
+  "Coalossal",
+  "Flapple",
+  "Appletun",
+  "Sandaconda",
+  "Polteageist",
+  "Falinks",
+  "Pincurchin",
+  "Frosmoth",
+  "Stonjourner",
+  "Dracozolt",
+  "Arctozolt",
+  "Dracovish",
+  "Arctovish",
+  "Duraludon",
+  "Drakloak",
+  "Kubfu",
+  "Zarude",
+  "Regieleki",
+  "Regidrago",
+  "Glastrier",
+  "Spectrier",
+  "Arcanine",
+  "Gengar",
+  "Machamp",
+  "Snorlax",
+  "Dragalge",
+  "Mamoswine",
+  "Weavile",
+  "Togekiss",
+  "Kartana",
+  "Celesteela",
+  "Tapu Koko",
+  "Tapu Fini",
+  "Tapu Lele",
+  "Tapu Bulu",
+  "Necrozma",
+  "Lunala",
+  "Solgaleo",
+  "Marshadow",
+  "Magearna",
+  "Naganadel",
+  "Pheromosa",
+  "Xurkitree",
+  "Ditto",
+  "Staraptor",
+  "Azumarill"
+];
+var POKEMON_CORRECTIONS = [
+  { from: "be ge ce", to: "VGC" },
+  { from: "v g c", to: "VGC" },
+  { from: "nuzlock", to: "Nuzlocke" },
+  { from: "nos locke", to: "Nuzlocke" },
+  { from: "nus locke", to: "Nuzlocke" },
+  { from: "espid tai", to: "speed tie" },
+  { from: "espid tay", to: "speed tie" },
+  { from: "trick rum", to: "Trick Room" }
+];
+var POKEMON_PROMPT_TERMS = [...COMPETITIVE_TERMS.slice(0, 14), ...POKEMON_NAMES.slice(0, 24)];
+var looksLikePokemon = (context) => /pok[eé]mon|\bvgc\b|nuzlocke|\blocke\b|poke-?survivor/i.test(context.join(" "));
+
+// shared/vocab.ts
+var OWN_TERMS = ["Movidas", "Marrshall", "MovidasMarshall", "Gorens", "Reaptor"];
+var DEFAULT_TERMS = OWN_TERMS;
+var BUILTIN_TERMS = [...COMPETITIVE_TERMS, ...POKEMON_NAMES];
+var BUILTIN_CORRECTIONS = POKEMON_CORRECTIONS.map((c) => ({ ...c, n: 1 }));
+var FUZZY_STRICT = 0.8;
+var STRICT = new Set([...COMPETITIVE_TERMS, ...POKEMON_NAMES].map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "")));
+var MAX_TERMS = 400;
+var MAX_CORRECTIONS = 500;
+var FUZZY_MIN = 0.72;
+var FUZZY_MIN_LEN = 6;
+var emptyVocabulary = () => ({ terms: [...DEFAULT_TERMS], corrections: [] });
+var COMMON = new Set(
+  "el la los las un una unos unas de del al y o u e a en con por para que se su sus lo le les mi mis es son fue este esta esto ese esa como pero muy mas ya si no me te nos yo tu el ella ellos nosotros vamos va van voy vas hay ha han he has estoy esta estan eso aqui alli ahi bien mal bueno buena todo todos toda nada algo tambien cuando donde porque pues entonces vale venga ostia joder tio tia gente chat directo vez veces cosa cosas dia dias tengo tiene tienes hacer hace hago".split(" ")
+);
+function normToken(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/ñ/g, "n").replace(/[^a-z0-9]/g, "");
+}
+function phonetic(s) {
+  return normToken(s).replace(/sh/g, "s").replace(/ch/g, "X").replace(/ll/g, "y").replace(/rr/g, "r").replace(/ss/g, "s").replace(/ck/g, "k").replace(/qu/g, "k").replace(/c(?=[ei])/g, "s").replace(/z/g, "s").replace(/c/g, "k").replace(/v/g, "b").replace(/w/g, "u").replace(/h/g, "").replace(/X/g, "ch").replace(/(.)\1+/g, "$1");
+}
+function editDistance(a, b, max = 99) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      cur.push(v);
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function similarity(a, b) {
+  const len = Math.max(a.length, b.length);
+  if (!len) return 1;
+  return 1 - editDistance(a, b, len) / len;
+}
+function splitPunct(t) {
+  const m = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/su.exec(t);
+  return { pre: m?.[1] ?? "", core: m?.[2] ?? t, post: m?.[3] ?? "" };
+}
+var MAX_SPAN = 3;
+function applyVocabulary(words, v) {
+  if (!words.length) return words;
+  const exact = /* @__PURE__ */ new Map();
+  for (const c of [...BUILTIN_CORRECTIONS, ...v.corrections]) {
+    const key = c.from.split(/\s+/).map(normToken).filter(Boolean).join(" ");
+    if (key && c.to.trim()) exact.set(key, c.to.trim());
+  }
+  const fuzzy = [.../* @__PURE__ */ new Set([...v.terms, ...BUILTIN_TERMS])].map((t) => ({ term: t, code: phonetic(t), min: STRICT.has(normToken(t)) ? FUZZY_STRICT : FUZZY_MIN })).filter((t) => normToken(t.term).length >= FUZZY_MIN_LEN);
+  if (!exact.size && !fuzzy.length) return words;
+  const cores = words.map((w) => splitPunct(w.text));
+  const keys = cores.map((c) => normToken(c.core));
+  const out = [];
+  let changed = false;
+  for (let i = 0; i < words.length; ) {
+    let done = false;
+    for (let n = Math.min(MAX_SPAN, words.length - i); n >= 1 && !done; n--) {
+      if (keys.slice(i, i + n).some((k) => !k)) continue;
+      const to = exact.get(keys.slice(i, i + n).join(" "));
+      if (to === void 0) continue;
+      out.push({ text: `${cores[i].pre}${to}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
+      i += n;
+      done = true;
+      changed = true;
+    }
+    if (done) continue;
+    if (fuzzy.length) {
+      for (let n = Math.min(2, words.length - i); n >= 1 && !done; n--) {
+        const joined = keys.slice(i, i + n).join("");
+        if (joined.length < 4 || keys.slice(i, i + n).some((k) => !k)) continue;
+        if (n === 1 && COMMON.has(joined)) continue;
+        if (n === 2 && (COMMON.has(keys[i]) || COMMON.has(keys[i + 1]))) continue;
+        const code = phonetic(joined);
+        let best = null;
+        for (const f of fuzzy) {
+          if (code[0] !== f.code[0] || Math.abs(code.length - f.code.length) > 3) continue;
+          const s = similarity(code, f.code);
+          if (s >= f.min && (!best || s > best.s)) best = { term: f.term, s };
+        }
+        if (!best || normToken(best.term) === joined) continue;
+        out.push({ text: `${cores[i].pre}${best.term}${cores[i + n - 1].post}`, start: words[i].start, end: words[i + n - 1].end });
+        i += n;
+        done = true;
+        changed = true;
+      }
+    }
+    if (!done) out.push(words[i++]);
+  }
+  return changed ? out : words;
+}
+function whisperPrompt(v, context = [], extra = []) {
+  const ascii = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 .'-]/g, " ").replace(/\s+/g, " ").trim();
+  const own = v.terms.slice(0, OWN_TERMS.length + 5);
+  const terms = [...new Set([...own, ...v.corrections.filter((c) => c.n >= 1 && !BUILTIN_CORRECTIONS.some((d) => d.to === c.to)).map((c) => c.to), ...extra].map(ascii).filter(Boolean))].slice(0, 60);
+  const ctx = [...new Set(context.map(ascii).filter((c) => c.length >= 3))].slice(0, 10);
+  const parts = [];
+  if (ctx.length) parts.push(`Directo de Twitch en espanol sobre ${ctx.join(", ")}.`);
+  if (terms.length) parts.push(`Nombres y palabras: ${terms.join(", ")}.`);
+  return parts.join(" ").slice(0, 480);
+}
+function cleanVocabulary(x) {
+  const o = typeof x === "object" && x !== null ? x : {};
+  const terms = Array.isArray(o.terms) ? o.terms.filter((t) => typeof t === "string" && t.trim().length > 0).map((t) => t.trim().slice(0, 80)) : null;
+  const corr = !Array.isArray(o.corrections) ? [] : o.corrections.filter((c) => typeof c === "object" && c !== null && typeof c.from === "string" && typeof c.to === "string").map((c) => ({ from: c.from.trim().slice(0, 80), to: c.to.trim().slice(0, 80), n: Number.isFinite(c.n) && c.n > 0 ? Math.min(9999, Math.floor(c.n)) : 1 })).filter((c) => c.from && c.to);
+  const seenT = /* @__PURE__ */ new Set();
+  const uniqueTerms = (terms ?? DEFAULT_TERMS).filter((t) => {
+    const k = normToken(t);
+    if (!k || seenT.has(k)) return false;
+    seenT.add(k);
+    return true;
+  });
+  return { terms: uniqueTerms.slice(0, MAX_TERMS), corrections: corr.slice(0, MAX_CORRECTIONS) };
+}
+function learnCorrections(before, after) {
+  const a = before.map(normToken);
+  const b = after.map(normToken);
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i2 = n - 1; i2 >= 0; i2--) for (let j2 = m - 1; j2 >= 0; j2--) dp[i2][j2] = a[i2] === b[j2] ? dp[i2 + 1][j2 + 1] + 1 : Math.max(dp[i2 + 1][j2], dp[i2][j2 + 1]);
+  const out = [];
+  let i = 0;
+  let j = 0;
+  let delA = [];
+  let addB = [];
+  const flush = () => {
+    if (delA.length && addB.length && delA.length <= MAX_SPAN && addB.length <= MAX_SPAN) {
+      const fromKey = delA.map(normToken).join(" ");
+      const bad = !fromKey || fromKey === addB.map(normToken).join(" ") || delA.length === 1 && (COMMON.has(fromKey) || fromKey.length < 3);
+      if (!bad) out.push({ from: delA.map((w) => splitPunct(w).core).join(" "), to: addB.map((w) => splitPunct(w).core).join(" ") });
+    }
+    delA = [];
+    addB = [];
+  };
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      flush();
+      i++;
+      j++;
+    } else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) addB.push(after[j++]);
+    else delA.push(before[i++]);
+  }
+  flush();
+  return out.filter((c) => c.from && c.to);
+}
+function mergeCorrections(cur, learned) {
+  const out = cur.map((c) => ({ ...c }));
+  for (const l of learned) {
+    const key = l.from.split(/\s+/).map(normToken).join(" ");
+    const hit = out.find((c) => c.from.split(/\s+/).map(normToken).join(" ") === key);
+    if (hit) {
+      hit.to = l.to;
+      hit.n += 1;
+    } else out.push({ from: l.from, to: l.to, n: 1 });
+  }
+  return out.slice(-MAX_CORRECTIONS);
+}
 
 // electron/services/store.ts
 var import_node_fs = __toESM(require("node:fs"));
@@ -30752,6 +31132,7 @@ function defaults(defaultOutputDir) {
       }
     },
     stats: { transcribeRatio: {} },
+    vocab: emptyVocabulary(),
     vods: [],
     outputs: [],
     groups: [],
@@ -30822,6 +31203,7 @@ var Store = class _Store {
         }
       },
       stats: { transcribeRatio: ratios(saved.stats?.transcribeRatio) },
+      vocab: cleanVocabulary(saved.vocab),
       vods: arr(saved.vods),
       outputs: arr(saved.outputs).map(normalizeOutput).filter((x) => x !== null),
       groups: arr(saved.groups),
@@ -31331,6 +31713,8 @@ function validateAutopilot(cur, p, enc) {
     n.parallel = v;
   }
   if (p.purgePublished !== void 0) n.purgePublished = bool(p.purgePublished, "El borrado tras publicar");
+  if (p.fastAnalysis !== void 0) n.fastAnalysis = bool(p.fastAnalysis, "El an\xE1lisis r\xE1pido");
+  if (p.smartSelect !== void 0) n.smartSelect = bool(p.smartSelect, "La selecci\xF3n inteligente");
   if (p.styledCovers !== void 0) n.styledCovers = bool(p.styledCovers, "El estilo de las portadas");
   if (p.cleanup !== void 0) n.cleanup = bool(p.cleanup, "La limpieza del directo");
   if (p.chatCapture !== void 0) n.chatCapture = bool(p.chatCapture, "La captura del chat");
@@ -33307,6 +33691,34 @@ function transcriptForClaude(words, windowSec = 6) {
   return lines.join("\n");
 }
 
+// shared/subtitleEdit.ts
+function applyLineChanges(words, changes) {
+  const sorted = [...changes].filter((c) => Number.isFinite(c.start) && Number.isFinite(c.end) && c.end >= c.start).sort((a, b) => a.start - b.start);
+  const out = [];
+  const changed = [];
+  let ci = 0;
+  let i = 0;
+  const mid = (w) => (w.start + w.end) / 2;
+  while (i < words.length) {
+    while (ci < sorted.length && sorted[ci].end < mid(words[i]) - 1e-3) ci++;
+    const c = sorted[ci];
+    if (c && mid(words[i]) >= c.start - 1e-3) {
+      const group = [];
+      while (i < words.length && mid(words[i]) <= c.end + 1e-3) group.push(words[i++]);
+      const after = c.text.trim().split(/\s+/).filter(Boolean);
+      const before = group.map((w) => w.text.trim());
+      if (after.join(" ") !== before.join(" ")) {
+        changed.push({ before, after });
+        if (after.length) out.push(...spreadWords(after.join(" "), group[0].start, Math.max(group[group.length - 1].end, group[0].start + 0.05 * after.length)));
+      } else out.push(...group);
+      ci++;
+      continue;
+    }
+    out.push(words[i++]);
+  }
+  return { words: out, changed };
+}
+
 // shared/claudePrompt.ts
 var PROMPT_EXAMPLE = {
   clips: [
@@ -33613,7 +34025,7 @@ async function transcribeVideo(tools, input, o) {
           continue;
         }
         const base = import_node_path10.default.join(tmp, `c${i}`);
-        const args = ["-m", o.model, "-f", wav, "-l", o.language || "auto", "-oj", "-ml", "1", "-sow", "-pp", "-bs", "1", "-bo", "1", "-t", String(threads), "-of", base];
+        const args = ["-m", o.model, "-f", wav, "-l", o.language || "auto", "-oj", "-ml", "1", "-sow", "-pp", "-bs", "1", "-bo", "1", "-t", String(threads), ...o.prompt ? ["--prompt", o.prompt] : [], "-of", base];
         await runCli(o.exe, args, (p) => {
           pct[i] = Math.min(99, p);
           report();
@@ -33635,7 +34047,10 @@ async function transcribeVideo(tools, input, o) {
       throw e;
     })));
   } finally {
-    import_node_fs12.default.rmSync(tmp, { recursive: true, force: true });
+    try {
+      import_node_fs12.default.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+    }
   }
   const words = parts.flat();
   if (!words.length && !o.range) throw new Error("Whisper no encontr\xF3 ninguna palabra en el audio.");
@@ -33660,9 +34075,83 @@ var TranscriptService = class {
   file(vodId) {
     return import_node_path11.default.join(this.dir, `${vodId.replace(/[^\w-]/g, "_")}.json`);
   }
-  /** Palabras guardadas; vacío si no hay transcripción o el archivo no se puede leer. */
+  /** Versión del vocabulario: sube al cambiarlo, para descartar lo que ya se había corregido. */
+  vocabVersion = 0;
+  corrected = /* @__PURE__ */ new Map();
+  /** Palabras propias y correcciones aprendidas. */
+  vocabulary() {
+    return this.d.store.data.vocab;
+  }
+  setVocabulary(v) {
+    this.d.store.data.vocab = cleanVocabulary(v);
+    this.vocabVersion++;
+    this.d.store.save();
+    this.d.notifier.changed();
+    return this.d.store.data.vocab;
+  }
+  /**
+   * Palabras guardadas con el vocabulario aplicado (lo guardado en disco no se toca, así que lo que se aprenda
+   * mañana también corrige las transcripciones de hoy). Vacío si no hay transcripción o no se puede leer.
+   */
   words(vodId) {
-    return this.raw(vodId).words;
+    const raw = this.raw(vodId).words;
+    const v = this.vocabulary();
+    if (!raw.length || !v.terms.length && !v.corrections.length) return raw;
+    let mtime = 0;
+    try {
+      mtime = import_node_fs13.default.statSync(this.file(vodId)).mtimeMs;
+    } catch {
+    }
+    const key = `${this.vocabVersion}:${mtime}:${raw.length}`;
+    const hit = this.corrected.get(vodId);
+    if (hit?.key === key) return hit.words;
+    const words = applyVocabulary(raw, v);
+    this.corrected.set(vodId, { key, words });
+    if (this.corrected.size > 4) this.corrected.delete(this.corrected.keys().next().value);
+    return words;
+  }
+  /** Prompt inicial de Whisper: las palabras propias y de qué va el directo (título y juegos). */
+  promptFor(vod) {
+    const context = [vod.title ?? "", ...(vod.chapters ?? []).map((c) => c.title)];
+    return whisperPrompt(this.vocabulary(), context, looksLikePokemon(context) ? POKEMON_PROMPT_TERMS : []);
+  }
+  /**
+   * El usuario corrige el texto de unas líneas de subtítulo: se guardan las palabras nuevas en la transcripción
+   * y se aprenden las correcciones (lo que salió mal → lo que puso) para el futuro.
+   */
+  editLines(vodId, changes) {
+    this.vod(vodId);
+    if (!Array.isArray(changes) || changes.length > 5e3) throw new Error("Las correcciones no son v\xE1lidas.");
+    for (const c of changes) {
+      if (typeof c?.text !== "string" || typeof c.start !== "number" || typeof c.end !== "number") throw new Error("Las correcciones no son v\xE1lidas.");
+      if (c.text.length > 600) throw new Error("Una l\xEDnea de subt\xEDtulo es demasiado larga.");
+    }
+    const cur = this.raw(vodId);
+    if (!cur.words.length) throw new Error("Este VOD no tiene transcripci\xF3n que corregir.");
+    const base = this.words(vodId);
+    const r2 = applyLineChanges(base, changes);
+    if (!r2.changed.length) return { changed: 0, learned: [] };
+    import_node_fs13.default.mkdirSync(this.dir, { recursive: true });
+    const file = this.file(vodId);
+    import_node_fs13.default.writeFileSync(`${file}.tmp`, JSON.stringify({ words: r2.words, ...cur.covered ? { covered: cur.covered } : {} }));
+    import_node_fs13.default.renameSync(`${file}.tmp`, file);
+    const vod = this.vod(vodId);
+    vod.transcript = { ...vod.transcript ?? { source: "whisper", at: (/* @__PURE__ */ new Date()).toISOString() }, words: r2.words.length, at: (/* @__PURE__ */ new Date()).toISOString() };
+    let learned = [];
+    for (const c of r2.changed) learned = learned.concat(learnCorrections(c.before, c.after));
+    if (learned.length) {
+      const v = this.vocabulary();
+      v.corrections = mergeCorrections(v.corrections, learned);
+      for (const l of learned) {
+        const name = new RegExp("^\\p{Lu}", "u").test(l.to) && l.to.length >= 4 && !l.to.includes(" ");
+        if (name && !v.terms.some((t) => normToken(t) === normToken(l.to))) v.terms.push(l.to);
+      }
+      this.vocabVersion++;
+    }
+    this.corrected.delete(vodId);
+    this.d.store.save();
+    this.d.notifier.changed();
+    return { changed: r2.changed.length, learned };
   }
   raw(vodId) {
     try {
@@ -33783,7 +34272,7 @@ var TranscriptService = class {
    * no el directo entero; sin ellos, el directo completo. Así los subtítulos y los títulos sugeridos no obligan a transcribir
    * a mano ni a esperar a todo el directo. Falla con un motivo claro si no se puede (sin Whisper o sin el VOD descargado).
    */
-  async ensure(vodId, ranges) {
+  async ensure(vodId, ranges, opts = {}) {
     if (!ranges?.length) {
       if (this.words(vodId).length && this.isFull(vodId)) return;
       return this.once(`${vodId}:full`, async () => {
@@ -33791,13 +34280,27 @@ var TranscriptService = class {
         await this.transcribe(vodId);
       });
     }
-    for (const m of this.missing(vodId, ranges)) {
-      await this.once(`${vodId}:${Math.round(m.start)}-${Math.round(m.end)}`, async () => {
-        this.requirements(vodId);
-        const still = this.missing(vodId, [{ start: m.start + 1.5, end: m.end - 1.5 }]);
-        for (const s of still) await this.transcribe(vodId, s);
-      });
-    }
+    const pending2 = this.missing(vodId, ranges);
+    const totalSec = pending2.reduce((a, r2) => a + (r2.end - r2.start), 0);
+    let doneSec = 0;
+    opts.onProgress?.(0, totalSec);
+    await Promise.all(
+      pending2.map(
+        (m) => this.once(`${vodId}:${Math.round(m.start)}-${Math.round(m.end)}`, async () => {
+          this.requirements(vodId);
+          const still = this.missing(vodId, [{ start: m.start + 1.5, end: m.end - 1.5 }]);
+          for (const s of still) await this.transcribe(vodId, s);
+        }).then(() => {
+          doneSec += m.end - m.start;
+          opts.onProgress?.(doneSec, totalSec);
+        })
+      )
+    );
+  }
+  /** Segundos de audio que faltan por transcribir de estos tramos y lo que tardará según la velocidad medida en este PC. */
+  estimate(vodId, ranges) {
+    const sec = this.missing(vodId, ranges).reduce((a, r2) => a + (r2.end - r2.start), 0);
+    return { sec, eta: sec / this.ratio(this.d.store.data.settings.whisperModel) };
   }
   once(key, fn) {
     const running = this.inflight.get(key);
@@ -33886,6 +34389,7 @@ var TranscriptService = class {
           exe: bin,
           model: modelPath(this.modelsDir, s.whisperModel),
           language: s.whisperLanguage,
+          prompt: this.promptFor(vod),
           range,
           ...this.share(),
           // el directo entero tarda horas: lo hecho se guarda por trozos y se puede pausar o apagar el equipo
@@ -34138,9 +34642,9 @@ function estimateEta(o) {
   return void 0;
 }
 var TaskTracker = class {
-  constructor(notifier, clock2 = Date.now) {
+  constructor(notifier, clock3 = Date.now) {
     this.notifier = notifier;
-    this.clock = clock2;
+    this.clock = clock3;
   }
   tasks = [];
   list() {
@@ -34296,30 +34800,30 @@ var Github = class {
     const j = await r2.json();
     return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
   }
-  async getContent(path17) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path17)}`);
+  async getContent(path18) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path18)}`);
     if (r2.status === 404) return null;
-    if (!r2.ok) await this.fail(r2, `el archivo ${path17}`);
+    if (!r2.ok) await this.fail(r2, `el archivo ${path18}`);
     const j = await r2.json();
     return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
   }
   /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
-  async putContent(path17, text, message, sha) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path17)}`, {
+  async putContent(path18, text, message, sha) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path18)}`, {
       json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
     });
     if (r2.status === 409 || r2.status === 422) return null;
-    if (!r2.ok) await this.fail(r2, `guardar ${path17}`);
+    if (!r2.ok) await this.fail(r2, `guardar ${path18}`);
     return (await r2.json()).content.sha;
   }
-  async deleteContent(path17, sha, message) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path17)}`, { json: { message, sha } });
-    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path17}`);
+  async deleteContent(path18, sha, message) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path18)}`, { json: { message, sha } });
+    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path18}`);
   }
-  async listDir(path17) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path17)}`);
+  async listDir(path18) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path18)}`);
     if (r2.status === 404) return [];
-    if (!r2.ok) await this.fail(r2, `la carpeta ${path17}`);
+    if (!r2.ok) await this.fail(r2, `la carpeta ${path18}`);
     const j = await r2.json();
     return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
   }
@@ -34599,9 +35103,9 @@ function tiktokFile(o) {
   if (!f) throw new PublishError("El clip no tiene archivo.");
   return f;
 }
-async function call(d, path17, body) {
+async function call(d, path18, body) {
   const f = d.fetchFn ?? fetch;
-  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path17}`, {
+  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path18}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify(body)
@@ -35229,8 +35733,8 @@ function friendly(e) {
 }
 
 // electron/domain/autopilot.ts
-var import_node_fs20 = __toESM(require("node:fs"));
-var import_node_path13 = __toESM(require("node:path"));
+var import_node_fs21 = __toESM(require("node:fs"));
+var import_node_path14 = __toESM(require("node:path"));
 
 // shared/autoEdit.ts
 var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
@@ -35294,6 +35798,33 @@ function planLong(words, segs, o = {}) {
   if (total > 3) effects.push({ type: "fadeIn", duration: 0.4 }, { type: "fadeOut", duration: 0.8 });
   effects.push({ type: "polish" });
   return { segments, effects };
+}
+
+// shared/chapters.ts
+var CHAPTER_MIN = 3;
+var CHAPTER_MIN_SEC = 10;
+var clock2 = (sec) => {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s % 3600 / 60);
+  const r2 = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(r2).padStart(2, "0")}` : `${m}:${String(r2).padStart(2, "0")}`;
+};
+function outputStarts(segs, kept) {
+  return segs.map((s) => kept.filter((k) => k.end <= s.start + 0.01).reduce((a, k) => a + (k.end - k.start), 0));
+}
+function chapterBlock(items, totalSec, firstLabel = "Inicio") {
+  const sorted = [...items].filter((c) => Number.isFinite(c.at) && c.at >= 0 && c.label.trim()).sort((a, b) => a.at - b.at);
+  const out = [];
+  for (const c of sorted) {
+    const prev = out[out.length - 1];
+    if (prev && c.at - prev.at < CHAPTER_MIN_SEC) continue;
+    out.push({ at: out.length === 0 ? 0 : c.at, label: c.label.trim().replace(/\s+/g, " ").slice(0, 60) });
+  }
+  while (out.length > 1 && totalSec - out[out.length - 1].at < CHAPTER_MIN_SEC) out.pop();
+  if (out.length < CHAPTER_MIN) return "";
+  if (out[0].label === "") out[0].label = firstLabel;
+  return out.map((c) => `${clock2(c.at)} ${c.label}`).join("\n");
 }
 
 // shared/highlights.ts
@@ -35624,6 +36155,267 @@ function isAutoNameable(o) {
 var GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
 var isGenericAutoTitle = (o) => o.titleSource !== "manual" && GENERIC_TITLE.test(o.title.trim());
 
+// electron/services/momentJudge.ts
+var import_node_crypto7 = __toESM(require("node:crypto"));
+var import_node_fs20 = __toESM(require("node:fs"));
+var import_node_path13 = __toESM(require("node:path"));
+
+// shared/judge.ts
+var KINDS = ["gracia", "fail", "reaccion", "discusion", "historia", "epico", "otro"];
+var CRITERIA = ["humor", "originalidad", "interaccion", "reaccion", "contexto", "autonomia"];
+var WEIGHTS = { humor: 0.3, originalidad: 0.15, interaccion: 0.15, reaccion: 0.15, autonomia: 0.15, contexto: 0.1 };
+var clamp2 = (x, lo, hi) => {
+  const n = typeof x === "number" ? x : Number(x);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo;
+};
+function entertainment(j, signal = 0) {
+  let t = 0;
+  for (const c of CRITERIA) t += WEIGHTS[c] * clamp2(j.scores[c], 0, 10);
+  const sig = Math.min(10, Math.max(0, signal * 2));
+  return Math.round((0.85 * t + 0.15 * sig) * 100) / 100;
+}
+function judgeText(words, c, maxChars = 1100) {
+  const inside = words.filter((w) => w.start >= c.start && w.start < c.end);
+  const out = [];
+  let nextMark = 0;
+  for (const w of inside) {
+    const rel = w.start - c.start;
+    if (rel >= nextMark) {
+      out.push(`[${Math.round(rel)}s]`);
+      nextMark = rel + 10;
+    }
+    out.push(w.text);
+  }
+  const t = out.join(" ");
+  return t.length > maxChars ? `${t.slice(0, maxChars)}\u2026` : t;
+}
+var JUDGE_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Valoras fragmentos transcritos de un directo para decidir cu\xE1les merecen estar en un v\xEDdeo de mejores momentos. Las voces del streamer y de sus amigos de Discord llegan mezcladas, as\xED que la transcripci\xF3n no dice qui\xE9n habla: deduce el contexto. S\xE9 EXIGENTE y no te dejes llevar por el volumen: una conversaci\xF3n larga o gritos no son gracia. La media de un directo es mediocre: punt\xFAa 5 lo normal, 7 lo bueno y 9-10 solo lo realmente excepcional. Cada criterio es de 0 a 10: humor (gracia o potencial humor\xEDstico), originalidad (algo que no se ve siempre), interaccion (calidad del intercambio entre personas), reaccion (reacciones espont\xE1neas), contexto (tiene planteamiento y desenlace claros dentro del fragmento), autonomia (se entiende sin haber visto el directo). "tipo" es uno de: gracia, fail, reaccion, discusion, historia, epico, otro. "descartar" es true si no merece un v\xEDdeo (charla sin inter\xE9s, silencios, se entiende solo con contexto que falta, o la transcripci\xF3n es ininteligible). "inicio" y "fin" son los segundos (relativos al inicio del fragmento, como las marcas [Ns]) donde empieza y acaba de verdad la situaci\xF3n: sin relleno antes ni despu\xE9s, pero incluyendo planteamiento y remate. "motivo" es una frase corta en castellano que explica la nota. Responde SOLO con JSON.';
+function judgePrompt(words, cands) {
+  const items = cands.map((c) => ({ id: c.id, duracion: Math.round(c.end - c.start), texto: judgeText(words, c) }));
+  return `Valora cada fragmento. Devuelve {"juicios":[{"id":"","humor":0,"originalidad":0,"interaccion":0,"reaccion":0,"contexto":0,"autonomia":0,"tipo":"","descartar":false,"inicio":0,"fin":0,"motivo":""}]} con un juicio por fragmento.
+Fragmentos:
+${JSON.stringify(items)}`;
+}
+function parseJudgements(raw, cands) {
+  const list = raw?.juicios;
+  if (!Array.isArray(list)) return [];
+  const byId = new Map(cands.map((c) => [c.id, c]));
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const r2 of list) {
+    if (typeof r2 !== "object" || r2 === null) continue;
+    const id = String(r2.id ?? "");
+    const c = byId.get(id);
+    if (!c || seen.has(id)) continue;
+    if (!CRITERIA.every((k) => r2[k] !== void 0 && r2[k] !== null && Number.isFinite(Number(r2[k])))) continue;
+    seen.add(id);
+    const scores = Object.fromEntries(CRITERIA.map((k) => [k, clamp2(r2[k], 0, 10)]));
+    const kind = KINDS.includes(r2.tipo) ? r2.tipo : "otro";
+    const reason = typeof r2.motivo === "string" ? r2.motivo.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 200) : "";
+    let trim;
+    if (r2.inicio !== void 0 && r2.fin !== void 0 && Number.isFinite(Number(r2.inicio)) && Number.isFinite(Number(r2.fin))) {
+      const len = c.end - c.start;
+      const a = clamp2(r2.inicio, 0, len);
+      const b = clamp2(r2.fin, 0, len);
+      if (b - a >= 10 && b - a >= len * 0.5) trim = { start: c.start + a, end: c.start + b };
+    }
+    out.push({ id, scores, kind, reason, discard: r2.descartar === true, trim });
+  }
+  return out;
+}
+function toJudged(cands, js) {
+  const by = new Map(js.map((j) => [j.id, j]));
+  return cands.flatMap((c) => {
+    const j = by.get(c.id);
+    return j ? [{ ...c, judgement: j, total: entertainment(j, c.signal) }] : [];
+  });
+}
+var STOP_WORDS = new Set("a al algo as\xED aunque bien como con cosa cuando de del donde el ella en es esa ese eso esta este est\xE1 fue ha hay la las le lo los me mi muy no nos o para pero por porque pues que qu\xE9 se si s\xED sin su te tu un una ya yo es son t\xEDo chat vale venga".split(" "));
+var tokens = (t) => new Set(
+  t.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter((w) => w.length > 3 && !STOP_WORDS.has(w))
+);
+function similarityOfText(a, b) {
+  const x = tokens(a);
+  const y = tokens(b);
+  if (!x.size || !y.size) return 0;
+  let inter = 0;
+  for (const w of x) if (y.has(w)) inter++;
+  return inter / Math.min(x.size, y.size);
+}
+function selectBest(items, o) {
+  const penalty = o.kindPenalty ?? 0.6;
+  const gap = o.minGap ?? 20;
+  const pool = items.filter((x) => !x.judgement.discard && x.total >= o.minTotal);
+  const chosen = [];
+  const kinds = /* @__PURE__ */ new Map();
+  let total = 0;
+  const left = [...pool];
+  while (left.length && chosen.length < (o.maxCount ?? Infinity)) {
+    let bi = -1;
+    let bs = -Infinity;
+    for (let i = 0; i < left.length; i++) {
+      const it2 = left[i];
+      const adj = it2.total - penalty * (kinds.get(it2.judgement.kind) ?? 0);
+      if (adj < o.minTotal - penalty * 2) continue;
+      if (adj > bs) {
+        bs = adj;
+        bi = i;
+      }
+    }
+    if (bi < 0) break;
+    const it = left.splice(bi, 1)[0];
+    let seg = it.judgement.trim ?? { start: it.start, end: it.end };
+    if (o.maxLen && seg.end - seg.start > o.maxLen) {
+      const peakMid = (it.start + it.end) / 2;
+      const a = Math.max(seg.start, Math.min(peakMid - o.maxLen / 2, seg.end - o.maxLen));
+      seg = { start: a, end: a + o.maxLen };
+    }
+    const len = seg.end - seg.start;
+    if (total + len > o.maxSec) continue;
+    if (chosen.some((c) => seg.start < c.seg.end + gap && seg.end > c.seg.start - gap)) continue;
+    if (o.textFor) {
+      const txt = o.textFor(seg);
+      if (chosen.some((c) => similarityOfText(txt, o.textFor(c.seg)) > 0.55)) continue;
+    }
+    chosen.push({ ...it, seg });
+    kinds.set(it.judgement.kind, (kinds.get(it.judgement.kind) ?? 0) + 1);
+    total += len;
+  }
+  return { chosen: chosen.sort((a, b) => a.seg.start - b.seg.start), eligible: pool.length, totalSec: total };
+}
+function kindSummary(sel) {
+  const n = /* @__PURE__ */ new Map();
+  for (const c of sel.chosen) n.set(c.judgement.kind, (n.get(c.judgement.kind) ?? 0) + 1);
+  return [...n.entries()].map(([k, v]) => `${v} ${k}`).join(", ");
+}
+var textFn = (words) => (s) => textOf(words, s.start, s.end, 2e3);
+
+// electron/services/llm.ts
+var LLM_PROVIDERS = {
+  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile" },
+  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.0-flash" }
+};
+var TIMEOUT_MS = 9e4;
+function extractJson(text) {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+  const body = (fenced ? fenced[1] : text).trim();
+  try {
+    return JSON.parse(body);
+  } catch {
+    const a = body.indexOf("{");
+    const b = body.lastIndexOf("}");
+    if (a >= 0 && b > a) {
+      try {
+        return JSON.parse(body.slice(a, b + 1));
+      } catch {
+      }
+    }
+    throw new Error("El modelo no devolvi\xF3 un JSON v\xE1lido.");
+  }
+}
+async function askJson(cfg, system, user, d = {}) {
+  if (!cfg.apiKey) throw new Error("Falta la clave del modelo de lenguaje (Ajustes > Piloto autom\xE1tico).");
+  const fetchFn = d.fetchFn ?? fetch;
+  const sleep = d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
+  const url = `${cfg.baseUrl ?? LLM_PROVIDERS[cfg.provider].baseUrl}/chat/completions`;
+  const body = JSON.stringify({
+    model: cfg.model,
+    temperature: d.temperature ?? 0.4,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ]
+  });
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetchFn(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
+        body,
+        signal: AbortSignal.timeout(TIMEOUT_MS)
+      });
+    } catch (e) {
+      const n = e.name;
+      throw new Error(n === "TimeoutError" || n === "AbortError" ? "El modelo de lenguaje no respondi\xF3 a tiempo." : "No se pudo conectar con el modelo de lenguaje.");
+    }
+    if (res.status === 429 && attempt < 2) {
+      const wait2 = Math.min(30, Number(res.headers.get("retry-after")) || 5 * (attempt + 1));
+      await sleep(wait2 * 1e3);
+      continue;
+    }
+    if (res.status === 401 || res.status === 403) throw new Error("El modelo de lenguaje rechaz\xF3 la clave. Rev\xEDsala en Ajustes.");
+    if (res.status === 429) throw new Error("Se agot\xF3 el l\xEDmite gratuito del modelo de lenguaje. Se reintentar\xE1 en el pr\xF3ximo directo.");
+    if (!res.ok) throw new Error(`Error del modelo de lenguaje (${res.status}).`);
+    const j = await res.json();
+    const content = j.choices?.[0]?.message?.content;
+    if (!content) throw new Error("El modelo de lenguaje devolvi\xF3 una respuesta vac\xEDa.");
+    return extractJson(content);
+  }
+}
+
+// electron/services/momentJudge.ts
+var VERSION = "v1";
+var CHUNK2 = 6;
+var keyOf = (words, c) => import_node_crypto7.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
+function loadCache(file) {
+  if (!file) return {};
+  try {
+    const j = JSON.parse(import_node_fs20.default.readFileSync(file, "utf8"));
+    return typeof j === "object" && j ? j : {};
+  } catch {
+    return {};
+  }
+}
+function saveCache(file, data) {
+  if (!file) return;
+  try {
+    import_node_fs20.default.mkdirSync(import_node_path13.default.dirname(file), { recursive: true });
+    import_node_fs20.default.writeFileSync(file, JSON.stringify(data));
+  } catch {
+  }
+}
+async function judgeCandidates(conf, words, cands, d = {}) {
+  const cache = loadCache(d.cacheFile);
+  const found = [];
+  const todo = [];
+  for (const c of cands) {
+    const s = cache[keyOf(words, c)];
+    if (s) found.push({ id: c.id, scores: s.scores, kind: s.kind, reason: s.reason, discard: s.discard, trim: s.trim ? { start: c.start + s.trim.a, end: c.start + s.trim.b } : void 0 });
+    else todo.push(c);
+  }
+  const cached = found.length;
+  const chunks = [];
+  for (let i = 0; i < todo.length; i += CHUNK2) chunks.push(todo.slice(i, i + CHUNK2));
+  let failed = 0;
+  let lastError = null;
+  for (const [n, chunk] of chunks.entries()) {
+    d.signal?.();
+    try {
+      const raw = await askJson(conf, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
+      const js = parseJudgements(raw, chunk);
+      for (const j of js) {
+        const c = chunk.find((x) => x.id === j.id);
+        cache[keyOf(words, c)] = { scores: j.scores, kind: j.kind, reason: j.reason, discard: j.discard, trim: j.trim ? { a: j.trim.start - c.start, b: j.trim.end - c.start } : void 0 };
+        found.push(j);
+      }
+      saveCache(d.cacheFile, cache);
+      if (!js.length) {
+        failed++;
+        lastError = new Error("El modelo no devolvi\xF3 valoraciones utilizables.");
+      }
+    } catch (e) {
+      if (/rechaz|clave/i.test(e.message)) throw e;
+      failed++;
+      lastError = e;
+    }
+    d.onProgress?.(n + 1, chunks.length);
+  }
+  if (chunks.length && failed > chunks.length / 2) throw lastError ?? new Error("No se pudo valorar con el modelo de lenguaje.");
+  return { judged: toJudged(cands, found), cached, asked: todo.length, failedChunks: failed, chunks: chunks.length };
+}
+
 // shared/slots.ts
 function nextSlot(after, hhmm2, taken = /* @__PURE__ */ new Set()) {
   const [h, m] = hhmm2.split(":").map(Number);
@@ -35800,72 +36592,10 @@ function audioEnergy(tools, input, onProgress) {
   });
 }
 
-// electron/services/llm.ts
-var LLM_PROVIDERS = {
-  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile" },
-  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.0-flash" }
-};
-var TIMEOUT_MS = 9e4;
-function extractJson(text) {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const body = (fenced ? fenced[1] : text).trim();
-  try {
-    return JSON.parse(body);
-  } catch {
-    const a = body.indexOf("{");
-    const b = body.lastIndexOf("}");
-    if (a >= 0 && b > a) {
-      try {
-        return JSON.parse(body.slice(a, b + 1));
-      } catch {
-      }
-    }
-    throw new Error("El modelo no devolvi\xF3 un JSON v\xE1lido.");
-  }
-}
-async function askJson(cfg, system, user, d = {}) {
-  if (!cfg.apiKey) throw new Error("Falta la clave del modelo de lenguaje (Ajustes > Piloto autom\xE1tico).");
-  const fetchFn = d.fetchFn ?? fetch;
-  const sleep = d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
-  const url = `${cfg.baseUrl ?? LLM_PROVIDERS[cfg.provider].baseUrl}/chat/completions`;
-  const body = JSON.stringify({
-    model: cfg.model,
-    temperature: 0.4,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ]
-  });
-  for (let attempt = 0; ; attempt++) {
-    let res;
-    try {
-      res = await fetchFn(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
-        body,
-        signal: AbortSignal.timeout(TIMEOUT_MS)
-      });
-    } catch (e) {
-      const n = e.name;
-      throw new Error(n === "TimeoutError" || n === "AbortError" ? "El modelo de lenguaje no respondi\xF3 a tiempo." : "No se pudo conectar con el modelo de lenguaje.");
-    }
-    if (res.status === 429 && attempt < 2) {
-      const wait2 = Math.min(30, Number(res.headers.get("retry-after")) || 5 * (attempt + 1));
-      await sleep(wait2 * 1e3);
-      continue;
-    }
-    if (res.status === 401 || res.status === 403) throw new Error("El modelo de lenguaje rechaz\xF3 la clave. Rev\xEDsala en Ajustes.");
-    if (res.status === 429) throw new Error("Se agot\xF3 el l\xEDmite gratuito del modelo de lenguaje. Se reintentar\xE1 en el pr\xF3ximo directo.");
-    if (!res.ok) throw new Error(`Error del modelo de lenguaje (${res.status}).`);
-    const j = await res.json();
-    const content = j.choices?.[0]?.message?.content;
-    if (!content) throw new Error("El modelo de lenguaje devolvi\xF3 una respuesta vac\xEDa.");
-    return extractJson(content);
-  }
-}
-
 // electron/domain/autopilot.ts
+var QUALITY_CLIP = 6.5;
+var QUALITY_SUMMARY = 6.5;
+var MIN_SUMMARY_SEC = 150;
 var clean = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var Autopilot = class {
   constructor(d) {
@@ -35903,7 +36633,7 @@ var Autopilot = class {
       await prev.done.catch(() => void 0);
     }
     if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    const missing = !vod.filePath || !import_node_fs20.default.existsSync(vod.filePath);
+    const missing = !vod.filePath || !import_node_fs21.default.existsSync(vod.filePath);
     if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const ctrl = new AbortController();
     this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
@@ -35979,18 +36709,18 @@ var Autopilot = class {
     }
     if (known) this.d.transcripts.prune(vodId, spans);
     const chat = this.chatFileFor(vod);
-    if (chat) import_node_fs20.default.rmSync(chat, { force: true });
+    if (chat) import_node_fs21.default.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
     return { freedBytes, kept: outs.length };
   }
   /** Archivo con la actividad del chat de este directo, si se guardó. */
   chatFileFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs20.default.existsSync(this.d.chatDir)) return void 0;
+    if (!vod.streamStartedAt || !import_node_fs21.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs20.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs21.default.readdirSync(this.d.chatDir)) {
       try {
-        const full = import_node_path13.default.join(this.d.chatDir, f);
-        const j = JSON.parse(import_node_fs20.default.readFileSync(full, "utf8"));
+        const full = import_node_path14.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs21.default.readFileSync(full, "utf8"));
         if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
@@ -36001,7 +36731,7 @@ var Autopilot = class {
     const f = this.chatFileFor(vod);
     if (!f) return void 0;
     try {
-      return ChatBins.fromArray(JSON.parse(import_node_fs20.default.readFileSync(f, "utf8")).bins).toArray();
+      return ChatBins.fromArray(JSON.parse(import_node_fs21.default.readFileSync(f, "utf8")).bins).toArray();
     } catch {
       return void 0;
     }
@@ -36024,11 +36754,14 @@ var Autopilot = class {
       })();
       let words = this.d.transcripts.words(vod.id);
       let tTranscribe = "";
+      let deferTranscribe = false;
       if (!this.d.transcripts.isFull(vod.id)) {
         const st = this.d.transcripts.status();
         const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? await this.d.clips.vodDuration(vod.id)) : null;
         if (skip) notes.push(`Sin transcripci\xF3n: ${skip}.`);
-        else if (st.engine) {
+        else if (st.engine && this.cfg.fastAnalysis !== false && !this.d.transcripts.hasCheckpoint(vod.id)) {
+          deferTranscribe = true;
+        } else if (st.engine) {
           this.mark(vod, "transcribing");
           task.update(2, "Transcribiendo el directo (puede tardar)\u2026");
           try {
@@ -36083,10 +36816,103 @@ var Autopilot = class {
         summary = dom.segs;
         if (before !== moments.length + mains.length) notes.push("Algunos momentos se recortaron o descartaron para no mezclar categor\xEDas.");
       }
-      if (!moments.length && !summary.length && !mains.length) {
+      const llmConf = this.llmConf();
+      let pool = [];
+      if (llmConf && this.cfg.smartSelect !== false && (this.cfg.maxClips > 0 || this.cfg.maxVideos > 0)) {
+        const need = this.cfg.maxClips + (this.cfg.maxVideos ? Math.ceil(this.cfg.summaryMinutes * 60 / 40) : 0);
+        pool = findMoments(sig, { count: Math.min(60, Math.max(16, need * 2)), minLen: 25, maxLen: 75, gap: 45 }).flatMap((m, i) => {
+          const f = new Set(cats.map((c) => c.title)).size > 1 ? fitToCategory(m, cats, 15) : { start: m.start, end: m.end };
+          return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
+        });
+      }
+      const legacy = { moments, summary, mains };
+      if (pool.length) {
+        moments = [];
+        summary = [];
+      }
+      let summaryMeta;
+      const meta = /* @__PURE__ */ new Map();
+      if (!moments.length && !summary.length && !mains.length && !pool.length) {
         this.mark(vod, "skipped", ["No se encontraron momentos que destaquen en este directo.", ...notes].join(" "));
         task.done("Sin momentos destacados");
         return vod;
+      }
+      if (deferTranscribe) {
+        const spans = [...moments, ...summary, ...mains, ...pool].map((g) => ({ start: g.start, end: g.end }));
+        this.mark(vod, "transcribing");
+        task.update(40, "Transcribiendo solo lo elegido\u2026");
+        try {
+          const ts = Date.now();
+          const est = this.d.transcripts.estimate(vod.id, spans);
+          if (est.sec > 0) task.estimate(est.eta / 0.15);
+          await this.d.transcripts.ensure(vod.id, spans, {
+            onProgress: (doneSec, totalSec) => task.update(40 + (totalSec ? doneSec / totalSec * 15 : 15), `Transcribiendo lo elegido (${Math.round(doneSec / 60)} de ${Math.round(totalSec / 60)} min)\u2026`)
+          });
+          words = this.d.transcripts.words(vod.id);
+          tTranscribe = lap(ts);
+          this.d.log.info(`Transcripci\xF3n de lo elegido en "${vod.title}": ${tTranscribe} (${Math.round(est.sec / 60)} min de audio, de ${Math.round((vod.durationSec ?? duration) / 60)} del directo)`);
+          notes.push(`An\xE1lisis r\xE1pido: se transcribieron ${Math.round(est.sec / 60)} min de ${Math.round(duration / 60)}.`);
+        } catch (e) {
+          if (isCancelled(e)) throw e;
+          notes.push(`Sin transcripci\xF3n: ${e.message}`);
+        }
+        this.mark(vod, "analyzing");
+      }
+      if (pool.length) {
+        task.update(56, "Valorando los momentos candidatos\u2026");
+        let judged = null;
+        if (!words.length) notes.push("Selecci\xF3n inteligente omitida: no hay transcripci\xF3n.");
+        else {
+          try {
+            const r2 = await judgeCandidates(llmConf, words, pool, {
+              fetchFn: this.d.llmFetch,
+              cacheFile: this.d.judgeDir ? import_node_path14.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
+              onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
+              signal: () => throwIfCancelled()
+            });
+            judged = r2.judged;
+            notes.push(`Selecci\xF3n inteligente: ${r2.judged.length} candidatos valorados${r2.cached ? ` (${r2.cached} ya estaban guardados)` : ""}${r2.failedChunks ? `, ${r2.failedChunks} lote(s) sin respuesta` : ""}.`);
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+            notes.push(`Selecci\xF3n inteligente no disponible (${e.message}); se us\xF3 el volumen y el chat.`);
+          }
+        }
+        if (judged) {
+          const textFor = textFn(words);
+          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: QUALITY_CLIP, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: QUALITY_SUMMARY, maxLen: 90, minGap: 20, textFor }) : null;
+          if (clips) {
+            moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
+            clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
+            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota m\xEDnima (${QUALITY_CLIP}/10); no se rellen\xF3 con momentos flojos.`);
+          }
+          if (sum && sum.chosen.length) {
+            if (sum.totalSec >= MIN_SUMMARY_SEC) {
+              summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
+              const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
+              notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < this.cfg.summaryMinutes * 60 * 0.85 ? " M\xE1s corto de lo configurado: no hab\xEDa m\xE1s momentos buenos." : ""}`);
+              if (new Set(cats.map((c) => c.title)).size > 1) {
+                const dom = dominantCategory(summary, cats, 8);
+                if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
+                summary = dom.segs;
+              }
+              summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
+            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${QUALITY_SUMMARY}/10).`);
+          } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${QUALITY_SUMMARY}/10).`);
+        } else {
+          ({ moments, summary } = legacy);
+          try {
+            await this.d.transcripts.ensure(vod.id, [...moments, ...summary].map((g) => ({ start: g.start, end: g.end })));
+            words = this.d.transcripts.words(vod.id);
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+          }
+        }
+        if (!moments.length && !summary.length && !mains.length) {
+          this.mark(vod, "skipped", ["Ning\xFAn momento supera la nota m\xEDnima de calidad: no se genera nada para no publicar relleno.", ...notes].join(" "));
+          task.done("Sin momentos con la calidad m\xEDnima");
+          return vod;
+        }
       }
       task.update(55, "Poniendo t\xEDtulos\u2026");
       const titles = await this.titles(vod, words, moments, mains, notes);
@@ -36108,13 +36934,17 @@ var Autopilot = class {
       const errors = [];
       const total = (summary.length ? 1 : 0) + mains.length + moments.length;
       let doneCount = 0;
-      const step = async (role, label, fn, t) => {
+      const step = async (role, label, fn, t, m) => {
         try {
           const item = await fn();
-          item.auto = { role, review: "pending" };
+          item.auto = { role, review: "pending", ...m ? { score: Math.round(m.score * 10) / 10, kind: m.kind, reason: m.reason } : {} };
           item.titleSource = "auto";
           item.visibility = this.cfg.visibility;
-          if (t.description || item.category) this.d.library.setAutoDescription(item.id, withCategoryLine(t.description, item.category));
+          const ch = chapterOf.get(item.id);
+          if (t.description || item.category || ch) {
+            const base = withCategoryLine(t.description, item.category);
+            this.d.library.setAutoDescription(item.id, ch ? `${base}${base ? "\n\n" : ""}${ch}` : base);
+          }
           this.d.store.save();
           created.push(item);
         } catch (e) {
@@ -36136,15 +36966,29 @@ var Autopilot = class {
           return plain();
         }
       };
-      const longMake = (title, segs) => {
+      const chapterOf = /* @__PURE__ */ new Map();
+      const longMake = async (title, segs, chapters = false) => {
         const e = pro ? planLong(words, segs) : null;
-        return safely(
+        const item = await safely(
           Boolean(e),
           () => this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }),
           () => this.d.clips.createLong(vod.id, { title, segments: segs, ...subs })
         );
+        if (chapters && segs.length >= 3) {
+          try {
+            const starts = outputStarts(segs, item.segments ?? segs);
+            const block = chapterBlock(
+              segs.map((g, i) => ({ at: starts[i], label: i === 0 ? "Inicio" : shortTitle(words, g, i) || `Momento ${i + 1}` })),
+              item.durationSec
+            );
+            if (block) chapterOf.set(item.id, block);
+          } catch (err) {
+            this.d.log.warn(`Sin cap\xEDtulos en "${title}": ${err.message}`);
+          }
+        }
+        return item;
       };
-      if (summary.length) await step("summary", "resumen", () => longMake(titles.summary.title, summary), titles.summary);
+      if (summary.length) await step("summary", "resumen", () => longMake(titles.summary.title, summary, true), titles.summary, summaryMeta);
       for (const [i, m] of mains.entries()) {
         const t = titles.mains[i];
         await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
@@ -36152,7 +36996,7 @@ var Autopilot = class {
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
         const e = pro ? planEdit(words, m) : null;
-        await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t);
+        await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, meta.get(m));
       }
       if (!created.length) throw new Error(`No se pudo montar ning\xFAn v\xEDdeo. ${errors.join(" ")}`);
       const prior = this.d.store.data.outputs.filter(
@@ -36201,6 +37045,13 @@ var Autopilot = class {
       this.d.log.error("Piloto autom\xE1tico fallido", e);
       throw e;
     }
+  }
+  /** Configuración del modelo de lenguaje si hay uno elegido y con clave; si no, null. */
+  llmConf() {
+    const llm = this.cfg.llm;
+    const key = this.d.llmKey();
+    if (llm.provider === "none" || !key) return null;
+    return { provider: llm.provider, model: llm.model || LLM_PROVIDERS[llm.provider].defaultModel, apiKey: key, baseUrl: this.d.llmBaseUrl };
   }
   async titles(vod, words, moments, mains, notes) {
     const base = {
@@ -36366,7 +37217,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs20.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs21.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -36408,8 +37259,8 @@ ${text}`,
 };
 
 // electron/domain/channel.ts
-var import_node_fs21 = __toESM(require("node:fs"));
-var import_node_path14 = __toESM(require("node:path"));
+var import_node_fs22 = __toESM(require("node:fs"));
+var import_node_path15 = __toESM(require("node:path"));
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
 var OFFLINE_CONFIRMATIONS = 2;
 var MIN_IMPORT_SEC = 60;
@@ -36569,10 +37420,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs21.default.mkdirSync(c.dir, { recursive: true });
-      const file = import_node_path14.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs21.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs21.default.renameSync(`${file}.tmp`, file);
+      import_node_fs22.default.mkdirSync(c.dir, { recursive: true });
+      const file = import_node_path15.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
+      import_node_fs22.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs22.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -37039,7 +37890,7 @@ var Scheduler = class {
 };
 
 // electron/domain/engine.ts
-var import_node_crypto7 = __toESM(require("node:crypto"));
+var import_node_crypto8 = __toESM(require("node:crypto"));
 
 // electron/engine/workflow.ts
 function engineCrons(offsetMinutes = (/* @__PURE__ */ new Date()).getTimezoneOffset(), fromHour = 20, toHour = 4) {
@@ -37215,13 +38066,13 @@ var EngineService = class {
     };
   }
   hash(payload, crons) {
-    return import_node_crypto7.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
+    return import_node_crypto8.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
-  async put(gh, path17, text, msg) {
-    const cur = await gh.getContent(path17);
+  async put(gh, path18, text, msg) {
+    const cur = await gh.getContent(path18);
     if (cur?.text === text) return;
-    const sha = await gh.putContent(path17, text, msg, cur?.sha);
-    if (!sha) throw new Error(`No se pudo escribir ${path17} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    const sha = await gh.putContent(path18, text, msg, cur?.sha);
+    if (!sha) throw new Error(`No se pudo escribir ${path18} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
   }
   /** Sube el motor, el flujo y la configuración. */
   async push(gh, payload, crons) {
@@ -37327,7 +38178,7 @@ var EngineService = class {
 };
 
 // electron/services/oauth.ts
-var import_node_crypto8 = __toESM(require("node:crypto"));
+var import_node_crypto9 = __toESM(require("node:crypto"));
 var import_node_http = __toESM(require("node:http"));
 var PROVIDERS = {
   google: {
@@ -37366,8 +38217,8 @@ var PROVIDERS = {
   }
 };
 function pkcePair() {
-  const verifier = import_node_crypto8.default.randomBytes(48).toString("base64url");
-  return { verifier, challenge: import_node_crypto8.default.createHash("sha256").update(verifier).digest("base64url") };
+  const verifier = import_node_crypto9.default.randomBytes(48).toString("base64url");
+  return { verifier, challenge: import_node_crypto9.default.createHash("sha256").update(verifier).digest("base64url") };
 }
 var redirectUri = (p) => `http://127.0.0.1:${p.port}/callback`;
 function buildAuthUrl(p, c, state, challenge) {
@@ -37486,7 +38337,7 @@ async function refreshToken(p, c, t, d = {}) {
 }
 async function authorize(p, c, openUrl, d = {}) {
   if (!c.clientId || !c.clientSecret) throw new Error(`Faltan el ID y el secreto de la app de ${p.label}.`);
-  const state = import_node_crypto8.default.randomBytes(16).toString("hex");
+  const state = import_node_crypto9.default.randomBytes(16).toString("hex");
   const pk = p.pkce ? pkcePair() : void 0;
   const w = waitForCode(p, state, d.timeoutMs);
   d.onCancel?.(w.close);
@@ -37558,17 +38409,17 @@ var ConnectionService = class {
     if (this.cancel) throw new Error("Ya hay una conexi\xF3n en curso.");
     const p = this.provider(platform);
     try {
-      const tokens = await authorize(p, { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret) }, this.d.openUrl, {
+      const tokens2 = await authorize(p, { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret) }, this.d.openUrl, {
         fetchFn: this.d.fetchFn,
         now: this.d.now,
         onCancel: (fn) => this.cancel = fn
       });
       if (p.id === "meta") {
-        const long = await refreshToken(p, { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret) }, tokens, { fetchFn: this.d.fetchFn, now: this.d.now });
-        Object.assign(tokens, long);
+        const long = await refreshToken(p, { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret) }, tokens2, { fetchFn: this.d.fetchFn, now: this.d.now });
+        Object.assign(tokens2, long);
       }
-      const info = await this.d.afterConnect?.(platform, tokens) ?? {};
-      c.tokens = this.d.secrets.encode(JSON.stringify({ ...tokens, extra: { ...tokens.extra, ...info.extra } }));
+      const info = await this.d.afterConnect?.(platform, tokens2) ?? {};
+      c.tokens = this.d.secrets.encode(JSON.stringify({ ...tokens2, extra: { ...tokens2.extra, ...info.extra } }));
       if (info.account) c.account = info.account;
       this.d.store.save();
       this.d.notifier.changed();
@@ -37681,7 +38532,7 @@ var AppContext = class {
   constructor(o) {
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
-    this.log = new Logger(import_node_path15.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
+    this.log = new Logger(import_node_path16.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
       this.log.warn(`data.json estaba da\xF1ado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? " (se recuper\xF3 la \xFAltima copia buena)" : " (se empez\xF3 con datos vac\xEDos)"}`);
@@ -37731,7 +38582,7 @@ var AppContext = class {
         const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
         return r2.stdout.trim().split("\n")[0] ?? "";
       },
-      chat: { dir: import_node_path15.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
+      chat: { dir: import_node_path16.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
     this.autopilot = new Autopilot({
       store: this.store,
@@ -37745,7 +38596,8 @@ var AppContext = class {
       categories: this.categories,
       library: this.library,
       pubs: this.pubs,
-      chatDir: import_node_path15.default.join(o.userDataDir, "chat"),
+      chatDir: import_node_path16.default.join(o.userDataDir, "chat"),
+      judgeDir: import_node_path16.default.join(o.userDataDir, "judgements"),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
@@ -37766,7 +38618,7 @@ var AppContext = class {
       }),
       providers: o.oauthProviders,
       fetchFn: o.socialEnv?.fetchFn,
-      afterConnect: (platform, tokens) => lookupAccount(platform, tokens, { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api })
+      afterConnect: (platform, tokens2) => lookupAccount(platform, tokens2, { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api })
     });
     this.updates = new UpdateService({
       updater: o.updater ?? null,
@@ -37914,10 +38766,10 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs22.default.mkdtempSync(import_node_path16.default.join(import_node_os6.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs23.default.mkdtempSync(import_node_path17.default.join(import_node_os6.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
-    userDataDir: import_node_path16.default.join(work, "data"),
-    defaultOutputDir: import_node_path16.default.join(work, "out"),
+    userDataDir: import_node_path17.default.join(work, "data"),
+    defaultOutputDir: import_node_path17.default.join(work, "out"),
     cipher: plainCipher,
     notifier: silentNotifier,
     headless: true,
@@ -37983,7 +38835,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs22.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs23.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -37991,7 +38843,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs22.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs23.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -38025,7 +38877,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs22.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs23.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {

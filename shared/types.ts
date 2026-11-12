@@ -1,3 +1,4 @@
+import type { StyleProfile } from './styleProfile';
 import type { Vocabulary } from './vocab';
 import type { SubtitleStyleId, Word } from './subtitles';
 import type { VerticalLayout } from './layout';
@@ -550,6 +551,12 @@ export interface Api {
   addMoment(vodId: string, start: number, end: number, title?: string): Promise<MomentsView>;
   removeMoment(vodId: string, key: string): Promise<MomentsView>;
   clearMomentEdits(vodId: string): Promise<MomentsView>;
+  /** Perfil de estilo de edición (silencios, duración, música, subtítulos, títulos y lore del canal). */
+  getStyle(): Promise<StyleProfile>;
+  setStyle(patch: Partial<StyleProfile>): Promise<StyleProfile>;
+  addLore(name: string, note?: string, triggers?: string[]): Promise<StyleProfile>;
+  removeLore(id: string): Promise<StyleProfile>;
+  resetStyle(): Promise<StyleProfile>;
   getPrefs(): Promise<PrefsView>;
   setPrefsEnabled(enabled: boolean): Promise<PrefsView>;
   resetPrefs(): Promise<PrefsView>;
@@ -657,6 +664,11 @@ export const CHANNELS = {
   momentsAdd: 'moments:add',
   momentsRemove: 'moments:remove',
   momentsClear: 'moments:clear',
+  styleGet: 'style:get',
+  styleSet: 'style:set',
+  styleAddLore: 'style:addLore',
+  styleRemoveLore: 'style:removeLore',
+  styleReset: 'style:reset',
   prefsGet: 'prefs:get',
   prefsEnabled: 'prefs:enabled',
   prefsReset: 'prefs:reset',

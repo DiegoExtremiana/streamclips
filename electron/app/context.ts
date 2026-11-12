@@ -16,6 +16,7 @@ import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
 import { SpeakerService } from '../domain/speakers';
 import { MomentsService } from '../domain/moments';
+import { StyleService } from '../domain/style';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
@@ -102,6 +103,7 @@ export class AppContext {
   readonly transcripts: TranscriptService;
   readonly speakers: SpeakerService;
   readonly moments: MomentsService;
+  readonly style: StyleService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -168,6 +170,7 @@ export class AppContext {
       modelsDir: path.join(o.userDataDir, 'models'),
       engine: o.diarizationEngine,
     });
+    this.style = new StyleService(path.join(o.userDataDir, 'style-profile.json'));
     this.moments = new MomentsService({
       dir: path.join(o.userDataDir, 'moments'),
       prefsFile: path.join(o.userDataDir, 'preferences.json'),

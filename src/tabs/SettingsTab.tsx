@@ -6,6 +6,7 @@ import UpdatesCard from './UpdatesCard';
 import VocabularyCard from './VocabularyCard';
 import SpeakersCard from './SpeakersCard';
 import PrefsCard from './PrefsCard';
+import StyleCard from './StyleCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
 import { SubTabs, useSubTab } from '../SubTabs';
@@ -208,6 +209,7 @@ export default function SettingsTab() {
 
       <VocabularyCard />
       <SpeakersCard />
+      <StyleCard />
       <PrefsCard />
 
       </div>}

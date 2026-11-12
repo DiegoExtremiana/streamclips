@@ -33,6 +33,8 @@ export interface Judgement {
   discard: boolean;
   /** Dónde empieza y acaba de verdad la situación (segundos del directo), dentro del candidato. */
   trim?: Seg;
+  /** El recorte o el momento lo puso el usuario a mano: se respeta tal cual, sin acortarlo. */
+  manual?: boolean;
 }
 
 export interface Judged extends Candidate {
@@ -198,7 +200,7 @@ export function selectBest(items: Judged[], o: SelectOpts): Selection {
     if (bi < 0) break;
     const it = left.splice(bi, 1)[0];
     let seg: Seg = it.judgement.trim ?? { start: it.start, end: it.end };
-    if (o.maxLen && seg.end - seg.start > o.maxLen) {
+    if (o.maxLen && !it.judgement.manual && seg.end - seg.start > o.maxLen) {
       const peakMid = (it.start + it.end) / 2;
       const a = Math.max(seg.start, Math.min(peakMid - o.maxLen / 2, seg.end - o.maxLen));
       seg = { start: a, end: a + o.maxLen };

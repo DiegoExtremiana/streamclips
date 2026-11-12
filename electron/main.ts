@@ -77,6 +77,7 @@ if (!app.requestSingleInstanceLock()) {
         return shell.openExternal(url);
       },
       fontsDir: path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'fonts'),
+      diarizationModel: path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'models', 'pyannote-segmentation-3.0.int8.onnx'),
       bundled: findBundledTools({
         resourcesDir: app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'),
         platform: process.platform,

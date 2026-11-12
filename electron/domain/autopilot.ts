@@ -21,6 +21,7 @@ import type { SerialQueue } from '../services/queue';
 import type { Notifier } from './notifier';
 import type { TaskTracker } from './tasks';
 import type { TranscriptService } from './transcripts';
+import type { SpeakerService } from './speakers';
 import type { ClipService } from './clips';
 import type { CategoryService } from './categories';
 import { categoryOf, dominantCategory, fitToCategory, hasCategoryLine, withCategoryLine } from '../../shared/categories';
@@ -35,6 +36,7 @@ export interface AutopilotDeps {
   queue: SerialQueue;
   tools: () => ToolPaths;
   transcripts: TranscriptService;
+  speakers: SpeakerService;
   clips: ClipService;
   categories: CategoryService;
   library: LibraryService;
@@ -428,8 +430,30 @@ export class Autopilot {
         }
       }
 
+      // 3d) hablantes: quién habla en lo elegido (para colorear los subtítulos por voz)
+      if (this.cfg.speakers !== false && words.length) {
+        const avail = this.d.speakers.available();
+        if (!avail.ok) notes.push(`Hablantes sin identificar: ${avail.reason}`);
+        else {
+          const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
+          const need = this.d.speakers.pendingSeconds(vod.id, spans);
+          if (need > 0) {
+            task.update(60, 'Identificando hablantes…');
+            try {
+              const ts = Date.now();
+              const r = await this.d.speakers.diarize(vod.id, spans, (done, total) => task.update(60 + (total ? (done / total) * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total / 60)} min)…`));
+              words = this.d.transcripts.words(vod.id);
+              notes.push(`Hablantes: ${r.voices} voz/voces en ${Math.round(r.sec / 60)} min de audio (${lap(ts)}).`);
+            } catch (e) {
+              if (isCancelled(e)) throw e;
+              notes.push(`Hablantes sin identificar: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
+
       // 4) títulos
-      task.update(55, 'Poniendo títulos…');
+      task.update(75, 'Poniendo títulos…');
       const titles = await this.titles(vod, words, moments, mains, notes);
       // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
       const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
@@ -470,7 +494,7 @@ export class Autopilot {
           if (isCancelled(e)) throw e;
           errors.push(`${label}: ${(e as Error).message}`);
         }
-        task.update(55 + (++doneCount / total) * 40, `Montando (${doneCount}/${total})…`);
+        task.update(76 + (++doneCount / total) * 19, `Montando (${doneCount}/${total})…`);
       };
       const pro = this.cfg.proEdit !== false && words.length > 0;
       if (this.cfg.proEdit !== false && !words.length) notes.push('Edición profesional omitida: no hay transcripción.');

@@ -213,6 +213,10 @@ export function registerIpc(ipc: IpcLike, ctx: AppContext, platform: IpcPlatform
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
   handle(CHANNELS.transcriptEdit, (vodId, changes) => ctx.transcripts.editLines(str(vodId, 'vodId'), changes as never));
   handle(CHANNELS.vocabGet, () => ctx.transcripts.vocabulary());
+  handle(CHANNELS.speakersGet, () => ({ available: ctx.speakers.available(), profiles: ctx.speakers.profiles() }));
+  handle(CHANNELS.speakersRename, (id, alias) => ctx.speakers.rename(num(id, 'id'), typeof alias === 'string' ? alias : ''));
+  handle(CHANNELS.speakersSelf, (id) => ctx.speakers.setSelf(id === null ? null : num(id, 'id')));
+  handle(CHANNELS.speakersMerge, (from, into) => ctx.speakers.merge(num(from, 'from'), num(into, 'into')));
   handle(CHANNELS.vocabSet, (v) => ctx.transcripts.setVocabulary(v));
   handle(CHANNELS.transcriptPrompt, async (vodId) => {
     const id = str(vodId, 'vodId');

@@ -1,3 +1,4 @@
+import { cleanBook, emptyBook, type SpeakerBook } from '../../shared/speakers';
 import { cleanVocabulary, emptyVocabulary, type Vocabulary } from '../../shared/vocab';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,6 +55,8 @@ export interface DataShape {
   stats: { transcribeRatio: Record<string, number> };
   /** Palabras propias y correcciones aprendidas (ver shared/vocab.ts). */
   vocab: Vocabulary;
+  /** Voces conocidas (diarización de hablantes). */
+  speakers: SpeakerBook;
 }
 
 /** Motor nocturno (repositorio público con GitHub Actions). */
@@ -130,6 +133,7 @@ function defaults(defaultOutputDir: string): DataShape {
     },
     stats: { transcribeRatio: {} },
     vocab: emptyVocabulary(),
+    speakers: emptyBook(),
     vods: [],
     outputs: [],
     groups: [],
@@ -215,6 +219,7 @@ export class Store {
       },
       stats: { transcribeRatio: ratios(saved.stats?.transcribeRatio) },
       vocab: cleanVocabulary(saved.vocab),
+      speakers: cleanBook(saved.speakers),
       vods: arr<VodJob>(saved.vods),
       outputs: arr<unknown>(saved.outputs).map(normalizeOutput).filter((x): x is OutputItem => x !== null),
       groups: arr<Group>(saved.groups),

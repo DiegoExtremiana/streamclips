@@ -121,3 +121,87 @@ export function updateProfile(p: VoiceProfile, embedding: number[], weight = 1):
   const n = p.n + weight;
   return { ...p, n, embedding: p.embedding.map((x, i) => (x * p.n + embedding[i] * weight) / n) };
 }
+
+/**
+ * Une los grupos de voz que suenan igual (el agrupamiento del motor parte de más a propósito). Agrupa por parecido medio entre
+ * grupos (enlace medio) hasta que ningún par llega al umbral. Devuelve, para cada grupo, el número de voz resultante (0, 1, 2…
+ * por orden de aparición del primer grupo). Los grupos sin vector no entran.
+ */
+export function mergeClusters(embeddings: Map<number, number[]>, threshold: number): Map<number, number> {
+  const ids = [...embeddings.keys()].sort((a, b) => a - b);
+  let groups: number[][] = ids.map((i) => [i]);
+  const sim = (a: number[], b: number[]) => {
+    let s = 0;
+    for (const x of a) for (const y of b) s += cosine(embeddings.get(x)!, embeddings.get(y)!);
+    return s / (a.length * b.length);
+  };
+  for (;;) {
+    let best = -Infinity;
+    let bi = -1;
+    let bj = -1;
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const s = sim(groups[i], groups[j]);
+        if (s > best) {
+          best = s;
+          bi = i;
+          bj = j;
+        }
+      }
+    }
+    if (bi < 0 || best < threshold) break;
+    groups = groups.filter((_, k) => k !== bi && k !== bj).concat([[...groups[bi], ...groups[bj]]]);
+  }
+  groups.sort((a, b) => Math.min(...a) - Math.min(...b));
+  const out = new Map<number, number>();
+  groups.forEach((g, n) => g.forEach((id) => out.set(id, n)));
+  return out;
+}
+
+/** Memoria de voces: perfiles conocidos y el siguiente número libre. Se guarda con el resto de los datos. */
+export interface SpeakerBook {
+  profiles: VoiceProfile[];
+  nextId: number;
+}
+
+export const emptyBook = (): SpeakerBook => ({ profiles: [], nextId: 1 });
+
+/** Normaliza lo que llega del disco o de la interfaz (nunca se fía de su forma). */
+export function cleanBook(x: unknown): SpeakerBook {
+  const o = (typeof x === 'object' && x !== null ? x : {}) as { profiles?: unknown; nextId?: unknown };
+  const profiles: VoiceProfile[] = [];
+  const seen = new Set<number>();
+  for (const p of Array.isArray(o.profiles) ? (o.profiles as Partial<VoiceProfile>[]) : []) {
+    if (typeof p !== 'object' || p === null) continue;
+    if (!Number.isInteger(p.id) || (p.id as number) < 1 || seen.has(p.id as number)) continue;
+    if (!Array.isArray(p.embedding) || p.embedding.length < 8 || p.embedding.length > 4096 || !p.embedding.every((v) => typeof v === 'number' && Number.isFinite(v))) continue;
+    seen.add(p.id as number);
+    const alias = typeof p.alias === 'string' ? p.alias.replace(/[<>]/g, '').trim().slice(0, 40) : '';
+    profiles.push({ id: p.id as number, ...(alias ? { alias } : {}), ...(p.self === true ? { self: true } : {}), embedding: p.embedding, n: Number.isFinite(p.n) && (p.n as number) > 0 ? (p.n as number) : 1 });
+  }
+  // solo una voz puede ser la del propio streamer
+  let selfSeen = false;
+  for (const p of profiles) {
+    if (p.self && selfSeen) delete p.self;
+    if (p.self) selfSeen = true;
+  }
+  const max = profiles.reduce((a, p) => Math.max(a, p.id), 0);
+  const next = Number.isInteger(o.nextId) && (o.nextId as number) > max ? (o.nextId as number) : max + 1;
+  return { profiles, nextId: next };
+}
+
+/** Reparte las voces de un análisis entre los perfiles conocidos: cada perfil solo puede ser una voz (gana la más parecida). */
+export function resolveVoices(
+  voices: Map<number, number[]>,
+  profiles: VoiceProfile[],
+  o: MatchOpts = {},
+): Map<number, VoiceProfile | null> {
+  const cand = [...voices.entries()].map(([v, e]) => ({ v, p: matchProfile(e, profiles, o), s: 0 }));
+  for (const c of cand) c.s = c.p ? cosine(voices.get(c.v)!, c.p.embedding) : 0;
+  const out = new Map<number, VoiceProfile | null>();
+  for (const c of [...cand].sort((a, b) => b.s - a.s)) {
+    const taken = [...out.values()].includes(c.p);
+    out.set(c.v, c.p && !taken ? c.p : null);
+  }
+  return out;
+}

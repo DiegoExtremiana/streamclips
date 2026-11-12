@@ -11,6 +11,8 @@ export interface SubtitleEnv {
   /** Hace la transcripción si falta (los subtítulos la piden solos). */
   ensure?: (vodId: string, ranges?: Range[]) => Promise<void>;
   fontsDir?: string;
+  /** Colores por voz de unas palabras (si hay varias voces identificadas). */
+  speakerColors?: (words: Word[]) => Record<number, string> | undefined;
 }
 
 /**
@@ -37,7 +39,7 @@ export async function withSubtitles<T>(
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-ass-'));
   try {
     const ass = path.join(dir, 'subs.ass');
-    fs.writeFileSync(ass, buildAss(words, SUBTITLE_STYLES[style], w, h));
+    fs.writeFileSync(ass, buildAss(words, SUBTITLE_STYLES[style], w, h, env.speakerColors?.(words)));
     return await fn({ ass, fontsDir: env.fontsDir });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

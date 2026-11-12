@@ -17,7 +17,8 @@ const tmp = () => {
 };
 const clip = (id: string, over: Partial<TwitchClip> = {}): TwitchClip => ({ id, title: id, url: `https://clips.twitch.tv/${id}`, durationSec: 30, createdAt: `2026-11-${String(10 + Number(id.replace(/\D/g, '') || 0)).padStart(2, '0')}T10:00:00Z`, creator: 'x', views: 10, thumbnail: '', ...over });
 const loud = [...Array.from({ length: 24 }, () => -40), ...Array.from({ length: 6 }, () => -14)];
-const hype = 'no puede ser madre mía jajaja increíble vamos ostia no me lo creo siii qué brutal joder jajaja ostia vamos no puede ser'.split(' ').map((text, i) => ({ text, start: i, end: i + 0.8 }));
+const phrase = 'no puede ser madre mía jajaja increíble vamos ostia no me lo creo'.split(' ');
+const hype = Array.from({ length: 75 }, (_, i) => ({ text: phrase[i % phrase.length], start: i * 0.4, end: i * 0.4 + 0.3 }));
 
 function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
   const analyzed: string[] = [];
@@ -34,7 +35,7 @@ function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
   return { svc, analyzed, file };
 }
 
-// con muchos clips de pocas visualizaciones, uno muy visto queda en lo alto del percentil
+// la nota no mira las visualizaciones: se dan valores distintos para comprobarlo
 const many = (n: number) => Array.from({ length: n }, (_, i) => clip(`c${i + 1}`, { views: i + 1 }));
 
 describe('puntuación de clips en segundo plano', () => {

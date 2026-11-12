@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { TwitchClip } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { heuristicScore, isGold, modelScore, SCORE_VERSION, viewsPercentile, type ClipSignals } from '../../shared/clipScore';
+import { heuristicScore, isGold, modelScore, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
 
 interface Stored {
   /** Nota 0-10 (no se enseña). Ausente si el análisis falló. */
@@ -43,7 +43,6 @@ const MAX_CLIP_SEC = 180;
 export class ClipScoreService {
   private scores = new Map<string, Stored>();
   private queue: TwitchClip[] = [];
-  private views: number[] = [];
   private running: Promise<void> | null = null;
   private stopped = false;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -91,7 +90,6 @@ export class ClipScoreService {
 
   /** Añade a la cola los clips sin puntuar (los más recientes primero) y arranca el trabajo si no estaba en marcha. */
   enqueue(clips: TwitchClip[]): void {
-    this.views = clips.map((c) => c.views);
     const queued = new Set(this.queue.map((c) => c.id));
     const add = clips.filter((c) => this.needs(c) && !queued.has(c.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     if (!add.length) return;
@@ -138,13 +136,12 @@ export class ClipScoreService {
 
   private async score(clip: TwitchClip): Promise<Stored> {
     const sig = await this.d.analyze(clip);
-    const pct = viewsPercentile(clip.views, this.views);
-    const base = heuristicScore(sig, pct);
+    const base = heuristicScore(sig);
     // el modelo (límite gratuito diario) solo se gasta en los que pueden llegar a dorado: confirma o rebaja
     if (this.d.judge && sig.words.length >= 4 && base >= PRE_JUDGE_MIN) {
       try {
         const judged = await this.d.judge(clip, sig.words);
-        if (judged !== null) return { score: modelScore(judged, pct), v: SCORE_VERSION, at: this.now(), by: 'model' };
+        if (judged !== null) return { score: modelScore(judged), v: SCORE_VERSION, at: this.now(), by: 'model' };
       } catch (e) {
         this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
       }

@@ -91,8 +91,9 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
       const n = (e as Error).name;
       throw new Error(n === 'TimeoutError' || n === 'AbortError' ? 'El modelo de lenguaje no respondió a tiempo.' : 'No se pudo conectar con el modelo de lenguaje.');
     }
-    if (res.status === 429 && attempt < 2) {
-      const wait = Math.min(30, Number(res.headers.get('retry-after')) || 5 * (attempt + 1));
+    if (res.status === 429 && attempt < 4) {
+      // el plan gratuito limita las peticiones por minuto: esperar un minuto suele bastar; solo si sigue lleno se da por agotado
+      const wait = Math.min(90, Number(res.headers.get('retry-after')) || 15 * (attempt + 1));
       await sleep(wait * 1000);
       continue;
     }

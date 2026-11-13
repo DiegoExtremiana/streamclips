@@ -67,6 +67,8 @@ export interface TwitchClip {
   reason?: string;
   /** Cómo se valoró: con el modelo de lenguaje o solo con lo que se oye y se dice. */
   scoredBy?: 'model' | 'user';
+  /** Qué IA y qué modelo la examinaron y cuándo (ms desde 1970). */
+  scoredWith?: { provider: string; model: string; vision?: boolean; at?: number };
   /** Respuesta (0 no, 1 algo, 2 sí) a cada pregunta de la rúbrica, por «criterio.pregunta»; solo si lo valoró el modelo. */
   items?: Record<string, number>;
   /** Cita literal con la que el modelo justifica cada criterio. */

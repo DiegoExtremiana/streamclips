@@ -187,6 +187,10 @@ describe('puntuación de clips en segundo plano', () => {
     await again.svc.idle();
     assert.equal(again.analyzed.length, 1);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).good1.ai.model, 'modelo-1');
+    // la ficha del clip puede mostrar con qué IA y cuándo se examinó
+    const d = again.svc.detailOf('good1');
+    assert.equal(d?.ai?.model, 'modelo-1');
+    assert.equal(typeof d?.at, 'number');
   });
 
   it('un clip flojo en todo pero con potencial viral claro sale dorado; uno flojo sin viralidad no', async () => {

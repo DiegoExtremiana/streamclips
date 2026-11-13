@@ -17,6 +17,13 @@ const LOADING_MS = 3_000; // mientras se lee el historial se vuelve a preguntar 
 
 const fmtScore = (n: number) => n.toFixed(1).replace('.', ',');
 
+const PROVIDER_NAME: Record<string, string> = { gemini: 'Gemini', groq: 'Groq' };
+/** «Gemini · gemini-3.5-flash-lite · 13/11/2026»: quién examinó el clip y cuándo. */
+function stampText(w: NonNullable<TwitchClip['scoredWith']>): string {
+  const when = w.at ? ` · ${new Date(w.at).toLocaleDateString('es-ES')}` : '';
+  return `${PROVIDER_NAME[w.provider] ?? w.provider} · ${w.model}${w.vision ? ' (con imagen)' : ''}${when}`;
+}
+
 /** Los cuatro criterios de la nota como barras, con el motivo y cómo se calculó. */
 function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
   const cr = clip.criteria;
@@ -33,7 +40,7 @@ function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
       ))}
       {cr.viral >= 8 && <div className="badge ok" data-testid={`viral-${clip.id}`} style={{ alignSelf: 'flex-start' }}>Puede ser viral</div>}
       {!compact && clip.reason && <div className="crit-reason">{clip.reason}</div>}
-      {!compact && <div className="muted small">{by}</div>}
+      {!compact && <div className="muted small" data-testid={`stamp-${clip.id}`}>{by}{clip.scoredWith ? ` Examinado con ${stampText(clip.scoredWith)}.` : ''}</div>}
       {!compact && clip.items && (
         <details className="crit-why" data-testid={`why-${clip.id}`}>
           <summary>Ver por qué, pregunta a pregunta</summary>

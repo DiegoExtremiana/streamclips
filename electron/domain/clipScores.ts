@@ -144,9 +144,9 @@ export class ClipScoreService {
   }
 
   /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
-  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'user'; items?: RubricItems; evidence?: Evidence } | undefined {
+  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'user'; items?: RubricItems; evidence?: Evidence; ai?: AiStamp; at?: number } | undefined {
     const s = this.scores.get(id);
-    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'model', items: s.items, evidence: s.evidence } : undefined;
+    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'model', items: s.items, evidence: s.evidence, ai: s.ai, at: s.at } : undefined;
   }
 
   /**

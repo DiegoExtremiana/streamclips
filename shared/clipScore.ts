@@ -36,4 +36,5 @@ export function modelScore(judged: number): number {
   return Math.round(clamp(judged, 0, 10) * 10) / 10;
 }
 
-export const isGold = (score: number | undefined): boolean => typeof score === 'number' && score >= GOLD_MIN;
+/** Dorado: la nota global llega a 8, o el potencial viral por sí solo llega a 8 (un clip puede ser flojo en todo y aun así viralizarse). */
+export const isGold = (score: number | undefined, viral?: number): boolean => (typeof score === 'number' && score >= GOLD_MIN) || (typeof viral === 'number' && viral >= GOLD_MIN);

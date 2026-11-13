@@ -28,6 +28,14 @@ export interface Api {
   channelImportClip(clipId: string): Promise<VodJob>;
   /** Dirección directa para ver un clip de Twitch sin descargarlo. */
   channelClipStream(clipId: string): Promise<string>;
+  /** «No estoy de acuerdo»: corrige humor, «se cuenta algo» e interés de un clip valorado; la IA aprende de ello. */
+  correctClipScore(clipId: string, scores: { humor: number; historia: number; interes: number }): Promise<{ score: number }>;
+  /** Vuelve a la nota de la IA y olvida esa corrección. */
+  undoClipCorrection(clipId: string): Promise<void>;
+  /** Cuántas correcciones ha hecho el streamer y la tendencia que se ha detectado. */
+  clipFeedback(): Promise<{ count: number; enough: boolean; trend: { humor?: number; historia?: number; interes?: number } }>;
+  /** Olvida todas las correcciones (la IA vuelve a valorar solo con su criterio). */
+  clearClipFeedback(): Promise<void>;
   setAutoImport(on: boolean): Promise<ChannelStatus>;
   /** Da el visto bueno: se programa en su hora. */
   listConnections(): Promise<ConnectionInfo[]>;

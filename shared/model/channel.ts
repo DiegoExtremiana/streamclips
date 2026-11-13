@@ -66,7 +66,7 @@ export interface TwitchClip {
   /** Frase que explica la nota. */
   reason?: string;
   /** Cómo se valoró: con el modelo de lenguaje o solo con lo que se oye y se dice. */
-  scoredBy?: 'model' | 'signals';
+  scoredBy?: 'model' | 'user';
   /** Respuesta (0 no, 1 algo, 2 sí) a cada pregunta de la rúbrica, por «criterio.pregunta»; solo si lo valoró el modelo. */
   items?: Record<string, number>;
   /** Cita literal con la que el modelo justifica cada criterio. */

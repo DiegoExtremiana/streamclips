@@ -29,6 +29,7 @@ function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
     file,
     canRun: () => true,
     sleep: async () => undefined,
+    judge: async (c) => ({ ...judged(c.id.startsWith('good') ? 9.5 : 2), ai: { provider: 'test', model: 'modelo-1' } }),
     analyze: async (c) => {
       analyzed.push(c.id);
       return c.id.startsWith('good') ? { durationSec: 30, words: hype, energyDb: loud } : { durationSec: 30, words: [{ text: 'vale', start: 0, end: 1 }], energyDb: Array.from({ length: 30 }, () => -40) };
@@ -130,10 +131,12 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(svc.scoreOf('good8'), undefined, 'sin nota engañosa');
     assert.ok(analyzed.length <= 2, 'no se siguen bajando clips para nada (solo los que ya estaban en curso)');
     assert.match(svc.problem() ?? '', /La IA no está disponible/);
+    // sin IA que responda (judge devuelve null) tampoco se guarda nada
     const { svc: s2 } = make({ judge: async () => null });
-    s2.enqueue([...many(10), clip('good1', { views: 500 })]);
+    s2.enqueue([clip('good1')]);
     await s2.idle();
-    assert.equal(s2.gold('good1'), true);
+    assert.equal(s2.scoreOf('good1'), undefined);
+    assert.match(s2.problem() ?? '', /No hay IA configurada/);
   });
 
   it('un chiste tranquilo (sin gritos ni risas) lo valora el modelo aunque las señales lo vean flojo', async () => {
@@ -148,36 +151,54 @@ describe('puntuación de clips en segundo plano', () => {
     assert.ok((svc.scoreOf('c1') ?? 0) >= 8);
   });
 
-  it('lo valorado sin modelo se repite con modelo en cuanto lo hay, sin insistir a cada rato', async () => {
-    let t = 1_000_000;
+  it('sin IA configurada no se descarga nada y se explica; al ponerla se examina', async () => {
     let has = false;
-    let asked = 0;
-    const { svc, analyzed } = make({
-      now: () => t,
-      hasJudge: () => has,
-      judge: async () => {
-        asked++;
-        return judged(6, 'Normal');
-      },
-    });
-    // al principio no hay modelo: judge existe pero la app aún no tiene clave y devuelve null
-    const noKey = make({ now: () => t, hasJudge: () => has, judge: async () => null });
-    noKey.svc.enqueue([clip('good1')]);
-    await noKey.svc.idle();
-    assert.equal(noKey.svc.detailOf('good1')!.by, 'signals');
-    // con el mismo archivo y ya con clave, se vuelve a analizar, pero pasado el tiempo de espera
-    const again = make({ now: () => t, hasJudge: () => true, judge: async () => judged(9, 'Muy bueno') }, noKey.file);
-    again.svc.enqueue([clip('good1')]);
-    await again.svc.idle();
-    assert.equal(again.analyzed.length, 0, 'recién puntuado: aún no insiste');
-    t += 31 * 60_000;
+    const { svc, analyzed } = make({ hasJudge: () => has });
+    svc.enqueue([clip('good1')]);
+    await svc.idle();
+    assert.equal(analyzed.length, 0, 'ni se descarga');
+    assert.match(svc.problem() ?? '', /No hay IA configurada/);
+    has = true;
+    svc.enqueue([clip('good1')]);
+    await svc.idle();
+    assert.equal(analyzed.length, 1);
+    assert.equal(svc.problem(), undefined);
+  });
+
+  it('cada nota guarda la IA, el modelo y la fecha del examen; lo guardado sin IA anotada se vuelve a examinar', async () => {
+    const file = tmp();
+    const notes = path.join(path.dirname(file), 'n.md');
+    const first = make({ now: () => 1_800_000_000_000, notesFile: notes, judge: async () => ({ ...judged(9), ai: { provider: 'gemini', model: 'gemini-3.5-flash-lite', vision: true } }) }, file);
+    first.svc.enqueue([clip('good1')]);
+    await first.svc.idle();
+    const stored = JSON.parse(fs.readFileSync(file, 'utf8')).good1;
+    assert.deepEqual(stored.ai, { provider: 'gemini', model: 'gemini-3.5-flash-lite', vision: true });
+    assert.equal(stored.at, 1_800_000_000_000);
+    const md = fs.readFileSync(notes, 'utf8');
+    assert.match(md, /\| IA \| Modelo \| Examinado \|/);
+    assert.match(md, /gemini-3\.5-flash-lite \(con imagen\)/);
+    assert.match(md, /2027-01-15 08:00/);
+    // la misma nota sin `ai` (cálculo con audio o de una versión anterior) no vale
+    const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+    delete j.good1.ai;
+    fs.writeFileSync(file, JSON.stringify(j));
+    const again = make({}, file);
     again.svc.enqueue([clip('good1')]);
     await again.svc.idle();
     assert.equal(again.analyzed.length, 1);
-    assert.equal(again.svc.detailOf('good1')!.by, 'model');
-    assert.equal(svc.scoreOf('good1'), undefined);
-    assert.equal(asked + analyzed.length, 0);
-    has = true;
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).good1.ai.model, 'modelo-1');
+  });
+
+  it('un clip flojo en todo pero con potencial viral claro sale dorado; uno flojo sin viralidad no', async () => {
+    const viral = make({ judge: async () => ({ ...judged(1), criteria: { humor: 1, historia: 1, viral: 10, interes: 1 }, ai: { provider: 'test', model: 'm' } }) });
+    viral.svc.enqueue([clip('good1')]);
+    await viral.svc.idle();
+    assert.ok((viral.svc.scoreOf('good1') ?? 99) < 8);
+    assert.equal(viral.svc.gold('good1'), true);
+    const flat = make({ judge: async () => ({ ...judged(1), ai: { provider: 'test', model: 'm' } }) });
+    flat.svc.enqueue([clip('good1')]);
+    await flat.svc.idle();
+    assert.equal(flat.svc.gold('good1'), false);
   });
 
   it('un clip sin palabras no se puntúa con ceros: queda sin nota con su motivo y no se repite', async () => {

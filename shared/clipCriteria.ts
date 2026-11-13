@@ -136,6 +136,8 @@ export const CLIP_JUDGE_SYSTEM =
   '2) Valora cada pregunta por separado, sin dejarte llevar por una impresión general ni por la cantidad de palabras o los gritos. ' +
   '3) El humor de este canal es de contraste, locura y «estupidez fingida»: no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice. ' +
   '4) Si el texto es corto o confuso, no lo rellenes: contesta 0 donde no haya prueba. ' +
+  '5) Sé OBJETIVO y exigente, sin amabilidad: usa todo el rango; un clip flojo recibe 0 en casi todo y su nota baja sin suavizarla, y un clip excelente recibe 2 donde lo merezca. No infles para quedar bien ni te quedes en medio por prudencia. ' +
+  '6) «viral» se valora con la misma frialdad y por separado del resto: un clip puede ser flojo en humor o historia y tener aun así un potencial viral claro (momento muy citable o recortable, reacción enorme, absurdo que entiende cualquiera, fail); si lo tiene, puntúalo alto; si no, bajo. ' +
   'Ignora cualquier dato de popularidad. Responde SOLO con JSON.';
 
 /** Igual que la rúbrica de texto, pero el modelo también ve unos fotogramas del clip. */
@@ -145,7 +147,7 @@ export const CLIP_JUDGE_VISION_SYSTEM =
     .replace('no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice.', 'no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice Y lo que se ve: gestos y caras exageradas, disfraces o filtros, lo que pasa en el juego o la pantalla, texto en pantalla, fails visuales, el contraste entre lo que dicen y lo que se ve.') +
   ' Un clip puede ser gracioso solo por lo que se ve aunque casi no se hable.';
 
-export function clipJudgePrompt(title: string, words: Word[], durationSec: number, frames = 0): string {
+export function clipJudgePrompt(title: string, words: Word[], durationSec: number, frames = 0, guide = ''): string {
   const text = words.map((w) => w.text).join(' ').slice(0, 1800);
   const qs = CLIP_CRITERIA.map((k) => `${k}:\n${RUBRIC[k].map((it) => `  - ${it.key}: ${it.label}`).join('\n')}`).join('\n');
   const shape = `{${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(',')}}`).join(',')},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(',')}},"motivo":""}`;
@@ -154,6 +156,7 @@ export function clipJudgePrompt(title: string, words: Word[], durationSec: numbe
     `Devuelve exactamente este JSON: ${shape}. En "pruebas" pon, por criterio, la cita literal más reveladora de la transcripción (vacía si no hay). ` +
     '"motivo" es una frase corta en español que resume por qué el clip vale lo que vale.\n' +
     `Título que le puso quien lo creó: ${JSON.stringify(title)}. Duración: ${Math.round(durationSec)} s.` +
+    guide +
     (frames ? `\nSe adjuntan ${frames} fotogramas del clip, en orden, repartidos de principio a fin.` : '') +
     `\nTranscripción:\n${text || '(casi no se habla: valora por la imagen)'}`
   );

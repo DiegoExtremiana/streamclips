@@ -19,6 +19,7 @@ import { ThemeStore } from '../domain/themes';
 import { SpeakerService } from '../domain/speakers';
 import { MomentsService } from '../domain/moments';
 import type { ClipScoreService } from '../domain/clipScores';
+import { ClipFeedbackStore } from '../domain/clipFeedback';
 import { createClipScoreService } from './wiring/clipScores';
 import { StorageService } from '../domain/storage';
 import { setAssetFolders } from '../services/soundBank';
@@ -114,6 +115,7 @@ export class AppContext {
   readonly speakers: SpeakerService;
   readonly moments: MomentsService;
   readonly clipScores: ClipScoreService;
+  readonly clipFeedback: ClipFeedbackStore;
   readonly storage: StorageService;
   readonly style: StyleService;
   readonly covers: CoverService;
@@ -246,6 +248,7 @@ export class AppContext {
       restore: (id) => this.vods.ensureFile(id),
       discardSource: (id) => this.vods.discardSource(id),
     });
+    this.clipFeedback = new ClipFeedbackStore(path.join(o.userDataDir, 'clip-feedback.json'));
     this.clipScores = createClipScoreService(this, o);
     this.storage = new StorageService({ store: this.store, userDataDir: o.userDataDir, discard: (id) => this.autopilot.discard(id), isRunning: (id) => this.autopilot.isRunning(id), busy: () => this.isBusy(), log: this.log });
     this.channel.scores = this.clipScores;

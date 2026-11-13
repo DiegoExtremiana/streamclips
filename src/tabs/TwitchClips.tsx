@@ -9,6 +9,7 @@ import { CLIP_CRITERIA, CRITERION_LABEL, POINTS_LABEL, RUBRIC } from '../../shar
 import { errMsg } from '../lib';
 import { IconPlus, IconSearch, IconSortAsc, IconSortDesc } from '../icons';
 import { Modal } from '../library/ui';
+import { EDITABLE, type EditableScores } from '../../shared/clipFeedback';
 
 const REFRESH_MS = 60_000;
 const SCORING_MS = 15_000; // mientras se valoran clips se vuelve a preguntar para que vayan saliendo las notas
@@ -20,7 +21,7 @@ const fmtScore = (n: number) => n.toFixed(1).replace('.', ',');
 function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
   const cr = clip.criteria;
   if (!cr) return null;
-  const by = clip.scoredBy === 'model' ? 'Valorado por el modelo de lenguaje.' : 'Calculado con lo que se oye y se dice (sin modelo de lenguaje).';
+  const by = clip.scoredBy === 'user' ? 'Corregido por ti.' : clip.scoredBy === 'model' ? 'Valorado por la IA.' : '';
   return (
     <div className={`crit${compact ? ' compact' : ''}`} data-testid={`crit-${clip.id}`} title={`${clip.reason ?? ''} ${by}`.trim()}>
       {CLIP_CRITERIA.map((k) => (
@@ -30,6 +31,7 @@ function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
           <span className="crit-val">{fmtScore(cr[k])}</span>
         </div>
       ))}
+      {cr.viral >= 8 && <div className="badge ok" data-testid={`viral-${clip.id}`} style={{ alignSelf: 'flex-start' }}>Puede ser viral</div>}
       {!compact && clip.reason && <div className="crit-reason">{clip.reason}</div>}
       {!compact && <div className="muted small">{by}</div>}
       {!compact && clip.items && (
@@ -57,7 +59,58 @@ function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
 const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'No está en la Biblioteca' };
 
 /** Vista previa de un clip de Twitch sin descargarlo: se pide la dirección directa del vídeo y se reproduce aquí. */
-function ClipPreview({ clip, state, busy, onAdd, onClose }: { clip: TwitchClip; state: ClipLibraryState; busy: boolean; onAdd: () => void; onClose: () => void }) {
+/** «No estoy de acuerdo»: se mueven humor, «se cuenta algo» y momento interesante; «Puede ser viral» lo valora solo la IA. La IA aprende de estas correcciones. */
+function Disagree({ clip, onDone }: { clip: TwitchClip; onDone: () => void }) {
+  const cr = clip.criteria!;
+  const [open, setOpen] = useState(false);
+  const [vals, setVals] = useState<EditableScores>({ humor: cr.humor, historia: cr.historia, interes: cr.interes });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [fb, setFb] = useState<{ count: number; enough: boolean } | null>(null);
+  useEffect(() => { window.api.clipFeedback().then(setFb).catch(() => undefined); }, [clip.scoredBy]);
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setErr('');
+    try {
+      await fn();
+      setOpen(false);
+      onDone();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="disagree" data-testid="disagree">
+      {!open ? (
+        <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn small" onClick={() => { setVals({ humor: cr.humor, historia: cr.historia, interes: cr.interes }); setOpen(true); }}>No estoy de acuerdo</button>
+          {clip.scoredBy === 'user' && <button className="btn ghost small" disabled={busy} onClick={() => void run(() => window.api.undoClipCorrection(clip.id))}>Volver a la nota de la IA</button>}
+          {fb && fb.count > 0 && <span className="muted small">La IA ha aprendido de {fb.count} corrección(es){fb.enough ? '' : ' (con 3 empieza a notar tu criterio)'}.</span>}
+        </div>
+      ) : (
+        <div className="disagree-edit">
+          {EDITABLE.map((k) => (
+            <label key={k} className="crit-row" style={{ alignItems: 'center' }}>
+              <span className="crit-name">{CRITERION_LABEL[k]}</span>
+              <input type="range" min={0} max={10} step={0.5} value={vals[k]} aria-label={`${CRITERION_LABEL[k]} según tú`} onChange={(e) => setVals((v) => ({ ...v, [k]: Number(e.target.value) }))} />
+              <span className="crit-val">{fmtScore(vals[k])}</span>
+            </label>
+          ))}
+          <div className="muted small">«Puede ser viral» lo valora solo la IA: una persona no puede saberlo. La IA usa tus correcciones como ejemplos para valorar mejor los próximos clips.</div>
+          {err && <div className="msg bad" role="alert">{err}</div>}
+          <div className="row" style={{ gap: 8, marginTop: 6 }}>
+            <button className="btn small" disabled={busy} onClick={() => void run(() => window.api.correctClipScore(clip.id, vals))}>{busy ? 'Guardando…' : 'Guardar mi valoración'}</button>
+            <button className="btn ghost small" disabled={busy} onClick={() => setOpen(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip: TwitchClip; state: ClipLibraryState; busy: boolean; onAdd: () => void; onClose: () => void; onCorrected: () => void }) {
   const [src, setSrc] = useState('');
   const [error, setError] = useState('');
   useEffect(() => {
@@ -80,6 +133,7 @@ function ClipPreview({ clip, state, busy, onAdd, onClose }: { clip: TwitchClip; 
           <div className="clipprev-score" data-testid="clip-preview-score">
             <div className={`bigscore${clip.gold ? ' gold' : ''}`}>{fmtScore(clip.score)}<small>/10</small></div>
             <Criteria clip={clip} />
+            {clip.criteria && <Disagree clip={clip} onDone={onCorrected} />}
           </div>
         )}
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
@@ -319,7 +373,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           <button className="btn ghost" onClick={() => setLimit(limit + PAGE)}>Mostrar más ({matching.length - shown.length} restantes)</button>
         </div>
       )}
-      {current && <ClipPreview clip={current} state={stateOf(current)} busy={busy === current.id} onAdd={() => void importClip(current.id)} onClose={() => setOpen(null)} />}
+      {current && <ClipPreview clip={current} state={stateOf(current)} busy={busy === current.id} onAdd={() => void importClip(current.id)} onClose={() => setOpen(null)} onCorrected={() => void load(false)} />}
     </section>
   );
 }

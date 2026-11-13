@@ -243,8 +243,8 @@ export function AiCard() {
           <label htmlFor="ap-llm">Proveedor</label>
           <select id="ap-llm" value={a.llm.provider} onChange={(e) => up({ llm: { ...a.llm, provider: e.target.value as AutopilotSettings['llm']['provider'] } })}>
             <option value="none">Ninguno</option>
-            <option value="groq">Groq (recomendado)</option>
-            <option value="gemini">Gemini</option>
+            <option value="gemini">Gemini (recomendado)</option>
+            <option value="groq">Groq</option>
           </select>
         </div>
         <div className="field" style={{ flex: 1 }}>
@@ -254,18 +254,9 @@ export function AiCard() {
       </div>
       <div className="field">
         <label htmlFor="ap-key">Clave de API</label>
-        <input id="ap-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder="gsk_…" />
+        <input id="ap-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder={a.llm.provider === 'gemini' ? 'AIza…' : 'gsk_…'} />
       </div>
-      <details className="howto">
-        <summary>Cómo conseguir la clave gratuita de Groq, paso a paso</summary>
-        <ol>
-          <li>Abre <code>console.groq.com/keys</code> en el navegador.</li>
-          <li>Inicia sesión con tu cuenta de Google o de GitHub. No pide tarjeta.</li>
-          <li>Pulsa <strong>Create API Key</strong>, ponle un nombre (por ejemplo StreamClips) y confirma.</li>
-          <li>Copia la clave en ese momento (empieza por <code>gsk_</code>): no se vuelve a mostrar.</li>
-          <li>Aquí arriba, elige <strong>Groq</strong> como proveedor, pega la clave en «Clave de API» y pulsa Guardar.</li>
-        </ol>
-      </details>
+      <KeyHowTo current={a.llm.provider} />
 
       <h3>Qué hace con ella</h3>
       <Check checked={a.scoreClips !== false} onChange={(v) => up({ scoreClips: v })} title="Puntuar en segundo plano los clips de tu canal">
@@ -279,6 +270,58 @@ export function AiCard() {
       </button>
       <Status msg={msg} />
     </section>
+  );
+}
+
+type KeyProvider = 'gemini' | 'groq';
+const KEY_GUIDE: Record<KeyProvider, { name: string; steps: ReactNode[]; note: string }> = {
+  gemini: {
+    name: 'Gemini (Google)',
+    steps: [
+      <>Abre <code>aistudio.google.com/apikey</code> en el navegador.</>,
+      <>Inicia sesión con tu cuenta de Google. No pide tarjeta.</>,
+      <>Pulsa <strong>Crear clave de API</strong> (Create API key). Si te pide un proyecto, elige uno nuevo o el que te proponga.</>,
+      <>Copia la clave (empieza por <code>AIza</code>).</>,
+      <>Aquí arriba, elige <strong>Gemini</strong> como proveedor, pega la clave en «Clave de API» y pulsa Guardar inteligencia artificial.</>,
+    ],
+    note: 'Ve las imágenes de los clips directamente. En el plan gratuito, Google puede usar lo que se le envía (frases y fotogramas) para mejorar sus productos. Sus límites diarios se ven en tu panel de AI Studio.',
+  },
+  groq: {
+    name: 'Groq',
+    steps: [
+      <>Abre <code>console.groq.com/keys</code> en el navegador.</>,
+      <>Inicia sesión con tu cuenta de Google o de GitHub. No pide tarjeta.</>,
+      <>Pulsa <strong>Create API Key</strong>, ponle un nombre (por ejemplo StreamClips) y confirma.</>,
+      <>Copia la clave en ese momento (empieza por <code>gsk_</code>): no se vuelve a mostrar.</>,
+      <>Aquí arriba, elige <strong>Groq</strong> como proveedor, pega la clave en «Clave de API» y pulsa Guardar inteligencia artificial.</>,
+    ],
+    note: 'Muy rápido, pero con un límite diario de texto bajo (cientos de clips al día como mucho) y la imagen depende de un modelo en vista previa.',
+  },
+};
+
+/** Cómo conseguir la clave gratuita: se elige el proveedor y salen sus pasos (empieza en el que está elegido arriba). */
+function KeyHowTo({ current }: { current: string }) {
+  const [pick, setPick] = useState<KeyProvider>(current === 'groq' ? 'groq' : 'gemini');
+  useEffect(() => { if (current === 'groq' || current === 'gemini') setPick(current); }, [current]);
+  const g = KEY_GUIDE[pick];
+  return (
+    <details className="howto" data-testid="key-howto">
+      <summary>Cómo conseguir la clave gratuita, paso a paso</summary>
+      <div className="field" style={{ margin: '8px 0' }}>
+        <label htmlFor="ap-howto">Proveedor</label>
+        <select id="ap-howto" value={pick} onChange={(e) => setPick(e.target.value as KeyProvider)}>
+          {(Object.keys(KEY_GUIDE) as KeyProvider[]).map((k) => (
+            <option key={k} value={k}>{KEY_GUIDE[k].name}</option>
+          ))}
+        </select>
+      </div>
+      <ol>
+        {g.steps.map((st, i) => (
+          <li key={i}>{st}</li>
+        ))}
+      </ol>
+      <div className="muted small">{g.note}</div>
+    </details>
   );
 }
 

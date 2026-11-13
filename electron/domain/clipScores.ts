@@ -3,7 +3,17 @@ import path from 'node:path';
 import type { TwitchClip } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import { isGold, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
-import { criteriaFromSignals, overall, reasonFromCriteria, withMeasuredViral, type ClipCriteria, type ClipJudgement, type Evidence, type RubricItems } from '../../shared/clipCriteria';
+import { applyCorrection, type EditableScores } from '../../shared/clipFeedback';
+import type { ClipFeedbackStore } from './clipFeedback';
+import { overall, reasonFromCriteria, withMeasuredViral, type ClipCriteria, type ClipJudgement, type Evidence, type RubricItems } from '../../shared/clipCriteria';
+
+/** La IA que valoró un clip: proveedor y modelo exactos (el de imagen si lo vio). */
+export interface AiStamp {
+  provider: string;
+  model: string;
+  /** ¿Vio los fotogramas del clip? */
+  vision?: boolean;
+}
 
 interface Stored {
   /** Título y fecha del clip (para el documento de notas legible). */
@@ -18,7 +28,11 @@ interface Stored {
   /** Frase con lo que explica la nota. */
   reason?: string;
   /** Cómo se puntuó: con el modelo de lenguaje o con las señales del propio clip. */
-  by?: 'model' | 'signals';
+  by?: 'model' | 'user';
+  /** Lo que se oye en el clip (recortado): sirve para que una corrección del streamer enseñe algo. */
+  text?: string;
+  /** Notas de la IA antes de que el streamer las corrigiera. */
+  aiCrit?: ClipCriteria;
   /** Intentos fallidos seguidos. */
   fails?: number;
   /** Respuestas de la rúbrica y pruebas (citas) del modelo. */
@@ -26,8 +40,8 @@ interface Stored {
   evidence?: Evidence;
   /** El clip no tiene palabras que valorar: no se puntúa (y no se repite). */
   noText?: boolean;
-  /** Se puntuó solo con las señales porque no había modelo (o falló): se repite en cuanto haya uno. */
-  noModel?: boolean;
+  /** Qué IA y qué modelo hicieron esta valoración (la fecha del examen es `at`). */
+  ai?: AiStamp;
 }
 
 /** Fases de valorar un clip, para medir dónde se va el tiempo. */
@@ -41,7 +55,7 @@ export interface ClipScoreDeps {
   /** Baja el audio del clip y saca sus palabras y su volumen. Lanza si no se puede. */
   analyze: (clip: TwitchClip, onPhase?: (phase: ScorePhase) => void) => Promise<ClipSignals>;
   /** Valoración del contenido por el modelo de lenguaje (cuatro criterios y motivo); null si no hay modelo o no respondió. */
-  judge?: (clip: TwitchClip, words: Word[], frames?: string[]) => Promise<ClipJudgement | null>;
+  judge?: (clip: TwitchClip, words: Word[], frames?: string[]) => Promise<(ClipJudgement & { ai?: AiStamp }) | null>;
   /** Texto con lo que falta para poder valorar (p. ej. el modelo de Whisper); null si todo está listo. */
   ready?: () => string | null;
   /** ¿Hay un modelo de lenguaje configurado ahora? Si lo hay, los clips puntuados sin él se vuelven a valorar. */
@@ -55,11 +69,14 @@ export interface ClipScoreDeps {
   log?: { info: (m: string) => void; warn: (m: string) => void };
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /** Correcciones del streamer a las notas (para guardarlas y que la IA aprenda). */
+  feedback?: ClipFeedbackStore;
 }
 
 /** Con menos palabras que esto no hay nada que leer para el modelo. */
 const MIN_WORDS_TO_JUDGE = 4;
 const MAX_FAILS = 2;
+const NO_AI = 'No hay IA configurada: sin ella los clips no se valoran (Ajustes › Piloto automático). En cuanto la pongas se examinan.';
 /** El modelo de lenguaje no se puede usar (modelo retirado, clave rechazada, cuota agotada): se detiene el trabajo en vez de gastar descargas. */
 class ModelBlocked extends Error {
   readonly blocked = true;
@@ -69,8 +86,6 @@ const CONCURRENCY = 2;
 /** Se conservan las notas de versiones anteriores del método mientras sean comparables: no se repite el trabajo al actualizar. */
 const MIN_COMPATIBLE_VERSION = 5;
 const RETRY_AFTER_MS = 24 * 3600_000;
-/** Un clip valorado sin modelo se repite con modelo, pero no más a menudo que esto (límites gratuitos). */
-const MODEL_RETRY_MS = 30 * 60_000;
 const WAIT_MS = 60_000;
 /** Más largos que esto no son «clips» normales y no se analizan. */
 const MAX_CLIP_SEC = 180;
@@ -102,6 +117,8 @@ export class ClipScoreService {
         if (!v || typeof v !== 'object' || v.v < MIN_COMPATIBLE_VERSION || v.v > SCORE_VERSION) continue;
         // un intento fallido de una sesión anterior no se arrastra: tras actualizar el programa (o arreglar la causa) se vuelve a intentar
         if (v.score === undefined && !v.noText) continue;
+        // una nota sin IA anotada (cálculo con el audio, o de una versión que no guardaba el modelo) no es fiable: se vuelve a examinar
+        if (v.score !== undefined && !v.ai && v.by !== 'user') continue;
         this.scores.set(id, v);
       }
     } catch {
@@ -127,9 +144,37 @@ export class ClipScoreService {
   }
 
   /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
-  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'signals'; items?: RubricItems; evidence?: Evidence } | undefined {
+  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'user'; items?: RubricItems; evidence?: Evidence } | undefined {
     const s = this.scores.get(id);
-    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'signals', items: s.items, evidence: s.evidence } : undefined;
+    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'model', items: s.items, evidence: s.evidence } : undefined;
+  }
+
+  /**
+   * El streamer no está de acuerdo con la nota: se guardan sus valores de humor, «se cuenta algo» e interés (la viralidad la deja la IA),
+   * la nota se recalcula y la corrección queda para que la IA calibre sus próximas valoraciones.
+   */
+  correct(id: string, user: EditableScores): { score: number } {
+    const s = this.scores.get(id);
+    if (!s?.crit || s.score === undefined) throw new Error('Este clip todavía no tiene nota que corregir.');
+    const ai = s.aiCrit ?? s.crit;
+    const crit = applyCorrection(s.crit, user);
+    const score = overall(crit);
+    this.scores.set(id, { ...s, crit, aiCrit: ai, score, by: 'user', reason: 'Corregido por ti.' });
+    this.d.feedback?.add({ clipId: id, title: s.title ?? '', text: s.text ?? '', ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes }, user, at: this.now() });
+    this.save();
+    this.writeNotes();
+    return { score };
+  }
+
+  /** Devuelve el clip a la nota de la IA y olvida su corrección. */
+  undoCorrection(id: string): void {
+    const s = this.scores.get(id);
+    if (!s?.aiCrit) return;
+    const crit = s.aiCrit;
+    this.scores.set(id, { ...s, crit, aiCrit: undefined, score: overall(crit), by: 'model', reason: 'Valoración de la IA.' });
+    this.d.feedback?.remove(id);
+    this.save();
+    this.writeNotes();
   }
 
   /** Por qué un clip no tiene nota (no tiene palabras que valorar). */
@@ -173,7 +218,8 @@ export class ClipScoreService {
 
   /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
-    return isGold(this.scores.get(id)?.score);
+    const s = this.scores.get(id);
+    return isGold(s?.score, s?.crit?.viral);
   }
 
   /** El análisis en segundo plano está activado (Ajustes). */
@@ -191,13 +237,13 @@ export class ClipScoreService {
     const s = this.scores.get(c.id);
     if (!s) return true;
     if (s.noText) return false;
-    if (s.score !== undefined) return Boolean(s.noModel && this.d.hasJudge?.() && this.now() - s.at > MODEL_RETRY_MS);
+    if (s.score !== undefined) return false;
     return (s.fails ?? 0) < MAX_FAILS || this.now() - s.at > RETRY_AFTER_MS;
   }
 
   /** Añade a la cola los clips sin puntuar (los más recientes primero) y arranca el trabajo si no estaba en marcha. */
   enqueue(clips: TwitchClip[]): void {
-    this.blocker = this.d.ready?.() ?? null;
+    this.blocker = this.d.ready?.() ?? (this.d.hasJudge && !this.d.hasJudge() ? NO_AI : null);
     if (this.blocker) return;
     const queued = new Set(this.queue.map((c) => c.id));
     const add = clips.filter((c) => this.needs(c) && !queued.has(c.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -230,7 +276,7 @@ export class ClipScoreService {
         await this.sleep(WAIT_MS);
         continue;
       }
-      this.blocker = this.d.ready?.() ?? null;
+      this.blocker = this.d.ready?.() ?? (this.d.hasJudge && !this.d.hasJudge() ? NO_AI : null);
       if (this.blocker) {
         this.queue = [];
         return;
@@ -276,12 +322,12 @@ export class ClipScoreService {
       const lines = [
         '# Notas de tus clips de Twitch',
         '',
-        'Lo escribe StreamClips solo. Cada clip se valora una vez y la nota queda aquí; al abrir el programa no se vuelve a calcular.',
-        'Nota de 0 a 10 (8 o más = dorado). Se mide el contenido, nunca las visualizaciones.',
+        'Lo escribe StreamClips solo. Cada clip lo examina la IA una vez y la nota queda aquí con la IA, el modelo y la fecha del examen; si no hay IA disponible (o el modelo está retirado) no se guarda ninguna nota y se examina cuando la haya.',
+        'Nota de 0 a 10. Dorado: nota de 8 o más, o «Viral» de 8 o más. Se mide el contenido, nunca las visualizaciones.',
         '',
-        '| Nota | Humor | Se cuenta algo | Viral | Interesante | Clip | Fecha | Motivo |',
-        '|---|---|---|---|---|---|---|---|',
-        ...rows.map(([id, v]) => `| ${c(v.score)} | ${c(v.crit?.humor)} | ${c(v.crit?.historia)} | ${c(v.crit?.viral)} | ${c(v.crit?.interes)} | ${(v.title ?? id).replace(/\|/g, '/')} | ${(v.createdAt ?? '').slice(0, 10)} | ${(v.reason ?? '').replace(/[|\n]/g, ' ')} |`),
+        '| Nota | Humor | Se cuenta algo | Viral | Interesante | Clip | Fecha del clip | IA | Modelo | Examinado | Motivo |',
+        '|---|---|---|---|---|---|---|---|---|---|---|',
+        ...rows.map(([id, v]) => `| ${c(v.score)} | ${c(v.crit?.humor)} | ${c(v.crit?.historia)} | ${c(v.crit?.viral)} | ${c(v.crit?.interes)} | ${(v.title ?? id).replace(/\|/g, '/')} | ${(v.createdAt ?? '').slice(0, 10)} | ${v.by === 'user' ? `${v.ai?.provider ?? ''} + corregido por ti` : (v.ai?.provider ?? '')} | ${(v.ai?.model ?? '').replace(/\|/g, '/')}${v.ai?.vision ? ' (con imagen)' : ''} | ${new Date(v.at).toISOString().slice(0, 16).replace('T', ' ')} | ${(v.reason ?? '').replace(/[|\n]/g, ' ')} |`),
         '',
       ];
       fs.mkdirSync(path.dirname(this.d.notesFile), { recursive: true });
@@ -317,25 +363,24 @@ export class ClipScoreService {
     if (sig.words.length < MIN_WORDS_TO_JUDGE && !(sig.frames?.length && this.d.judge)) {
       return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip, así que no hay nada que valorar.' };
     }
-    const crit = criteriaFromSignals(sig);
-    const noModel = true; // se repite con modelo en cuanto lo haya
-    if (this.d.judge) {
-      mark('modelo');
-      try {
-        const j = await this.d.judge(clip, sig.words, sig.frames);
-        if (j) {
-          const criteria = withMeasuredViral(j.criteria, sig);
-          return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model' };
-        }
-      } catch (e) {
-        // con modelo configurado, una nota sacada solo del audio no es fiable (el humor sale casi siempre bajo): mejor sin nota que una nota engañosa
-        const msg = (e as Error).message;
-        this.d.log?.warn(`El modelo no valoró el clip ${clip.id}: ${msg}`);
-        if (/no existe|rechaz|límite gratuito|Falta la clave/i.test(msg)) throw new ModelBlocked(msg);
-        throw new Error(`El modelo no pudo valorar el clip: ${msg}`);
-      }
+    if (!this.d.judge) throw new ModelBlocked(NO_AI);
+    mark('modelo');
+    let j: (ClipJudgement & { ai?: AiStamp }) | null;
+    try {
+      j = await this.d.judge(clip, sig.words, sig.frames);
+    } catch (e) {
+      // la valoración solo vale si la hace la IA: sin IA, con un modelo retirado, con la clave rechazada o sin cuota no se guarda nada y se examina cuando vuelva
+      const msg = (e as Error).message;
+      this.d.log?.warn(`El modelo no valoró el clip ${clip.id}: ${msg}`);
+      if (/no existe|rechaz|límite gratuito|Falta la clave/i.test(msg)) throw new ModelBlocked(msg);
+      throw new Error(`El modelo no pudo valorar el clip: ${msg}`);
     }
-    if (sig.words.length < MIN_WORDS_TO_JUDGE) return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip y el modelo no pudo valorarlo por la imagen.' };
-    return { score: overall(crit), crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals', noModel: noModel };
+    if (!j) {
+      if (sig.words.length < MIN_WORDS_TO_JUDGE) return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip y la IA no pudo valorarlo por la imagen.' };
+      throw new ModelBlocked(NO_AI);
+    }
+    const criteria = withMeasuredViral(j.criteria, sig);
+    const ai = j.ai ?? { provider: 'desconocida', model: 'desconocido' };
+    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model', text: sig.words.map((w) => w.text).join(' ').slice(0, 500), ai };
   }
 }

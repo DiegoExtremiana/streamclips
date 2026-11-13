@@ -5,6 +5,7 @@ import type { AppContext, ContextOptions } from '../context';
 import { ClipScoreService } from '../../domain/clipScores';
 import { askJson, MIN_INTERVAL_MS, visionConfig, type LlmProvider } from '../../services/llm';
 import { CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM, clipJudgePrompt, parseClipJudgement } from '../../../shared/clipCriteria';
+import { feedbackGuide } from '../../../shared/clipFeedback';
 import { audioEnergy as measureEnergy } from '../../services/audioEnergy';
 import { run } from '../../services/tools';
 
@@ -39,6 +40,7 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
   }
   return new ClipScoreService({
     file: path.join(o.userDataDir, 'clip-scores.json'),
+    feedback: app.clipFeedback,
     notesFile: path.join(o.userDataDir, 'Notas de clips.md'),
     log: app.log,
     enabled: () => app.store.data.settings.autopilot.scoreClips !== false,
@@ -86,9 +88,9 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
       await clipJudgeGate(o.llmBaseUrl ? 0 : Math.round(MIN_INTERVAL_MS[conf.provider as LlmProvider] * 0.55));
       if (frames?.length) {
         try {
-          const raw = await askJson(visionConfig(conf), CLIP_JUDGE_VISION_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec, frames.length), { temperature: 0.2, images: frames });
+          const raw = await askJson(visionConfig(conf), CLIP_JUDGE_VISION_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec, frames.length, feedbackGuide(app.clipFeedback.all())), { temperature: 0.2, images: frames });
           const j = parseClipJudgement(raw);
-          if (j) return j;
+          if (j) return { ...j, ai: { provider: conf.provider, model: visionConfig(conf).model, vision: true } };
         } catch (e) {
           // sin imágenes (el modelo no las admite o falló): se valora solo con lo que se oye, como antes; sin cuota no se insiste
           if (/límite gratuito|rechazó la clave/.test((e as Error).message)) throw e;
@@ -96,8 +98,9 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
         }
         if (words.length < 12) return null;
       }
-      const raw = await askJson(conf, CLIP_JUDGE_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec), { temperature: 0.2 });
-      return parseClipJudgement(raw);
+      const raw = await askJson(conf, CLIP_JUDGE_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec, 0, feedbackGuide(app.clipFeedback.all())), { temperature: 0.2 });
+      const j = parseClipJudgement(raw);
+      return j ? { ...j, ai: { provider: conf.provider, model: conf.model } } : null;
     },
   });
 }

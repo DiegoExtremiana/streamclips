@@ -575,3 +575,6 @@ button.btn.danger-text { color: var(--bad); }
 .navblurb { font-size: 11.5px; line-height: 1.3; color: var(--faint); font-weight: 400; }
 .navbtn[aria-selected=true] .navblurb { color: var(--muted); }
 .navbtn .navcount { margin-left: auto; }
+.disagree { margin-top: 10px; }
+.disagree-edit { display: flex; flex-direction: column; gap: 6px; }
+.disagree-edit input[type='range'] { width: 100%; }

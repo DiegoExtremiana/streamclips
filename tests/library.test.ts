@@ -222,7 +222,11 @@ describe('Biblioteca: recorte y encuadre de un clip', () => {
     env.ctx.store.data.publications.length = 0;
     fs.renameSync(split, `${split}.bak`);
     try {
-      await assert.rejects(env.ctx.library.reeditClip(clip.id, { cropX: 1 }), /VOD de origen|No se pudo volver a descargar/); // el directo borrado se intenta recuperar solo (aquí no hay yt-dlp)
+      // sin el directo, reencuadrar sigue funcionando con el propio vídeo del clip...
+      const r = await env.ctx.library.reeditClip(clip.id, { cropX: 1 });
+      assert.equal(r.cropX, 1);
+      // ...y alargarlo intenta bajar solo ese trozo de Twitch (aquí no hay yt-dlp)
+      await assert.rejects(env.ctx.library.reeditClip(clip.id, { start: Math.max(0, (r.start ?? 1) - 1), end: (r.end ?? 4) }), /No se pudo bajar de Twitch el trozo|volver a descargar/);
     } finally {
       fs.renameSync(`${split}.bak`, split);
     }

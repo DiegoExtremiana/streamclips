@@ -33100,8 +33100,18 @@ async function renderTimeline(tools, input, t, out) {
         "0",
         "-i",
         list,
-        "-c",
+        // el vídeo se copia; el audio se vuelve a codificar de una vez: unir trozos de AAC ya codificados deja saltos en cada unión y
+        // algunos reproductores (el del programa incluido) repiten un fragmento de sonido en bucle al saltar en la barra de tiempo
+        "-c:v",
         "copy",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "160k",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
         "-movflags",
         "+faststart",
         joined
@@ -36422,7 +36432,11 @@ var ClipScoreService = class {
     this.now = d.now ?? Date.now;
     try {
       const j = JSON.parse(import_node_fs20.default.readFileSync(d.file, "utf8"));
-      for (const [id, v] of Object.entries(j)) if (v && typeof v === "object" && v.v >= MIN_COMPATIBLE_VERSION && v.v <= SCORE_VERSION) this.scores.set(id, v);
+      for (const [id, v] of Object.entries(j)) {
+        if (!v || typeof v !== "object" || v.v < MIN_COMPATIBLE_VERSION || v.v > SCORE_VERSION) continue;
+        if (v.score === void 0 && !v.noText) continue;
+        this.scores.set(id, v);
+      }
     } catch {
     }
   }

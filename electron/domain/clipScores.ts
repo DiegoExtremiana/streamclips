@@ -87,7 +87,7 @@ const CONCURRENCY = 2;
 /** Se conservan las notas de versiones anteriores del método mientras sean comparables: no se repite el trabajo al actualizar. */
 const MIN_COMPATIBLE_VERSION = 5;
 /** Desde esta versión las notas salen de una rúbrica calibrada y con pruebas comprobadas. */
-const CALIBRATED_VERSION = 7;
+const CALIBRATED_VERSION = 8;
 const RETRY_AFTER_MS = 24 * 3600_000;
 const WAIT_MS = 60_000;
 /** Más largos que esto no son «clips» normales y no se analizan. */
@@ -122,7 +122,7 @@ export class ClipScoreService {
         if (v.score === undefined && !v.noText) continue;
         // una nota sin IA anotada (cálculo con el audio, o de una versión que no guardaba el modelo) no es fiable: se vuelve a examinar
         if (v.score !== undefined && !v.ai && v.by !== 'user') continue;
-        // las notas de la IA anteriores a la calibración estricta (v7) se vuelven a examinar; tus correcciones se conservan
+        // las notas de la IA anteriores a la calibración y el criterio del creador (v8) se vuelven a examinar; tus correcciones se conservan
         if (v.score !== undefined && v.v < CALIBRATED_VERSION && v.by !== 'user') continue;
         this.scores.set(id, v);
       }

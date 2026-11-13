@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.29.3
+
+- **El criterio es el tuyo**: la IA recibe tu perfil (humor de absurdo y estupidez fingida, gritos solo con motivo, historia e interés independientes del humor, lo raro o nuevo pesa más en «interesante», risas del chat como pista, imagen que cuenta como humor, el lore del canal ni suma ni resta, tacos sin efecto, penalizar arranque lento, final cortado, chiste repetido y charla sin interés, severidad muy alta). «Puede ser viral» lo decide la IA con criterio general de contenido corto para TikTok/Reels/Shorts.
+- La **duración ya no influye** en la nota de viral.
+- Todos los clips se vuelven a valorar con este criterio (tus correcciones se conservan).
+
 ## Novedades de la v0.29.2
 
 - **Todos los clips se vuelven a valorar con el criterio nuevo** (resumen previo, referencias de 2, 5 y 8, pruebas comprobadas). Tus correcciones con «No estoy de acuerdo» se conservan. Empieza por los más recientes y, si Gemini agota su cuota gratuita del día, para y sigue solo al día siguiente.

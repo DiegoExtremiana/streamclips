@@ -325,13 +325,13 @@ describe('puntuación de clips en segundo plano', () => {
     fs.writeFileSync(file, JSON.stringify({
       viejo: { v: 5, at: 1, score: 7, crit, by: 'model', ai },
       mio: { v: 5, at: 1, score: 3, crit, by: 'user', ai },
-      previo: { v: 6, at: 1, score: 5, crit, by: 'model', ai },
-      nuevo: { v: 7, at: 1, score: 3, crit, by: 'model', ai },
+      previo: { v: 7, at: 1, score: 5, crit, by: 'model', ai },
+      nuevo: { v: 8, at: 1, score: 3, crit, by: 'model', ai },
     }));
     const m = make({}, file);
     assert.equal(m.svc.scoreOf('viejo'), undefined);
     assert.equal(m.svc.scoreOf('mio'), 3);
-    assert.equal(m.svc.scoreOf('previo'), undefined, 'la nota hecha con el criterio anterior (v6) también se repite');
+    assert.equal(m.svc.scoreOf('previo'), undefined, 'la nota hecha con el criterio anterior (v7) también se repite');
     assert.equal(m.svc.scoreOf('nuevo'), 3);
   });
 });

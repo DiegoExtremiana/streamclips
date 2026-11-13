@@ -18,7 +18,7 @@ const HELP: Record<ClipCriterion, string> = {
   historia: 'Si se entiende qué pasa, hay desarrollo y desenlace, y se entiende sin ver el directo.',
   interes: 'Si pasa algo inesperado o raro, hay una reacción fuerte y se recordaría.',
   humor: 'Si hay remate, contraste, exageración o actuación que haga gracia.',
-  viral: 'Si un desconocido lo compartiría. Mezcla las preguntas de abajo (75 %) con lo medido en el clip (25 %): duración adecuada, que se hable pronto y el pico de volumen.',
+  viral: 'Si un desconocido lo compartiría. Mezcla las preguntas de abajo (75 %) con lo medido en el clip (25 %): que se hable pronto y el pico de volumen.',
 };
 
 /** Una estadística: barra que se llena hasta su nota; se abre para ver las preguntas y la prueba. */

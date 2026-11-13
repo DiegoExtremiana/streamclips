@@ -69,13 +69,11 @@ export type Evidence = Partial<Record<ClipCriterion, string>>;
 /** Peso de lo medido (duración, arranque rápido, pico de volumen) dentro de «Puede ser viral»; el resto es la rúbrica. */
 export const VIRAL_MEASURED_WEIGHT = 0.25;
 
-/** Lo medible de un clip para la viralidad, de 0 a 10: duración adecuada (8 a 45 s), que se hable pronto y el pico de volumen. */
+/** Lo medible de un clip para la viralidad, de 0 a 10: que se hable pronto (gancho) y el pico de volumen. La duración no cuenta: al creador le da igual si funciona. */
 export function viralMeasured(s: ClipSignals): number {
-  const dur = Math.max(1, s.durationSec);
-  const fit = dur < 8 ? 0.2 : dur <= 45 ? 1 : clamp(1 - (dur - 45) / 75, 0.3, 1);
   const first = s.words.length ? Math.min(...s.words.map((w) => w.start)) : 99;
   const quick = first <= 1.5 ? 1 : first <= 3 ? 0.6 : 0.2;
-  return r1(10 * (0.5 * fit + 0.3 * quick + 0.2 * clamp(peakRise(s.energyDb) / 14, 0, 1)));
+  return r1(10 * (0.6 * quick + 0.4 * clamp(peakRise(s.energyDb) / 14, 0, 1)));
 }
 
 /** La nota de viralidad final: rúbrica del modelo más lo medido en el clip. El resto de criterios es la rúbrica tal cual. */
@@ -128,6 +126,20 @@ export function reasonFromCriteria(c: ClipCriteria, by: 'model' | 'signals'): st
   return by === 'signals' ? `${base} Calculado con lo que se oye y se dice (sin modelo de lenguaje).` : base;
 }
 
+/** El criterio del creador, sacado de sus respuestas: es lo que hace que la nota sea la suya y no una genérica. */
+export const CREATOR_PROFILE =
+  'CRITERIO DEL CREADOR (obligatorio, manda sobre cualquier otra idea): ' +
+  'a) Su humor es el ABSURDO y la ESTUPIDEZ FINGIDA: hacerse el tonto, exagerar, contraste entre lo que dice y la situación. Un 8 o más en humor solo si le haría reír a alguien que ve el clip sin conocerlo. ' +
+  'b) Los gritos o el ruido solo suben la nota si responden a algo inesperado; gritar sin motivo no es humor ni interés. ' +
+  'c) «Se cuenta algo» e «interesante» son independientes del humor: una anécdota o un momento épico bien contados pueden tener historia e interés altos y humor bajo. ' +
+  'd) En «interesante» pesa MÁS lo raro o nuevo (algo que no se ve a menudo), después lo inesperado, la reacción fuerte y lo memorable. ' +
+  'e) Las risas del chat o de los amigos en directo son una pista fiable y suman al humor; también cuenta lo que se ve (caras o gestos exagerados, filtros, fails visuales), aunque casi no se hable. ' +
+  'f) Los chistes internos y el lore del canal NO suman ni restan: se juzga solo lo que se entiende dentro del clip; si el chiste depende de ese contexto, el humor se valora por lo que sí se entienda y el viral baja. ' +
+  'g) Los tacos y el lenguaje fuerte no afectan a la nota. La duración del clip tampoco. ' +
+  'h) BAJAN claramente la nota: empezar lento o con relleno, acabar cortado o sin remate, repetir el mismo chiste varias veces y charlar con el chat de cosas sin interés. ' +
+  'i) Los clips son para TikTok, Reels y Shorts: pesa que enganchen en los primeros segundos y rematen rápido. El creador no sabe qué hace viral un clip, así que «viral» lo decides tú con criterio general de contenido corto (frase de meme, reacción enorme, fail clarísimo, absurdo que entiende cualquiera) y con la severidad indicada. ' +
+  'j) Muy exigente: la mayoría de clips entre 0 y 4; un 7 es raro y un 8 o más solo si él se reiría al verlo. ';
+
 export const CLIP_JUDGE_SYSTEM =
   'Eres editor de contenido de un streamer de Twitch que habla en español de España y evalúas un clip corto a partir de su transcripción. ' +
   'No sabes quién habla (las voces llegan mezcladas) ni ves la imagen: deduce el contexto de lo que se dice y no inventes lo que no se pueda saber. ' +
@@ -139,6 +151,7 @@ export const CLIP_JUDGE_SYSTEM =
   '5) Sé OBJETIVO, frío y exigente: no buscas agradar ni animar. Calibración realista: la gran mayoría de clips de un streamer son del montón (cada criterio entre 0 y 4); un criterio de 7 o más es raro y 9 o 10 excepcional (menos de 1 clip de cada 20). Ante la duda entre dos respuestas, elige la más baja. ' +
   '6) Los cuatro criterios son INDEPENDIENTES: puntúa cada uno solo con sus preguntas. Un clip puede ser muy gracioso sin contar nada (historia 0), o contar algo muy bien sin ninguna gracia, o ser interesante sin ser viral. Que un criterio sea alto no es motivo para subir los demás. ' +
   '7) «viral» se valora con la misma frialdad y por separado: es potencial REAL de que un desconocido lo comparta (momento muy citable o recortable, reacción enorme, absurdo que entiende cualquiera, fail claro). Un clip normal, aunque sea gracioso para su comunidad, NO es viral: ponle 0 o 1 en casi todas las preguntas de viral. Un viral alto debe ser la excepción. ' +
+  CREATOR_PROFILE +
   'Ignora cualquier dato de popularidad. Responde SOLO con JSON.';
 
 /** Igual que la rúbrica de texto, pero el modelo también ve unos fotogramas del clip. */

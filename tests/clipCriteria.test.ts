@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIP_CRITERIA, CRITERION_WEIGHT, RUBRIC, clipJudgePrompt, criteriaFromSignals, heuristicScore, overall, parseClipJudgement, reasonFromCriteria, viralMeasured, withMeasuredViral } from '../shared/clipCriteria';
+import { CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM, CLIP_CRITERIA, CRITERION_WEIGHT, RUBRIC, clipJudgePrompt, criteriaFromSignals, heuristicScore, overall, parseClipJudgement, reasonFromCriteria, viralMeasured, withMeasuredViral } from '../shared/clipCriteria';
 
 const speech = (phrase: string, dur: number, perSec = 2.5) => {
   const base = phrase.split(' ');
@@ -70,7 +70,7 @@ describe('criterios de la nota de un clip', () => {
     assert.equal(weird.reason, 'Buen remate');
   });
 
-  it('«puede ser viral» mezcla la rúbrica con lo medido: duración adecuada, que se hable pronto y el pico de volumen', () => {
+  it('«puede ser viral» mezcla la rúbrica con lo medido: que se hable pronto y el pico de volumen (la duración no cuenta)', () => {
     const good = { durationSec: 25, words: speech('hola que tal', 25), energyDb: loud };
     const bad = { durationSec: 150, words: speech('hola que tal', 150).map((w) => ({ ...w, start: w.start + 20, end: w.end + 20 })), energyDb: quiet };
     assert.ok(viralMeasured(good) > 7, String(viralMeasured(good)));
@@ -111,5 +111,14 @@ describe('criterios de la nota de un clip', () => {
     const all1 = Object.fromEntries(CLIP_CRITERIA.map((k) => [k, Object.fromEntries(RUBRIC[k].map((it) => [it.key, 1]))]));
     assert.equal(parseClipJudgement({ ...all1, resumen: '  Se le cae el cubo y se ríe.  ' })!.summary, 'Se le cae el cubo y se ríe.');
     assert.equal(parseClipJudgement(all1)!.summary, undefined);
+  });
+
+  it('el criterio del creador va en las instrucciones del modelo (texto y con imagen)', () => {
+    for (const sys of [CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM]) {
+      assert.match(sys, /CRITERIO DEL CREADOR/);
+      assert.match(sys, /ABSURDO y la ESTUPIDEZ FINGIDA/);
+      assert.match(sys, /NO suman ni restan/);
+    }
+    assert.equal(viralMeasured({ durationSec: 5, words: speech('hola', 5), energyDb: loud }), viralMeasured({ durationSec: 90, words: speech('hola', 5), energyDb: loud }), 'la duración no cambia lo medido');
   });
 });

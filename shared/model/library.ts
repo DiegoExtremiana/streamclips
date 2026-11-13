@@ -147,6 +147,8 @@ export type Effect =
   | { type: 'fadeOut'; duration?: number }
   | { type: 'sfx'; at: number; sound?: SoundId }
   | { type: 'music'; mood: MusicMood; /** Volumen de la música respecto a su nivel normal (0,04-0,4); baja más aún cuando se habla. */ volume?: number }
+  /** Fundido breve a negro (con su audio) en cada salto entre momentos distintos del directo, para que no se note como un corte brusco. */
+  | { type: 'joints'; duration?: number }
   | { type: 'polish' };
 
 export interface ClipSpec {

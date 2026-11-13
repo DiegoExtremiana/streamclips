@@ -42,6 +42,8 @@ export const CHANNELS = {
   outputsDelete: 'outputs:delete',
   outputsDeleteMany: 'outputs:delete-many',
   autopilotRun: 'autopilot:run',
+  themesList: 'themes:list',
+  themesChoose: 'themes:choose',
   eventChannel: 'event:channel',
   vodsList: 'vods:list',
   vodsAdd: 'vods:add',

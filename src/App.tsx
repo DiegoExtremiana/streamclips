@@ -10,6 +10,7 @@ import SettingsTab from './tabs/SettingsTab';
 import { errMsg } from './lib';
 import { useUpdateStatus } from './tabs/UpdatesCard';
 import Toasts from './Toasts';
+import ThemesDialog from './ThemesDialog';
 
 export type TabId = 'programacion' | 'biblioteca' | 'clips' | 'portadas' | 'conexiones' | 'ajustes';
 
@@ -134,6 +135,7 @@ export default function App() {
           {tab === 'ajustes' && <SettingsTab />}
         </main>
       </div>
+      <ThemesDialog />
       <Toasts />
     </div>
   );

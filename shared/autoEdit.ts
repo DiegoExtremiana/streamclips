@@ -117,6 +117,11 @@ export function planLong(words: Word[], segs: Range[], o: EditOpts = {}): { segm
 }
 
 /** Añade la música de fondo al final de la lista de efectos (dejando sitio dentro del máximo). */
+/** Transiciones suaves en los saltos entre momentos distintos (para vídeos hechos de fragmentos no consecutivos). */
+export function withJoints(effects: Effect[]): Effect[] {
+  return effects.some((e) => e.type === 'joints') ? effects : [...effects.slice(0, MAX_EFFECTS - 1), { type: 'joints', duration: 0.25 }];
+}
+
 export function withMusic(effects: Effect[], mood: MusicMood, volume = 0.16): Effect[] {
   const rest = effects.filter((e) => e.type !== 'music');
   const polish = rest.filter((e) => e.type === 'polish');

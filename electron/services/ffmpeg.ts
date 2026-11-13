@@ -205,6 +205,9 @@ interface TimelineSpec {
  * Monta el vídeo: cada tramo conservado se codifica igual (con sus acercamientos y fundidos),
  * se concatenan sin recodificar y, si hay subtítulos, se graban en una segunda pasada.
  */
+/** Entre dos tramos separados más que esto (s) se considera un salto entre momentos distintos del directo, no un corte de silencio. */
+const JOINT_MIN_GAP = 20;
+
 async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, out: string): Promise<void> {
   fs.mkdirSync(path.dirname(out), { recursive: true });
   const fx = t.effects ?? [];
@@ -214,6 +217,8 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
   const clampFade = (d: number | undefined) => Math.min(d ?? FADE.default, total / 2);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-'));
   const polish = fx.some((e) => e.type === 'polish');
+  const joints = fx.find((e): e is Extract<Effect, { type: 'joints' }> => e.type === 'joints');
+  const jointDur = Math.min(0.6, joints?.duration ?? 0.25);
   const allSfx = fx.filter((e): e is Extract<Effect, { type: 'sfx' }> => e.type === 'sfx');
   try {
     // los efectos de sonido necesitan una pista de audio a la que sumarse
@@ -236,8 +241,8 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
         {
           vf,
           layout: t.layout,
-          fadeIn: i === 0 && fadeIn ? clampFade(fadeIn.duration) : undefined,
-          fadeOut: i === t.ranges.length - 1 && fadeOut ? clampFade(fadeOut.duration) : undefined,
+          fadeIn: i === 0 ? (fadeIn ? clampFade(fadeIn.duration) : undefined) : joints && r.start - t.ranges[i - 1].end > JOINT_MIN_GAP ? jointDur : undefined,
+          fadeOut: i === t.ranges.length - 1 ? (fadeOut ? clampFade(fadeOut.duration) : undefined) : joints && t.ranges[i + 1].start - r.end > JOINT_MIN_GAP ? jointDur : undefined,
           polish,
           sfx: hasAudio ? allSfx.filter((e) => e.at >= r.start && e.at <= r.end).map((e) => ({ at: e.at - r.start, sound: e.sound ?? 'pop' })) : undefined,
         },

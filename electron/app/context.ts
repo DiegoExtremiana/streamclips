@@ -15,6 +15,7 @@ import { CategoryService } from '../domain/categories';
 import type { Chapter } from '../../shared/categories';
 import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
+import { ThemeStore } from '../domain/themes';
 import { SpeakerService } from '../domain/speakers';
 import { MomentsService } from '../domain/moments';
 import type { ClipScoreService } from '../domain/clipScores';
@@ -109,6 +110,7 @@ export class AppContext {
   readonly categories: CategoryService;
   readonly library: LibraryService;
   readonly transcripts: TranscriptService;
+  readonly themes: ThemeStore;
   readonly speakers: SpeakerService;
   readonly moments: MomentsService;
   readonly clipScores: ClipScoreService;
@@ -217,7 +219,9 @@ export class AppContext {
       },
       chat: { dir: path.join(o.userDataDir, 'chat'), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort },
     });
+    this.themes = new ThemeStore(path.join(o.userDataDir, 'themes.json'), () => o.notifier.changed());
     this.autopilot = new Autopilot({
+      themes: this.themes,
       store: this.store,
       log: this.log,
       notifier: o.notifier,

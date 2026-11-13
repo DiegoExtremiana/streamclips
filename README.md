@@ -2,6 +2,18 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.28.0
+
+Edición temática (fases 1 a 6 del plan de la v28):
+
+- **Detector semántico de temas**: el piloto lee los mejores momentos y los tramos de charla con contenido y el modelo agrupa por significado (no por palabras repetidas) historias, bromas recurrentes y conversaciones que vuelven horas después. Cada tema trae categoría, participantes, confianza, motivo de la agrupación, si tiene desenlace y potencial (clip / largo / varios). Los de poca confianza se descartan.
+- **Vídeos temáticos con fragmentos no consecutivos**: orden cronológico (como mucho un gancho al principio), contexto añadido a las piezas que lo necesitan, sin repeticiones, con transiciones (fundido en cada unión, efecto `joints`) y música/sonidos de la edición profesional. Si no hay material suficiente no se crea nada.
+- **Ventana «¿largo o cortos?»**: solo cuando un tema sirve de verdad para las dos cosas. Muestra tema, contexto, motivo, fragmentos y sus horas, duraciones reales, número de cortos y la estructura. Si solo hay una forma buena, se hace sola. Las propuestas pendientes se guardan en `themes.json` y conservan sus transcripciones aunque el directo se borre (se vuelve a bajar al aceptar).
+- **Sin duplicados**: las propuestas que se solapan con lo ya generado (más del 60 %) se descartan.
+- Ajuste en Autopilot: «Vídeos por tema».
+
+Pendiente para próximas versiones (fases 7 a 9): panel para revisar/corregir temas (renombrar, unir, separar, reproducir apariciones), memoria de temas entre directos y aprendizaje de tus decisiones.
+
 ## Novedades de la v0.27.0
 
 - **Clips de tu canal por fin se valoran:** el fallo era que el programa intentaba medir el audio del clip como si fuera un vídeo y fallaba con «El archivo no contiene vídeo» en los 1.074 clips. Corregido y con prueba.

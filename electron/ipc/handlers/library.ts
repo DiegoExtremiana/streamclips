@@ -32,6 +32,23 @@ export function registerLibrary({ handle, ctx, platform }: IpcContext): void {
     });
     return vod;
   });
+  handle(CHANNELS.themesList, () => ctx.themes.pending());
+  handle(CHANNELS.themesChoose, async (id, choice) => {
+    const themeId = str(id, 'id');
+    const p = ctx.themes.get(themeId);
+    if (!p || p.status !== 'pending') throw new Error('Esta propuesta ya no está disponible.');
+    if (choice === 'dismiss') {
+      ctx.themes.resolve(themeId, 'dismissed');
+      return { made: 0 };
+    }
+    if (choice !== 'long' && choice !== 'shorts') throw new Error('Formato no válido.');
+    ctx.themes.resolve(themeId, 'accepted', choice);
+    // la creación tarda (descarga, transcripción, montaje): sigue en segundo plano y el programa avisa al terminar
+    void ctx.autopilot.makeTheme(p, choice).catch((e) => {
+      if (!isCancelled(e)) ctx.log.error('Vídeo temático', e);
+    });
+    return { made: choice === 'long' ? 1 : p.shorts.length };
+  });
   handle(CHANNELS.autopilotCancel, (id) => ctx.autopilot.cancel(str(id, 'id')));
   handle(CHANNELS.autopilotPause, (id) => ctx.autopilot.pause(str(id, 'id')));
   handle(CHANNELS.vodsDiscard, (id) => ctx.autopilot.discard(str(id, 'id')));

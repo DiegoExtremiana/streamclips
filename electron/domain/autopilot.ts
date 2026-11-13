@@ -1,10 +1,11 @@
+import type { SubtitleStyleId } from '../../shared/subtitles';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { planEdit, planLong, withMusic } from '../../shared/autoEdit';
-import { buildThreads, parseTopics, TOPIC_SYSTEM, topicPrompt } from '../../shared/topics';
+import { planEdit, planLong, withJoints, withMusic } from '../../shared/autoEdit';
+import { buildProposal, decideFormat, dedupeProposals, parseThemes, THEME_SYSTEM, themePrompt, transcriptBlocks, type ThemeProposal, type ThemeUnit } from '../../shared/themes';
 import { guessMood, MOOD_SYSTEM, moodPrompt, parseMood, type MusicMood } from '../../shared/music';
 import { hasBackgroundSound } from '../services/music';
 import { defaultStyle, type StyleProfile } from '../../shared/styleProfile';
@@ -16,7 +17,7 @@ import { judgeVisual } from '../services/visualJudge';
 import { applyEdits } from '../../shared/momentEdits';
 import { loadEdits, loadPrefs, saveSnapshot } from '../services/momentStore';
 import { applyPrefs, describePrefs } from '../../shared/preferences';
-import { kindSummary, selectBest, textFn, type Candidate, type Judged } from '../../shared/judge';
+import { judgeText, kindSummary, selectBest, textFn, type Candidate, type Judged } from '../../shared/judge';
 import { nextFreeSlot } from '../../shared/slots';
 import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
@@ -70,6 +71,8 @@ export interface AutopilotDeps {
   restore?: (vodId: string) => Promise<string>;
   /** Borra del disco el directo completo; devuelve los bytes liberados. */
   discardSource?: (vodId: string) => number;
+  /** Propuestas de vídeos temáticos pendientes de que elijas el formato (se guardan aparte). */
+  themes?: { put: (vodId: string, proposals: ThemeProposal[]) => void; hasPending: (vodId: string) => boolean; pendingSpans: (vodId: string) => Range[] };
   /** Motor nocturno: devuelve el motivo si no hay tiempo para transcribir un directo de esta duración. */
   canTranscribe?: (durationSec: number) => string | null;
 }
@@ -78,6 +81,12 @@ export interface AutopilotDeps {
 const DEFAULT_QUALITY = 6.5;
 /** Un resumen de menos de esto no merece publicarse. */
 const MIN_SUMMARY_SEC = 150;
+
+/** Descripción del vídeo temático: de qué va y los capítulos de su estructura. */
+function themeDescription(p: ThemeProposal): string {
+  const parts = [p.context || `Todo lo que se habló sobre «${p.title}» durante el directo.`];
+  return parts.join('\n\n');
+}
 
 interface Titles {
   title: string;
@@ -212,7 +221,7 @@ export class Autopilot {
       else if (x.start !== undefined && x.end !== undefined) spans.push({ start: x.start, end: x.end });
       else known = false; // un vídeo antiguo sin tramos guardados: no se sabe qué transcripción necesita
     }
-    if (known) this.d.transcripts.prune(vodId, spans);
+    if (known) this.d.transcripts.prune(vodId, [...spans, ...(this.d.themes?.pendingSpans(vodId) ?? [])]);
     const chat = this.chatFileFor(vod);
     if (chat) fs.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
@@ -379,7 +388,9 @@ export class Autopilot {
       let summaryMeta: { score: number; kind: string; reason: string } | undefined;
       const meta = new Map<Seg, { score: number; kind: string; reason: string }>();
       /** Vídeos por tema: los momentos de un mismo asunto repartidos por el directo, juntos y en orden. */
-      const topicVideos: { title: string; segs: Seg[]; score: number }[] = [];
+      const topicLongs: ThemeProposal[] = [];
+      const topicShorts: ThemeProposal[] = [];
+      const askProposals: ThemeProposal[] = [];
       if (!moments.length && !summary.length && !mains.length && !pool.length) {
         this.mark(vod, 'skipped', ['No se encontraron momentos que destaquen en este directo.', ...notes].join(' '));
         task.done('Sin momentos destacados');
@@ -494,20 +505,14 @@ export class Autopilot {
               summaryMeta = { score: avg, kind: 'resumen', reason: kindSummary(sum) };
             } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
           } else if (sum) notes.push(`Ningún momento supera la nota mínima del resumen (${quality}/10).`);
-          if (this.cfg.topics !== false && this.cfg.maxVideos > 0) {
+          if (this.cfg.topics !== false && (this.cfg.maxVideos > 0 || this.cfg.maxClips > 0)) {
             clock.mark('temas');
-            const cand = [...judged].filter((j) => !j.judgement.discard).sort((a, b) => b.total - a.total).slice(0, 40).sort((a, b) => a.start - b.start);
-            if (cand.length >= 4) {
-              try {
-                const raw = await askJson(llmConf!, TOPIC_SYSTEM, topicPrompt(words, cand), { fetchFn: this.d.llmFetch, temperature: 0.2 });
-                const threads = buildThreads(judged, parseTopics(raw, new Set(cand.map((c) => c.id))), { targetSec: this.cfg.mainMinutes * 60, maxThreads: 2 });
-                for (const t of threads) topicVideos.push({ title: t.title, segs: t.segs, score: t.score });
-                if (threads.length) notes.push(`Vídeos por tema: ${threads.map((t) => `«${t.title}» (${t.pieces} momentos, ${Math.round(t.totalSec / 60)} min)`).join(', ')}.`);
-                else notes.push('Vídeos por tema: ningún asunto se repite lo bastante en el directo.');
-              } catch (e) {
-                if (isCancelled(e)) throw e;
-                notes.push(`Vídeos por tema no disponibles (${(e as Error).message.split('\n')[0]}).`);
-              }
+            const found = await this.findThemes(vod, judged, words, llmConf!, notes);
+            for (const p of found) {
+              const how = decideFormat(p);
+              if (how === 'ask') askProposals.push(p);
+              else if (how === 'long') topicLongs.push(p);
+              else if (how === 'shorts') topicShorts.push(p);
             }
           }
         } else {
@@ -575,7 +580,7 @@ export class Autopilot {
       this.mark(vod, 'rendering');
       const created: OutputItem[] = [];
       const errors: string[] = [];
-      const total = (summary.length ? 1 : 0) + mains.length + topicVideos.length + moments.length;
+      const total = (summary.length ? 1 : 0) + mains.length + topicLongs.length + topicShorts.reduce((n, p) => n + p.shorts.length, 0) + moments.length;
       let doneCount = 0;
       const step = async (role: AutoRole, label: string, fn: () => Promise<OutputItem>, t: Titles, m?: { score: number; kind: string; reason: string }) => {
         try {
@@ -613,35 +618,12 @@ export class Autopilot {
       // los silencios de más de lo que dijo el creador (2 s por defecto) se cortan; su estilo manda sobre el criterio general
       const style = this.d.style?.() ?? defaultStyle();
       const editOpts = { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false };
-      // música lofi de fondo solo si el vídeo no tiene ya sonido de fondo; el ambiente sale del tema
-      const musicFor = async (title: string, segs: Seg[], smart: boolean): Promise<MusicMood | null> => {
-        if (this.cfg.music === false || !vod.filePath || !fs.existsSync(vod.filePath)) return null;
-        try {
-          const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
-          const gaps: Range[] = [];
-          for (let i = 0; i + 1 < inside.length; i++) if (inside[i + 1].start - inside[i].end >= 0.8) gaps.push({ start: inside[i].end, end: inside[i + 1].start });
-          const step = Math.max(1, Math.floor(gaps.length / 6));
-          if (await hasBackgroundSound(this.d.tools(), vod.filePath, gaps.filter((_, i) => i % step === 0))) return null;
-          const text = inside.map((w) => w.text).join(' ');
-          let mood = guessMood(`${title} ${text}`);
-          if (smart && llmConf) {
-            try {
-              mood = parseMood(await askJson(llmConf, MOOD_SYSTEM, moodPrompt(title, text), { fetchFn: this.d.llmFetch, temperature: 0.2 })) ?? mood;
-            } catch (err) {
-              if (isCancelled(err)) throw err;
-            }
-          }
-          return mood;
-        } catch (err) {
-          if (isCancelled(err)) throw err;
-          this.d.log.warn(`Sin música en "${title}": ${(err as Error).message.split('\n')[0]}`);
-          return null;
-        }
-      };
+      const musicFor = (title: string, segs: Seg[], smart: boolean) => this.musicFor(vod, words, title, segs, smart, llmConf);
       // capítulos con marca de tiempo para la descripción del resumen (como los vídeos de los canales grandes)
       const chapterOf = new Map<string, string>();
-      const longMake = async (title: string, segs: Seg[], chapters = false) => {
+      const longMake = async (title: string, segs: Seg[], chapters = false, themed = false) => {
         let e = pro ? planLong(words, segs, editOpts) : null;
+        if (e && themed) e = { ...e, effects: withJoints(e.effects) };
         const mood = e ? await musicFor(title, segs, true) : null;
         if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
         const item = await safely(
@@ -668,9 +650,16 @@ export class Autopilot {
         const t = titles.mains[i];
         await step('main', `vídeo ${i + 1}`, () => longMake(t.title, [m]), t);
       }
-      for (const tv of topicVideos) {
-        const t: Titles = { title: clean(tv.title, 100), description: `Todo lo que se habló sobre «${tv.title}» durante el directo, en un solo vídeo.` };
-        await step('main', `tema «${tv.title}»`, () => longMake(t.title, tv.segs, true), t, { score: tv.score, kind: 'tema', reason: 'Momentos del mismo tema, juntos y en orden.' });
+      for (const p of topicLongs) {
+        const t: Titles = { title: clean(p.title, 100), description: themeDescription(p) };
+        for (const piece of p.pieces) if (piece.title) chapterLabels.set(Math.round(piece.start), piece.title);
+        await step('main', `tema «${p.title}»`, () => longMake(t.title, p.long.segs, true, true), t, { score: 8, kind: 'tema', reason: `Tema recurrente: ${p.context || p.title}`.slice(0, 200) });
+      }
+      for (const p of topicShorts) {
+        for (const sh of p.shorts) {
+          const t: Titles = { title: clean(sh.title, 100), description: p.context };
+          await step('clip', `corto «${sh.title}»`, () => this.makeShort(vod.id, words, llmConf, sh.title, sh.segs[0], subs), t, { score: 7.5, kind: 'tema', reason: `Parte del tema «${p.title}».` });
+        }
       }
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
@@ -702,8 +691,13 @@ export class Autopilot {
           }
         }
       }
+      // temas con dos formas buenas de aprovecharlos: se te pregunta cuál prefieres (ventana en la aplicación)
+      if (askProposals.length && this.d.themes) {
+        this.d.themes.put(vod.id, askProposals);
+        notes.push(`${askProposals.length} tema(s) esperan que elijas formato: ${askProposals.map((p) => `«${p.title}»`).join(', ')}.`);
+      }
       // ya están los vídeos y los clips: el directo completo y lo que solo servía para sacarlos se borra
-      if (this.cfg.cleanup !== false && this.d.discardSource) {
+      if (this.cfg.cleanup !== false && this.d.discardSource && !this.d.themes?.hasPending(vod.id)) {
         try {
           const r = this.discard(vod.id, { fromRun: true });
           notes.push(`Directo completo borrado del disco (${(r.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r.kept} vídeo(s) y clip(s) con sus transcripciones.`);
@@ -938,6 +932,133 @@ clock.mark(null);
   private dateLabel(vod: VodJob): string {
     const d = new Date(vod.streamStartedAt ?? vod.createdAt);
     return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
+
+  /** Música de fondo si el vídeo no tiene ya sonido de fondo; el ambiente sale del tema (con modelo si `smart`, si no por palabras). */
+  private async musicFor(vod: VodJob, words: Word[], title: string, segs: Seg[], smart: boolean, llmConf: LlmConfig | null | undefined): Promise<MusicMood | null> {
+    if (this.cfg.music === false || !vod.filePath || !fs.existsSync(vod.filePath)) return null;
+    try {
+      const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
+      const gaps: Range[] = [];
+      for (let i = 0; i + 1 < inside.length; i++) if (inside[i + 1].start - inside[i].end >= 0.8) gaps.push({ start: inside[i].end, end: inside[i + 1].start });
+      const step = Math.max(1, Math.floor(gaps.length / 6));
+      if (await hasBackgroundSound(this.d.tools(), vod.filePath, gaps.filter((_, i) => i % step === 0))) return null;
+      const text = inside.map((w) => w.text).join(' ');
+      let mood = guessMood(`${title} ${text}`);
+      if (smart && llmConf) {
+        try {
+          mood = parseMood(await askJson(llmConf, MOOD_SYSTEM, moodPrompt(title, text), { fetchFn: this.d.llmFetch, temperature: 0.2 })) ?? mood;
+        } catch (err) {
+          if (isCancelled(err)) throw err;
+        }
+      }
+      return mood;
+    } catch (err) {
+      if (isCancelled(err)) throw err;
+      this.d.log.warn(`Sin música en "${title}": ${(err as Error).message.split('\n')[0]}`);
+      return null;
+    }
+  }
+
+  /** Un corto temático: un tramo continuo con la edición profesional (cortes, sonidos, música) y, si falla, sin ella. */
+  private async makeShort(vodId: string, words: Word[], llmConf: LlmConfig | null | undefined, title: string, seg: Seg, subs: { subtitles?: SubtitleStyleId }): Promise<OutputItem> {
+    const vod = this.d.store.data.vods.find((v) => v.id === vodId)!;
+    const style = this.d.style?.() ?? defaultStyle();
+    let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+    const mood = e ? await this.musicFor(vod, words, title, [seg], false, llmConf) : null;
+    if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+    if (e) {
+      try {
+        return await this.d.clips.createClip(vodId, { start: seg.start, end: seg.end, title, cuts: e.cuts, effects: e.effects, ...subs });
+      } catch (err) {
+        if (isCancelled(err)) throw err;
+        this.d.log.warn(`Edición profesional falló en un corto temático, se monta sin ella: ${(err as Error).message.split('\n')[0]}`);
+      }
+    }
+    return this.d.clips.createClip(vodId, { start: seg.start, end: seg.end, title, ...subs });
+  }
+
+  /**
+   * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
+   * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
+   */
+  private async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[]): Promise<ThemeProposal[]> {
+    const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
+    const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c, 380), title: c.judgement.title, total: c.total }));
+    const blocks = transcriptBlocks(words, cand).slice(0, 20);
+    blocks.forEach((b, i) => units.push({ id: `b${i}`, start: b.start, end: b.end, text: judgeText(words, b, 380), total: 5 }));
+    units.sort((a, b) => a.start - b.start);
+    if (units.length < 4) return [];
+    try {
+      const raw = await askJson(conf, THEME_SYSTEM, themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
+      const built = parseThemes(raw, new Set(units.map((u) => u.id)))
+        .map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60 }))
+        .filter((p): p is ThemeProposal => Boolean(p));
+      const existing = this.d.store.data.outputs
+        .filter((x) => x.vodId === vod.id && x.auto?.review !== 'pending')
+        .map((x) => (x.segments?.length ? x.segments : x.start !== undefined && x.end !== undefined ? [{ start: x.start, end: x.end }] : []))
+        .filter((x) => x.length);
+      const { kept, dropped } = dedupeProposals(built, existing);
+      const top = kept.slice(0, 3);
+      notes.push(top.length ? `Edición temática: ${top.map((p) => `«${p.title}» (${p.pieces.length} fragmentos${p.long.sec ? `, ${Math.round(p.long.sec / 60)} min` : ''})`).join(', ')}${dropped ? `; ${dropped} descartado(s) por repetir lo ya hecho` : ''}.` : 'Edición temática: ningún tema con material suficiente para un vídeo con sentido.');
+      return top;
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      notes.push(`Edición temática no disponible (${(e as Error).message.split('\n')[0]}).`);
+      return [];
+    }
+  }
+
+  /** Crea lo que elegiste en la ventana: el vídeo largo o los cortos del tema. Si el directo se borró, se vuelve a bajar. */
+  async makeTheme(proposal: ThemeProposal, format: 'long' | 'shorts'): Promise<OutputItem[]> {
+    const vod = this.d.store.data.vods.find((v) => v.id === proposal.vodId);
+    if (!vod) throw new Error('El directo de este tema ya no está en el programa.');
+    const spans = [...proposal.pieces.map((p) => ({ start: p.start, end: p.end }))];
+    await this.d.transcripts.ensure(vod.id, spans).catch((e) => this.d.log.warn(`Transcripción del tema: ${(e as Error).message}`));
+    if (!vod.filePath || !fs.existsSync(vod.filePath)) await this.d.restore?.(vod.id);
+    const words = this.d.transcripts.words(vod.id);
+    const llmConf = this.llmConf();
+    const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
+    const made: OutputItem[] = [];
+    const finish = (item: OutputItem, role: AutoRole, title: string, description: string, reason: string) => {
+      item.auto = { role, review: 'pending', score: 8, kind: 'tema', reason: reason.slice(0, 200) };
+      item.titleSource = 'auto';
+      item.visibility = this.cfg.visibility;
+      this.d.library.setAutoDescription(item.id, withCategoryLine(description, item.category));
+      this.d.store.save();
+      if (!this.cfg.requireApproval) {
+        try {
+          this.approve(item.id);
+        } catch (e) {
+          this.d.log.warn(`${title}: ${(e as Error).message}`);
+        }
+      }
+      made.push(item);
+    };
+    if (format === 'long') {
+      const style = this.d.style?.() ?? defaultStyle();
+      const segs = proposal.long.segs;
+      let e = this.cfg.proEdit !== false && words.length ? planLong(words, segs, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+      if (e) e = { ...e, effects: withJoints(e.effects) };
+      const mood = e ? await this.musicFor(vod, words, proposal.title, segs, true, llmConf) : null;
+      if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+      const title = clean(proposal.title, 100);
+      let item: OutputItem;
+      try {
+        item = e ? await this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }) : await this.d.clips.createLong(vod.id, { title, segments: segs, ...subs });
+      } catch (err) {
+        if (!e || isCancelled(err)) throw err;
+        item = await this.d.clips.createLong(vod.id, { title, segments: segs, ...subs });
+      }
+      finish(item, 'main', title, themeDescription(proposal), `Tema: ${proposal.context || proposal.title}`);
+    } else {
+      for (const sh of proposal.shorts) {
+        const item = await this.makeShort(vod.id, words, llmConf, sh.title, sh.segs[0], subs);
+        finish(item, 'clip', sh.title, proposal.context, `Parte del tema «${proposal.title}».`);
+      }
+    }
+    this.d.notifier.changed();
+    return made;
   }
 
   /** Visto bueno: programa el vídeo en su hora en las redes elegidas. */

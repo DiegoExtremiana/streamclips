@@ -86,6 +86,7 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
   const fades = new Set<string>();
   let polish = false;
   let music = false;
+  let joints = false;
   const total = totalDuration(ranges);
   for (let i = 0; i < effects.length; i++) {
     const e: unknown = effects[i];
@@ -117,11 +118,15 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
       music = true;
       if (!isMusicMood(e.mood)) return `el efecto ${i + 1} (music) necesita un mood: ${MUSIC_MOODS.join(', ')}`;
       if (e.volume !== undefined && (!isNum(e.volume) || e.volume < 0.04 || e.volume > 0.4)) return `el efecto ${i + 1}: el volumen de la música debe estar entre 0,04 y 0,4`;
+    } else if (e.type === 'joints') {
+      if (joints) return 'solo puede haber un joints';
+      joints = true;
+      if (e.duration !== undefined && (!isNum(e.duration) || e.duration < 0.1 || e.duration > 1)) return `el efecto ${i + 1}: la duración de las transiciones debe estar entre 0,1 y 1 s`;
     } else if (e.type === 'polish') {
       if (polish) return 'solo puede haber un polish';
       polish = true;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music o polish)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music, joints o polish)`;
     }
   }
   return null;
@@ -165,6 +170,7 @@ export function normalizeEffects(list: Effect[]): Effect[] {
     if (e.type === 'punch') return { type: 'punch', at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
     if (e.type === 'sfx') return { type: 'sfx', at: e.at, sound: e.sound ?? 'pop' };
     if (e.type === 'polish') return { type: 'polish' };
+    if (e.type === 'joints') return { type: 'joints', duration: e.duration ?? 0.25 };
     if (e.type === 'music') return { type: 'music', mood: e.mood, volume: e.volume ?? 0.16 };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });

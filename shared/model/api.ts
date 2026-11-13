@@ -3,6 +3,7 @@ import type { AssetKind, ComposeOpts, CoverAsset } from '../covers';
 import type { StyleProfile } from '../styleProfile';
 import type { Vocabulary } from '../vocab';
 import type { Word } from '../subtitles';
+import type { ThemeProposal } from '../themes';
 import type { AutoNameResult, ChannelStatus, ClipsResult, ScheduleEntry, ToolStatus, TwitchVod, WhisperStatus } from './channel';
 import type { Platform, RenderKind } from './core';
 import type { CloudStatus, ConnectionInfo, EngineStatus, TaskInfo, UpdateStatus, YoutubePlaylist } from './jobs';
@@ -61,6 +62,10 @@ export interface Api {
   /** Vuelve a lanzar el piloto automático sobre un VOD ya descargado. */
   /** Analiza (o vuelve a analizar) un VOD; si había un análisis en marcha, lo cancela y empieza de nuevo. */
   runAutopilot(vodId: string): Promise<VodJob>;
+  /** Temas que el análisis ha encontrado y esperan que elijas entre un vídeo largo o varios cortos. */
+  listThemes(): Promise<ThemeProposal[]>;
+  /** Elige el formato de un tema (o lo descarta con `dismiss`) y crea los vídeos. */
+  chooseTheme(id: string, choice: 'long' | 'shorts' | 'dismiss'): Promise<{ made: number }>;
   /** Detiene el análisis en marcha de un VOD. Devuelve si había algo que detener. */
   cancelAutopilot(vodId: string): Promise<boolean>;
   /** Pausa el análisis: lo ya transcrito se conserva y se retoma con «Reanudar» (aunque se cierre el programa). */

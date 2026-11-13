@@ -77,3 +77,14 @@ Plan, en pasos pequeños, **cada uno con `npm run check` y e2e en verde antes de
 - Calidad musical de la lofi generada: probada en nivel, duración y ducking, no escuchada.
 - Detección de «ya hay música» por nivel de las pausas (umbral -42 dB): calibrar con directos reales.
 
+
+
+## v0.28.0 (hecho: fases 1-6)
+- shared/themes.ts (núcleo puro), electron/domain/themes.ts (ThemeStore → themes.json), Autopilot.findThemes/makeTheme/makeShort, IPC themes:list/themes:choose, src/ThemesDialog.tsx.
+- Sin verificar con directos reales: calidad de la agrupación del modelo, umbral de confianza 0,4, solapamiento 0,6, fundidos en uniones.
+
+### Plan fases siguientes (v0.29+)
+7. Panel de temas (pestaña): listar `themes.json` ya resueltos también, renombrar/unir/separar, reproducir desde timestamps.
+8. Memoria entre directos: guardar resumen + embeddings ligeros por tema (recuperar solo los k más cercanos, nunca cargar todo el histórico); marcar contenido de VODs anteriores como contexto, nunca para títulos/portadas.
+9. Aprendizaje: registrar decisiones (unir/separar/descartar/largo vs cortos) como preferencias consultables y editables, aplicadas solo tras varias repeticiones.
+Coste: una llamada de modelo por directo para los temas (+1 por vídeo largo para el ambiente de música), dentro de los límites gratuitos.

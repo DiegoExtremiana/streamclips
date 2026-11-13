@@ -1,3 +1,4 @@
+import type { StorageFreed, StorageReport } from '../storage';
 import type { AssetKind, ComposeOpts, CoverAsset } from '../covers';
 import type { StyleProfile } from '../styleProfile';
 import type { Vocabulary } from '../vocab';
@@ -67,9 +68,9 @@ export interface Api {
   /** Borra del disco el directo completo (se conservan vídeos, clips y sus transcripciones). */
   discardVod(vodId: string): Promise<{ freedBytes: number; kept: number }>;
   /** Cuánto ocupa cada cosa del programa y cuánto se puede liberar. */
-  storageReport(): Promise<import('../storage').StorageReport>;
+  storageReport(): Promise<StorageReport>;
   /** Borra los directos ya aprovechados y los temporales; se conservan vídeos, clips y transcripciones. */
-  freeStorage(): Promise<import('../storage').StorageFreed>;
+  freeStorage(): Promise<StorageFreed>;
   onChannelUpdate(cb: (s: ChannelStatus) => void): () => void;
   listVods(): Promise<VodJob[]>;
   addVod(url: string, title?: string): Promise<VodJob>;

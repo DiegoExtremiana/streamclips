@@ -78,6 +78,9 @@ export function AutopilotCard() {
       <Check checked={a.enabled} onChange={(v) => up({ enabled: v })} title="Activar el piloto automático" />
       <Check checked={a.requireApproval} onChange={(v) => up({ requireApproval: v })} title="Pedir mi visto bueno antes de programar">Si lo desactivas, se programa solo.</Check>
       <Check checked={a.proEdit !== false} onChange={(v) => up({ proEdit: v })} title="Edición profesional">Quita silencios y tiempos muertos, acerca la imagen en los momentos fuertes, añade efectos de sonido y fundidos e iguala el volumen.</Check>
+      <Check checked={a.soundCues !== false} onChange={(v) => up({ soundCues: v })} title="Efectos de sonido según lo que digo">Pone un sonido cuando dices «ganamos», «dinero», «he muerto»… (sonidos propios, sin derechos de autor; puedes sustituir cualquiera dejando un archivo con su nombre, por ejemplo tada.mp3, en %APPDATA%\\StreamClips\\Sonidos).</Check>
+      <Check checked={a.music !== false} onChange={(v) => up({ music: v })} title="Música lofi de fondo">Si el vídeo no tiene ya música o sonido de fondo, añade una lofi sin letra, siempre por debajo de las voces, según el tema (café, viaje, noche, charla, juego). Puedes poner tu propia música con ese nombre (cafe.mp3…) en %APPDATA%\\StreamClips\\Música.</Check>
+      <Check checked={a.topics !== false} onChange={(v) => up({ topics: v })} title="Vídeos por tema">Si hablas de lo mismo en varios momentos del directo, los junta en orden en un vídeo con sentido (unos 10 min, algo más o menos).</Check>
       <Check checked={a.fastAnalysis !== false} onChange={(v) => up({ fastAnalysis: v })} title="Análisis rápido">Elige los momentos por volumen y chat y solo transcribe lo elegido (mucho más rápido). Si lo desactivas, se transcribe todo antes de elegir y los momentos también cuentan por lo que se dice.</Check>
       <Check checked={a.chatCapture} onChange={(v) => up({ chatCapture: v })} title="Guardar la actividad del chat durante el directo">Es anónimo: solo cuenta mensajes.</Check>
       <Check checked={a.cleanup !== false} onChange={(v) => up({ cleanup: v })} title="Borrar el directo completo al terminar">Se conservan los vídeos, los clips y sus transcripciones; si hace falta el directo más adelante, se vuelve a descargar solo.</Check>
@@ -134,7 +137,7 @@ export function AutopilotCard() {
         onClick={() => {
           const minQuality = Number(q.replace(',', '.'));
           void save({
-            enabled: a.enabled, requireApproval: a.requireApproval, proEdit: a.proEdit !== false, fastAnalysis: a.fastAnalysis !== false, chatCapture: a.chatCapture,
+            enabled: a.enabled, requireApproval: a.requireApproval, proEdit: a.proEdit !== false, soundCues: a.soundCues !== false, music: a.music !== false, topics: a.topics !== false, fastAnalysis: a.fastAnalysis !== false, chatCapture: a.chatCapture,
             cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, maxVideos: a.maxVideos, maxClips: a.maxClips, summaryMinutes: a.summaryMinutes,
             mainMinutes: a.mainMinutes, parallel: a.parallel ?? 2, series: a.series, ...(Number.isFinite(minQuality) && q.trim() !== '' ? { minQuality } : {}),
           }).then(() => setCounts(null));

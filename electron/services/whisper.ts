@@ -259,7 +259,7 @@ function runCli(exe: string, args: string[], onPct: (pct: number) => void): Prom
 /** Transcribe el audio de un vídeo por trozos y devuelve las palabras con su tiempo en el vídeo. */
 export async function transcribeVideo(tools: ToolPaths, input: string, o: TranscribeOpts): Promise<Word[]> {
   if (!fs.existsSync(o.model)) throw new Error('Falta el modelo de Whisper.');
-  const total = (await probe(tools, input)).durationSec;
+  const total = (await probe(tools, input, { audioOnly: true })).durationSec;
   const from = Math.max(0, o.range?.start ?? 0);
   const to = Math.min(total || Infinity, o.range?.end ?? total);
   const dur = Math.max(0, to - from);

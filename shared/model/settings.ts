@@ -42,6 +42,12 @@ export interface AutopilotSettings {
   chatCapture: boolean;
   /** Edición profesional automática: cortes de silencios, acercamientos, efectos de sonido, fundidos y volumen parejo. */
   proEdit?: boolean;
+  /** Efectos de sonido según lo que se dice (ganar, dinero, morir…). Por defecto sí. */
+  soundCues?: boolean;
+  /** Música lofi sin letra de fondo cuando el vídeo no tiene ya sonido de fondo. Por defecto sí. */
+  music?: boolean;
+  /** Vídeos por tema: junta los momentos de un mismo tema repartidos por el directo. Por defecto sí. */
+  topics?: boolean;
   /** Al terminar de sacar vídeos y clips, borrar el directo completo y los datos que ya no sirven. Por defecto sí. */
   cleanup?: boolean;
   /** Borrar un vídeo o clip (archivos incluidos) cuando ya se ha publicado en todas sus redes. Por defecto sí. */

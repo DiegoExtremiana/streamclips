@@ -1,4 +1,6 @@
 import type { SubtitleStyleId } from '../subtitles';
+import type { SoundId } from '../sounds';
+import type { MusicMood } from '../music';
 import type { VerticalLayout } from '../layout';
 import type { ClipFormat, OutputKind, Platform, RenderKind } from './core';
 import type { AutoRole, AutopilotState, TranscriptInfo, VodStatus } from './jobs';
@@ -143,7 +145,8 @@ export type Effect =
   | { type: 'punch'; at: number; duration?: number; zoom?: number }
   | { type: 'fadeIn'; duration?: number }
   | { type: 'fadeOut'; duration?: number }
-  | { type: 'sfx'; at: number; sound?: 'whoosh' | 'pop' | 'hit' }
+  | { type: 'sfx'; at: number; sound?: SoundId }
+  | { type: 'music'; mood: MusicMood; /** Volumen de la música respecto a su nivel normal (0,04-0,4); baja más aún cuando se habla. */ volume?: number }
   | { type: 'polish' };
 
 export interface ClipSpec {

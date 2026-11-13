@@ -51,6 +51,9 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.enabled !== undefined) n.enabled = bool(p.enabled, 'El interruptor del piloto automático');
   if (p.requireApproval !== undefined) n.requireApproval = bool(p.requireApproval, 'La aprobación previa');
   if (p.proEdit !== undefined) n.proEdit = bool(p.proEdit, 'La edición profesional');
+  if (p.soundCues !== undefined) n.soundCues = bool(p.soundCues, 'Los efectos de sonido');
+  if (p.music !== undefined) n.music = bool(p.music, 'La música de fondo');
+  if (p.topics !== undefined) n.topics = bool(p.topics, 'Los vídeos por tema');
   if (p.parallel !== undefined) {
     const v = Number(p.parallel);
     if (!Number.isInteger(v) || v < 1 || v > 4) throw new Error('Los directos a la vez deben ser un número del 1 al 4.');

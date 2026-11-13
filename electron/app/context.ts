@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { Store } from '../services/store';
 import { Logger } from '../services/logger';
@@ -19,6 +20,7 @@ import { MomentsService } from '../domain/moments';
 import type { ClipScoreService } from '../domain/clipScores';
 import { createClipScoreService } from './wiring/clipScores';
 import { StorageService } from '../domain/storage';
+import { setAssetFolders } from '../services/soundBank';
 import { StyleService } from '../domain/style';
 import { CoverService } from '../domain/covers';
 import type { DiarizeEngine } from '../services/diarize';
@@ -84,6 +86,8 @@ export interface ContextOptions {
   socialEnv?: PublisherEnv & AccountEnv;
   chatPort?: number;
   energy?: typeof audioEnergy;
+  /** Enviar fotogramas del clip al modelo al valorarlo (por defecto sí; las pruebas lo desactivan para no depender de ffmpeg). */
+  clipVision?: boolean;
   echoLog?: boolean;
   /** Sin interfaz (motor nocturno en GitHub Actions): la nube no toca las claves de tus redes. */
   headless?: boolean;
@@ -132,9 +136,14 @@ export class AppContext {
   readonly renderQueue = new SerialQueue();
   readonly transcribeQueue = new SerialQueue(() => this.parallel());
 
+  private readonly userDataDir: string;
+
   constructor(o: ContextOptions) {
+    this.userDataDir = o.userDataDir;
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
+    // carpetas donde puedes dejar tus propios sonidos (ding.mp3, tada.wav…) y tu música (cafe.mp3, viaje.mp3…): si existen, mandan sobre los generados
+    setAssetFolders({ sounds: path.join(o.userDataDir, 'Sonidos'), music: path.join(o.userDataDir, 'Música') });
     this.log = new Logger(path.join(o.userDataDir, 'logs'), 1_000_000, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
@@ -234,7 +243,7 @@ export class AppContext {
       discardSource: (id) => this.vods.discardSource(id),
     });
     this.clipScores = createClipScoreService(this, o);
-    this.storage = new StorageService({ store: this.store, userDataDir: o.userDataDir, discard: (id) => this.autopilot.discard(id), isRunning: (id) => this.autopilot.isRunning(id) });
+    this.storage = new StorageService({ store: this.store, userDataDir: o.userDataDir, discard: (id) => this.autopilot.discard(id), isRunning: (id) => this.autopilot.isRunning(id), busy: () => this.isBusy(), log: this.log });
     this.channel.scores = this.clipScores;
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
     this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error('Piloto automático', e)));
@@ -328,6 +337,8 @@ export class AppContext {
     this.updates.start();
     this.cloud.start();
     this.engine.start();
+    this.storage.start();
+    for (const d of ['Sonidos', 'Música']) fs.mkdirSync(path.join(this.userDataDir, d), { recursive: true });
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${(e as Error).message}`));
     void this.autopilot.refreshLibraryAtStart();
     this.log.info('Aplicación iniciada.');
@@ -339,5 +350,6 @@ export class AppContext {
     this.updates.stop();
     this.cloud.stop();
     this.engine.stop();
+    this.storage.stop();
   }
 }

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { addDownloadedVod, makeEnv, makeVideo, tmpDir, type TestEnv } from './helpers';
 import { formatBytes } from '../shared/storage';
+import { StorageService } from '../electron/domain/storage';
 
 const envs: TestEnv[] = [];
 afterEach(() => {
@@ -33,5 +34,36 @@ describe('espacio en disco', () => {
     assert.equal(fs.existsSync(unused.filePath!), true, 'el directo sin clips no se toca');
     assert.equal(env.ctx.storage.report().reclaimableVods, 0);
     assert.equal(env.ctx.store.data.outputs.length, 1, 'el clip se conserva');
+  });
+
+  it('borra solo los directos ya usados cuando pasa un rato y no hay nada trabajando', async () => {
+    const env = makeEnv();
+    envs.push(env);
+    const dir = tmpDir();
+    const used = addDownloadedVod(env, makeVideo(path.join(dir, 'used.mp4'), { dur: 6 }), 'used');
+    const unused = addDownloadedVod(env, makeVideo(path.join(dir, 'unused.mp4'), { dur: 6 }), 'unused');
+    await env.ctx.clips.createClip(used.id, { kind: 'both', start: 1, end: 4, title: 'Clip', cropX: 0.5 });
+    let clock = Date.now();
+    let busy = true;
+    const svc = new StorageService({
+      store: env.ctx.store,
+      userDataDir: dir,
+      discard: (id) => env.ctx.autopilot.discard(id),
+      isRunning: () => false,
+      busy: () => busy,
+      now: () => clock,
+    });
+    assert.equal(svc.sweepUsed().vods, 0, 'con trabajo en marcha no se borra nada');
+    busy = false;
+    assert.equal(svc.sweepUsed().vods, 0, 'recién usado: se espera por si sigues sacando clips');
+    clock += 31 * 60_000;
+    env.ctx.store.data.settings.autopilot.cleanup = false;
+    assert.equal(svc.sweepUsed().vods, 0, 'con la opción desactivada no se borra');
+    env.ctx.store.data.settings.autopilot.cleanup = true;
+    const r = svc.sweepUsed();
+    assert.equal(r.vods, 1);
+    assert.equal(fs.existsSync(used.filePath ?? ''), false);
+    assert.equal(fs.existsSync(unused.filePath!), true, 'el directo sin usar se queda');
+    assert.equal(env.ctx.store.data.outputs.length, 1);
   });
 });

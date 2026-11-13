@@ -61,3 +61,17 @@ Plan, en pasos pequeños, **cada uno con `npm run check` y e2e en verde antes de
 - Subir a `main` y hacer `git push`; el push de etiquetas falla desde el sandbox: crear la release en Chrome (`releases/new?tag=vX&target=main&title=vX`), escribir las notas y publicar.
 - Verificar con `gh api repos/DiegoExtremiana/streamclips/releases/tags/vX` y el flujo «Instalador de Windows» (`StreamClips-Setup-X.exe`, `.blockmap`, `latest.yml`).
 - Regenerar el motor de la nube (`npm run cloud:build`) y commitear `resources/cloud/engine.js` si cambia.
+
+## v0.27.0 (hecho)
+- Valoración de clips: arreglado el error de probe sobre audio (`probe(..., {audioOnly})`); fotogramas al modelo (`clipFrames`, `visionConfig`).
+- `StorageService.sweepUsed`: borrado automático de directos usados (30 min de gracia, sin trabajo en marcha).
+- `shared/topics.ts` + paso «temas» del piloto: vídeos por tema.
+- `shared/sounds.ts` + `electron/services/soundBank.ts`: 11 efectos sintetizados + sustitución por archivos del usuario.
+- `shared/music.ts` + `electron/services/music.ts`: lofi generada por ambiente, mezcla con ducking y detección de sonido de fondo.
+
+### Pendiente / sin verificar con datos reales
+- Modelo de visión de Groq (`meta-llama/llama-4-scout-17b-16e-instruct`): nombre no comprobado contra su API; si falla, cae a solo texto (queda en el log).
+- El pack de efectos de YouTube de la lista del usuario son vídeos largos sin nombres por sonido: no se importaron; la vía es dejar archivos en la carpeta Sonidos.
+- Calidad musical de la lofi generada: probada en nivel, duración y ducking, no escuchada.
+- Detección de «ya hay música» por nivel de las pausas (umbral -42 dB): calibrar con directos reales.
+

@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.27.0
+
+- **Clips de tu canal por fin se valoran:** el fallo era que el programa intentaba medir el audio del clip como si fuera un vídeo y fallaba con «El archivo no contiene vídeo» en los 1.074 clips. Corregido y con prueba.
+- **Los clips se valoran viéndolos y oyéndolos:** además de la transcripción, el modelo recibe 5 fotogramas del clip (gestos, pantalla, gags visuales). Un clip casi mudo pero gracioso ya puede tener nota. Si el modelo no admite imágenes, se valora solo con el texto.
+- **El directo se borra solo después de usarse:** a la media hora del último vídeo o clip sacado de él, y solo si no hay nada en marcha (respeta «Borrar el directo completo al terminar»). Si hace falta de nuevo, se vuelve a bajar.
+- **Vídeos por tema:** si hablas de lo mismo en varios momentos del directo, el modelo los agrupa y se monta un vídeo con esos momentos en orden (objetivo de unos 10 min, puede pasarse un 25 % o quedarse corto).
+- **Efectos de sonido según lo que dices:** «ganamos» (fanfarria), «dinero» (moneda), «he muerto» (fallo), «explota» (explosión), «cuidado» (alerta), «shiny» (destello)… 11 sonidos generados con ffmpeg, sin derechos de autor. Puedes sustituir cualquiera dejando un archivo con su nombre (`tada.mp3`) en `%APPDATA%\StreamClips\Sonidos`.
+- **Música lofi sin letra:** si el vídeo no tiene ya sonido de fondo (se mide en las pausas entre palabras), se añade una lofi generada según el tema (café, viaje, noche, charla, juego), siempre por debajo de las voces y agachándose cuando se habla. Tu propia música (`cafe.mp3`…) en `%APPDATA%\StreamClips\Música` manda sobre la generada.
+
 ## Novedades de la v0.26.0
 
 - **Arreglo grave del audio:** en algunos vídeos, de repente un sonido se repetía en bucle hasta el final. Causa encontrada y reproducida: los tramos con efecto de sonido salían en **mono** y los demás en **estéreo**, y al unirlos sin recodificar el audio se corrompía. Ahora todo sale en estéreo y hay una prueba que lo vigila (audio con frecuencia creciente: si algo se repite, falla). Los vídeos ya montados con el fallo hay que volver a montarlos desde la Biblioteca.

@@ -12,8 +12,19 @@ export interface StorageDeps {
   discard: (vodId: string) => { freedBytes: number };
   /** ¿Se está analizando este directo ahora? */
   isRunning: (vodId: string) => boolean;
+  /** ¿Hay descargas, montajes o análisis en marcha? Mientras sea así no se borra ningún directo. */
+  busy?: () => boolean;
+  /** Registro de lo que se borra solo. */
+  log?: { info: (m: string) => void; warn: (m: string) => void };
+  now?: () => number;
+  graceMs?: number;
+  sweepEveryMs?: number;
   tmpDir?: string;
 }
+
+/** Un directo usado se borra solo cuando lleva este rato sin que salga nada más de él (por si sigues sacando clips). */
+export const USED_VOD_GRACE_MS = 30 * 60_000;
+const SWEEP_EVERY_MS = 10 * 60_000;
 
 function sizeOf(p: string): number {
   try {
@@ -30,7 +41,48 @@ function sizeOf(p: string): number {
 
 /** Cuánto ocupa cada cosa del programa y qué se puede liberar sin perder nada que no se pueda recuperar. */
 export class StorageService {
+  private timer: NodeJS.Timeout | null = null;
+
   constructor(private readonly d: StorageDeps) {}
+
+  /** Empieza a borrar solos los directos ya usados (si «Borrar el directo completo al terminar» está activo). */
+  start(): void {
+    if (this.timer) return;
+    this.timer = setInterval(() => this.sweepUsed(), this.d.sweepEveryMs ?? SWEEP_EVERY_MS);
+    this.timer.unref?.();
+    setTimeout(() => this.sweepUsed(), 60_000).unref?.();
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  /**
+   * Borra los directos completos que ya se usaron: tienen vídeos o clips sacados de ellos, el último salió hace más de
+   * media hora y no hay nada trabajando. Si hace falta el directo otra vez, se vuelve a bajar solo.
+   */
+  sweepUsed(): { vods: number; freedBytes: number } {
+    const none = { vods: 0, freedBytes: 0 };
+    const { outputs, settings } = this.d.store.data;
+    if (settings.autopilot.cleanup === false || this.d.busy?.()) return none;
+    const now = (this.d.now ?? Date.now)();
+    let freedBytes = 0;
+    let n = 0;
+    for (const v of this.freeable()) {
+      if (v.origin === 'clip') continue;
+      const last = Math.max(...outputs.filter((o) => o.vodId === v.id).map((o) => Date.parse(o.createdAt) || 0));
+      if (now - last < (this.d.graceMs ?? USED_VOD_GRACE_MS)) continue;
+      try {
+        freedBytes += this.d.discard(v.id).freedBytes;
+        n++;
+      } catch (e) {
+        this.d.log?.warn(`No se pudo borrar el directo «${v.title}»: ${(e as Error).message}`);
+      }
+    }
+    if (n) this.d.log?.info(`Directos ya usados borrados solos: ${n} (${(freedBytes / 1024 ** 3).toFixed(1)} GB liberados).`);
+    return { vods: n, freedBytes };
+  }
 
   /** Directos completos que se pueden borrar: ya tienen clips o vídeos sacados de ellos y no se están analizando. */
   private freeable() {

@@ -1,5 +1,7 @@
 import type { ClipSpec, Effect, EditPlan, LongSpec } from './types';
 import { isSubtitleStyleId } from './subtitles';
+import { SOUND_IDS, isSoundId } from './sounds';
+import { MUSIC_MOODS, isMusicMood } from './music';
 import { normalizeLayout, validateLayout } from './layout';
 import { MIN_CUT_SEC, MIN_KEPT_SEC, keptRanges, totalDuration, type Range } from './timeline';
 
@@ -83,6 +85,7 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
   if (effects.length > MAX_EFFECTS) return `tiene más de ${MAX_EFFECTS} efectos`;
   const fades = new Set<string>();
   let polish = false;
+  let music = false;
   const total = totalDuration(ranges);
   for (let i = 0; i < effects.length; i++) {
     const e: unknown = effects[i];
@@ -108,12 +111,17 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
       const at = e.at;
       if (!isNum(at)) return `el efecto ${i + 1} (sfx) necesita "at" numérico`;
       if (!ranges.some((r) => at >= r.start && at <= r.end)) return `el efecto ${i + 1} (sfx) cae en una parte cortada o fuera del clip`;
-      if (e.sound !== undefined && e.sound !== 'whoosh' && e.sound !== 'pop' && e.sound !== 'hit') return `el efecto ${i + 1}: sound debe ser whoosh, pop o hit`;
+      if (e.sound !== undefined && !isSoundId(e.sound)) return `el efecto ${i + 1}: sound debe ser uno de ${SOUND_IDS.join(', ')}`;
+    } else if (e.type === 'music') {
+      if (music) return 'solo puede haber una música';
+      music = true;
+      if (!isMusicMood(e.mood)) return `el efecto ${i + 1} (music) necesita un mood: ${MUSIC_MOODS.join(', ')}`;
+      if (e.volume !== undefined && (!isNum(e.volume) || e.volume < 0.04 || e.volume > 0.4)) return `el efecto ${i + 1}: el volumen de la música debe estar entre 0,04 y 0,4`;
     } else if (e.type === 'polish') {
       if (polish) return 'solo puede haber un polish';
       polish = true;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx o polish)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music o polish)`;
     }
   }
   return null;
@@ -157,6 +165,7 @@ export function normalizeEffects(list: Effect[]): Effect[] {
     if (e.type === 'punch') return { type: 'punch', at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
     if (e.type === 'sfx') return { type: 'sfx', at: e.at, sound: e.sound ?? 'pop' };
     if (e.type === 'polish') return { type: 'polish' };
+    if (e.type === 'music') return { type: 'music', mood: e.mood, volume: e.volume ?? 0.16 };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });
 }

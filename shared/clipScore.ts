@@ -15,6 +15,8 @@ export interface ClipSignals {
   words: Word[];
   /** Volumen por segundo (dB), si se pudo medir. */
   energyDb?: number[];
+  /** Fotogramas del clip (data URL JPEG) para que el modelo también lo vea; nunca se guardan. */
+  frames?: string[];
 }
 
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));

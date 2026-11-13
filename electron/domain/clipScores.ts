@@ -31,8 +31,8 @@ interface Stored {
 }
 
 /** Fases de valorar un clip, para medir dónde se va el tiempo. */
-export type ScorePhase = 'descarga' | 'volumen' | 'transcripcion' | 'modelo';
-const PHASE_LABEL: Record<ScorePhase, string> = { descarga: 'bajando el audio', volumen: 'midiendo el volumen', transcripcion: 'transcribiendo con Whisper', modelo: 'preguntando al modelo' };
+export type ScorePhase = 'descarga' | 'imagen' | 'volumen' | 'transcripcion' | 'modelo';
+const PHASE_LABEL: Record<ScorePhase, string> = { descarga: 'bajando el clip', imagen: 'sacando fotogramas', volumen: 'midiendo el volumen', transcripcion: 'transcribiendo con Whisper', modelo: 'preguntando al modelo' };
 
 export interface ClipScoreDeps {
   /** Documento legible con las notas de todos los clips (se reescribe al valorar). */
@@ -41,7 +41,7 @@ export interface ClipScoreDeps {
   /** Baja el audio del clip y saca sus palabras y su volumen. Lanza si no se puede. */
   analyze: (clip: TwitchClip, onPhase?: (phase: ScorePhase) => void) => Promise<ClipSignals>;
   /** Valoración del contenido por el modelo de lenguaje (cuatro criterios y motivo); null si no hay modelo o no respondió. */
-  judge?: (clip: TwitchClip, words: Word[]) => Promise<ClipJudgement | null>;
+  judge?: (clip: TwitchClip, words: Word[], frames?: string[]) => Promise<ClipJudgement | null>;
   /** Texto con lo que falta para poder valorar (p. ej. el modelo de Whisper); null si todo está listo. */
   ready?: () => string | null;
   /** ¿Hay un modelo de lenguaje configurado ahora? Si lo hay, los clips puntuados sin él se vuelven a valorar. */
@@ -298,7 +298,7 @@ export class ClipScoreService {
   private async scoreInner(clip: TwitchClip, mark: (p: ScorePhase) => void): Promise<Stored> {
     const sig = await this.d.analyze(clip, mark);
     // sin palabras no hay nada que valorar: no se inventa una nota (un clip mudo no es «aburrido», es que no se puede leer)
-    if (sig.words.length < MIN_WORDS_TO_JUDGE) {
+    if (sig.words.length < MIN_WORDS_TO_JUDGE && !(sig.frames?.length && this.d.judge)) {
       return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip, así que no hay nada que valorar.' };
     }
     const crit = criteriaFromSignals(sig);
@@ -306,15 +306,16 @@ export class ClipScoreService {
     if (this.d.judge) {
       mark('modelo');
       try {
-        const j = await this.d.judge(clip, sig.words);
+        const j = await this.d.judge(clip, sig.words, sig.frames);
         if (j) {
           const criteria = withMeasuredViral(j.criteria, sig);
-          return { score: overall(criteria), crit: criteria, reason: j.reason || reasonFromCriteria(criteria, 'model'), items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model' };
+          return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model' };
         }
       } catch (e) {
         this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
       }
     }
+    if (sig.words.length < MIN_WORDS_TO_JUDGE) return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip y el modelo no pudo valorarlo por la imagen.' };
     return { score: overall(crit), crit, reason: reasonFromCriteria(crit, 'signals'), v: SCORE_VERSION, at: this.now(), by: 'signals', noModel: noModel };
   }
 }

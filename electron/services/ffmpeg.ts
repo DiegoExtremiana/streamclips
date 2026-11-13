@@ -3,6 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { run, type ToolPaths } from './tools';
 import type { Effect, LongSpec, RenderKind } from '../../shared/types';
+import type { SoundId } from '../../shared/sounds';
+import { sfxInput } from './soundBank';
+import { mixMusic, musicFile } from './music';
 import { keptRanges, totalDuration, type Range } from '../../shared/timeline';
 import { FADE, PUNCH } from '../../shared/plan';
 import { dstPixels, OUT_H, OUT_W, type VerticalLayout } from '../../shared/layout';
@@ -63,7 +66,8 @@ export interface ProbeInfo {
   hasAudio: boolean;
 }
 
-export async function probe(tools: ToolPaths, file: string): Promise<ProbeInfo> {
+/** `audioOnly`: acepta archivos sin imagen (un .wav suelto); si no, un archivo sin vídeo es un error. */
+export async function probe(tools: ToolPaths, file: string, o: { audioOnly?: boolean } = {}): Promise<ProbeInfo> {
   const { stdout } = await run(tools.ffprobe, [
     '-v', 'error',
     '-show_entries', 'stream=codec_type,width,height:format=duration',
@@ -75,11 +79,11 @@ export async function probe(tools: ToolPaths, file: string): Promise<ProbeInfo> 
     format?: { duration?: string };
   };
   const video = j.streams?.find((s) => s.codec_type === 'video');
-  if (!video) throw new Error('El archivo no contiene vídeo.');
+  if (!video && !o.audioOnly) throw new Error('El archivo no contiene vídeo.');
   return {
     durationSec: Number(j.format?.duration ?? 0),
-    width: Number(video.width ?? 0),
-    height: Number(video.height ?? 0),
+    width: Number(video?.width ?? 0),
+    height: Number(video?.height ?? 0),
     hasAudio: Boolean(j.streams?.some((s) => s.codec_type === 'audio')),
   };
 }
@@ -114,12 +118,7 @@ export function punchFilter(w: number, h: number, punches: { a: number; dur: num
   return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=${w}:${h}`;
 }
 
-/** Efectos de sonido sintetizados con ffmpeg (sin archivos ni derechos de autor): fuente lavfi, duración y volumen. */
-export const SFX: Record<'whoosh' | 'pop' | 'hit', { src: string; dur: number; vol: number }> = {
-  whoosh: { src: 'anoisesrc=d=0.45:c=pink:r=48000:a=0.8,highpass=f=300,lowpass=f=5500,afade=t=in:d=0.2,afade=t=out:st=0.2:d=0.25', dur: 0.45, vol: 0.55 },
-  pop: { src: 'sine=f=980:d=0.14:r=48000,afade=t=out:d=0.14', dur: 0.14, vol: 0.45 },
-  hit: { src: 'sine=f=70:d=0.32:r=48000,afade=t=out:d=0.32', dur: 0.32, vol: 0.9 },
-};
+export { SFX } from './soundBank';
 
 /** Volumen parejo de todo el vídeo (objetivo habitual de YouTube: -14 LUFS; aquí -16 para no saturar). */
 export const POLISH_AF = 'loudnorm=I=-16:TP=-1.5:LRA=11';
@@ -132,7 +131,7 @@ interface SegmentOpts {
   fadeIn?: number;
   fadeOut?: number;
   /** Efectos de sonido, con su instante dentro del tramo. */
-  sfx?: { at: number; sound: 'whoosh' | 'pop' | 'hit' }[];
+  sfx?: { at: number; sound: SoundId }[];
   polish?: boolean;
 }
 
@@ -152,9 +151,10 @@ async function cutSegment(tools: ToolPaths, input: string, start: number, end: n
   const sfx = o.sfx ?? [];
   if (sfx.length) {
     // vídeo y audio en un solo grafo: el audio original más cada efecto retrasado a su instante
-    const inputs = sfx.flatMap((x) => ['-f', 'lavfi', '-i', SFX[x.sound].src]);
+    const defs = sfx.map((x) => sfxInput(x.sound));
+    const inputs = defs.flatMap((d) => d.args);
     const vchain = o.layout ? `${composeGraph(o.layout)};[base]${vf.length ? vf.join(',') : 'null'}[vout]` : `[0:v]${vf.length ? vf.join(',') : 'null'}[vout]`;
-    const mix = sfx.map((x, i) => `[${i + 1}:a]aformat=channel_layouts=stereo,adelay=${Math.round(Math.max(0, x.at) * 1000)}:all=1,volume=${SFX[x.sound].vol}[s${i}]`).join(';');
+    const mix = sfx.map((x, i) => `[${i + 1}:a]aformat=channel_layouts=stereo,adelay=${Math.round(Math.max(0, x.at) * 1000)}:all=1,volume=${defs[i].vol}[s${i}]`).join(';');
     const graph = `${vchain};[0:a]aformat=channel_layouts=stereo${af.length ? `,${af.join(',')}` : ''}[a0];${mix};[a0]${sfx.map((_, i) => `[s${i}]`).join('')}amix=inputs=${sfx.length + 1}:duration=first:dropout_transition=0:normalize=0,aformat=channel_layouts=stereo[aout]`;
     await run(tools.ffmpeg, [
       '-y', '-hide_banner', '-loglevel', 'error',
@@ -245,19 +245,30 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
       );
       parts.push(part);
     }
-    // un solo tramo y sin subtítulos: el propio tramo es el resultado
-    if (parts.length === 1 && !t.subs) {
+    const musicFx = fx.find((e): e is Extract<Effect, { type: 'music' }> => e.type === 'music');
+    const music = musicFx ? await musicFile(tools, musicFx.mood) : null;
+    // un solo tramo, sin subtítulos ni música: el propio tramo es el resultado
+    if (parts.length === 1 && !t.subs && !music) {
       fs.copyFileSync(parts[0], out);
       return;
     }
-    const list = path.join(tmp, 'list.txt');
-    fs.writeFileSync(list, parts.map(concatLine).join('\n'));
-    const joined = t.subs ? path.join(tmp, 'joined.mp4') : out;
-    await run(tools.ffmpeg, [
-      '-y', '-hide_banner', '-loglevel', 'error',
-      '-f', 'concat', '-safe', '0', '-i', list,
-      '-c', 'copy', '-movflags', '+faststart', joined,
-    ]);
+    let joined = parts[0];
+    if (parts.length > 1) {
+      const list = path.join(tmp, 'list.txt');
+      fs.writeFileSync(list, parts.map(concatLine).join('\n'));
+      joined = path.join(tmp, 'joined.mp4');
+      await run(tools.ffmpeg, [
+        '-y', '-hide_banner', '-loglevel', 'error',
+        '-f', 'concat', '-safe', '0', '-i', list,
+        '-c', 'copy', '-movflags', '+faststart', joined,
+      ]);
+    }
+    if (music && musicFx) {
+      // la música va debajo de las voces: baja sola cuando se habla (el audio del vídeo gobierna su volumen)
+      const mixed = t.subs ? path.join(tmp, 'music.mp4') : out;
+      await mixMusic(tools, joined, music, musicFx.volume ?? 0.16, mixed);
+      joined = mixed;
+    }
     if (t.subs) {
       await run(tools.ffmpeg, [
         '-y', '-hide_banner', '-loglevel', 'error',
@@ -268,6 +279,8 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
         '-c:a', 'copy', '-movflags', '+faststart',
         out,
       ]);
+    } else if (joined !== out) {
+      fs.copyFileSync(joined, out);
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

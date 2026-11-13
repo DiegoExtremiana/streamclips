@@ -2,6 +2,8 @@ import type { Effect } from './types';
 import type { Word } from './subtitles';
 import { keptRanges, type Range } from './timeline';
 import { MAX_EFFECTS } from './plan';
+import { soundCues } from './sounds';
+import type { MusicMood } from './music';
 
 export interface EditPlan {
   /** Partes que se quitan (silencios y tiempos muertos), en tiempo del VOD. */
@@ -18,6 +20,8 @@ export interface EditOpts {
   /** Separación mínima entre acercamientos (s). */
   punchSpacing?: number;
   maxCuts?: number;
+  /** Efectos de sonido según lo que se dice (por defecto sí). */
+  cues?: boolean;
 }
 
 const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
@@ -79,6 +83,11 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
     const at = c.end + 0.02;
     if (isKept(at) && at < seg.end - 0.5) effects.push({ type: 'sfx', at, sound: 'whoosh' });
   }
+  // sonidos que acompañan a lo que se dice (ganar, dinero, morir…), sin pisar los golpes de arriba
+  if (o.cues !== false) {
+    const taken = effects.filter((e) => e.type === 'sfx' || e.type === 'punch').map((e) => (e as { at: number }).at);
+    for (const c of soundCues(inside, seg, isKept, taken)) effects.push({ type: 'sfx', at: c.at, sound: c.sound });
+  }
   const fadeBudget = dur > 3;
   if (fadeBudget) {
     effects.push({ type: 'fadeIn', duration: 0.3 });
@@ -105,4 +114,12 @@ export function planLong(words: Word[], segs: Range[], o: EditOpts = {}): { segm
   if (total > 3) effects.push({ type: 'fadeIn', duration: 0.4 }, { type: 'fadeOut', duration: 0.8 });
   effects.push({ type: 'polish' });
   return { segments, effects };
+}
+
+/** Añade la música de fondo al final de la lista de efectos (dejando sitio dentro del máximo). */
+export function withMusic(effects: Effect[], mood: MusicMood, volume = 0.16): Effect[] {
+  const rest = effects.filter((e) => e.type !== 'music');
+  const polish = rest.filter((e) => e.type === 'polish');
+  const others = rest.filter((e) => e.type !== 'polish').slice(0, MAX_EFFECTS - polish.length - 1);
+  return [...others, ...polish, { type: 'music', mood, volume }];
 }

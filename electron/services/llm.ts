@@ -1,9 +1,15 @@
 export type LlmProvider = 'groq' | 'gemini';
 
-export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string }> = {
-  groq: { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile' },
+export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string; /** Modelo que entiende imágenes (el de texto de Groq no). */ visionModel?: string }> = {
+  groq: { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile', visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
   gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.5-flash-lite' },
 };
+
+/** La misma cuenta pero con un modelo que ve imágenes (Gemini ya lo hace; Groq usa su modelo con visión). */
+export function visionConfig(cfg: LlmConfig): LlmConfig {
+  const m = LLM_PROVIDERS[cfg.provider].visionModel;
+  return m && !cfg.baseUrl ? { ...cfg, model: m } : cfg;
+}
 
 /** Modelos que ya no existen: se sustituyen por el recomendado (Google retiró los Gemini 1.5 y 2.0 en 2026). */
 export function resolveModel(provider: LlmProvider, model: string): string {
@@ -29,6 +35,8 @@ export interface LlmDeps {
   sleep?: (ms: number) => Promise<void>;
   /** Por defecto 0.4; para valorar se usa algo más bajo (respuestas más estables). */
   temperature?: number;
+  /** Imágenes (data URL JPEG) que se envían junto a la pregunta; el modelo debe admitir visión. */
+  images?: string[];
 }
 
 const TIMEOUT_MS = 90_000;
@@ -65,7 +73,7 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: system },
-      { role: 'user', content: user },
+      { role: 'user', content: d.images?.length ? [{ type: 'text', text: user }, ...d.images.map((url) => ({ type: 'image_url', image_url: { url } }))] : user },
     ],
   });
   for (let attempt = 0; ; attempt++) {
@@ -89,6 +97,7 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
     if (res.status === 401 || res.status === 403) throw new Error('El modelo de lenguaje rechazó la clave. Revísala en Ajustes.');
     if (res.status === 429) throw new Error('Se agotó el límite gratuito del modelo de lenguaje. Se reintentará en el próximo directo.');
     if (res.status === 404) throw new Error(`El modelo «${cfg.model}» no existe o ya no está disponible. Cámbialo en Ajustes › Piloto automático.`);
+    if (res.status === 400 && d.images?.length) throw new Error('El modelo no admite imágenes.');
     if (!res.ok) throw new Error(`Error del modelo de lenguaje (${res.status}).`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content;

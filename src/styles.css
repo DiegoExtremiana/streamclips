@@ -144,6 +144,8 @@ button:focus-visible, [role=button]:focus-visible { outline: 2px solid var(--acc
 .backdrop { position: fixed; inset: 0; background: rgba(4, 5, 8, 0.72); backdrop-filter: blur(6px); display: grid; place-items: center; z-index: 50; padding: 24px; animation: fade .14s ease-out; }
 .modal { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 16px; padding: 22px; width: min(480px, 100%); max-height: 92vh; overflow: auto; outline: none; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); animation: pop .16s ease-out; }
 .modal.wide { width: min(1100px, 100%); }
+.modal.mid { width: min(680px, 100%); }
+.modal-body { display: grid; gap: 12px; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
 .modal-head h2 { margin: 0; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modal form > * + *, .modal > * + * { margin-top: 12px; }
@@ -176,6 +178,30 @@ button:focus-visible, [role=button]:focus-visible { outline: 2px solid var(--acc
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+/* ---------- estilo común de ventanas y animaciones suaves (solo opacity/transform: no cuestan rendimiento) ---------- */
+.modal-section-title + ol, .modal-body ol { margin: 6px 0 0; padding-left: 20px; }
+.modal-lead { font-weight: 600; margin: 0; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+.modal-actions .left { margin-right: auto; color: var(--muted); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.modal-section-title { font-weight: 600; margin: 0 0 6px; }
+.backdrop { animation: fade .18s ease-out; }
+.modal { animation: pop .22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.main > * { animation: rise .24s ease-out backwards; }
+.toast { animation: slidein .24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.tile, .twclip { animation: rise .26s ease-out backwards; }
+button.btn:active:not(:disabled), .iconbtn:active:not(:disabled), .segbtn:active { transform: scale(0.97); }
+.iconbtn, .segbtn { transition: background .12s, color .12s, transform .08s; }
+.navbtn { transition: background .12s, color .12s, transform .12s; }
+.navbtn:hover { transform: translateX(2px); }
+.crit-bar i { transform-origin: left; animation: grow .55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.howto[open] > :not(summary) { animation: rise .18s ease-out backwards; }
+.badge { transition: background .15s, color .15s; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes slidein { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 .versions { display: flex; gap: 12px; align-items: flex-start; }

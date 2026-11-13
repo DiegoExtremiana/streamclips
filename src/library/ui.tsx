@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { IconClose } from '../icons';
 
 /** Ventana modal accesible: Escape y clic fuera la cierran, el foco entra en ella y vuelve a donde estaba. */
-export function Modal(props: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) {
+export function Modal(props: { title: string; onClose: () => void; wide?: boolean | 'mid'; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const { onClose } = props;
   useEffect(() => {
@@ -22,7 +22,7 @@ export function Modal(props: { title: string; onClose: () => void; wide?: boolea
   }, [onClose]);
   return (
     <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => e.stopPropagation()}>
-      <div ref={ref} className={`modal ${props.wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={props.title} tabIndex={-1}>
+      <div ref={ref} className={`modal ${props.wide === 'mid' ? 'mid' : props.wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={props.title} tabIndex={-1}>
         <div className="modal-head">
           <h2>{props.title}</h2>
           <button className="btn ghost small" aria-label="Cerrar" onClick={onClose}><IconClose /></button>

@@ -125,4 +125,3 @@ describe('corregir la nota de un clip', () => {
     assert.throws(() => svc.correct('nope', { humor: 9, historia: 8, interes: 8 }), /todavía no tiene nota/);
   });
 });
-});

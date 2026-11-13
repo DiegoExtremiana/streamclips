@@ -50,38 +50,38 @@ export default function ThemesDialog() {
     }
   };
   return (
-    <Modal title="Tema para un vídeo" wide onClose={() => !busy && setHidden((h) => new Set(h).add(p.id))}>
-      <div className="modal-body" style={{ display: 'grid', gap: 12 }}>
-        <p style={{ margin: 0, fontWeight: 600 }}>
+    <Modal title="Tema para un vídeo" wide="mid" onClose={() => !busy && setHidden((h) => new Set(h).add(p.id))}>
+      <div className="modal-body">
+        <p className="modal-lead">
           ¿Prefieres un vídeo largo de {dur(p.long.sec)} sobre «{p.title}» o {p.shorts.length} vídeos cortos?
         </p>
-        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '6px 14px' }}>
+        <dl className="kv">
           <dt>Tema</dt>
-          <dd style={{ margin: 0 }}>{p.title}</dd>
+          <dd>{p.title}</dd>
           <dt>Contexto</dt>
-          <dd style={{ margin: 0 }}>{p.context}{p.resolved ? '' : ' (la historia queda sin resolver)'}</dd>
-          {p.why && (<><dt>Por qué es un tema</dt><dd style={{ margin: 0 }}>{p.why} (seguridad {Math.round(p.confidence * 100)} %)</dd></>)}
-          {(p.category || p.participants.length > 0) && (<><dt>Categoría</dt><dd style={{ margin: 0 }}>{[p.category, p.participants.length ? `con ${p.participants.join(', ')}` : ''].filter(Boolean).join(' · ')}</dd></>)}
+          <dd>{p.context}{p.resolved ? '' : ' (la historia queda sin resolver)'}</dd>
+          {p.why && (<><dt>Por qué es un tema</dt><dd>{p.why} (seguridad {Math.round(p.confidence * 100)} %)</dd></>)}
+          {(p.category || p.participants.length > 0) && (<><dt>Categoría</dt><dd>{[p.category, p.participants.length ? `con ${p.participants.join(', ')}` : ''].filter(Boolean).join(' · ')}</dd></>)}
           <dt>Fragmentos detectados</dt>
-          <dd style={{ margin: 0 }}>{p.pieces.length}: {p.pieces.map((x) => clock(x.start)).join(' · ')}</dd>
+          <dd>{p.pieces.length}: {p.pieces.map((x) => clock(x.start)).join(' · ')}</dd>
           <dt>Número de vídeos</dt>
-          <dd style={{ margin: 0 }}>1 largo, o {p.shorts.length} cortos</dd>
+          <dd>1 largo, o {p.shorts.length} cortos</dd>
           <dt>Duración estimada</dt>
-          <dd style={{ margin: 0 }}>
+          <dd>
             Largo: {dur(p.long.sec)} · Cortos: {shortSecs.map(dur).join(', ')}
           </dd>
         </dl>
         <div>
-          <strong>Propuesta de estructura</strong>
-          <ol style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+          <div className="modal-section-title">Propuesta de estructura</div>
+          <ol>
             {p.structure.map((l, i) => (
               <li key={i}>{l}</li>
             ))}
           </ol>
         </div>
         {error && <div className="msg bad">{error}</div>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-          {left > 1 && <span style={{ marginRight: 'auto', opacity: 0.7 }}>Quedan {left - 1} tema(s) más</span>}
+        <div className="modal-actions">
+          {left > 1 && <span className="left">Quedan {left - 1} tema(s) más</span>}
           <button className="btn ghost" disabled={busy} onClick={() => void choose('dismiss')}>Ahora no</button>
           <button className="btn" disabled={busy} onClick={() => void choose('shorts')}>{p.shorts.length} vídeos cortos</button>
           <button className="btn primary" disabled={busy} onClick={() => void choose('long')}>Vídeo largo ({dur(p.long.sec)})</button>

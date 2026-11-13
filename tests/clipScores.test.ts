@@ -123,13 +123,13 @@ describe('puntuación de clips en segundo plano', () => {
     assert.ok((svc.scoreOf('good2') ?? 99) < 4, 'la nota del modelo manda (la viralidad suma un poco de lo medido)');
   });
 
-  it('si el modelo falla o no hay, vale la nota por señales', async () => {
-    const { svc } = make({ judge: async () => { throw new Error('límite'); } });
-    svc.enqueue([...many(10), clip('good1', { views: 500 })]);
+  it('si el modelo no está disponible no se inventa una nota: se detiene y avisa; sin modelo configurado vale la de señales', async () => {
+    const { svc, analyzed } = make({ judge: async () => { throw new Error('El modelo «x» no existe o ya no está disponible.'); } });
+    svc.enqueue(Array.from({ length: 8 }, (_, i) => clip(`good${i + 1}`)));
     await svc.idle();
-    assert.equal(svc.gold('good1'), true);
-    assert.equal(svc.detailOf('good1')!.by, 'signals', 'sin modelo se dice que se calculó con señales');
-    assert.match(svc.detailOf('good1')!.reason, /Calculado con lo que se oye/);
+    assert.equal(svc.scoreOf('good8'), undefined, 'sin nota engañosa');
+    assert.ok(analyzed.length <= 2, 'no se siguen bajando clips para nada (solo los que ya estaban en curso)');
+    assert.match(svc.problem() ?? '', /La IA no está disponible/);
     const { svc: s2 } = make({ judge: async () => null });
     s2.enqueue([...many(10), clip('good1', { views: 500 })]);
     await s2.idle();

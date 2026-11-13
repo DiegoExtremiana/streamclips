@@ -5,6 +5,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 ## Novedades de la v0.28.2
 
 - **Modelos de Groq retirados**: Groq cerró en 2026 los Llama 3.3 (texto) y Llama 4 Scout (imagen) que usaba el programa, y cada petición daba «no existe». Ahora el texto usa `openai/gpt-oss-120b` y la imagen `qwen/qwen3.8-27b` (vista previa en Groq, sin verificar con tu clave); si el de imagen falla, se valora solo con lo que se oye. Los nombres antiguos guardados en Ajustes se sustituyen solos.
+- **Nada de notas inventadas**: si la IA no está disponible (modelo retirado, clave rechazada, cuota agotada) los clips ya no se puntúan con un cálculo de emergencia del audio (daba humor 0,2–1,7 a clips graciosos); el trabajo se detiene, avisa del motivo y se reintenta al reabrir. Sin ninguna IA configurada sigue valiendo el cálculo por señales.
 - Se limpian al arrancar los restos temporales de una valoración de clips interrumpida.
 
 ## Novedades de la v0.28.1

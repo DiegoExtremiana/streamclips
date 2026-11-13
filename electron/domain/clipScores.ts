@@ -60,6 +60,10 @@ export interface ClipScoreDeps {
 /** Con menos palabras que esto no hay nada que leer para el modelo. */
 const MIN_WORDS_TO_JUDGE = 4;
 const MAX_FAILS = 2;
+/** El modelo de lenguaje no se puede usar (modelo retirado, clave rechazada, cuota agotada): se detiene el trabajo en vez de gastar descargas. */
+class ModelBlocked extends Error {
+  readonly blocked = true;
+}
 /** Clips valorados a la vez: mientras uno se transcribe, otro baja su audio y otro espera al modelo. */
 const CONCURRENCY = 2;
 /** Se conservan las notas de versiones anteriores del método mientras sean comparables: no se repite el trabajo al actualizar. */
@@ -238,6 +242,13 @@ export class ClipScoreService {
         this.scores.set(clip.id, { ...meta, ...(await this.score(clip)) });
         this.lastError = null;
       } catch (e) {
+        if ((e as ModelBlocked).blocked) {
+          // el modelo no está disponible (retirado, clave mala o cuota agotada): no se siguen bajando clips para nada; se avisa y se reintenta al reabrir
+          this.blocker = `La IA no está disponible: ${(e as Error).message}`;
+          this.lastError = (e as Error).message.slice(0, 240);
+          this.queue = [];
+          return;
+        }
         const prev = this.scores.get(clip.id);
         this.scores.set(clip.id, { ...meta, v: SCORE_VERSION, at: this.now(), fails: (prev?.fails ?? 0) + 1 });
         this.lastError = (e as Error).message.slice(0, 240);
@@ -317,7 +328,11 @@ export class ClipScoreService {
           return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model' };
         }
       } catch (e) {
-        this.d.log?.warn(`El modelo no valoró el clip ${clip.id}; se usan las señales del propio clip: ${(e as Error).message}`);
+        // con modelo configurado, una nota sacada solo del audio no es fiable (el humor sale casi siempre bajo): mejor sin nota que una nota engañosa
+        const msg = (e as Error).message;
+        this.d.log?.warn(`El modelo no valoró el clip ${clip.id}: ${msg}`);
+        if (/no existe|rechaz|límite gratuito|Falta la clave/i.test(msg)) throw new ModelBlocked(msg);
+        throw new Error(`El modelo no pudo valorar el clip: ${msg}`);
       }
     }
     if (sig.words.length < MIN_WORDS_TO_JUDGE) return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip y el modelo no pudo valorarlo por la imagen.' };

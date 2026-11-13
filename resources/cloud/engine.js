@@ -93,10 +93,10 @@ var init_twitch = __esm({
         this.token = { clientId: c.clientId, value: j.access_token, expiresAt: this.now() + (j.expires_in ?? 3600) * 1e3 };
         return j.access_token;
       }
-      async helix(path29, c) {
+      async helix(path30, c) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const token = await this.appToken(c, attempt > 0);
-          const res = await this.request(`https://api.twitch.tv/helix/${path29}`, {
+          const res = await this.request(`https://api.twitch.tv/helix/${path30}`, {
             headers: { "Client-Id": c.clientId, Authorization: `Bearer ${token}` }
           });
           if (res.status === 401) {
@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs37 = require("fs");
+                var fs38 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs37.readFileSync(filename);
+                  var ret = fs38.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs37.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs38.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs36 = require("fs");
+            var fs37 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs36.readFileSync(filename);
+              var ret = fs37.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs36.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs37.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -30686,13 +30686,13 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs35 = __toESM(require("node:fs"));
+var import_node_fs36 = __toESM(require("node:fs"));
 var import_node_os12 = __toESM(require("node:os"));
-var import_node_path28 = __toESM(require("node:path"));
+var import_node_path29 = __toESM(require("node:path"));
 
 // electron/app/context.ts
-var import_node_fs34 = __toESM(require("node:fs"));
-var import_node_path27 = __toESM(require("node:path"));
+var import_node_fs35 = __toESM(require("node:fs"));
+var import_node_path28 = __toESM(require("node:path"));
 
 // shared/speakers.ts
 function assignSpeakers(words, segs, o = {}) {
@@ -31067,9 +31067,9 @@ function editDistance(a, b, max = 99) {
   return prev[b.length];
 }
 function similarity(a, b) {
-  const len = Math.max(a.length, b.length);
-  if (!len) return 1;
-  return 1 - editDistance(a, b, len) / len;
+  const len2 = Math.max(a.length, b.length);
+  if (!len2) return 1;
+  return 1 - editDistance(a, b, len2) / len2;
 }
 function splitPunct(t) {
   const m = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/su.exec(t);
@@ -31677,8 +31677,8 @@ function wordsForOutput(words, ranges) {
     const mid = (w.start + w.end) / 2;
     const t = toOutputTime(mid, ranges);
     if (t === null) continue;
-    const len = Math.max(0.05, w.end - w.start);
-    out.push({ text: w.text, start: Math.max(0, t - len / 2), end: t + len / 2, ...w.spk !== void 0 ? { spk: w.spk } : {} });
+    const len2 = Math.max(0.05, w.end - w.start);
+    out.push({ text: w.text, start: Math.max(0, t - len2 / 2), end: t + len2 / 2, ...w.spk !== void 0 ? { spk: w.spk } : {} });
   }
   return out;
 }
@@ -32090,8 +32090,8 @@ function parseVodUrl(input) {
   return u.toString();
 }
 function safeId(id) {
-  const clean2 = id.replace(/[^A-Za-z0-9._-]/g, "_");
-  return clean2 && clean2 !== "." && clean2 !== ".." ? clean2 : "video";
+  const clean3 = id.replace(/[^A-Za-z0-9._-]/g, "_");
+  return clean3 && clean3 !== "." && clean3 !== ".." ? clean3 : "video";
 }
 async function downloadSection(tools, url, start, end, dir) {
   if (!(end > start) || start < 0) throw new Error("El tramo pedido no es v\xE1lido.");
@@ -32560,7 +32560,7 @@ function lofiGraph(mood) {
   const { bpm, chords } = LOFI[mood];
   const b = 60 / bpm;
   const bar = 4 * b;
-  const total = chords.length * bar;
+  const total2 = chords.length * bar;
   const inputs = [];
   const chain = [];
   chords.forEach((c, i) => {
@@ -32571,10 +32571,10 @@ function lofiGraph(mood) {
   });
   const k = chords.length;
   const per2 = (2 * b).toFixed(4);
-  inputs.push("-f", "lavfi", "-i", `aevalsrc='0.55*sin(2*PI*(50*mod(t,${per2})+90*(1-exp(-25*mod(t,${per2})))/25))*exp(-8*mod(t,${per2}))':s=48000:d=${total.toFixed(4)}`);
-  inputs.push("-f", "lavfi", "-i", `anoisesrc=d=${total.toFixed(4)}:c=white:r=48000:a=0.5`);
-  inputs.push("-f", "lavfi", "-i", `anoisesrc=d=${total.toFixed(4)}:c=white:r=48000:a=0.5`);
-  inputs.push("-f", "lavfi", "-i", `anoisesrc=d=${total.toFixed(4)}:c=pink:r=48000:a=0.5`);
+  inputs.push("-f", "lavfi", "-i", `aevalsrc='0.55*sin(2*PI*(50*mod(t,${per2})+90*(1-exp(-25*mod(t,${per2})))/25))*exp(-8*mod(t,${per2}))':s=48000:d=${total2.toFixed(4)}`);
+  inputs.push("-f", "lavfi", "-i", `anoisesrc=d=${total2.toFixed(4)}:c=white:r=48000:a=0.5`);
+  inputs.push("-f", "lavfi", "-i", `anoisesrc=d=${total2.toFixed(4)}:c=white:r=48000:a=0.5`);
+  inputs.push("-f", "lavfi", "-i", `anoisesrc=d=${total2.toFixed(4)}:c=pink:r=48000:a=0.5`);
   const graph = [
     `${chain.join("")}concat=n=${k}:v=0:a=1,aformat=sample_rates=48000:channel_layouts=mono,lowpass=f=2200,vibrato=f=0.6:d=0.25[pad]`,
     `[${k}:a]lowpass=f=140[kick]`,
@@ -32583,7 +32583,7 @@ function lofiGraph(mood) {
     `[${k + 3}:a]highpass=f=3000,volume=0.012[vinyl]`,
     `[pad][kick][snare][hat][vinyl]amix=inputs=5:normalize=0,alimiter=limit=0.9,aformat=channel_layouts=stereo[out]`
   ].join(";");
-  return { inputs, graph, seconds: total };
+  return { inputs, graph, seconds: total2 };
 }
 async function musicFile(tools, mood) {
   const dir = assetFolders().music;
@@ -32772,7 +32772,8 @@ function validateEffects(effects, ranges) {
   const fades = /* @__PURE__ */ new Set();
   let polish = false;
   let music = false;
-  const total = totalDuration(ranges);
+  let joints = false;
+  const total2 = totalDuration(ranges);
   for (let i = 0; i < effects.length; i++) {
     const e = effects[i];
     if (!isObj(e)) return `el efecto ${i + 1} no es un objeto`;
@@ -32792,7 +32793,7 @@ function validateEffects(effects, ranges) {
       if (e.duration !== void 0 && (!isNum2(e.duration) || e.duration < FADE.min || e.duration > FADE.max)) {
         return `el efecto ${i + 1}: duration debe estar entre ${FADE.min} y ${FADE.max} s`;
       }
-      if ((e.duration ?? FADE.default) * 2 > total) return `el efecto ${i + 1}: el fundido es m\xE1s largo que el v\xEDdeo`;
+      if ((e.duration ?? FADE.default) * 2 > total2) return `el efecto ${i + 1}: el fundido es m\xE1s largo que el v\xEDdeo`;
     } else if (e.type === "sfx") {
       const at = e.at;
       if (!isNum2(at)) return `el efecto ${i + 1} (sfx) necesita "at" num\xE9rico`;
@@ -32803,11 +32804,15 @@ function validateEffects(effects, ranges) {
       music = true;
       if (!isMusicMood(e.mood)) return `el efecto ${i + 1} (music) necesita un mood: ${MUSIC_MOODS.join(", ")}`;
       if (e.volume !== void 0 && (!isNum2(e.volume) || e.volume < 0.04 || e.volume > 0.4)) return `el efecto ${i + 1}: el volumen de la m\xFAsica debe estar entre 0,04 y 0,4`;
+    } else if (e.type === "joints") {
+      if (joints) return "solo puede haber un joints";
+      joints = true;
+      if (e.duration !== void 0 && (!isNum2(e.duration) || e.duration < 0.1 || e.duration > 1)) return `el efecto ${i + 1}: la duraci\xF3n de las transiciones debe estar entre 0,1 y 1 s`;
     } else if (e.type === "polish") {
       if (polish) return "solo puede haber un polish";
       polish = true;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music o polish)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music, joints o polish)`;
     }
   }
   return null;
@@ -32816,7 +32821,7 @@ function validateLongSpec(l, vodDurationSec) {
   if (!isObj(l)) return "no es un objeto";
   if (!Array.isArray(l.segments) || l.segments.length === 0) return "no tiene tramos";
   if (l.segments.length > MAX_LONG_SEGMENTS) return `tiene m\xE1s de ${MAX_LONG_SEGMENTS} tramos`;
-  let total = 0;
+  let total2 = 0;
   for (let i = 0; i < l.segments.length; i++) {
     const s = l.segments[i];
     if (!isObj(s) || !isNum2(s.start) || !isNum2(s.end)) return `el tramo ${i + 1} no tiene tiempos num\xE9ricos`;
@@ -32825,9 +32830,9 @@ function validateLongSpec(l, vodDurationSec) {
     if (vodDurationSec !== void 0 && s.end > vodDurationSec + END_TOLERANCE_SEC) {
       return `el tramo ${i + 1} acaba despu\xE9s del final del VOD`;
     }
-    total += s.end - s.start;
+    total2 += s.end - s.start;
   }
-  if (total > MAX_LONG_SEC) return `dura m\xE1s de ${MAX_LONG_SEC / 60} minutos en total`;
+  if (total2 > MAX_LONG_SEC) return `dura m\xE1s de ${MAX_LONG_SEC / 60} minutos en total`;
   if (l.title !== void 0 && typeof l.title !== "string") return "el t\xEDtulo debe ser texto";
   const fx = validateEffects(l.effects, l.segments);
   if (fx) return fx;
@@ -32847,6 +32852,7 @@ function normalizeEffects(list) {
     if (e.type === "punch") return { type: "punch", at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
     if (e.type === "sfx") return { type: "sfx", at: e.at, sound: e.sound ?? "pop" };
     if (e.type === "polish") return { type: "polish" };
+    if (e.type === "joints") return { type: "joints", duration: e.duration ?? 0.25 };
     if (e.type === "music") return { type: "music", mood: e.mood, volume: e.volume ?? 0.16 };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });
@@ -33033,15 +33039,18 @@ async function cutSegment(tools, input, start, end, o, out) {
     out
   ]);
 }
+var JOINT_MIN_GAP = 20;
 async function renderTimeline(tools, input, t, out) {
   import_node_fs9.default.mkdirSync(import_node_path8.default.dirname(out), { recursive: true });
   const fx = t.effects ?? [];
   const fadeIn = fx.find((e) => e.type === "fadeIn");
   const fadeOut = fx.find((e) => e.type === "fadeOut");
-  const total = totalDuration(t.ranges);
-  const clampFade = (d) => Math.min(d ?? FADE.default, total / 2);
+  const total2 = totalDuration(t.ranges);
+  const clampFade = (d) => Math.min(d ?? FADE.default, total2 / 2);
   const tmp = import_node_fs9.default.mkdtempSync(import_node_path8.default.join(import_node_os2.default.tmpdir(), "streamclips-"));
   const polish = fx.some((e) => e.type === "polish");
+  const joints = fx.find((e) => e.type === "joints");
+  const jointDur = Math.min(0.6, joints?.duration ?? 0.25);
   const allSfx = fx.filter((e) => e.type === "sfx");
   try {
     const hasAudio = allSfx.length ? (await probe(tools, input)).hasAudio : false;
@@ -33060,8 +33069,8 @@ async function renderTimeline(tools, input, t, out) {
         {
           vf,
           layout: t.layout,
-          fadeIn: i === 0 && fadeIn ? clampFade(fadeIn.duration) : void 0,
-          fadeOut: i === t.ranges.length - 1 && fadeOut ? clampFade(fadeOut.duration) : void 0,
+          fadeIn: i === 0 ? fadeIn ? clampFade(fadeIn.duration) : void 0 : joints && r2.start - t.ranges[i - 1].end > JOINT_MIN_GAP ? jointDur : void 0,
+          fadeOut: i === t.ranges.length - 1 ? fadeOut ? clampFade(fadeOut.duration) : void 0 : joints && t.ranges[i + 1].start - r2.end > JOINT_MIN_GAP ? jointDur : void 0,
           polish,
           sfx: hasAudio ? allSfx.filter((e) => e.at >= r2.start && e.at <= r2.end).map((e) => ({ at: e.at - r2.start, sound: e.sound ?? "pop" })) : void 0
         },
@@ -34090,10 +34099,10 @@ var isObj2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function spreadWords(text, start, end) {
   const parts = text.replace(/<[^>]+>/g, "").split(/\s+/).filter(Boolean);
   if (!parts.length || end <= start) return [];
-  const total = parts.reduce((a, p) => a + p.length, 0);
+  const total2 = parts.reduce((a, p) => a + p.length, 0);
   let t = start;
   return parts.map((p) => {
-    const d = (end - start) * p.length / total;
+    const d = (end - start) * p.length / total2;
     const w = { text: p, start: t, end: t + d };
     t += d;
     return w;
@@ -34377,9 +34386,9 @@ function ggmlProblem(file) {
     const nVocab = i32();
     if (nVocab < 0 || nVocab > 2e5) throw new Error("vocabulario con tama\xF1o absurdo");
     for (let i = 0; i < nVocab; i++) {
-      const len = read(4).readUInt32LE(0);
-      if (len > 1e3) throw new Error("palabra de vocabulario con tama\xF1o absurdo");
-      pos += len;
+      const len2 = read(4).readUInt32LE(0);
+      if (len2 > 1e3) throw new Error("palabra de vocabulario con tama\xF1o absurdo");
+      pos += len2;
     }
     let tensors = 0;
     while (pos < size) {
@@ -34439,7 +34448,7 @@ async function downloadModel(dir, name, onProgress, o = {}) {
       throw new Error("No se pudo conectar para descargar el modelo de Whisper. Comprueba tu conexi\xF3n a internet.");
     }
     if (!res.ok || !res.body) throw new Error(`No se pudo descargar el modelo de Whisper (HTTP ${res.status}).`);
-    const total = Number(res.headers.get("content-length") ?? 0);
+    const total2 = Number(res.headers.get("content-length") ?? 0);
     let got = 0;
     let last = -1;
     const fd = import_node_fs14.default.openSync(part, "w");
@@ -34450,8 +34459,8 @@ async function downloadModel(dir, name, onProgress, o = {}) {
         let off = 0;
         while (off < c.length) off += import_node_fs14.default.writeSync(fd, c, off, c.length - off);
         got += c.length;
-        if (total) {
-          const pct = Math.floor(got / total * 100);
+        if (total2) {
+          const pct = Math.floor(got / total2 * 100);
           if (pct !== last) {
             last = pct;
             onProgress(pct);
@@ -34461,7 +34470,7 @@ async function downloadModel(dir, name, onProgress, o = {}) {
     } finally {
       import_node_fs14.default.closeSync(fd);
     }
-    if (total && got !== total) throw new Error("La descarga del modelo se cort\xF3. Vuelve a intentarlo.");
+    if (total2 && got !== total2) throw new Error("La descarga del modelo se cort\xF3. Vuelve a intentarlo.");
     if (got < WHISPER_MODELS[name].minBytes) throw new Error("El archivo descargado es demasiado peque\xF1o para ser el modelo. Vuelve a intentarlo.");
     const streamed = hash.digest("hex");
     if (expected && streamed !== expected) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (su huella no coincide). Vuelve a intentarlo.");
@@ -34516,9 +34525,9 @@ ${tail.trim().split("\n").slice(-10).join("\n")}`)));
 }
 async function transcribeVideo(tools, input, o) {
   if (!import_node_fs14.default.existsSync(o.model)) throw new Error("Falta el modelo de Whisper.");
-  const total = (await probe(tools, input, { audioOnly: true })).durationSec;
+  const total2 = (await probe(tools, input, { audioOnly: true })).durationSec;
   const from = Math.max(0, o.range?.start ?? 0);
-  const to = Math.min(total || Infinity, o.range?.end ?? total);
+  const to = Math.min(total2 || Infinity, o.range?.end ?? total2);
   const dur = Math.max(0, to - from);
   const chunk = o.chunkSec ?? CHUNK_SEC;
   const n = Math.max(1, Math.ceil(dur / chunk));
@@ -34570,9 +34579,9 @@ async function transcribeVideo(tools, input, o) {
         if (i >= n) return;
         if (done.has(i)) continue;
         const offset = from + i * chunk;
-        const len = Math.min(chunk, Math.max(0.5, to - offset));
+        const len2 = Math.min(chunk, Math.max(0.5, to - offset));
         const wav = import_node_path12.default.join(tmp, `c${i}.wav`);
-        await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(offset), "-t", String(len), "-i", input, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]);
+        await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(offset), "-t", String(len2), "-i", input, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav]);
         if (!import_node_fs14.default.existsSync(wav) || import_node_fs14.default.statSync(wav).size < 2e3) {
           pct[i] = 100;
           if (ck) import_node_fs14.default.writeFileSync(ckFile(i), "[]");
@@ -35082,16 +35091,66 @@ function basicExe(exe) {
   return import_node_fs15.default.existsSync(p) ? p : void 0;
 }
 
+// electron/domain/themes.ts
+var import_node_fs16 = __toESM(require("node:fs"));
+var import_node_path14 = __toESM(require("node:path"));
+var ThemeStore = class {
+  constructor(file, onChange = () => void 0) {
+    this.file = file;
+    this.onChange = onChange;
+    try {
+      const j = JSON.parse(import_node_fs16.default.readFileSync(file, "utf8"));
+      if (j && typeof j === "object") this.data = j;
+    } catch {
+    }
+  }
+  data = {};
+  save() {
+    try {
+      import_node_fs16.default.mkdirSync(import_node_path14.default.dirname(this.file), { recursive: true });
+      import_node_fs16.default.writeFileSync(this.file, JSON.stringify(this.data));
+    } catch {
+    }
+  }
+  /** Sustituye las propuestas pendientes del directo por las nuevas (las ya resueltas no se tocan). */
+  put(vodId, proposals) {
+    const done = (this.data[vodId] ?? []).filter((p) => p.status !== "pending");
+    this.data[vodId] = [...done, ...proposals];
+    this.save();
+    this.onChange();
+  }
+  pending() {
+    return Object.values(this.data).flat().filter((p) => p.status === "pending");
+  }
+  hasPending(vodId) {
+    return (this.data[vodId] ?? []).some((p) => p.status === "pending");
+  }
+  pendingSpans(vodId) {
+    return (this.data[vodId] ?? []).filter((p) => p.status === "pending").flatMap((p) => p.pieces.map((x) => ({ start: x.start, end: x.end })));
+  }
+  get(id) {
+    return Object.values(this.data).flat().find((p) => p.id === id);
+  }
+  resolve(id, status, format) {
+    const p = this.get(id);
+    if (!p) return;
+    p.status = status;
+    if (format) p.format = format;
+    this.save();
+    this.onChange();
+  }
+};
+
 // electron/domain/speakers.ts
-var import_node_fs17 = __toESM(require("node:fs"));
-var import_node_path15 = __toESM(require("node:path"));
+var import_node_fs18 = __toESM(require("node:fs"));
+var import_node_path16 = __toESM(require("node:path"));
 
 // electron/services/diarize.ts
 var import_node_crypto5 = __toESM(require("node:crypto"));
-var import_node_fs16 = __toESM(require("node:fs"));
+var import_node_fs17 = __toESM(require("node:fs"));
 var import_node_module = require("node:module");
 var import_node_os7 = __toESM(require("node:os"));
-var import_node_path14 = __toESM(require("node:path"));
+var import_node_path15 = __toESM(require("node:path"));
 var import_node_stream2 = require("node:stream");
 var EMBEDDING_MODEL = {
   file: "3dspeaker_eres2net_base_zh-cn_16k.onnx",
@@ -35114,11 +35173,11 @@ function loadSherpa() {
   return cachedSherpa;
 }
 function embeddingPath(dir) {
-  return import_node_path14.default.join(dir, EMBEDDING_MODEL.file);
+  return import_node_path15.default.join(dir, EMBEDDING_MODEL.file);
 }
 var embeddingInstalled = (dir) => {
   try {
-    return import_node_fs16.default.statSync(embeddingPath(dir)).size === EMBEDDING_MODEL.bytes;
+    return import_node_fs17.default.statSync(embeddingPath(dir)).size === EMBEDDING_MODEL.bytes;
   } catch {
     return false;
   }
@@ -35126,7 +35185,7 @@ var embeddingInstalled = (dir) => {
 async function downloadEmbeddingModel(dir, onProgress, fetchFn = fetch) {
   const dest = embeddingPath(dir);
   if (embeddingInstalled(dir)) return dest;
-  import_node_fs16.default.mkdirSync(dir, { recursive: true });
+  import_node_fs17.default.mkdirSync(dir, { recursive: true });
   const part = `${dest}.part`;
   try {
     let res;
@@ -35137,7 +35196,7 @@ async function downloadEmbeddingModel(dir, onProgress, fetchFn = fetch) {
     }
     if (!res.ok || !res.body) throw new Error(`No se pudo descargar el modelo de voz (HTTP ${res.status}).`);
     const hash = import_node_crypto5.default.createHash("sha256");
-    const fd = import_node_fs16.default.openSync(part, "w");
+    const fd = import_node_fs17.default.openSync(part, "w");
     let got = 0;
     let last = -1;
     try {
@@ -35145,7 +35204,7 @@ async function downloadEmbeddingModel(dir, onProgress, fetchFn = fetch) {
         const c = Buffer.from(raw);
         hash.update(c);
         let off = 0;
-        while (off < c.length) off += import_node_fs16.default.writeSync(fd, c, off, c.length - off);
+        while (off < c.length) off += import_node_fs17.default.writeSync(fd, c, off, c.length - off);
         got += c.length;
         const pct = Math.min(100, Math.floor(got / EMBEDDING_MODEL.bytes * 100));
         if (pct !== last) {
@@ -35154,14 +35213,14 @@ async function downloadEmbeddingModel(dir, onProgress, fetchFn = fetch) {
         }
       }
     } finally {
-      import_node_fs16.default.closeSync(fd);
+      import_node_fs17.default.closeSync(fd);
     }
     if (got !== EMBEDDING_MODEL.bytes) throw new Error(`El modelo de voz se descarg\xF3 incompleto (${got} de ${EMBEDDING_MODEL.bytes} bytes).`);
     if (hash.digest("hex") !== EMBEDDING_MODEL.sha256) throw new Error("El modelo de voz descargado no es el esperado (huella distinta).");
-    import_node_fs16.default.renameSync(part, dest);
+    import_node_fs17.default.renameSync(part, dest);
     return dest;
   } finally {
-    import_node_fs16.default.rmSync(part, { force: true });
+    import_node_fs17.default.rmSync(part, { force: true });
   }
 }
 function sherpaEngine(segmentationModel, embeddingModel, threads = 2) {
@@ -35185,23 +35244,23 @@ function sherpaEngine(segmentationModel, embeddingModel, threads = 2) {
   };
 }
 async function extractSamples(tools, file, r2) {
-  const tmp = import_node_fs16.default.mkdtempSync(import_node_path14.default.join(import_node_os7.default.tmpdir(), "streamclips-diar-"));
+  const tmp = import_node_fs17.default.mkdtempSync(import_node_path15.default.join(import_node_os7.default.tmpdir(), "streamclips-diar-"));
   try {
-    const wav = import_node_path14.default.join(tmp, "a.wav");
+    const wav = import_node_path15.default.join(tmp, "a.wav");
     await run(tools.ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.max(0, r2.start)), "-t", String(Math.max(0.1, r2.end - r2.start)), "-i", file, "-vn", "-ac", "1", "-ar", String(SR), "-c:a", "pcm_s16le", wav]);
-    const buf = import_node_fs16.default.readFileSync(wav);
+    const buf = import_node_fs17.default.readFileSync(wav);
     let pos = 12;
     let dataAt = -1;
     let dataLen = 0;
     while (pos + 8 <= buf.length) {
       const id = buf.toString("ascii", pos, pos + 4);
-      const len = buf.readUInt32LE(pos + 4);
+      const len2 = buf.readUInt32LE(pos + 4);
       if (id === "data") {
         dataAt = pos + 8;
-        dataLen = Math.min(len, buf.length - dataAt);
+        dataLen = Math.min(len2, buf.length - dataAt);
         break;
       }
-      pos += 8 + len + len % 2;
+      pos += 8 + len2 + len2 % 2;
     }
     if (dataAt < 0) throw new Error("El audio extra\xEDdo no tiene datos.");
     const n = Math.floor(dataLen / 2);
@@ -35209,7 +35268,7 @@ async function extractSamples(tools, file, r2) {
     for (let i = 0; i < n; i++) out[i] = buf.readInt16LE(dataAt + i * 2) / 32768;
     return out;
   } finally {
-    import_node_fs16.default.rmSync(tmp, { recursive: true, force: true });
+    import_node_fs17.default.rmSync(tmp, { recursive: true, force: true });
   }
 }
 function diarizeSamples(engine, samples, offsetSec) {
@@ -35224,9 +35283,9 @@ function diarizeSamples(engine, samples, offsetSec) {
   const clusterEmb = /* @__PURE__ */ new Map();
   const clusterSec = /* @__PURE__ */ new Map();
   for (const [k, parts] of byCluster) {
-    const total = parts.reduce((a, p) => a + p.length, 0);
-    clusterSec.set(k, total / SR);
-    const take = Math.min(total, EMBED_SECONDS * SR);
+    const total2 = parts.reduce((a, p) => a + p.length, 0);
+    clusterSec.set(k, total2 / SR);
+    const take = Math.min(total2, EMBED_SECONDS * SR);
     const all = new Float32Array(take);
     let o = 0;
     for (const p of parts) {
@@ -35270,7 +35329,7 @@ var JOIN_GAP_SEC = 20;
 var SpeakerService = class {
   constructor(d) {
     this.d = d;
-    this.dir = import_node_path15.default.join(import_node_path15.default.dirname(d.store.file), "speakers");
+    this.dir = import_node_path16.default.join(import_node_path16.default.dirname(d.store.file), "speakers");
   }
   dir;
   engine = null;
@@ -35278,15 +35337,15 @@ var SpeakerService = class {
   cache = /* @__PURE__ */ new Map();
   chain = Promise.resolve();
   file(vodId) {
-    return import_node_path15.default.join(this.dir, `${vodId.replace(/[^\w-]/g, "_")}.json`);
+    return import_node_path16.default.join(this.dir, `${vodId.replace(/[^\w-]/g, "_")}.json`);
   }
   read(vodId) {
     const f = this.file(vodId);
     try {
-      const mtime = import_node_fs17.default.statSync(f).mtimeMs;
+      const mtime = import_node_fs18.default.statSync(f).mtimeMs;
       const hit = this.cache.get(vodId);
       if (hit && hit.mtime === mtime) return hit.data;
-      const j = JSON.parse(import_node_fs17.default.readFileSync(f, "utf8"));
+      const j = JSON.parse(import_node_fs18.default.readFileSync(f, "utf8"));
       const data = { segs: Array.isArray(j.segs) ? j.segs : [], covered: Array.isArray(j.covered) ? j.covered : [] };
       this.cache.set(vodId, { mtime, data });
       return data;
@@ -35295,10 +35354,10 @@ var SpeakerService = class {
     }
   }
   write(vodId, data) {
-    import_node_fs17.default.mkdirSync(this.dir, { recursive: true });
+    import_node_fs18.default.mkdirSync(this.dir, { recursive: true });
     const f = this.file(vodId);
-    import_node_fs17.default.writeFileSync(`${f}.tmp`, JSON.stringify(data));
-    import_node_fs17.default.renameSync(`${f}.tmp`, f);
+    import_node_fs18.default.writeFileSync(`${f}.tmp`, JSON.stringify(data));
+    import_node_fs18.default.renameSync(`${f}.tmp`, f);
     this.cache.delete(vodId);
     this.versions.set(vodId, (this.versions.get(vodId) ?? 0) + 1);
   }
@@ -35311,7 +35370,7 @@ var SpeakerService = class {
   available() {
     if (this.d.engine) return { ok: true };
     if (!loadSherpa()) return { ok: false, reason: "El m\xF3dulo de diarizaci\xF3n (sherpa-onnx) no est\xE1 disponible en este equipo." };
-    if (!import_node_fs17.default.existsSync(this.d.segmentationModel)) return { ok: false, reason: "Falta el modelo de segmentaci\xF3n de voces incluido con el programa." };
+    if (!import_node_fs18.default.existsSync(this.d.segmentationModel)) return { ok: false, reason: "Falta el modelo de segmentaci\xF3n de voces incluido con el programa." };
     return { ok: true };
   }
   async getEngine() {
@@ -35367,7 +35426,7 @@ var SpeakerService = class {
   }
   async doDiarize(vodId, ranges, onProgress) {
     const todo = this.pending(vodId, ranges);
-    const total = todo.reduce((a, r2) => a + (r2.end - r2.start), 0);
+    const total2 = todo.reduce((a, r2) => a + (r2.end - r2.start), 0);
     if (!todo.length) return { voices: 0, sec: 0 };
     const engine = await this.getEngine();
     const file = await this.d.source(vodId);
@@ -35398,10 +35457,10 @@ var SpeakerService = class {
       this.write(vodId, { segs: [...kept, ...segs].sort((a, b) => a.start - b.start), covered: [...cur.covered, { start: r2.start, end: r2.end }] });
       this.d.store.save();
       done += r2.end - r2.start;
-      onProgress?.(done, total);
+      onProgress?.(done, total2);
     }
     this.d.notifier.changed();
-    return { voices: ids.size, sec: total };
+    return { voices: ids.size, sec: total2 };
   }
   profiles() {
     return this.d.store.data.speakers.profiles.map((p) => ({ id: p.id, alias: p.alias || defaultAlias(p.id), self: p.self === true, named: Boolean(p.alias) }));
@@ -35438,8 +35497,8 @@ var SpeakerService = class {
     if (!merged.self) delete merged.self;
     if (!b.alias && a.alias) merged.alias = a.alias;
     book.profiles = book.profiles.filter((p) => p.id !== from).map((p) => p.id === into ? merged : p);
-    if (import_node_fs17.default.existsSync(this.dir)) {
-      for (const f of import_node_fs17.default.readdirSync(this.dir)) {
+    if (import_node_fs18.default.existsSync(this.dir)) {
+      for (const f of import_node_fs18.default.readdirSync(this.dir)) {
         if (!f.endsWith(".json")) continue;
         const id = f.slice(0, -5);
         const cur = this.read(id);
@@ -35533,13 +35592,13 @@ function scoreSeconds(sig) {
     weights.exclamaciones = 0.8;
   }
   const keys = Object.keys(parts);
-  const total = keys.reduce((a, k) => a + weights[k], 0);
+  const total2 = keys.reduce((a, k) => a + weights[k], 0);
   const score = new Array(n).fill(0);
-  if (total > 0) {
+  if (total2 > 0) {
     for (let i = 0; i < n; i++) {
       let s = 0;
       for (const k of keys) s += weights[k] * Math.max(-1, parts[k][i]);
-      score[i] = s / total;
+      score[i] = s / total2;
     }
   }
   return { score, parts };
@@ -35628,21 +35687,21 @@ function buildSummary(sig, o) {
   const moments = findMoments(sig, { count: 60, minLen: 25, maxLen: 90, gap: 45 });
   const ranked = [...moments].sort((a, b) => b.score - a.score);
   const picked = [];
-  let total = 0;
+  let total2 = 0;
   for (const m of ranked) {
-    const len = m.end - m.start;
-    if (total + len > o.maxSec) continue;
+    const len2 = m.end - m.start;
+    if (total2 + len2 > o.maxSec) continue;
     picked.push({ start: m.start, end: m.end });
-    total += len;
-    if (total >= o.minSec) break;
+    total2 += len2;
+    if (total2 >= o.minSec) break;
   }
   return mergeSegments(picked);
 }
-function bestStretches(sig, len, count2, avoid = []) {
-  if (count2 <= 0 || sig.durationSec < len * 1.2) return [];
+function bestStretches(sig, len2, count2, avoid = []) {
+  if (count2 <= 0 || sig.durationSec < len2 * 1.2) return [];
   const { score } = scoreSeconds(sig);
   const n = score.length;
-  const w = Math.min(Math.round(len), n);
+  const w = Math.min(Math.round(len2), n);
   if (w < 1) return [];
   const used = new Array(n).fill(false);
   for (const a of avoid) for (let i = Math.max(0, Math.floor(a.start)); i < Math.min(n, Math.ceil(a.end)); i++) used[i] = true;
@@ -35676,7 +35735,7 @@ function bestStretches(sig, len, count2, avoid = []) {
   }
   out.sort((a, b) => a.start - b.start);
   for (let i = 1; i < out.length; i++) if (out[i].start < out[i - 1].end) out[i].start = out[i - 1].end;
-  return out.filter((s) => s.end - s.start >= Math.min(30, len / 2));
+  return out.filter((s) => s.end - s.start >= Math.min(30, len2 / 2));
 }
 function textOf(words, start, end, maxChars = 700) {
   const t = words.filter((w) => w.start >= start && w.start < end).map((w) => w.text).join(" ");
@@ -35753,12 +35812,12 @@ function shortDescription(words, m, o = {}) {
   }).filter((c) => c.useful >= 3 && c.text.length >= 25);
   if (!cands.length) return "";
   const chosen = [];
-  let len = 0;
+  let len2 = 0;
   for (const c of [...cands].sort((a, b) => b.score - a.score)) {
     if (chosen.length >= maxSentences) break;
-    if (len + c.text.length + 1 > maxChars) continue;
+    if (len2 + c.text.length + 1 > maxChars) continue;
     chosen.push(c);
-    len += c.text.length + 1;
+    len2 += c.text.length + 1;
   }
   if (!chosen.length) {
     const c = cands.sort((a, b) => b.score - a.score)[0];
@@ -35838,8 +35897,8 @@ function applyEdits(items, edits) {
 }
 
 // electron/services/momentStore.ts
-var import_node_fs18 = __toESM(require("node:fs"));
-var import_node_path16 = __toESM(require("node:path"));
+var import_node_fs19 = __toESM(require("node:fs"));
+var import_node_path17 = __toESM(require("node:path"));
 
 // shared/judge.ts
 var KINDS = ["gracia", "fail", "reaccion", "discusion", "historia", "epico", "otro"];
@@ -35895,10 +35954,10 @@ function parseJudgements(raw, cands) {
     const reason = typeof r2.motivo === "string" ? r2.motivo.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 200) : "";
     let trim;
     if (r2.inicio !== void 0 && r2.fin !== void 0 && Number.isFinite(Number(r2.inicio)) && Number.isFinite(Number(r2.fin))) {
-      const len = c.end - c.start;
-      const a = clamp2(r2.inicio, 0, len);
-      const b = clamp2(r2.fin, 0, len);
-      if (b - a >= 10 && b - a >= len * 0.5) trim = { start: c.start + a, end: c.start + b };
+      const len2 = c.end - c.start;
+      const a = clamp2(r2.inicio, 0, len2);
+      const b = clamp2(r2.fin, 0, len2);
+      if (b - a >= 10 && b - a >= len2 * 0.5) trim = { start: c.start + a, end: c.start + b };
     }
     const title = typeof r2.titulo === "string" ? r2.titulo.replace(/[<>"]/g, "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
     out.push({ id, scores, kind, reason, title: title.length >= 3 ? title : void 0, discard: r2.descartar === true, trim });
@@ -35930,7 +35989,7 @@ function selectBest(items, o) {
   const pool = items.filter((x) => !x.judgement.discard && x.total >= o.minTotal);
   const chosen = [];
   const kinds = /* @__PURE__ */ new Map();
-  let total = 0;
+  let total2 = 0;
   const left = [...pool];
   while (left.length && chosen.length < (o.maxCount ?? Infinity)) {
     let bi = -1;
@@ -35952,8 +36011,8 @@ function selectBest(items, o) {
       const a = Math.max(seg.start, Math.min(peakMid - o.maxLen / 2, seg.end - o.maxLen));
       seg = { start: a, end: a + o.maxLen };
     }
-    const len = seg.end - seg.start;
-    if (total + len > o.maxSec) continue;
+    const len2 = seg.end - seg.start;
+    if (total2 + len2 > o.maxSec) continue;
     if (chosen.some((c) => seg.start < c.seg.end + gap && seg.end > c.seg.start - gap)) continue;
     if (o.textFor) {
       const txt = o.textFor(seg);
@@ -35961,9 +36020,9 @@ function selectBest(items, o) {
     }
     chosen.push({ ...it, seg });
     kinds.set(it.judgement.kind, (kinds.get(it.judgement.kind) ?? 0) + 1);
-    total += len;
+    total2 += len2;
   }
-  return { chosen: chosen.sort((a, b) => a.seg.start - b.seg.start), eligible: pool.length, totalSec: total };
+  return { chosen: chosen.sort((a, b) => a.seg.start - b.seg.start), eligible: pool.length, totalSec: total2 };
 }
 function kindSummary(sel) {
   const n = /* @__PURE__ */ new Map();
@@ -36015,22 +36074,22 @@ function describePrefs(p) {
 
 // electron/services/momentStore.ts
 var safe = (id) => id.replace(/[^A-Za-z0-9_-]/g, "_");
-var editsFile = (dir, id) => import_node_path16.default.join(dir, `${safe(id)}.edits.json`);
-var snapFile = (dir, id) => import_node_path16.default.join(dir, `${safe(id)}.json`);
+var editsFile = (dir, id) => import_node_path17.default.join(dir, `${safe(id)}.edits.json`);
+var snapFile = (dir, id) => import_node_path17.default.join(dir, `${safe(id)}.json`);
 function readJson(file) {
   try {
-    return JSON.parse(import_node_fs18.default.readFileSync(file, "utf8"));
+    return JSON.parse(import_node_fs19.default.readFileSync(file, "utf8"));
   } catch {
     return null;
   }
 }
 function writeJson(file, data) {
-  import_node_fs18.default.mkdirSync(import_node_path16.default.dirname(file), { recursive: true });
+  import_node_fs19.default.mkdirSync(import_node_path17.default.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  import_node_fs18.default.writeFileSync(tmp, JSON.stringify(data));
-  import_node_fs18.default.renameSync(tmp, file);
+  import_node_fs19.default.writeFileSync(tmp, JSON.stringify(data));
+  import_node_fs19.default.renameSync(tmp, file);
 }
-var loadEdits = (dir, vodId) => import_node_fs18.default.existsSync(editsFile(dir, vodId)) ? cleanEdits(readJson(editsFile(dir, vodId))) : emptyEdits();
+var loadEdits = (dir, vodId) => import_node_fs19.default.existsSync(editsFile(dir, vodId)) ? cleanEdits(readJson(editsFile(dir, vodId))) : emptyEdits();
 var saveEdits = (dir, vodId, e) => writeJson(editsFile(dir, vodId), cleanEdits(e));
 function loadSnapshot(dir, vodId) {
   const j = readJson(snapFile(dir, vodId));
@@ -36199,13 +36258,13 @@ var MomentsService = class {
 };
 
 // electron/app/wiring/clipScores.ts
-var import_node_fs20 = __toESM(require("node:fs"));
+var import_node_fs21 = __toESM(require("node:fs"));
 var import_node_os8 = __toESM(require("node:os"));
-var import_node_path18 = __toESM(require("node:path"));
+var import_node_path19 = __toESM(require("node:path"));
 
 // electron/domain/clipScores.ts
-var import_node_fs19 = __toESM(require("node:fs"));
-var import_node_path17 = __toESM(require("node:path"));
+var import_node_fs20 = __toESM(require("node:fs"));
+var import_node_path18 = __toESM(require("node:path"));
 
 // shared/clipScore.ts
 var GOLD_MIN = 8;
@@ -36362,7 +36421,7 @@ var ClipScoreService = class {
     this.sleep = d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
     this.now = d.now ?? Date.now;
     try {
-      const j = JSON.parse(import_node_fs19.default.readFileSync(d.file, "utf8"));
+      const j = JSON.parse(import_node_fs20.default.readFileSync(d.file, "utf8"));
       for (const [id, v] of Object.entries(j)) if (v && typeof v === "object" && v.v >= MIN_COMPATIBLE_VERSION && v.v <= SCORE_VERSION) this.scores.set(id, v);
     } catch {
     }
@@ -36381,10 +36440,10 @@ var ClipScoreService = class {
   now;
   save() {
     try {
-      import_node_fs19.default.mkdirSync(import_node_path17.default.dirname(this.d.file), { recursive: true });
+      import_node_fs20.default.mkdirSync(import_node_path18.default.dirname(this.d.file), { recursive: true });
       const tmp = `${this.d.file}.tmp`;
-      import_node_fs19.default.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.scores)));
-      import_node_fs19.default.renameSync(tmp, this.d.file);
+      import_node_fs20.default.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.scores)));
+      import_node_fs20.default.renameSync(tmp, this.d.file);
     } catch {
     }
   }
@@ -36529,8 +36588,8 @@ var ClipScoreService = class {
         ...rows.map(([id, v]) => `| ${c(v.score)} | ${c(v.crit?.humor)} | ${c(v.crit?.historia)} | ${c(v.crit?.viral)} | ${c(v.crit?.interes)} | ${(v.title ?? id).replace(/\|/g, "/")} | ${(v.createdAt ?? "").slice(0, 10)} | ${(v.reason ?? "").replace(/[|\n]/g, " ")} |`),
         ""
       ];
-      import_node_fs19.default.mkdirSync(import_node_path17.default.dirname(this.d.notesFile), { recursive: true });
-      import_node_fs19.default.writeFileSync(this.d.notesFile, lines.join("\n"));
+      import_node_fs20.default.mkdirSync(import_node_path18.default.dirname(this.d.notesFile), { recursive: true });
+      import_node_fs20.default.writeFileSync(this.d.notesFile, lines.join("\n"));
     } catch {
     }
   }
@@ -36716,15 +36775,15 @@ async function clipJudgeGate(paceMs) {
   if (at > now) await new Promise((r2) => setTimeout(r2, at - now));
 }
 async function clipFrames(ffmpeg, file, dir, durationSec, n = 5) {
-  import_node_fs20.default.mkdirSync(dir, { recursive: true });
+  import_node_fs21.default.mkdirSync(dir, { recursive: true });
   const dur = Math.max(1, durationSec);
-  await run(ffmpeg, ["-y", "-v", "error", "-nostdin", "-i", file, "-an", "-vf", `fps=${(n / dur).toFixed(4)},scale=512:-2`, "-frames:v", String(n), "-q:v", "6", import_node_path18.default.join(dir, "f%02d.jpg")], 9e4);
-  return import_node_fs20.default.readdirSync(dir).filter((f) => f.endsWith(".jpg")).sort().map((f) => `data:image/jpeg;base64,${import_node_fs20.default.readFileSync(import_node_path18.default.join(dir, f)).toString("base64")}`);
+  await run(ffmpeg, ["-y", "-v", "error", "-nostdin", "-i", file, "-an", "-vf", `fps=${(n / dur).toFixed(4)},scale=512:-2`, "-frames:v", String(n), "-q:v", "6", import_node_path19.default.join(dir, "f%02d.jpg")], 9e4);
+  return import_node_fs21.default.readdirSync(dir).filter((f) => f.endsWith(".jpg")).sort().map((f) => `data:image/jpeg;base64,${import_node_fs21.default.readFileSync(import_node_path19.default.join(dir, f)).toString("base64")}`);
 }
 function createClipScoreService(app, o) {
   return new ClipScoreService({
-    file: import_node_path18.default.join(o.userDataDir, "clip-scores.json"),
-    notesFile: import_node_path18.default.join(o.userDataDir, "Notas de clips.md"),
+    file: import_node_path19.default.join(o.userDataDir, "clip-scores.json"),
+    notesFile: import_node_path19.default.join(o.userDataDir, "Notas de clips.md"),
     log: app.log,
     enabled: () => app.store.data.settings.autopilot.scoreClips !== false,
     canRun: () => !app.channel.isLive() && !app.autopilot.isBusy() && app.store.data.settings.autopilot.scoreClips !== false,
@@ -36742,9 +36801,9 @@ function createClipScoreService(app, o) {
       const url = (await run(t.ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=480]/b", "--", clip.url], 6e4)).stdout.trim().split("\n")[0] ?? "";
       if (!/^https?:\/\//.test(url)) throw new Error("Twitch no dio una direcci\xF3n v\xE1lida para el clip.");
       const key = clip.id.replace(/[^A-Za-z0-9_-]/g, "_");
-      const mp4 = import_node_path18.default.join(import_node_os8.default.tmpdir(), `streamclips-score-${key}.mp4`);
-      const wav = import_node_path18.default.join(import_node_os8.default.tmpdir(), `streamclips-score-${key}.wav`);
-      const shots = import_node_path18.default.join(import_node_os8.default.tmpdir(), `streamclips-score-${key}`);
+      const mp4 = import_node_path19.default.join(import_node_os8.default.tmpdir(), `streamclips-score-${key}.mp4`);
+      const wav = import_node_path19.default.join(import_node_os8.default.tmpdir(), `streamclips-score-${key}.wav`);
+      const shots = import_node_path19.default.join(import_node_os8.default.tmpdir(), `streamclips-score-${key}`);
       try {
         await run(t.ffmpeg, ["-y", "-v", "error", "-nostdin", "-i", url, "-t", "180", "-c", "copy", mp4], 18e4);
         await run(t.ffmpeg, ["-y", "-v", "error", "-nostdin", "-i", mp4, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav], 12e4);
@@ -36759,9 +36818,9 @@ function createClipScoreService(app, o) {
         const words = await app.transcripts.transcribeAudio(wav, [clip.title]);
         return { durationSec: clip.durationSec, words, energyDb, frames };
       } finally {
-        import_node_fs20.default.rmSync(wav, { force: true });
-        import_node_fs20.default.rmSync(mp4, { force: true });
-        import_node_fs20.default.rmSync(shots, { recursive: true, force: true });
+        import_node_fs21.default.rmSync(wav, { force: true });
+        import_node_fs21.default.rmSync(mp4, { force: true });
+        import_node_fs21.default.rmSync(shots, { recursive: true, force: true });
       }
     },
     judge: async (clip, words, frames) => {
@@ -36786,18 +36845,18 @@ function createClipScoreService(app, o) {
 }
 
 // electron/domain/storage.ts
-var import_node_fs21 = __toESM(require("node:fs"));
+var import_node_fs22 = __toESM(require("node:fs"));
 var import_node_os9 = __toESM(require("node:os"));
-var import_node_path19 = __toESM(require("node:path"));
+var import_node_path20 = __toESM(require("node:path"));
 var USED_VOD_GRACE_MS = 30 * 6e4;
 var SWEEP_EVERY_MS = 10 * 6e4;
 function sizeOf(p) {
   try {
-    const st = import_node_fs21.default.statSync(p);
+    const st = import_node_fs22.default.statSync(p);
     if (st.isFile()) return st.size;
     if (!st.isDirectory()) return 0;
     let n = 0;
-    for (const f of import_node_fs21.default.readdirSync(p)) n += sizeOf(import_node_path19.default.join(p, f));
+    for (const f of import_node_fs22.default.readdirSync(p)) n += sizeOf(import_node_path20.default.join(p, f));
     return n;
   } catch {
     return 0;
@@ -36847,12 +36906,12 @@ var StorageService = class {
   /** Directos completos que se pueden borrar: ya tienen clips o vídeos sacados de ellos y no se están analizando. */
   freeable() {
     const { vods, outputs } = this.d.store.data;
-    return vods.filter((v) => v.filePath && import_node_fs21.default.existsSync(v.filePath) && !this.d.isRunning(v.id) && outputs.some((o) => o.vodId === v.id));
+    return vods.filter((v) => v.filePath && import_node_fs22.default.existsSync(v.filePath) && !this.d.isRunning(v.id) && outputs.some((o) => o.vodId === v.id));
   }
   tempFiles() {
     const dir = this.d.tmpDir ?? import_node_os9.default.tmpdir();
     try {
-      return import_node_fs21.default.readdirSync(dir).filter((f) => f.startsWith("streamclips-")).map((f) => import_node_path19.default.join(dir, f));
+      return import_node_fs22.default.readdirSync(dir).filter((f) => f.startsWith("streamclips-")).map((f) => import_node_path20.default.join(dir, f));
     } catch {
       return [];
     }
@@ -36868,8 +36927,8 @@ var StorageService = class {
     const items = [
       { id: "vods", label: "Directos descargados", bytes: vodBytes, note: "Los VODs completos. Se pueden borrar cuando ya salieron sus clips y v\xEDdeos." },
       { id: "library", label: "V\xEDdeos y clips de la Biblioteca", bytes: outBytes, note: `Carpeta de salida: ${settings.outputDir}` },
-      { id: "covers", label: "Portadas", bytes: sizeOf(import_node_path19.default.join(u, "covers")), note: "Tu biblioteca de im\xE1genes para portadas." },
-      { id: "models", label: "Modelos de Whisper", bytes: sizeOf(import_node_path19.default.join(u, "models")), note: "Lo que usa el programa para escuchar. Se vuelven a descargar si se borran." },
+      { id: "covers", label: "Portadas", bytes: sizeOf(import_node_path20.default.join(u, "covers")), note: "Tu biblioteca de im\xE1genes para portadas." },
+      { id: "models", label: "Modelos de Whisper", bytes: sizeOf(import_node_path20.default.join(u, "models")), note: "Lo que usa el programa para escuchar. Se vuelven a descargar si se borran." },
       { id: "temp", label: "Archivos temporales", bytes: temp, note: "Restos de montajes interrumpidos; se pueden borrar sin riesgo." }
     ];
     return { items, total: items.reduce((n, i) => n + i.bytes, 0), reclaimableBytes: reclaimVodBytes + temp, reclaimableVods: reclaimVods.length };
@@ -36881,7 +36940,7 @@ var StorageService = class {
     for (const f of this.tempFiles()) {
       const n = sizeOf(f);
       try {
-        import_node_fs21.default.rmSync(f, { recursive: true, force: true });
+        import_node_fs22.default.rmSync(f, { recursive: true, force: true });
         freed += n;
         temp++;
       } catch {
@@ -36900,8 +36959,8 @@ var StorageService = class {
 };
 
 // electron/domain/style.ts
-var import_node_fs22 = __toESM(require("node:fs"));
-var import_node_path20 = __toESM(require("node:path"));
+var import_node_fs23 = __toESM(require("node:fs"));
+var import_node_path21 = __toESM(require("node:path"));
 
 // shared/styleProfile.ts
 var MAX_LORE = 200;
@@ -36987,16 +37046,16 @@ var StyleService = class {
   }
   get() {
     try {
-      return cleanStyle(JSON.parse(import_node_fs22.default.readFileSync(this.file, "utf8")));
+      return cleanStyle(JSON.parse(import_node_fs23.default.readFileSync(this.file, "utf8")));
     } catch {
       return defaultStyle();
     }
   }
   save(p) {
-    import_node_fs22.default.mkdirSync(import_node_path20.default.dirname(this.file), { recursive: true });
+    import_node_fs23.default.mkdirSync(import_node_path21.default.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    import_node_fs22.default.writeFileSync(tmp, JSON.stringify(p, null, 2));
-    import_node_fs22.default.renameSync(tmp, this.file);
+    import_node_fs23.default.writeFileSync(tmp, JSON.stringify(p, null, 2));
+    import_node_fs23.default.renameSync(tmp, this.file);
     return p;
   }
   set(patch) {
@@ -37014,8 +37073,8 @@ var StyleService = class {
 };
 
 // electron/domain/covers.ts
-var import_node_fs23 = __toESM(require("node:fs"));
-var import_node_path21 = __toESM(require("node:path"));
+var import_node_fs24 = __toESM(require("node:fs"));
+var import_node_path22 = __toESM(require("node:path"));
 var import_node_os10 = __toESM(require("node:os"));
 var import_node_crypto6 = __toESM(require("node:crypto"));
 
@@ -37073,21 +37132,21 @@ var CoverService = class {
     this.d = d;
     this.now = d.now ?? Date.now;
     try {
-      const j = JSON.parse(import_node_fs23.default.readFileSync(this.indexFile(), "utf8"));
+      const j = JSON.parse(import_node_fs24.default.readFileSync(this.indexFile(), "utf8"));
       if (Array.isArray(j)) this.items = j.filter((x) => !!x && typeof x.id === "string" && typeof x.name === "string" && isAssetKind(x.kind) && /^[a-f0-9]{12}$/.test(x.id));
     } catch {
     }
   }
   items = [];
   now;
-  indexFile = () => import_node_path21.default.join(this.d.dir, "index.json");
-  fileOf = (a) => import_node_path21.default.join(this.d.dir, "files", `${a.id}${a.ext}`);
-  thumbOf = (a) => import_node_path21.default.join(this.d.dir, "thumbs", `${a.id}.png`);
+  indexFile = () => import_node_path22.default.join(this.d.dir, "index.json");
+  fileOf = (a) => import_node_path22.default.join(this.d.dir, "files", `${a.id}${a.ext}`);
+  thumbOf = (a) => import_node_path22.default.join(this.d.dir, "thumbs", `${a.id}.png`);
   save() {
-    import_node_fs23.default.mkdirSync(this.d.dir, { recursive: true });
+    import_node_fs24.default.mkdirSync(this.d.dir, { recursive: true });
     const tmp = `${this.indexFile()}.tmp`;
-    import_node_fs23.default.writeFileSync(tmp, JSON.stringify(this.items));
-    import_node_fs23.default.renameSync(tmp, this.indexFile());
+    import_node_fs24.default.writeFileSync(tmp, JSON.stringify(this.items));
+    import_node_fs24.default.renameSync(tmp, this.indexFile());
   }
   get(id) {
     const a = this.items.find((x) => x.id === id);
@@ -37115,8 +37174,8 @@ var CoverService = class {
       addedAt: this.now(),
       isImage: isImageExt(ext)
     };
-    import_node_fs23.default.mkdirSync(import_node_path21.default.join(this.d.dir, "files"), { recursive: true });
-    import_node_fs23.default.writeFileSync(this.fileOf(asset), data);
+    import_node_fs24.default.mkdirSync(import_node_path22.default.join(this.d.dir, "files"), { recursive: true });
+    import_node_fs24.default.writeFileSync(this.fileOf(asset), data);
     this.items.push(asset);
     this.save();
     return asset;
@@ -37127,8 +37186,8 @@ var CoverService = class {
   }
   rename(id, name) {
     const a = this.get(id);
-    const clean2 = cleanAssetName(name);
-    a.name = uniqueName(clean2, this.items.filter((x) => x.id !== id).map((x) => x.name));
+    const clean3 = cleanAssetName(name);
+    a.name = uniqueName(clean3, this.items.filter((x) => x.id !== id).map((x) => x.name));
     this.save();
     return a;
   }
@@ -37143,8 +37202,8 @@ var CoverService = class {
   }
   remove(id) {
     const a = this.get(id);
-    import_node_fs23.default.rmSync(this.fileOf(a), { force: true });
-    import_node_fs23.default.rmSync(this.thumbOf(a), { force: true });
+    import_node_fs24.default.rmSync(this.fileOf(a), { force: true });
+    import_node_fs24.default.rmSync(this.thumbOf(a), { force: true });
     this.items = this.items.filter((x) => x.id !== id);
     this.save();
   }
@@ -37154,11 +37213,11 @@ var CoverService = class {
     if (!a.isImage) return null;
     const out = this.thumbOf(a);
     try {
-      if (!import_node_fs23.default.existsSync(out)) {
-        import_node_fs23.default.mkdirSync(import_node_path21.default.dirname(out), { recursive: true });
+      if (!import_node_fs24.default.existsSync(out)) {
+        import_node_fs24.default.mkdirSync(import_node_path22.default.dirname(out), { recursive: true });
         await run(this.d.tools().ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-i", this.fileOf(a), "-frames:v", "1", "-vf", "scale=480:-2", out], 3e4);
       }
-      return `data:image/png;base64,${import_node_fs23.default.readFileSync(out).toString("base64")}`;
+      return `data:image/png;base64,${import_node_fs24.default.readFileSync(out).toString("base64")}`;
     } catch {
       return null;
     }
@@ -37171,8 +37230,8 @@ var CoverService = class {
     if (subject && !subject.isImage) throw new Error("La pieza principal tiene que ser una imagen.");
     const text = cleanPhrase(o.text ?? "");
     const badge = typeof o.badge === "number" && Number.isInteger(o.badge) && o.badge >= 1 && o.badge <= 999 ? o.badge : null;
-    const tmpDir = import_node_fs23.default.mkdtempSync(import_node_path21.default.join(import_node_os10.default.tmpdir(), "streamclips-portada-"));
-    const outFile = import_node_path21.default.join(tmpDir, "portada.png");
+    const tmpDir = import_node_fs24.default.mkdtempSync(import_node_path22.default.join(import_node_os10.default.tmpdir(), "streamclips-portada-"));
+    const outFile = import_node_path22.default.join(tmpDir, "portada.png");
     try {
       const fit = `scale=${COVER_W}:${COVER_H}:force_original_aspect_ratio=increase,crop=${COVER_W}:${COVER_H},setsar=1,${COVER_GRADE}`;
       const args = ["-y", "-hide_banner", "-loglevel", "error", "-i", this.fileOf(bg)];
@@ -37185,20 +37244,20 @@ var CoverService = class {
       }
       const ass = buildCoverAss(text, badge);
       if (ass) {
-        const f = import_node_path21.default.join(tmpDir, "cover.ass");
-        import_node_fs23.default.writeFileSync(f, ass);
+        const f = import_node_path22.default.join(tmpDir, "cover.ass");
+        import_node_fs24.default.writeFileSync(f, ass);
         graph += `;[${last}]ass='${filterPath(f)}'${this.d.fontsDir ? `:fontsdir='${filterPath(this.d.fontsDir)}'` : ""}[v2]`;
         last = "v2";
       }
       args.push("-filter_complex", graph, "-map", `[${last}]`, "-frames:v", "1", outFile);
       await run(this.d.tools().ffmpeg, args, 6e4);
-      if (!import_node_fs23.default.existsSync(outFile) || import_node_fs23.default.statSync(outFile).size === 0) throw new Error("no se gener\xF3 la imagen");
+      if (!import_node_fs24.default.existsSync(outFile) || import_node_fs24.default.statSync(outFile).size === 0) throw new Error("no se gener\xF3 la imagen");
       const label = o.name?.trim() || `Portada_${text ? text.toLocaleLowerCase("es") : bg.name}`;
-      return this.insert("portada.png", import_node_fs23.default.readFileSync(outFile), "portada", label);
+      return this.insert("portada.png", import_node_fs24.default.readFileSync(outFile), "portada", label);
     } catch (e) {
       throw new Error(`No se pudo componer la portada: ${e.message}`);
     } finally {
-      import_node_fs23.default.rmSync(tmpDir, { recursive: true, force: true });
+      import_node_fs24.default.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
 };
@@ -37342,9 +37401,9 @@ function estimateEta(o) {
   return void 0;
 }
 var TaskTracker = class {
-  constructor(notifier, clock3 = Date.now) {
+  constructor(notifier, clock4 = Date.now) {
     this.notifier = notifier;
-    this.clock = clock3;
+    this.clock = clock4;
   }
   tasks = [];
   list() {
@@ -37397,30 +37456,30 @@ var TaskTracker = class {
 };
 
 // electron/domain/cloud.ts
-var import_node_fs29 = __toESM(require("node:fs"));
-var import_node_path22 = __toESM(require("node:path"));
+var import_node_fs30 = __toESM(require("node:fs"));
+var import_node_path23 = __toESM(require("node:path"));
 var import_libsodium_wrappers = __toESM(require_libsodium_wrappers());
 
 // electron/services/cloud/github.ts
-var import_node_fs25 = __toESM(require("node:fs"));
+var import_node_fs26 = __toESM(require("node:fs"));
 
 // electron/services/social/common.ts
-var import_node_fs24 = __toESM(require("node:fs"));
+var import_node_fs25 = __toESM(require("node:fs"));
 var defaultSleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
 var PublishError = class extends Error {
 };
 async function readChunk(file, start, endExclusive) {
-  const fh = await import_node_fs24.default.promises.open(file, "r");
+  const fh = await import_node_fs25.default.promises.open(file, "r");
   try {
-    const len = endExclusive - start;
-    const buf = Buffer.alloc(len);
+    const len2 = endExclusive - start;
+    const buf = Buffer.alloc(len2);
     let got = 0;
-    while (got < len) {
-      const { bytesRead } = await fh.read(buf, got, len - got, start + got);
+    while (got < len2) {
+      const { bytesRead } = await fh.read(buf, got, len2 - got, start + got);
       if (!bytesRead) break;
       got += bytesRead;
     }
-    return got === len ? buf : buf.subarray(0, got);
+    return got === len2 ? buf : buf.subarray(0, got);
   } finally {
     await fh.close();
   }
@@ -37500,30 +37559,30 @@ var Github = class {
     const j = await r2.json();
     return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
   }
-  async getContent(path29) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path29)}`);
+  async getContent(path30) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path30)}`);
     if (r2.status === 404) return null;
-    if (!r2.ok) await this.fail(r2, `el archivo ${path29}`);
+    if (!r2.ok) await this.fail(r2, `el archivo ${path30}`);
     const j = await r2.json();
     return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
   }
   /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
-  async putContent(path29, text, message, sha) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path29)}`, {
+  async putContent(path30, text, message, sha) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path30)}`, {
       json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
     });
     if (r2.status === 409 || r2.status === 422) return null;
-    if (!r2.ok) await this.fail(r2, `guardar ${path29}`);
+    if (!r2.ok) await this.fail(r2, `guardar ${path30}`);
     return (await r2.json()).content.sha;
   }
-  async deleteContent(path29, sha, message) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path29)}`, { json: { message, sha } });
-    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path29}`);
+  async deleteContent(path30, sha, message) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path30)}`, { json: { message, sha } });
+    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path30}`);
   }
-  async listDir(path29) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path29)}`);
+  async listDir(path30) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path30)}`);
     if (r2.status === 404) return [];
-    if (!r2.ok) await this.fail(r2, `la carpeta ${path29}`);
+    if (!r2.ok) await this.fail(r2, `la carpeta ${path30}`);
     const j = await r2.json();
     return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
   }
@@ -37533,10 +37592,10 @@ var Github = class {
     return { id: (await r2.json()).id };
   }
   async uploadAsset(releaseId, name, file, contentType) {
-    const size = import_node_fs25.default.statSync(file).size;
+    const size = import_node_fs26.default.statSync(file).size;
     const r2 = await this.req("POST", `${this.uploads}/repos/${this.o.repo}/releases/${releaseId}/assets?name=${encodeURIComponent(name)}`, {
       headers: { "Content-Type": contentType, "Content-Length": String(size) },
-      body: import_node_fs25.default.createReadStream(file),
+      body: import_node_fs26.default.createReadStream(file),
       duplex: true,
       timeout: 60 * 6e4
     });
@@ -37551,7 +37610,7 @@ var Github = class {
     if (!r2.ok || !r2.body) await this.fail(r2, "descargar el v\xEDdeo");
     const { Readable: Readable3 } = await import("node:stream");
     const { pipeline: pipeline2 } = await import("node:stream/promises");
-    await pipeline2(Readable3.fromWeb(r2.body), import_node_fs25.default.createWriteStream(dest));
+    await pipeline2(Readable3.fromWeb(r2.body), import_node_fs26.default.createWriteStream(dest));
   }
   /** Borra la versión y su etiqueta (y con ella los archivos). */
   async deleteRelease(releaseId, tag) {
@@ -37641,7 +37700,7 @@ jobs:
 }
 
 // electron/services/social/youtube.ts
-var import_node_fs26 = __toESM(require("node:fs"));
+var import_node_fs27 = __toESM(require("node:fs"));
 var YT_ENDPOINTS = {
   upload: "https://www.googleapis.com/upload/youtube/v3",
   api: "https://www.googleapis.com/youtube/v3"
@@ -37670,8 +37729,8 @@ async function publishYoutube(d, o) {
   const sleep = d.sleep ?? defaultSleep;
   const chunk = d.chunkSize ?? YT_CHUNK;
   const { file, short } = youtubeFile(o);
-  if (!import_node_fs26.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs26.default.statSync(file).size;
+  if (!import_node_fs27.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs27.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const token = await d.token();
   const auth = { Authorization: `Bearer ${token}` };
@@ -37731,9 +37790,9 @@ async function publishYoutube(d, o) {
     }
   }
   const warn = d.warn ?? (() => void 0);
-  if (o.kind === "long" && o.thumbnail && import_node_fs26.default.existsSync(o.thumbnail)) {
+  if (o.kind === "long" && o.thumbnail && import_node_fs27.default.existsSync(o.thumbnail)) {
     try {
-      const img = import_node_fs26.default.readFileSync(o.thumbnail);
+      const img = import_node_fs27.default.readFileSync(o.thumbnail);
       const r2 = await timedFetch(f, `${ep.upload}/thumbnails/set?videoId=${encodeURIComponent(videoId)}`, { method: "POST", headers: { ...auth, "Content-Type": "image/jpeg" }, body: new Uint8Array(img) });
       if (!r2.ok) warn(`Miniatura no aceptada por YouTube: ${await apiMessage(r2)}`);
     } catch (e) {
@@ -37792,7 +37851,7 @@ async function ensurePlaylist(d, name) {
 }
 
 // electron/services/social/tiktok.ts
-var import_node_fs27 = __toESM(require("node:fs"));
+var import_node_fs28 = __toESM(require("node:fs"));
 var TT_API = "https://open.tiktokapis.com/v2";
 var CHUNK = 10 * 1024 * 1024;
 var POLL_MS = 5e3;
@@ -37803,9 +37862,9 @@ function tiktokFile(o) {
   if (!f) throw new PublishError("El clip no tiene archivo.");
   return f;
 }
-async function call(d, path29, body) {
+async function call(d, path30, body) {
   const f = d.fetchFn ?? fetch;
-  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path29}`, {
+  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path30}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify(body)
@@ -37823,8 +37882,8 @@ async function publishTiktok(d, o) {
   const f = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? defaultSleep;
   const file = tiktokFile(o);
-  if (!import_node_fs27.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs27.default.statSync(file).size;
+  if (!import_node_fs28.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs28.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const info = await call(d, "/post/publish/creator_info/query/", {});
   const options = info.privacy_level_options ?? [];
@@ -37832,16 +37891,16 @@ async function publishTiktok(d, o) {
   const privacy = wantPublic ? "PUBLIC_TO_EVERYONE" : options.includes("SELF_ONLY") ? "SELF_ONLY" : options[0];
   if (!privacy) throw new PublishError("TikTok no ofrece ninguna opci\xF3n de privacidad para esta cuenta.");
   const chunk = Math.max(d.chunkSize ?? CHUNK, 1);
-  const total = Math.max(1, Math.floor(size / chunk));
+  const total2 = Math.max(1, Math.floor(size / chunk));
   const init = await call(d, "/post/publish/video/init/", {
     post_info: { title: o.title.slice(0, 2200), privacy_level: privacy, disable_duet: false, disable_comment: false, disable_stitch: false },
-    source_info: { source: "FILE_UPLOAD", video_size: size, chunk_size: total === 1 ? size : chunk, total_chunk_count: total }
+    source_info: { source: "FILE_UPLOAD", video_size: size, chunk_size: total2 === 1 ? size : chunk, total_chunk_count: total2 }
   });
   if (!init.publish_id || !init.upload_url) throw new PublishError("TikTok no devolvi\xF3 la direcci\xF3n de subida.");
-  const step = total === 1 ? size : chunk;
-  for (let i = 0; i < total; i++) {
+  const step = total2 === 1 ? size : chunk;
+  for (let i = 0; i < total2; i++) {
     const start = i * step;
-    const end = i === total - 1 ? size : start + step;
+    const end = i === total2 - 1 ? size : start + step;
     const body = await readChunk(file, start, end);
     const r2 = await timedFetch(
       f,
@@ -37861,7 +37920,7 @@ async function publishTiktok(d, o) {
 }
 
 // electron/services/social/instagram.ts
-var import_node_fs28 = __toESM(require("node:fs"));
+var import_node_fs29 = __toESM(require("node:fs"));
 var IG_GRAPH = "https://graph.facebook.com/v21.0";
 var POLL_MS2 = 5e3;
 var POLL_MAX2 = 120;
@@ -37885,8 +37944,8 @@ async function publishInstagram(d, o) {
   const sleep = d.sleep ?? defaultSleep;
   const graph = d.graph ?? IG_GRAPH;
   const file = instagramFile(o);
-  if (!import_node_fs28.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
-  const size = import_node_fs28.default.statSync(file).size;
+  if (!import_node_fs29.default.existsSync(file)) throw new PublishError("El archivo del v\xEDdeo ya no est\xE1 en su sitio.");
+  const size = import_node_fs29.default.statSync(file).size;
   if (!size) throw new PublishError("El archivo del v\xEDdeo est\xE1 vac\xEDo.");
   const { accessToken, igUserId } = await d.token();
   if (!igUserId) throw new PublishError("No hay una cuenta de Instagram profesional enlazada. Vuelve a conectar la cuenta en Conexiones.");
@@ -37905,7 +37964,7 @@ async function publishInstagram(d, o) {
     {
       method: "POST",
       headers: { Authorization: `OAuth ${accessToken}`, offset: "0", file_size: String(size) },
-      body: import_node_fs28.default.createReadStream(file),
+      body: import_node_fs29.default.createReadStream(file),
       // @ts-expect-error opción de Node necesaria para enviar un flujo
       duplex: "half"
     },
@@ -38064,7 +38123,7 @@ var CloudService = class {
   }
   filesFor(o, platform) {
     const video = platform === "youtube" ? youtubeFile(o).file : platform === "tiktok" ? tiktokFile(o) : instagramFile(o);
-    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs29.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
+    return { video, ...platform === "youtube" && o.kind === "long" && o.thumbnail && import_node_fs30.default.existsSync(o.thumbnail) ? { thumb: o.thumbnail } : {} };
   }
   /** Una pasada: sube lo nuevo, trae el estado de lo ya subido y limpia lo cancelado. Nunca lanza. */
   sync() {
@@ -38229,7 +38288,7 @@ var CloudService = class {
         pub.note = e.message;
         continue;
       }
-      if (!import_node_fs29.default.existsSync(files.video)) {
+      if (!import_node_fs30.default.existsSync(files.video)) {
         pub.status = "failed";
         pub.note = "El archivo del v\xEDdeo ya no est\xE1 en su sitio.";
         continue;
@@ -38248,10 +38307,10 @@ var CloudService = class {
           if (e.status !== 422) throw e;
           throw new GithubError(`Hay una subida anterior a medias de \xAB${o.title}\xBB. Pulsa \xABSincronizar\xBB para reintentar.`, 422);
         });
-        const size = import_node_fs29.default.statSync(files.video).size;
-        const asset = await gh.uploadAsset(rel.id, import_node_path22.default.basename(files.video), files.video, "video/mp4");
+        const size = import_node_fs30.default.statSync(files.video).size;
+        const asset = await gh.uploadAsset(rel.id, import_node_path23.default.basename(files.video), files.video, "video/mp4");
         task.update(90);
-        const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path22.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
+        const thumb = files.thumb ? await gh.uploadAsset(rel.id, import_node_path23.default.basename(files.thumb), files.thumb, "image/jpeg").catch(() => null) : null;
         const job = {
           v: 1,
           key: pub.key,
@@ -38265,8 +38324,8 @@ var CloudService = class {
           kind: o.kind,
           releaseId: rel.id,
           releaseTag: tag,
-          file: { name: import_node_path22.default.basename(files.video), assetId: asset.id, size },
-          ...thumb ? { thumb: { name: import_node_path22.default.basename(files.thumb), assetId: thumb.id } } : {},
+          file: { name: import_node_path23.default.basename(files.video), assetId: asset.id, size },
+          ...thumb ? { thumb: { name: import_node_path23.default.basename(files.thumb), assetId: thumb.id } } : {},
           updatedAt: new Date(this.now()).toISOString()
         };
         const sha = await gh.putContent(jobPath(pub.key), serializeJob(job), `En cola: ${pub.key}`, prev ? existing.sha : void 0);
@@ -38433,9 +38492,9 @@ function friendly(e) {
 }
 
 // electron/domain/autopilot.ts
-var import_node_fs32 = __toESM(require("node:fs"));
+var import_node_fs33 = __toESM(require("node:fs"));
 var import_node_os11 = __toESM(require("node:os"));
-var import_node_path25 = __toESM(require("node:path"));
+var import_node_path26 = __toESM(require("node:path"));
 
 // shared/autoEdit.ts
 var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
@@ -38500,11 +38559,14 @@ function planLong(words, segs, o = {}) {
     segments.push(...keptRanges(s.start, s.end, p.cuts));
     body.push(...p.effects.filter((e) => e.type === "punch" || e.type === "sfx"));
   }
-  const total = segments.reduce((a, r2) => a + (r2.end - r2.start), 0);
+  const total2 = segments.reduce((a, r2) => a + (r2.end - r2.start), 0);
   const effects = body.slice(0, MAX_EFFECTS - 3);
-  if (total > 3) effects.push({ type: "fadeIn", duration: 0.4 }, { type: "fadeOut", duration: 0.8 });
+  if (total2 > 3) effects.push({ type: "fadeIn", duration: 0.4 }, { type: "fadeOut", duration: 0.8 });
   effects.push({ type: "polish" });
   return { segments, effects };
+}
+function withJoints(effects) {
+  return effects.some((e) => e.type === "joints") ? effects : [...effects.slice(0, MAX_EFFECTS - 1), { type: "joints", duration: 0.25 }];
 }
 function withMusic(effects, mood, volume = 0.16) {
   const rest = effects.filter((e) => e.type !== "music");
@@ -38513,60 +38575,159 @@ function withMusic(effects, mood, volume = 0.16) {
   return [...others, ...polish, { type: "music", mood, volume }];
 }
 
-// shared/topics.ts
-var TOPIC_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Recibes fragmentos de un mismo directo (con su id y su hora). Agr\xFApalos por TEMA: fragmentos en los que se habla de lo mismo (una an\xE9cdota que se retoma, una partida o reto, una discusi\xF3n, un asunto recurrente), aunque est\xE9n separados por horas. Un grupo solo vale si, puesto en orden cronol\xF3gico, los fragmentos se entienden como una historia o un tema continuo. No fuerces grupos: un fragmento que no encaja con ninguno se deja fuera. Cada id va como mucho en un grupo. Responde SOLO con JSON: {"temas":[{"titulo":"nombre corto del tema en castellano, 2 a 6 palabras, sin emojis","ids":["c1","c4"]}]}';
-function topicPrompt(words, items) {
-  const list = items.map((c) => ({ id: c.id, hora: `${Math.floor(c.start / 3600)}h${String(Math.floor(c.start % 3600 / 60)).padStart(2, "0")}`, titulo: c.judgement.title ?? "", texto: judgeText(words, c, 420) }));
+// shared/themes.ts
+var THEME_ROLES = ["gancho", "inicio", "desarrollo", "evolucion", "desenlace"];
+var ROLE_LABEL = { gancho: "Gancho", inicio: "Inicio", desarrollo: "Desarrollo", evolucion: "Evoluci\xF3n", desenlace: "Desenlace" };
+var THEME_SYSTEM = 'Eres editor de YouTube de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Recibes fragmentos de un mismo directo (id, hora, texto). Busca TEMAS e HISTORIAS: situaciones absurdas que se retoman, conversaciones que vuelven horas despu\xE9s, bromas recurrentes, un reto o partida con momentos relacionados, una an\xE9cdota que evoluciona. Agrupa por SIGNIFICADO, no por palabras repetidas: dos fragmentos pertenecen al mismo tema solo si hay una relaci\xF3n real (se refieren a lo mismo, uno explica o contin\xFAa al otro). Piensa como editor: \xBFqu\xE9 historia se cuenta?, \xBFpor qu\xE9 le interesar\xEDa a alguien que no vio el directo?, \xBFhay material para sostener un v\xEDdeo?, \xBFqu\xE9 fragmentos son imprescindibles y cu\xE1les repiten lo mismo? Descarta lo repetitivo. Mant\xE9n el ORDEN CRONOL\xD3GICO (no cambies la secuencia de modo que cambie el significado); como mucho puedes marcar UN fragmento como "gancho" para abrir el v\xEDdeo con lo m\xE1s fuerte si el resto sigue en orden. Roles de cada pieza: gancho, inicio (presenta el tema o situaci\xF3n), desarrollo, evolucion (c\xF3mo cambia la historia) o desenlace (remate o conclusi\xF3n); usa solo los que el material permita, sin forzar estructura. "contexto": true si esa pieza necesita unos segundos de lo anterior para entenderse. "cortos" son v\xEDdeos cortos independientes (cada uno una situaci\xF3n concreta, ids en orden). Si no hay material suficiente para un tema, pon "vale": false o no lo incluyas: prefiero ning\xFAn v\xEDdeo a uno de relleno. Cada id va como mucho en un tema. No inventes conexiones ni finales: si la historia queda abierta, "desenlace": false. "confianza" (0 a 1) = seguridad en que las piezas son de verdad el mismo tema; "potencial" 0 a 10 sobrio (un tema mencionado mucho puede ser aburrido). Responde SOLO con JSON: {"temas":[{"titulo":"2 a 7 palabras, sin emojis","contexto":"2 frases: qu\xE9 pasa y por qu\xE9 interesa","categoria":"humor|juego|an\xE9cdota|charla|reto|otro","participantes":["nombres si se oyen"],"motivo":"por qu\xE9 estas piezas son un mismo tema","confianza":0.8,"desenlace":true,"potencial":{"corto":5,"largo":6,"varios":4},"vale":true,"piezas":[{"id":"","rol":"","contexto":false}],"cortos":[{"titulo":"","ids":[""]}]}]}';
+function themePrompt(units) {
+  const list = units.map((u) => ({ id: u.id, hora: clock2(u.start), duracion: Math.round(u.end - u.start), ...u.title ? { titulo: u.title } : {}, texto: u.text }));
   return JSON.stringify({ fragmentos: list });
 }
-function parseTopics(raw, valid) {
+function clock2(s) {
+  const t = Math.max(0, Math.round(s));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor(t % 3600 / 60);
+  const sec = t % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+}
+var clean = (s, max) => typeof s === "string" ? s.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+function parseThemes(raw, valid) {
   const list = raw?.temas;
   if (!Array.isArray(list)) return [];
   const used = /* @__PURE__ */ new Set();
   const out = [];
   for (const t of list) {
-    const o = t;
-    if (typeof o?.titulo !== "string" || !Array.isArray(o.ids)) continue;
-    const ids = o.ids.filter((x) => typeof x === "string" && valid.has(x) && !used.has(x));
-    const uniq = [...new Set(ids)];
-    if (uniq.length < 2) continue;
-    uniq.forEach((x) => used.add(x));
-    out.push({ title: o.titulo.replace(/\s+/g, " ").trim().slice(0, 60), ids: uniq });
+    if (!t || typeof t !== "object" || t.vale === false) continue;
+    const title = clean(t.titulo, 70);
+    if (title.length < 3 || !Array.isArray(t.piezas)) continue;
+    const pieces = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const p of t.piezas) {
+      const id = String(p?.id ?? "");
+      if (!valid.has(id) || used.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      pieces.push({ id, role: THEME_ROLES.includes(p.rol) ? p.rol : "desarrollo", needsContext: p.contexto === true });
+    }
+    if (pieces.length < 2) continue;
+    pieces.forEach((p) => used.add(p.id));
+    const shorts = [];
+    if (Array.isArray(t.cortos)) {
+      for (const s of t.cortos) {
+        const ids = Array.isArray(s?.ids) ? s.ids.map(String).filter((id) => seen.has(id)) : [];
+        if (ids.length) shorts.push({ title: clean(s.titulo, 60), ids });
+      }
+    }
+    const num3 = (v, lo, hi, d) => typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+    const pot = t.potencial ?? {};
+    const confidence = num3(t.confianza, 0, 1, 0.6);
+    if (confidence < 0.4) continue;
+    out.push({
+      title,
+      context: clean(t.contexto, 320),
+      pieces,
+      shorts,
+      category: clean(t.categoria, 30),
+      participants: Array.isArray(t.participantes) ? t.participantes.map((x) => clean(x, 30)).filter(Boolean).slice(0, 8) : [],
+      confidence,
+      why: clean(t.motivo, 240),
+      potential: { clip: num3(pot.corto, 0, 10, 5), long: num3(pot.largo, 0, 10, 5), several: num3(pot.varios, 0, 10, 5) },
+      resolved: t.desenlace === true
+    });
   }
   return out;
 }
-function buildThreads(judged, topics, o = {}) {
+var len = (s) => s.end - s.start;
+var total = (segs) => segs.reduce((a, s) => a + len(s), 0);
+function overlapRatio(segs, others) {
+  const t = total(segs);
+  if (!t) return 0;
+  let ov = 0;
+  for (const s of segs) for (const o of others) ov += Math.max(0, Math.min(s.end, o.end) - Math.max(s.start, o.start));
+  return Math.min(1, ov / t);
+}
+function buildProposal(theme, units, vodId, o = {}) {
   const target = o.targetSec ?? 600;
-  const cap = target * (o.overshoot ?? 1.25);
-  const minSec = o.minSec ?? 150;
-  const minPieces = o.minPieces ?? 2;
-  const byId = new Map(judged.map((j) => [j.id, j]));
-  const threads = [];
-  for (const t of topics) {
-    const items = t.ids.map((id) => byId.get(id)).filter((j) => Boolean(j) && !j.judgement.discard && j.total >= (o.minTotal ?? 3)).sort((a, b) => b.total - a.total);
-    const chosen = [];
-    let sum = 0;
-    for (const j of items) {
-      const seg = j.judgement.trim ?? j;
-      const len = seg.end - seg.start;
-      if (len < 5) continue;
-      if (sum >= target || sum + len > cap) continue;
-      chosen.push(j);
-      sum += len;
-    }
-    if (chosen.length < minPieces) continue;
-    const segs = mergeSegments(chosen.map((j) => ({ start: (j.judgement.trim ?? j).start, end: (j.judgement.trim ?? j).end })), 2);
-    const totalSec = segs.reduce((a, s) => a + (s.end - s.start), 0);
-    if (totalSec < minSec) continue;
-    threads.push({ title: t.title, segs, totalSec, pieces: chosen.length, score: chosen.reduce((a, j) => a + j.total, 0) / chosen.length });
+  const cap = o.hardCapSec ?? target * 1.4;
+  const lead = o.leadIn ?? 6;
+  const byId = new Map(units.map((u) => [u.id, u]));
+  let pieces = theme.pieces.map((p) => ({ p, u: byId.get(p.id) })).filter((x) => Boolean(x.u)).sort((a, b) => a.u.start - b.u.start);
+  if (pieces.length < 2) return null;
+  const secOf = (xs) => xs.reduce((a, x) => a + len(x.u), 0);
+  while (secOf(pieces) > cap && pieces.length > 2) {
+    const removable = pieces.filter((x, i) => x.p.role !== "inicio" && x.p.role !== "desenlace" && i !== 0 && i !== pieces.length - 1);
+    const drop = (removable.length ? removable : pieces.slice(1, -1)).sort((a, b) => (a.u.total ?? 5) - (b.u.total ?? 5))[0];
+    if (!drop) break;
+    pieces = pieces.filter((x) => x !== drop);
   }
-  return threads.sort((a, b) => b.score * Math.sqrt(b.pieces) - a.score * Math.sqrt(a.pieces)).slice(0, o.maxThreads ?? 2);
+  const ranged = pieces.map((x, i) => {
+    const prevEnd = i > 0 ? pieces[i - 1].u.end : 0;
+    const start = x.p.needsContext ? Math.max(prevEnd, Math.max(0, x.u.start - lead)) : x.u.start;
+    return { id: x.u.id, role: x.p.role, title: x.u.title, start, end: x.u.end };
+  });
+  const hook = ranged.find((p) => p.role === "gancho");
+  const ordered = hook && ranged.length >= 3 && ranged[0] !== hook ? [hook, ...ranged.filter((p) => p !== hook)] : ranged;
+  const longSegs = mergeSegments(ordered.map((p) => ({ start: p.start, end: p.end })), 0);
+  const segs = hook && ordered[0] === hook && ranged[0] !== hook ? ordered.map((p) => ({ start: p.start, end: p.end })) : longSegs;
+  const longSec = total(segs);
+  const minLong = o.minLongSec ?? 180;
+  const structure = ordered.map((p) => `${ROLE_LABEL[p.role]} \xB7 ${clock2(p.start)} \xB7 ${clock2(len(p))}${p.title ? ` \u2014 ${p.title}` : ""}`);
+  const minShort = o.minShortSec ?? 25;
+  const maxShort = o.maxShortSec ?? 180;
+  const groups = theme.shorts.length ? theme.shorts.map((s) => ({ title: s.title, segs: s.ids.map((id) => byId.get(id)).filter((u) => Boolean(u)).sort((a, b) => a.start - b.start).map((u) => ({ start: u.start, end: u.end })) })) : ranged.map((p) => ({ title: p.title ?? "", segs: [{ start: p.start, end: p.end }] }));
+  const shorts = groups.flatMap((g, i) => {
+    const parts = mergeSegments(g.segs, 1);
+    return parts.map((seg, k) => ({ title: (g.title || `${theme.title} (parte ${i + 1})`) + (parts.length > 1 ? ` (${k + 1})` : ""), segs: [seg], sec: len(seg) }));
+  }).filter((s) => s.sec >= minShort && s.sec <= maxShort);
+  const longOk = longSec >= minLong && ordered.length >= 2;
+  const shortsOk = shorts.length >= 2;
+  if (!longOk && !shortsOk) return null;
+  return {
+    id: `${vodId}:${Math.round(ordered[0].start)}:${theme.title.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g, "-").slice(0, 24)}`,
+    vodId,
+    title: theme.title,
+    context: theme.context,
+    category: theme.category,
+    participants: theme.participants,
+    confidence: theme.confidence,
+    why: theme.why,
+    potential: theme.potential,
+    resolved: theme.resolved,
+    pieces: ordered,
+    structure,
+    long: { segs: longOk ? segs : [], sec: longOk ? longSec : 0 },
+    shorts: shortsOk ? shorts : [],
+    status: "pending",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function decideFormat(p) {
+  const long = p.long.sec > 0;
+  const shorts = p.shorts.length >= 2;
+  if (long && shorts) return "ask";
+  return long ? "long" : shorts ? "shorts" : "none";
+}
+function dedupeProposals(props, existing, limit = 0.6) {
+  const kept = [];
+  let dropped = 0;
+  for (const p of props) {
+    const mine = p.long.segs.length ? p.long.segs : p.shorts.flatMap((s) => s.segs);
+    const clash = [...existing, ...kept.map((k) => k.long.segs.length ? k.long.segs : k.shorts.flatMap((s) => s.segs))].some((o) => overlapRatio(mine, o) >= limit);
+    if (clash) dropped++;
+    else kept.push(p);
+  }
+  return { kept, dropped };
+}
+function transcriptBlocks(words, taken, size = 150, minWords = 70) {
+  if (!words.length) return [];
+  const by = /* @__PURE__ */ new Map();
+  for (const w of words) by.set(Math.floor(w.start / size), (by.get(Math.floor(w.start / size)) ?? 0) + 1);
+  return [...by.entries()].filter(([, n]) => n >= minWords).map(([k]) => ({ start: k * size, end: (k + 1) * size })).filter((b) => overlapRatio([b], taken) < 0.5).sort((a, b) => a.start - b.start);
 }
 
 // shared/chapters.ts
 var CHAPTER_MIN = 3;
 var CHAPTER_MIN_SEC = 10;
-var clock2 = (sec) => {
+var clock3 = (sec) => {
   const s = Math.max(0, Math.floor(sec));
   const h = Math.floor(s / 3600);
   const m = Math.floor(s % 3600 / 60);
@@ -38587,7 +38748,7 @@ function chapterBlock(items, totalSec, firstLabel = "Inicio") {
   while (out.length > 1 && totalSec - out[out.length - 1].at < CHAPTER_MIN_SEC) out.pop();
   if (out.length < CHAPTER_MIN) return "";
   if (out[0].label === "") out[0].label = firstLabel;
-  return out.map((c) => `${clock2(c.at)} ${c.label}`).join("\n");
+  return out.map((c) => `${clock3(c.at)} ${c.label}`).join("\n");
 }
 
 // shared/phaseClock.ts
@@ -38619,15 +38780,15 @@ var PhaseClock = class {
 
 // electron/services/momentJudge.ts
 var import_node_crypto9 = __toESM(require("node:crypto"));
-var import_node_fs30 = __toESM(require("node:fs"));
-var import_node_path23 = __toESM(require("node:path"));
+var import_node_fs31 = __toESM(require("node:fs"));
+var import_node_path24 = __toESM(require("node:path"));
 var VERSION = "v2";
 var CHUNK2 = 6;
 var keyOf = (words, c) => import_node_crypto9.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
 function loadCache(file) {
   if (!file) return {};
   try {
-    const j = JSON.parse(import_node_fs30.default.readFileSync(file, "utf8"));
+    const j = JSON.parse(import_node_fs31.default.readFileSync(file, "utf8"));
     return typeof j === "object" && j ? j : {};
   } catch {
     return {};
@@ -38636,8 +38797,8 @@ function loadCache(file) {
 function saveCache(file, data) {
   if (!file) return;
   try {
-    import_node_fs30.default.mkdirSync(import_node_path23.default.dirname(file), { recursive: true });
-    import_node_fs30.default.writeFileSync(file, JSON.stringify(data));
+    import_node_fs31.default.mkdirSync(import_node_path24.default.dirname(file), { recursive: true });
+    import_node_fs31.default.writeFileSync(file, JSON.stringify(data));
   } catch {
   }
 }
@@ -38684,8 +38845,8 @@ async function judgeCandidates(conf, words, cands, d = {}) {
 
 // electron/services/visualJudge.ts
 var import_node_crypto10 = __toESM(require("node:crypto"));
-var import_node_fs31 = __toESM(require("node:fs"));
-var import_node_path24 = __toESM(require("node:path"));
+var import_node_fs32 = __toESM(require("node:fs"));
+var import_node_path25 = __toESM(require("node:path"));
 
 // shared/visual.ts
 var VISUAL_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch. Ves unos fotogramas de cada fragmento de un directo (en orden cronol\xF3gico) y, junto a ellos, un resumen de lo que se dice. Punt\xFAa SOLO lo que se ve, de 0 a 10: 5 es una imagen normal (juego o c\xE1mara sin nada especial), 7 es visualmente buena (gesto o cara llamativa, acci\xF3n clara, algo gracioso o espectacular en pantalla, texto o suceso relevante), 9-10 solo si la imagen por s\xED sola har\xEDa re\xEDr o enganchar. Pon "muerta": true si la imagen no tiene nada que ver (pantalla de espera o \xABvuelvo enseguida\xBB, men\xFA, carga, pantalla negra, c\xE1mara apagada o vac\xEDa, el mismo plano inm\xF3vil sin acci\xF3n). "nota" es una frase corta en castellano de lo que se ve. No inventes lo que no se vea. Responde SOLO con JSON.';
@@ -38716,23 +38877,23 @@ function applyVisual(judged, vis) {
   return judged.map((j) => {
     const v = by.get(j.id);
     if (!v) return j;
-    const total = Math.round(Math.min(10, Math.max(0, j.total + (v.visual - 5) * VISUAL_SWING)) * 100) / 100;
+    const total2 = Math.round(Math.min(10, Math.max(0, j.total + (v.visual - 5) * VISUAL_SWING)) * 100) / 100;
     const reason = `${j.judgement.reason}${v.note ? ` Imagen (${v.visual.toFixed(0)}/10): ${v.note}` : ""}`.trim().slice(0, 320);
-    return { ...j, total, judgement: { ...j.judgement, reason, discard: j.judgement.discard || v.dead && v.visual <= 3 } };
+    return { ...j, total: total2, judgement: { ...j.judgement, reason, discard: j.judgement.discard || v.dead && v.visual <= 3 } };
   });
 }
 function frameTimes(seg, n) {
-  const len = Math.max(0, seg.end - seg.start);
-  return Array.from({ length: n }, (_, i) => Math.round((seg.start + len * (i + 1) / (n + 1)) * 10) / 10);
+  const len2 = Math.max(0, seg.end - seg.start);
+  return Array.from({ length: n }, (_, i) => Math.round((seg.start + len2 * (i + 1) / (n + 1)) * 10) / 10);
 }
 
 // electron/services/visualJudge.ts
 var VERSION2 = "v1";
 async function vodFrame(ffmpeg, file, at, tmpDir) {
-  const out = import_node_path24.default.join(tmpDir, `f${import_node_crypto10.default.randomBytes(4).toString("hex")}.jpg`);
+  const out = import_node_path25.default.join(tmpDir, `f${import_node_crypto10.default.randomBytes(4).toString("hex")}.jpg`);
   await run(ffmpeg, ["-y", "-v", "error", "-nostdin", "-ss", String(Math.max(0, at)), "-i", file, "-frames:v", "1", "-an", "-vf", "scale=512:-2", "-q:v", "6", out], 6e4);
-  const b64 = import_node_fs31.default.readFileSync(out).toString("base64");
-  import_node_fs31.default.rmSync(out, { force: true });
+  const b64 = import_node_fs32.default.readFileSync(out).toString("base64");
+  import_node_fs32.default.rmSync(out, { force: true });
   return `data:image/jpeg;base64,${b64}`;
 }
 var keyOf2 = (c, words) => import_node_crypto10.default.createHash("sha1").update(`${VERSION2}|${Math.round(c.start)}|${Math.round(c.end)}|${words.length}`).digest("hex").slice(0, 20);
@@ -38743,7 +38904,7 @@ async function judgeVisual(conf, words, judged, o) {
   const top = [...judged].filter((j) => !j.judgement.discard).sort((a, b) => b.total - a.total).slice(0, o.top ?? 14);
   let cache = {};
   try {
-    cache = o.cacheFile ? JSON.parse(import_node_fs31.default.readFileSync(o.cacheFile, "utf8")) : {};
+    cache = o.cacheFile ? JSON.parse(import_node_fs32.default.readFileSync(o.cacheFile, "utf8")) : {};
   } catch {
     cache = {};
   }
@@ -38760,7 +38921,7 @@ async function judgeVisual(conf, words, judged, o) {
   const groups = [];
   for (let i = 0; i < todo.length; i += perReq) groups.push(todo.slice(i, i + perReq));
   const sleep = o.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
-  import_node_fs31.default.mkdirSync(o.tmpDir, { recursive: true });
+  import_node_fs32.default.mkdirSync(o.tmpDir, { recursive: true });
   for (const [n, g] of groups.entries()) {
     o.signal?.();
     if (n > 0) await sleep(o.paceMs ?? MIN_INTERVAL_MS[conf.provider]);
@@ -38780,8 +38941,8 @@ async function judgeVisual(conf, words, judged, o) {
         cache[keyOf2(g.find((c) => c.id === r2.id), words)] = r2;
       }
       if (o.cacheFile) {
-        import_node_fs31.default.mkdirSync(import_node_path24.default.dirname(o.cacheFile), { recursive: true });
-        import_node_fs31.default.writeFileSync(o.cacheFile, JSON.stringify(cache));
+        import_node_fs32.default.mkdirSync(import_node_path25.default.dirname(o.cacheFile), { recursive: true });
+        import_node_fs32.default.writeFileSync(o.cacheFile, JSON.stringify(cache));
       }
     } catch (e) {
       const msg = e.message;
@@ -38924,7 +39085,11 @@ var ChatBins = class _ChatBins {
 // electron/domain/autopilot.ts
 var DEFAULT_QUALITY = 6.5;
 var MIN_SUMMARY_SEC = 150;
-var clean = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+function themeDescription(p) {
+  const parts = [p.context || `Todo lo que se habl\xF3 sobre \xAB${p.title}\xBB durante el directo.`];
+  return parts.join("\n\n");
+}
+var clean2 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var Autopilot = class {
   constructor(d) {
     this.d = d;
@@ -38961,7 +39126,7 @@ var Autopilot = class {
       await prev.done.catch(() => void 0);
     }
     if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    const missing = !vod.filePath || !import_node_fs32.default.existsSync(vod.filePath);
+    const missing = !vod.filePath || !import_node_fs33.default.existsSync(vod.filePath);
     if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const ctrl = new AbortController();
     this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
@@ -39035,20 +39200,20 @@ var Autopilot = class {
       else if (x.start !== void 0 && x.end !== void 0) spans.push({ start: x.start, end: x.end });
       else known = false;
     }
-    if (known) this.d.transcripts.prune(vodId, spans);
+    if (known) this.d.transcripts.prune(vodId, [...spans, ...this.d.themes?.pendingSpans(vodId) ?? []]);
     const chat = this.chatFileFor(vod);
-    if (chat) import_node_fs32.default.rmSync(chat, { force: true });
+    if (chat) import_node_fs33.default.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
     return { freedBytes, kept: outs.length };
   }
   /** Archivo con la actividad del chat de este directo, si se guardó. */
   chatFileFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs32.default.existsSync(this.d.chatDir)) return void 0;
+    if (!vod.streamStartedAt || !import_node_fs33.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs32.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs33.default.readdirSync(this.d.chatDir)) {
       try {
-        const full = import_node_path25.default.join(this.d.chatDir, f);
-        const j = JSON.parse(import_node_fs32.default.readFileSync(full, "utf8"));
+        const full = import_node_path26.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs33.default.readFileSync(full, "utf8"));
         if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
@@ -39059,7 +39224,7 @@ var Autopilot = class {
     const f = this.chatFileFor(vod);
     if (!f) return void 0;
     try {
-      return ChatBins.fromArray(JSON.parse(import_node_fs32.default.readFileSync(f, "utf8")).bins).toArray();
+      return ChatBins.fromArray(JSON.parse(import_node_fs33.default.readFileSync(f, "utf8")).bins).toArray();
     } catch {
       return void 0;
     }
@@ -39068,14 +39233,14 @@ var Autopilot = class {
   recordTimes(vod, phases, totalSec) {
     if (!this.d.momentsDir) return;
     try {
-      const file = import_node_path25.default.join(import_node_path25.default.dirname(this.d.momentsDir), "analysis-times.json");
+      const file = import_node_path26.default.join(import_node_path26.default.dirname(this.d.momentsDir), "analysis-times.json");
       let list = [];
       try {
-        list = JSON.parse(import_node_fs32.default.readFileSync(file, "utf8"));
+        list = JSON.parse(import_node_fs33.default.readFileSync(file, "utf8"));
       } catch {
       }
       list.push({ at: (/* @__PURE__ */ new Date()).toISOString(), vod: vod.title || vod.id, vodSec: vod.durationSec ?? null, totalSec, phases });
-      import_node_fs32.default.writeFileSync(file, JSON.stringify(list.slice(-40), null, 1));
+      import_node_fs33.default.writeFileSync(file, JSON.stringify(list.slice(-40), null, 1));
     } catch {
     }
   }
@@ -39084,8 +39249,8 @@ var Autopilot = class {
     const notes = [];
     try {
       const t0 = Date.now();
-      const clock3 = new PhaseClock();
-      clock3.mark("lectura de audio y chat");
+      const clock4 = new PhaseClock();
+      clock4.mark("lectura de audio y chat");
       const lap = (since) => {
         const s = Math.round((Date.now() - since) / 1e3);
         return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
@@ -39108,7 +39273,7 @@ var Autopilot = class {
           deferTranscribe = true;
         } else if (st.engine) {
           this.mark(vod, "transcribing");
-          clock3.mark("transcripci\xF3n completa");
+          clock4.mark("transcripci\xF3n completa");
           task.update(2, "Transcribiendo el directo (puede tardar)\u2026");
           try {
             const ts = Date.now();
@@ -39127,7 +39292,7 @@ var Autopilot = class {
         } else notes.push("Sin transcripci\xF3n: Whisper no est\xE1 disponible.");
       }
       this.mark(vod, "analyzing");
-      clock3.mark("volumen y chat");
+      clock4.mark("volumen y chat");
       task.update(30, "Analizando audio y chat\u2026");
       const duration = await this.d.clips.vodDuration(vod.id);
       let energyDb;
@@ -39180,7 +39345,9 @@ var Autopilot = class {
       const chapterLabels = /* @__PURE__ */ new Map();
       let summaryMeta;
       const meta = /* @__PURE__ */ new Map();
-      const topicVideos = [];
+      const topicLongs = [];
+      const topicShorts = [];
+      const askProposals = [];
       if (!moments.length && !summary.length && !mains.length && !pool.length) {
         this.mark(vod, "skipped", ["No se encontraron momentos que destaquen en este directo.", ...notes].join(" "));
         task.done("Sin momentos destacados");
@@ -39189,7 +39356,7 @@ var Autopilot = class {
       if (deferTranscribe) {
         const spans = [...moments, ...summary, ...mains, ...pool].map((g) => ({ start: g.start, end: g.end }));
         this.mark(vod, "transcribing");
-        clock3.mark("transcripci\xF3n de lo elegido");
+        clock4.mark("transcripci\xF3n de lo elegido");
         task.update(40, "Transcribiendo solo lo elegido\u2026");
         try {
           const ts = Date.now();
@@ -39209,7 +39376,7 @@ var Autopilot = class {
         this.mark(vod, "analyzing");
       }
       if (pool.length) {
-        clock3.mark("modelo de lenguaje");
+        clock4.mark("modelo de lenguaje");
         task.update(56, "Valorando los momentos candidatos\u2026");
         let judged = null;
         if (!words.length) notes.push("Selecci\xF3n inteligente omitida: no hay transcripci\xF3n.");
@@ -39217,27 +39384,27 @@ var Autopilot = class {
           try {
             const r2 = await judgeCandidates(llmConf, words, pool, {
               fetchFn: this.d.llmFetch,
-              cacheFile: this.d.judgeDir ? import_node_path25.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
-              onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
+              cacheFile: this.d.judgeDir ? import_node_path26.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
+              onProgress: (done, total3) => task.update(56 + (total3 ? done / total3 * 4 : 4), `Valorando candidatos (${done}/${total3})\u2026`),
               signal: () => throwIfCancelled()
             });
             judged = r2.judged;
             notes.push(`Selecci\xF3n inteligente: ${r2.judged.length} candidatos valorados${r2.cached ? ` (${r2.cached} ya estaban guardados)` : ""}${r2.failedChunks ? `, ${r2.failedChunks} lote(s) sin respuesta` : ""}.`);
-            if (this.cfg.vodVision !== false && vod.filePath && import_node_fs32.default.existsSync(vod.filePath)) {
-              clock3.mark("imagen del directo");
+            if (this.cfg.vodVision !== false && vod.filePath && import_node_fs33.default.existsSync(vod.filePath)) {
+              clock4.mark("imagen del directo");
               task.update(60, "Mirando los mejores momentos\u2026");
               const vr = await judgeVisual(llmConf, words, judged, {
                 ffmpeg: this.d.tools().ffmpeg,
                 file: vod.filePath,
-                tmpDir: import_node_path25.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`),
-                cacheFile: this.d.judgeDir ? import_node_path25.default.join(this.d.judgeDir, `${vod.id}.visual.json`) : void 0,
+                tmpDir: import_node_path26.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`),
+                cacheFile: this.d.judgeDir ? import_node_path26.default.join(this.d.judgeDir, `${vod.id}.visual.json`) : void 0,
                 fetchFn: this.d.llmFetch,
                 signal: () => throwIfCancelled()
               }).catch((e) => {
                 if (isCancelled(e)) throw e;
                 return null;
               });
-              import_node_fs32.default.rmSync(import_node_path25.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`), { recursive: true, force: true });
+              import_node_fs33.default.rmSync(import_node_path26.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`), { recursive: true, force: true });
               if (vr && !vr.failed) {
                 judged = vr.judged;
                 notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ""}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ""}.`);
@@ -39290,20 +39457,14 @@ var Autopilot = class {
               summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
             } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
           } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${quality}/10).`);
-          if (this.cfg.topics !== false && this.cfg.maxVideos > 0) {
-            clock3.mark("temas");
-            const cand = [...judged].filter((j) => !j.judgement.discard).sort((a, b) => b.total - a.total).slice(0, 40).sort((a, b) => a.start - b.start);
-            if (cand.length >= 4) {
-              try {
-                const raw2 = await askJson(llmConf, TOPIC_SYSTEM, topicPrompt(words, cand), { fetchFn: this.d.llmFetch, temperature: 0.2 });
-                const threads = buildThreads(judged, parseTopics(raw2, new Set(cand.map((c) => c.id))), { targetSec: this.cfg.mainMinutes * 60, maxThreads: 2 });
-                for (const t of threads) topicVideos.push({ title: t.title, segs: t.segs, score: t.score });
-                if (threads.length) notes.push(`V\xEDdeos por tema: ${threads.map((t) => `\xAB${t.title}\xBB (${t.pieces} momentos, ${Math.round(t.totalSec / 60)} min)`).join(", ")}.`);
-                else notes.push("V\xEDdeos por tema: ning\xFAn asunto se repite lo bastante en el directo.");
-              } catch (e) {
-                if (isCancelled(e)) throw e;
-                notes.push(`V\xEDdeos por tema no disponibles (${e.message.split("\n")[0]}).`);
-              }
+          if (this.cfg.topics !== false && (this.cfg.maxVideos > 0 || this.cfg.maxClips > 0)) {
+            clock4.mark("temas");
+            const found = await this.findThemes(vod, judged, words, llmConf, notes);
+            for (const p of found) {
+              const how = decideFormat(p);
+              if (how === "ask") askProposals.push(p);
+              else if (how === "long") topicLongs.push(p);
+              else if (how === "shorts") topicShorts.push(p);
             }
           }
         } else {
@@ -39328,11 +39489,11 @@ var Autopilot = class {
           const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
           const need = this.d.speakers.pendingSeconds(vod.id, spans);
           if (need > 0) {
-            clock3.mark("hablantes");
+            clock4.mark("hablantes");
             task.update(60, "Identificando hablantes\u2026");
             try {
               const ts = Date.now();
-              const r2 = await this.d.speakers.diarize(vod.id, spans, (done, total2) => task.update(60 + (total2 ? done / total2 * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total2 / 60)} min)\u2026`));
+              const r2 = await this.d.speakers.diarize(vod.id, spans, (done, total3) => task.update(60 + (total3 ? done / total3 * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total3 / 60)} min)\u2026`));
               words = this.d.transcripts.words(vod.id);
               notes.push(`Hablantes: ${r2.voices} voz/voces en ${Math.round(r2.sec / 60)} min de audio (${lap(ts)}).`);
             } catch (e) {
@@ -39342,14 +39503,14 @@ var Autopilot = class {
           }
         }
       }
-      clock3.mark("t\xEDtulos");
+      clock4.mark("t\xEDtulos");
       task.update(75, "Poniendo t\xEDtulos\u2026");
       const titles = await this.titles(vod, words, moments, mains, notes);
       const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
       if (ser) {
         const st = seriesTitles(ser, mains.length);
-        titles.summary = { title: clean(st.summary, 100), description: titles.summary.description };
-        titles.mains = titles.mains.map((t, i) => ({ title: clean(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
+        titles.summary = { title: clean2(st.summary, 100), description: titles.summary.description };
+        titles.mains = titles.mains.map((t, i) => ({ title: clean2(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
         notes.push(`Serie \xAB${ser.name}\xBB, d\xEDa ${ser.day}.`);
         if (!ser.fromTitle) {
           vod.seriesDay = ser.day;
@@ -39358,11 +39519,11 @@ var Autopilot = class {
         }
       }
       const tr = Date.now();
-      clock3.mark("montaje");
+      clock4.mark("montaje");
       this.mark(vod, "rendering");
       const created = [];
       const errors = [];
-      const total = (summary.length ? 1 : 0) + mains.length + topicVideos.length + moments.length;
+      const total2 = (summary.length ? 1 : 0) + mains.length + topicLongs.length + topicShorts.reduce((n, p) => n + p.shorts.length, 0) + moments.length;
       let doneCount = 0;
       const step = async (role, label, fn, t, m) => {
         try {
@@ -39381,7 +39542,7 @@ var Autopilot = class {
           if (isCancelled(e)) throw e;
           errors.push(`${label}: ${e.message}`);
         }
-        task.update(76 + ++doneCount / total * 19, `Montando (${doneCount}/${total})\u2026`);
+        task.update(76 + ++doneCount / total2 * 19, `Montando (${doneCount}/${total2})\u2026`);
       };
       const pro = this.cfg.proEdit !== false && words.length > 0;
       if (this.cfg.proEdit !== false && !words.length) notes.push("Edici\xF3n profesional omitida: no hay transcripci\xF3n.");
@@ -39398,33 +39559,11 @@ var Autopilot = class {
       };
       const style = this.d.style?.() ?? defaultStyle();
       const editOpts = { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false };
-      const musicFor = async (title, segs, smart) => {
-        if (this.cfg.music === false || !vod.filePath || !import_node_fs32.default.existsSync(vod.filePath)) return null;
-        try {
-          const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
-          const gaps = [];
-          for (let i = 0; i + 1 < inside.length; i++) if (inside[i + 1].start - inside[i].end >= 0.8) gaps.push({ start: inside[i].end, end: inside[i + 1].start });
-          const step2 = Math.max(1, Math.floor(gaps.length / 6));
-          if (await hasBackgroundSound(this.d.tools(), vod.filePath, gaps.filter((_, i) => i % step2 === 0))) return null;
-          const text = inside.map((w) => w.text).join(" ");
-          let mood = guessMood(`${title} ${text}`);
-          if (smart && llmConf) {
-            try {
-              mood = parseMood(await askJson(llmConf, MOOD_SYSTEM, moodPrompt(title, text), { fetchFn: this.d.llmFetch, temperature: 0.2 })) ?? mood;
-            } catch (err) {
-              if (isCancelled(err)) throw err;
-            }
-          }
-          return mood;
-        } catch (err) {
-          if (isCancelled(err)) throw err;
-          this.d.log.warn(`Sin m\xFAsica en "${title}": ${err.message.split("\n")[0]}`);
-          return null;
-        }
-      };
+      const musicFor = (title, segs, smart) => this.musicFor(vod, words, title, segs, smart, llmConf);
       const chapterOf = /* @__PURE__ */ new Map();
-      const longMake = async (title, segs, chapters = false) => {
+      const longMake = async (title, segs, chapters = false, themed = false) => {
         let e = pro ? planLong(words, segs, editOpts) : null;
+        if (e && themed) e = { ...e, effects: withJoints(e.effects) };
         const mood = e ? await musicFor(title, segs, true) : null;
         if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
         const item = await safely(
@@ -39451,9 +39590,16 @@ var Autopilot = class {
         const t = titles.mains[i];
         await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
       }
-      for (const tv of topicVideos) {
-        const t = { title: clean(tv.title, 100), description: `Todo lo que se habl\xF3 sobre \xAB${tv.title}\xBB durante el directo, en un solo v\xEDdeo.` };
-        await step("main", `tema \xAB${tv.title}\xBB`, () => longMake(t.title, tv.segs, true), t, { score: tv.score, kind: "tema", reason: "Momentos del mismo tema, juntos y en orden." });
+      for (const p of topicLongs) {
+        const t = { title: clean2(p.title, 100), description: themeDescription(p) };
+        for (const piece of p.pieces) if (piece.title) chapterLabels.set(Math.round(piece.start), piece.title);
+        await step("main", `tema \xAB${p.title}\xBB`, () => longMake(t.title, p.long.segs, true, true), t, { score: 8, kind: "tema", reason: `Tema recurrente: ${p.context || p.title}`.slice(0, 200) });
+      }
+      for (const p of topicShorts) {
+        for (const sh of p.shorts) {
+          const t = { title: clean2(sh.title, 100), description: p.context };
+          await step("clip", `corto \xAB${sh.title}\xBB`, () => this.makeShort(vod.id, words, llmConf, sh.title, sh.segs[0], subs), t, { score: 7.5, kind: "tema", reason: `Parte del tema \xAB${p.title}\xBB.` });
+        }
       }
       for (const [i, m] of moments.entries()) {
         const t = titles.clips[i];
@@ -39481,7 +39627,11 @@ var Autopilot = class {
           }
         }
       }
-      if (this.cfg.cleanup !== false && this.d.discardSource) {
+      if (askProposals.length && this.d.themes) {
+        this.d.themes.put(vod.id, askProposals);
+        notes.push(`${askProposals.length} tema(s) esperan que elijas formato: ${askProposals.map((p) => `\xAB${p.title}\xBB`).join(", ")}.`);
+      }
+      if (this.cfg.cleanup !== false && this.d.discardSource && !this.d.themes?.hasPending(vod.id)) {
         try {
           const r2 = this.discard(vod.id, { fromRun: true });
           notes.push(`Directo completo borrado del disco (${(r2.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r2.kept} v\xEDdeo(s) y clip(s) con sus transcripciones.`);
@@ -39489,9 +39639,9 @@ var Autopilot = class {
           notes.push(`No se pudo borrar el directo completo: ${e.message}`);
         }
       }
-      clock3.mark(null);
-      notes.push(`Tiempos: ${clock3.describe() || `montaje ${lap(tr)}`}; total ${lap(t0)}.`);
-      this.recordTimes(vod, clock3.seconds(), Math.round((Date.now() - t0) / 1e3));
+      clock4.mark(null);
+      notes.push(`Tiempos: ${clock4.describe() || `montaje ${lap(tr)}`}; total ${lap(t0)}.`);
+      this.recordTimes(vod, clock4.seconds(), Math.round((Date.now() - t0) / 1e3));
       this.d.log.info(`An\xE1lisis de "${vod.title}": ${notes[notes.length - 1]}`);
       const msg = `${created.length} v\xEDdeo(s) listos${this.cfg.requireApproval ? " para revisar" : ` (${scheduled} programados)`}.`;
       this.mark(vod, "done", [msg, ...errors, ...notes].join(" "));
@@ -39527,8 +39677,8 @@ var Autopilot = class {
   async titles(vod, words, moments, mains, notes) {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: "" },
-      mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean(shortDescription(words, m), 500) })),
-      clips: moments.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean(shortDescription(words, m), 500) }))
+      mains: mains.map((m, i) => ({ title: clean2(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean2(shortDescription(words, m), 500) })),
+      clips: moments.map((m, i) => ({ title: clean2(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean2(shortDescription(words, m), 500) }))
     };
     const uniq = () => {
       const u = dedupeTitles([...base.mains.map((t) => t.title), ...base.clips.map((t) => t.title)]);
@@ -39556,7 +39706,7 @@ var Autopilot = class {
 ${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch }
       );
-      const pick = (o, fb) => ({ title: clean(o?.titulo, 100) || fb.title, description: clean(o?.descripcion, 500) || fb.description });
+      const pick = (o, fb) => ({ title: clean2(o?.titulo, 100) || fb.title, description: clean2(o?.descripcion, 500) || fb.description });
       base.summary = pick(raw.resumen, base.summary);
       const byVideo = new Map((Array.isArray(raw.videos) ? raw.videos : []).map((c) => [String(c.id), c]));
       base.mains = base.mains.map((fb, i) => pick(byVideo.get(`video${i + 1}`), fb));
@@ -39589,8 +39739,8 @@ ${JSON.stringify(items)}`,
   async nameFor(vodId, segs) {
     const words = this.d.transcripts.words(vodId);
     if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
-    const fbTitle = clean(shortTitle(words, segs, 0), 100);
-    const fbDesc = clean(shortDescription(words, segs), 500);
+    const fbTitle = clean2(shortTitle(words, segs, 0), 100);
+    const fbDesc = clean2(shortDescription(words, segs), 500);
     const local = { title: /^Momento \d+$/.test(fbTitle) ? "" : fbTitle, description: fbDesc, source: "transcript" };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
@@ -39605,8 +39755,8 @@ ${JSON.stringify(items)}`,
 ${text}`,
           { fetchFn: this.d.llmFetch }
         );
-        const t = clean(raw.titulo, 100);
-        const d = clean(raw.descripcion, 500);
+        const t = clean2(raw.titulo, 100);
+        const d = clean2(raw.descripcion, 500);
         if (t || d) return { title: t || local.title, description: d || local.description, source: "llm" };
       } catch {
       }
@@ -39688,7 +39838,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs32.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs33.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -39708,6 +39858,124 @@ ${text}`,
   dateLabel(vod) {
     const d = new Date(vod.streamStartedAt ?? vod.createdAt);
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+  }
+  /** Música de fondo si el vídeo no tiene ya sonido de fondo; el ambiente sale del tema (con modelo si `smart`, si no por palabras). */
+  async musicFor(vod, words, title, segs, smart, llmConf) {
+    if (this.cfg.music === false || !vod.filePath || !import_node_fs33.default.existsSync(vod.filePath)) return null;
+    try {
+      const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
+      const gaps = [];
+      for (let i = 0; i + 1 < inside.length; i++) if (inside[i + 1].start - inside[i].end >= 0.8) gaps.push({ start: inside[i].end, end: inside[i + 1].start });
+      const step = Math.max(1, Math.floor(gaps.length / 6));
+      if (await hasBackgroundSound(this.d.tools(), vod.filePath, gaps.filter((_, i) => i % step === 0))) return null;
+      const text = inside.map((w) => w.text).join(" ");
+      let mood = guessMood(`${title} ${text}`);
+      if (smart && llmConf) {
+        try {
+          mood = parseMood(await askJson(llmConf, MOOD_SYSTEM, moodPrompt(title, text), { fetchFn: this.d.llmFetch, temperature: 0.2 })) ?? mood;
+        } catch (err) {
+          if (isCancelled(err)) throw err;
+        }
+      }
+      return mood;
+    } catch (err) {
+      if (isCancelled(err)) throw err;
+      this.d.log.warn(`Sin m\xFAsica en "${title}": ${err.message.split("\n")[0]}`);
+      return null;
+    }
+  }
+  /** Un corto temático: un tramo continuo con la edición profesional (cortes, sonidos, música) y, si falla, sin ella. */
+  async makeShort(vodId, words, llmConf, title, seg, subs) {
+    const vod = this.d.store.data.vods.find((v) => v.id === vodId);
+    const style = this.d.style?.() ?? defaultStyle();
+    let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+    const mood = e ? await this.musicFor(vod, words, title, [seg], false, llmConf) : null;
+    if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+    if (e) {
+      try {
+        return await this.d.clips.createClip(vodId, { start: seg.start, end: seg.end, title, cuts: e.cuts, effects: e.effects, ...subs });
+      } catch (err) {
+        if (isCancelled(err)) throw err;
+        this.d.log.warn(`Edici\xF3n profesional fall\xF3 en un corto tem\xE1tico, se monta sin ella: ${err.message.split("\n")[0]}`);
+      }
+    }
+    return this.d.clips.createClip(vodId, { start: seg.start, end: seg.end, title, ...subs });
+  }
+  /**
+   * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
+   * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
+   */
+  async findThemes(vod, judged, words, conf, notes) {
+    const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
+    const units = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c, 380), title: c.judgement.title, total: c.total }));
+    const blocks = transcriptBlocks(words, cand).slice(0, 20);
+    blocks.forEach((b, i) => units.push({ id: `b${i}`, start: b.start, end: b.end, text: judgeText(words, b, 380), total: 5 }));
+    units.sort((a, b) => a.start - b.start);
+    if (units.length < 4) return [];
+    try {
+      const raw = await askJson(conf, THEME_SYSTEM, themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
+      const built = parseThemes(raw, new Set(units.map((u) => u.id))).map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60 })).filter((p) => Boolean(p));
+      const existing = this.d.store.data.outputs.filter((x) => x.vodId === vod.id && x.auto?.review !== "pending").map((x) => x.segments?.length ? x.segments : x.start !== void 0 && x.end !== void 0 ? [{ start: x.start, end: x.end }] : []).filter((x) => x.length);
+      const { kept, dropped } = dedupeProposals(built, existing);
+      const top = kept.slice(0, 3);
+      notes.push(top.length ? `Edici\xF3n tem\xE1tica: ${top.map((p) => `\xAB${p.title}\xBB (${p.pieces.length} fragmentos${p.long.sec ? `, ${Math.round(p.long.sec / 60)} min` : ""})`).join(", ")}${dropped ? `; ${dropped} descartado(s) por repetir lo ya hecho` : ""}.` : "Edici\xF3n tem\xE1tica: ning\xFAn tema con material suficiente para un v\xEDdeo con sentido.");
+      return top;
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      notes.push(`Edici\xF3n tem\xE1tica no disponible (${e.message.split("\n")[0]}).`);
+      return [];
+    }
+  }
+  /** Crea lo que elegiste en la ventana: el vídeo largo o los cortos del tema. Si el directo se borró, se vuelve a bajar. */
+  async makeTheme(proposal, format) {
+    const vod = this.d.store.data.vods.find((v) => v.id === proposal.vodId);
+    if (!vod) throw new Error("El directo de este tema ya no est\xE1 en el programa.");
+    const spans = [...proposal.pieces.map((p) => ({ start: p.start, end: p.end }))];
+    await this.d.transcripts.ensure(vod.id, spans).catch((e) => this.d.log.warn(`Transcripci\xF3n del tema: ${e.message}`));
+    if (!vod.filePath || !import_node_fs33.default.existsSync(vod.filePath)) await this.d.restore?.(vod.id);
+    const words = this.d.transcripts.words(vod.id);
+    const llmConf = this.llmConf();
+    const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
+    const made = [];
+    const finish = (item, role, title, description, reason) => {
+      item.auto = { role, review: "pending", score: 8, kind: "tema", reason: reason.slice(0, 200) };
+      item.titleSource = "auto";
+      item.visibility = this.cfg.visibility;
+      this.d.library.setAutoDescription(item.id, withCategoryLine(description, item.category));
+      this.d.store.save();
+      if (!this.cfg.requireApproval) {
+        try {
+          this.approve(item.id);
+        } catch (e) {
+          this.d.log.warn(`${title}: ${e.message}`);
+        }
+      }
+      made.push(item);
+    };
+    if (format === "long") {
+      const style = this.d.style?.() ?? defaultStyle();
+      const segs = proposal.long.segs;
+      let e = this.cfg.proEdit !== false && words.length ? planLong(words, segs, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+      if (e) e = { ...e, effects: withJoints(e.effects) };
+      const mood = e ? await this.musicFor(vod, words, proposal.title, segs, true, llmConf) : null;
+      if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+      const title = clean2(proposal.title, 100);
+      let item;
+      try {
+        item = e ? await this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }) : await this.d.clips.createLong(vod.id, { title, segments: segs, ...subs });
+      } catch (err) {
+        if (!e || isCancelled(err)) throw err;
+        item = await this.d.clips.createLong(vod.id, { title, segments: segs, ...subs });
+      }
+      finish(item, "main", title, themeDescription(proposal), `Tema: ${proposal.context || proposal.title}`);
+    } else {
+      for (const sh of proposal.shorts) {
+        const item = await this.makeShort(vod.id, words, llmConf, sh.title, sh.segs[0], subs);
+        finish(item, "clip", sh.title, proposal.context, `Parte del tema \xAB${proposal.title}\xBB.`);
+      }
+    }
+    this.d.notifier.changed();
+    return made;
   }
   /** Visto bueno: programa el vídeo en su hora en las redes elegidas. */
   approve(outputId) {
@@ -39731,8 +39999,8 @@ ${text}`,
 
 // electron/domain/channel.ts
 init_twitch();
-var import_node_fs33 = __toESM(require("node:fs"));
-var import_node_path26 = __toESM(require("node:path"));
+var import_node_fs34 = __toESM(require("node:fs"));
+var import_node_path27 = __toESM(require("node:path"));
 var OTHER_CLIPS_MS = 10 * 6e4;
 var OTHER_CLIP_WINDOWS = 4;
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
@@ -39898,10 +40166,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs33.default.mkdirSync(c.dir, { recursive: true });
-      const file = import_node_path26.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs33.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs33.default.renameSync(`${file}.tmp`, file);
+      import_node_fs34.default.mkdirSync(c.dir, { recursive: true });
+      const file = import_node_path27.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
+      import_node_fs34.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs34.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -40591,11 +40859,11 @@ var EngineService = class {
   hash(payload, crons) {
     return import_node_crypto11.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
-  async put(gh, path29, text, msg) {
-    const cur = await gh.getContent(path29);
+  async put(gh, path30, text, msg) {
+    const cur = await gh.getContent(path30);
     if (cur?.text === text) return;
-    const sha = await gh.putContent(path29, text, msg, cur?.sha);
-    if (!sha) throw new Error(`No se pudo escribir ${path29} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    const sha = await gh.putContent(path30, text, msg, cur?.sha);
+    if (!sha) throw new Error(`No se pudo escribir ${path30} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
   }
   /** Sube el motor, el flujo y la configuración. */
   async push(gh, payload, crons) {
@@ -41032,6 +41300,7 @@ var AppContext = class {
   categories;
   library;
   transcripts;
+  themes;
   speakers;
   moments;
   clipScores;
@@ -41063,8 +41332,8 @@ var AppContext = class {
     this.userDataDir = o.userDataDir;
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
-    setAssetFolders({ sounds: import_node_path27.default.join(o.userDataDir, "Sonidos"), music: import_node_path27.default.join(o.userDataDir, "M\xFAsica") });
-    this.log = new Logger(import_node_path27.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
+    setAssetFolders({ sounds: import_node_path28.default.join(o.userDataDir, "Sonidos"), music: import_node_path28.default.join(o.userDataDir, "M\xFAsica") });
+    this.log = new Logger(import_node_path28.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
       this.log.warn(`data.json estaba da\xF1ado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? " (se recuper\xF3 la \xFAltima copia buena)" : " (se empez\xF3 con datos vac\xEDos)"}`);
@@ -41102,14 +41371,14 @@ var AppContext = class {
       tools,
       source: (id) => this.vods.ensureFile(id),
       segmentationModel: o.diarizationModel ?? "",
-      modelsDir: import_node_path27.default.join(o.userDataDir, "models"),
+      modelsDir: import_node_path28.default.join(o.userDataDir, "models"),
       engine: o.diarizationEngine
     });
-    this.style = new StyleService(import_node_path27.default.join(o.userDataDir, "style-profile.json"));
-    this.covers = new CoverService({ dir: import_node_path27.default.join(o.userDataDir, "covers"), tools, fontsDir: o.fontsDir });
+    this.style = new StyleService(import_node_path28.default.join(o.userDataDir, "style-profile.json"));
+    this.covers = new CoverService({ dir: import_node_path28.default.join(o.userDataDir, "covers"), tools, fontsDir: o.fontsDir });
     this.moments = new MomentsService({
-      dir: import_node_path27.default.join(o.userDataDir, "moments"),
-      prefsFile: import_node_path27.default.join(o.userDataDir, "preferences.json"),
+      dir: import_node_path28.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path28.default.join(o.userDataDir, "preferences.json"),
       words: (id) => this.transcripts.words(id),
       duration: (id) => this.store.data.vods.find((v) => v.id === id)?.durationSec,
       exists: (id) => this.store.data.vods.some((v) => v.id === id)
@@ -41134,9 +41403,11 @@ var AppContext = class {
         const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
         return r2.stdout.trim().split("\n")[0] ?? "";
       },
-      chat: { dir: import_node_path27.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
+      chat: { dir: import_node_path28.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
+    this.themes = new ThemeStore(import_node_path28.default.join(o.userDataDir, "themes.json"), () => o.notifier.changed());
     this.autopilot = new Autopilot({
+      themes: this.themes,
       store: this.store,
       log: this.log,
       notifier: o.notifier,
@@ -41149,10 +41420,10 @@ var AppContext = class {
       categories: this.categories,
       library: this.library,
       pubs: this.pubs,
-      chatDir: import_node_path27.default.join(o.userDataDir, "chat"),
-      judgeDir: import_node_path27.default.join(o.userDataDir, "judgements"),
-      momentsDir: import_node_path27.default.join(o.userDataDir, "moments"),
-      prefsFile: import_node_path27.default.join(o.userDataDir, "preferences.json"),
+      chatDir: import_node_path28.default.join(o.userDataDir, "chat"),
+      judgeDir: import_node_path28.default.join(o.userDataDir, "judgements"),
+      momentsDir: import_node_path28.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path28.default.join(o.userDataDir, "preferences.json"),
       style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
@@ -41252,7 +41523,7 @@ var AppContext = class {
     this.cloud.start();
     this.engine.start();
     this.storage.start();
-    for (const d of ["Sonidos", "M\xFAsica"]) import_node_fs34.default.mkdirSync(import_node_path27.default.join(this.userDataDir, d), { recursive: true });
+    for (const d of ["Sonidos", "M\xFAsica"]) import_node_fs35.default.mkdirSync(import_node_path28.default.join(this.userDataDir, d), { recursive: true });
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${e.message}`));
     void this.autopilot.refreshLibraryAtStart();
     this.log.info("Aplicaci\xF3n iniciada.");
@@ -41328,10 +41599,10 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs35.default.mkdtempSync(import_node_path28.default.join(import_node_os12.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs36.default.mkdtempSync(import_node_path29.default.join(import_node_os12.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
-    userDataDir: import_node_path28.default.join(work, "data"),
-    defaultOutputDir: import_node_path28.default.join(work, "out"),
+    userDataDir: import_node_path29.default.join(work, "data"),
+    defaultOutputDir: import_node_path29.default.join(work, "out"),
     cipher: plainCipher,
     notifier: silentNotifier,
     headless: true,
@@ -41397,7 +41668,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs35.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs36.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -41405,7 +41676,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs35.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs36.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -41439,7 +41710,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs35.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs36.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {

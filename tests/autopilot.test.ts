@@ -199,7 +199,7 @@ describe('piloto automático', () => {
       const tr = path.join(root, 'tr.json');
       fs.writeFileSync(tr, JSON.stringify({ words: [{ text: 'Hola', start: 56, end: 56.4 }, { text: 'qué', start: 57, end: 57.3 }, { text: 'locura.', start: 58, end: 58.6 }, { text: 'Increíble', start: 166, end: 166.5 }, { text: 'jugada.', start: 167, end: 167.5 }] }));
       e.ctx.transcripts.importFile(vod.id, tr);
-      e.ctx.settings.set({ autopilot: { llm: { provider: 'groq', model: 'x', apiKey: 'CLAVE' }, smartSelect: false } });
+      e.ctx.settings.set({ autopilot: { llm: { provider: 'groq', model: 'x', apiKey: 'CLAVE' }, smartSelect: false, music: false } });
       await e.ctx.autopilot.run(vod.id);
       const titles = e.ctx.store.data.outputs.map((o) => o.title).sort();
       assert.deepEqual(titles, ['Clip dos', 'Clip uno', 'Gran resumen', 'La historia']);

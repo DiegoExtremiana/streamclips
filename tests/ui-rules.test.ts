@@ -24,4 +24,12 @@ describe('reglas de la interfaz', () => {
     }
     assert.deepEqual(offenders, []);
   });
+
+  it('Twitch, YouTube, TikTok e Instagram llevan sus instrucciones desplegables de claves', () => {
+    const conn = fs.readFileSync(path.join(SRC, 'tabs/ConnectionsTab.tsx'), 'utf8');
+    const nets = fs.readFileSync(path.join(SRC, 'tabs/NetworksCard.tsx'), 'utf8');
+    assert.match(conn, /<KeyGuide[^>]*TWITCH_STEPS/);
+    assert.match(nets, /<KeyGuide[^>]*INFO\[c\.platform\]\.steps/);
+    for (const host of ['console.cloud.google.com', 'developers.tiktok.com', 'developers.facebook.com']) assert.ok(nets.includes(host), host);
+  });
 });

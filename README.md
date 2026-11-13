@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.29.0
+
+- **«No estoy de acuerdo»** en cada clip valorado: corriges humor, «se cuenta algo» y «momento interesante»; la IA aprende de forma controlada (guarda tus correcciones, solo ajusta si hay una tendencia clara) y se puede deshacer.
+- **Cada nota guarda la IA, el modelo y la fecha de examen.** Si no hay modelo o está desfasado, no se guarda valoración y el clip se examina cuando la IA esté disponible.
+- **Valoración objetiva**, con «Puede ser viral» evaluado aparte; un clip con viral alto también sale dorado.
+- **Gemini, recomendado**; ayuda desplegable con selector de proveedor para conseguir la clave.
+- **Instrucciones desplegables paso a paso** para las claves de Twitch, YouTube, TikTok e Instagram.
+- Ventanas y menús con el mismo estilo y animaciones suaves.
+
 ## Novedades de la v0.28.2
 
 - **Modelos de Groq retirados**: Groq cerró en 2026 los Llama 3.3 (texto) y Llama 4 Scout (imagen) que usaba el programa, y cada petición daba «no existe». Ahora el texto usa `openai/gpt-oss-120b` y la imagen `qwen/qwen3.8-27b` (vista previa en Groq, sin verificar con tu clave); si el de imagen falla, se valora solo con lo que se oye. Los nombres antiguos guardados en Ajustes se sustituyen solos.

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MASKED_SECRET } from '../../shared/types';
 import type { ConnectionInfo, Platform } from '../../shared/types';
 import { errMsg } from '../lib';
+import KeyGuide from '../library/KeyGuide';
 
 const INFO: Record<Platform, { name: string; redirect: string; steps: string[]; idLabel: string }> = {
   youtube: {
@@ -97,9 +98,7 @@ export default function NetworksCard() {
             <div className="muted small">{c.caveat}</div>
             {open === c.platform && (
               <div style={{ marginTop: 10 }}>
-                <ol className="small muted" style={{ paddingLeft: 18 }}>
-                  {INFO[c.platform].steps.map((s) => <li key={s}>{s}</li>)}
-                </ol>
+                <KeyGuide title="Cómo conseguir las claves, paso a paso" steps={INFO[c.platform].steps} testId={`${c.platform}-howto`} />
                 <div className="field">
                   <label>Dirección de redirección que debes registrar</label>
                   <input type="text" readOnly value={INFO[c.platform].redirect} onFocus={(e) => e.currentTarget.select()} />

@@ -1,3 +1,4 @@
+import KeyGuide, { TWITCH_STEPS } from '../library/KeyGuide';
 import { useEffect, useState } from 'react';
 import { MASKED_SECRET } from '../../shared/types';
 import { errMsg } from '../lib';
@@ -78,6 +79,7 @@ export default function ConnectionsTab(props: { vods: VodJob[]; outputs: OutputI
           Crea una aplicación gratuita en dev.twitch.tv (consola de desarrollador) y copia aquí su Client ID y su Client Secret.
           Solo se usa para leer tus VODs públicos.
         </div>
+        <KeyGuide title="Cómo conseguir el Client ID y el Client Secret, paso a paso" steps={TWITCH_STEPS} testId="twitch-howto" />
         <div className="field">
           <label htmlFor="tw-login">Nombre de tu canal</label>
           <input id="tw-login" type="text" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="don_diegons" />

@@ -317,4 +317,19 @@ describe('puntuación de clips en segundo plano', () => {
     await svc.idle();
     assert.deepEqual(analyzed, ['old1']);
   });
+
+  it('las notas de la IA anteriores a la calibración se examinan de nuevo y las correcciones del usuario se conservan', () => {
+    const file = path.join(os.tmpdir(), `sc-cal-${process.pid}-${Date.now()}.json`);
+    const crit = { humor: 8, historia: 1, viral: 9, interes: 6 };
+    const ai = { provider: 'gemini', model: 'm' };
+    fs.writeFileSync(file, JSON.stringify({
+      viejo: { v: 5, at: 1, score: 7, crit, by: 'model', ai },
+      mio: { v: 5, at: 1, score: 3, crit, by: 'user', ai },
+      nuevo: { v: 6, at: 1, score: 3, crit, by: 'model', ai },
+    }));
+    const m = make({}, file);
+    assert.equal(m.svc.scoreOf('viejo'), undefined);
+    assert.equal(m.svc.scoreOf('mio'), 3);
+    assert.equal(m.svc.scoreOf('nuevo'), 3);
+  });
 });

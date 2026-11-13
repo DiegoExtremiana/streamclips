@@ -9,6 +9,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Valoración objetiva**, con «Puede ser viral» evaluado aparte; un clip con viral alto también sale dorado.
 - **Gemini, recomendado**; ayuda desplegable con selector de proveedor para conseguir la clave.
 - **Instrucciones desplegables paso a paso** para las claves de Twitch, YouTube, TikTok e Instagram.
+- **Valoración más fría y realista**: calibración explícita (lo normal es 0-4, un 9 es excepcional), estadísticas independientes, viral solo con potencial real y cada «sí» exige una cita comprobable; las notas anteriores de la IA se vuelven a examinar y tus correcciones se conservan.
 - En la ficha del clip se ve con qué IA y modelo se examinó, y cuándo.
 - Si Gemini limita las peticiones por minuto, el programa espera y sigue en vez de dejar de valorar.
 - Ventanas y menús con el mismo estilo y animaciones suaves.

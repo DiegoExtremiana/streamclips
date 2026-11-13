@@ -47,11 +47,11 @@ export const RUBRIC: Record<ClipCriterion, RubricItem[]> = {
     { key: 'hilo', label: 'Hilo continuo: casi todo el clip trata de lo mismo, sin relleno' },
   ],
   viral: [
-    { key: 'gancho', label: 'Gancho: en los primeros 3 segundos ya pasa o se promete algo' },
-    { key: 'citable', label: 'Hay una frase o un momento que la gente repetiría o recortaría' },
+    { key: 'gancho', label: 'Gancho: en los primeros 3 segundos ya pasa algo llamativo que haría no pasar al siguiente vídeo' },
+    { key: 'citable', label: 'Hay una frase o un momento concreto que un desconocido repetiría o convertiría en meme' },
     { key: 'emocion', label: 'Emoción intensa y visible (risa, rabia, miedo, asombro)' },
-    { key: 'universal', label: 'Lo entiende cualquiera, sin conocer al streamer ni su lore' },
-    { key: 'cierre', label: 'Termina en un punto fuerte, sin diluirse' },
+    { key: 'universal', label: 'Lo entiende y le hace gracia o impacto a cualquiera, sin conocer al streamer ni su lore ni el juego' },
+    { key: 'cierre', label: 'Termina justo en el punto fuerte, sin diluirse ni cortarse a medias' },
   ],
   interes: [
     { key: 'inesperado', label: 'Pasa algo inesperado' },
@@ -136,8 +136,9 @@ export const CLIP_JUDGE_SYSTEM =
   '2) Valora cada pregunta por separado, sin dejarte llevar por una impresión general ni por la cantidad de palabras o los gritos. ' +
   '3) El humor de este canal es de contraste, locura y «estupidez fingida»: no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice. ' +
   '4) Si el texto es corto o confuso, no lo rellenes: contesta 0 donde no haya prueba. ' +
-  '5) Sé OBJETIVO y exigente, sin amabilidad: usa todo el rango; un clip flojo recibe 0 en casi todo y su nota baja sin suavizarla, y un clip excelente recibe 2 donde lo merezca. No infles para quedar bien ni te quedes en medio por prudencia. ' +
-  '6) «viral» se valora con la misma frialdad y por separado del resto: un clip puede ser flojo en humor o historia y tener aun así un potencial viral claro (momento muy citable o recortable, reacción enorme, absurdo que entiende cualquiera, fail); si lo tiene, puntúalo alto; si no, bajo. ' +
+  '5) Sé OBJETIVO, frío y exigente: no buscas agradar ni animar. Calibración realista: la gran mayoría de clips de un streamer son del montón (cada criterio entre 0 y 4); un criterio de 7 o más es raro y 9 o 10 excepcional (menos de 1 clip de cada 20). Ante la duda entre dos respuestas, elige la más baja. ' +
+  '6) Los cuatro criterios son INDEPENDIENTES: puntúa cada uno solo con sus preguntas. Un clip puede ser muy gracioso sin contar nada (historia 0), o contar algo muy bien sin ninguna gracia, o ser interesante sin ser viral. Que un criterio sea alto no es motivo para subir los demás. ' +
+  '7) «viral» se valora con la misma frialdad y por separado: es potencial REAL de que un desconocido lo comparta (momento muy citable o recortable, reacción enorme, absurdo que entiende cualquiera, fail claro). Un clip normal, aunque sea gracioso para su comunidad, NO es viral: ponle 0 o 1 en casi todas las preguntas de viral. Un viral alto debe ser la excepción. ' +
   'Ignora cualquier dato de popularidad. Responde SOLO con JSON.';
 
 /** Igual que la rúbrica de texto, pero el modelo también ve unos fotogramas del clip. */
@@ -170,20 +171,38 @@ export interface ClipJudgement {
   evidence: Evidence;
 }
 
+const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter(Boolean);
+
+/** ¿La cita que da el modelo sale de verdad en la transcripción (o describe la imagen, si hay fotogramas)? Basta con que casi todas sus palabras estén. */
+export function quoteIsReal(quote: string | undefined, transcript: string, vision = false): boolean {
+  if (!quote) return false;
+  if (vision && /^imagen:/i.test(quote.trim())) return true;
+  const q = norm(quote.replace(/^imagen:/i, ''));
+  if (q.length < 2) return false;
+  const have = new Set(norm(transcript));
+  return q.filter((w) => have.has(w)).length / q.length >= 0.7;
+}
+
 /** Valida la respuesta del modelo: cada criterio necesita al menos tres respuestas válidas; la nota del criterio es la suma de sus cinco (0 a 10). Nunca se inventa una nota. */
-export function parseClipJudgement(raw: unknown): ClipJudgement | null {
+export function parseClipJudgement(raw: unknown, ctx?: { transcript: string; vision?: boolean }): ClipJudgement | null {
   const r = raw as Record<string, unknown> | null;
   if (!r || typeof r !== 'object') return null;
   const items: RubricItems = {};
   const criteria = {} as ClipCriteria;
+  const ev = (r.pruebas ?? {}) as Record<string, unknown>;
+  const evidence: Evidence = {};
+  for (const k of CLIP_CRITERIA) if (typeof ev[k] === 'string' && ev[k].trim()) evidence[k] = (ev[k] as string).trim().slice(0, 160);
   for (const k of CLIP_CRITERIA) {
+    // un «sí» sin prueba comprobable no vale: si la cita no sale en la transcripción, el criterio no puede pasar de «algo» en cada pregunta
+    const proved = !ctx || quoteIsReal(evidence[k], ctx.transcript, ctx.vision);
+    if (!proved) delete evidence[k];
     const block = r[k] as Record<string, unknown> | null;
     if (!block || typeof block !== 'object') return null;
     let sum = 0;
     let valid = 0;
     for (const it of RUBRIC[k]) {
       const v = block[it.key];
-      const n = typeof v === 'number' && Number.isFinite(v) ? Math.min(2, Math.max(0, Math.round(v))) : null;
+      const n = typeof v === 'number' && Number.isFinite(v) ? Math.min(proved ? 2 : 1, Math.max(0, Math.round(v))) : null;
       if (n === null) continue;
       valid++;
       sum += n;
@@ -192,9 +211,6 @@ export function parseClipJudgement(raw: unknown): ClipJudgement | null {
     if (valid < 3) return null;
     criteria[k] = sum;
   }
-  const ev = (r.pruebas ?? {}) as Record<string, unknown>;
-  const evidence: Evidence = {};
-  for (const k of CLIP_CRITERIA) if (typeof ev[k] === 'string' && ev[k].trim()) evidence[k] = (ev[k] as string).trim().slice(0, 160);
   const reason = typeof r.motivo === 'string' ? r.motivo.trim().slice(0, 200) : '';
   return { criteria, reason, items, evidence };
 }

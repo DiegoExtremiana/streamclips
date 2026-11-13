@@ -89,7 +89,7 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
       if (frames?.length) {
         try {
           const raw = await askJson(visionConfig(conf), CLIP_JUDGE_VISION_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec, frames.length, feedbackGuide(app.clipFeedback.all())), { temperature: 0.2, images: frames });
-          const j = parseClipJudgement(raw);
+          const j = parseClipJudgement(raw, { transcript: words.map((w) => w.text).join(' '), vision: true });
           if (j) return { ...j, ai: { provider: conf.provider, model: visionConfig(conf).model, vision: true } };
         } catch (e) {
           // sin imágenes (el modelo no las admite o falló): se valora solo con lo que se oye, como antes; sin cuota no se insiste
@@ -99,7 +99,7 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
         if (words.length < 12) return null;
       }
       const raw = await askJson(conf, CLIP_JUDGE_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec, 0, feedbackGuide(app.clipFeedback.all())), { temperature: 0.2 });
-      const j = parseClipJudgement(raw);
+      const j = parseClipJudgement(raw, { transcript: words.map((w) => w.text).join(' ') });
       return j ? { ...j, ai: { provider: conf.provider, model: conf.model } } : null;
     },
   });

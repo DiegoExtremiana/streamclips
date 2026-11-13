@@ -88,4 +88,18 @@ describe('criterios de la nota de un clip', () => {
     assert.match(p, /pruebas/);
     assert.ok(!/vistas|visualizaciones/i.test(p.replace('Ignora', '')));
   });
+
+  it('un «sí» sin cita real en la transcripción baja a «algo»; con cita real se respeta', () => {
+    const all2 = { humor: { remate: 2, contraste: 2, locura: 2, actuacion: 2, sorpresa: 2 }, historia: { planteamiento: 2, desarrollo: 2, desenlace: 2, solo: 2, hilo: 2 }, viral: { gancho: 2, citable: 2, emocion: 2, universal: 2, cierre: 2 }, interes: { inesperado: 2, reaccion: 2, novedad: 2, protagonismo: 2, memorable: 2 } };
+    const transcript = 'me cago en la leche otra vez se me ha caído el cubo de agua encima';
+    const sinPrueba = parseClipJudgement({ ...all2, pruebas: { humor: 'una frase que nadie dijo jamás en el clip', viral: '' } }, { transcript })!;
+    assert.equal(sinPrueba.criteria.humor, 5);
+    assert.equal(sinPrueba.criteria.viral, 5);
+    assert.equal(sinPrueba.evidence.humor, undefined);
+    const conPrueba = parseClipJudgement({ ...all2, pruebas: { humor: '«Se me ha caído el cubo de agua»', viral: 'Imagen: derrama el cubo', historia: 'otra vez', interes: 'me cago en la leche' } }, { transcript, vision: true })!;
+    assert.equal(conPrueba.criteria.humor, 10);
+    assert.equal(conPrueba.criteria.viral, 10, 'con fotogramas, una prueba que empieza por «Imagen:» vale');
+    const sinFotos = parseClipJudgement({ ...all2, pruebas: { viral: 'Imagen: derrama el cubo' } }, { transcript })!;
+    assert.equal(sinFotos.criteria.viral, 5, 'sin fotogramas no se puede dar por vista una imagen');
+  });
 });

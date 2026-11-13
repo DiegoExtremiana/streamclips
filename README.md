@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.28.2
+
+- **Modelos de Groq retirados**: Groq cerró en 2026 los Llama 3.3 (texto) y Llama 4 Scout (imagen) que usaba el programa, y cada petición daba «no existe». Ahora el texto usa `openai/gpt-oss-120b` y la imagen `qwen/qwen3.8-27b` (vista previa en Groq, sin verificar con tu clave); si el de imagen falla, se valora solo con lo que se oye. Los nombres antiguos guardados en Ajustes se sustituyen solos.
+- Se limpian al arrancar los restos temporales de una valoración de clips interrumpida.
+
 ## Novedades de la v0.28.1
 
 - **Clips del canal sin valorar**: los 1074 clips habían quedado marcados como «fallados» por la versión anterior y no se reintentaban nunca. Ahora los fallos de una sesión previa no se arrastran: al abrir el programa se vuelven a intentar (se valoran en directo desde Twitch, sin guardarlos).

@@ -31,6 +31,12 @@ export async function clipFrames(ffmpeg: string, file: string, dir: string, dura
 
 /** La valoración de los clips del canal en segundo plano: de dónde saca el audio, cuándo trabaja y a qué modelo pregunta. */
 export function createClipScoreService(app: AppContext, o: ContextOptions): ClipScoreService {
+  // restos de una valoración interrumpida (cierre del programa a mitad): no se deja espacio muerto en la carpeta temporal
+  try {
+    for (const f of fs.readdirSync(os.tmpdir())) if (f.startsWith('streamclips-score-')) fs.rmSync(path.join(os.tmpdir(), f), { recursive: true, force: true });
+  } catch {
+    /* no se puede limpiar: no pasa nada */
+  }
   return new ClipScoreService({
     file: path.join(o.userDataDir, 'clip-scores.json'),
     notesFile: path.join(o.userDataDir, 'Notas de clips.md'),

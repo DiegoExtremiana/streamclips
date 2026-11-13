@@ -1,7 +1,7 @@
 export type LlmProvider = 'groq' | 'gemini';
 
 export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string; /** Modelo que entiende imágenes (el de texto de Groq no). */ visionModel?: string }> = {
-  groq: { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile', visionModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+  groq: { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'openai/gpt-oss-120b', visionModel: 'qwen/qwen3.8-27b' },
   gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.5-flash-lite' },
 };
 
@@ -15,6 +15,8 @@ export function visionConfig(cfg: LlmConfig): LlmConfig {
 export function resolveModel(provider: LlmProvider, model: string): string {
   const m = model.trim();
   if (!m) return LLM_PROVIDERS[provider].defaultModel;
+  // Groq retiró los Llama 3.x/4 de texto y visión en 2026 (el 404 «no existe» de cada petición)
+  if (provider === 'groq' && /^(meta-llama\/llama-4|llama-3\.[0-3]-70b|llama3-70b|llama-3\.2-)/.test(m)) return LLM_PROVIDERS.groq.defaultModel;
   if (provider === 'gemini' && /^gemini-(1\.5|2\.0)/.test(m)) return LLM_PROVIDERS.gemini.defaultModel;
   return m;
 }

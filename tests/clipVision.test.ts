@@ -40,7 +40,7 @@ describe('valorar clips viéndolos', () => {
   });
 
   it('Groq cambia a su modelo con visión; Gemini conserva el suyo; con servidor de pruebas no se toca', () => {
-    assert.match(visionConfig({ provider: 'groq', model: 'llama-3.3-70b-versatile', apiKey: 'k' }).model, /llama-4/);
+    assert.match(visionConfig({ provider: 'groq', model: 'llama-3.3-70b-versatile', apiKey: 'k' }).model, /qwen/);
     assert.equal(visionConfig({ provider: 'gemini', model: 'g', apiKey: 'k' }).model, 'g');
     assert.equal(visionConfig({ provider: 'groq', model: 'x', apiKey: 'k', baseUrl: 'http://127.0.0.1:1' }).model, 'x');
   });

@@ -109,6 +109,8 @@ test('resolveModel: sustituye los Gemini retirados y respeta el modelo elegido',
   assert.equal(resolveModel('gemini', 'gemini-1.5-flash'), LLM_PROVIDERS.gemini.defaultModel);
   assert.equal(resolveModel('gemini', 'gemini-3.8-flash'), 'gemini-3.8-flash');
   assert.equal(resolveModel('groq', 'llama-3.1-8b-instant'), 'llama-3.1-8b-instant');
+  assert.equal(resolveModel('groq', 'llama-3.3-70b-versatile'), LLM_PROVIDERS.groq.defaultModel);
+  assert.equal(resolveModel('groq', 'meta-llama/llama-4-scout-17b-16e-instruct'), LLM_PROVIDERS.groq.defaultModel);
 });
 
 test('judgeCandidates espera entre lotes para no pasar el límite gratuito', async () => {

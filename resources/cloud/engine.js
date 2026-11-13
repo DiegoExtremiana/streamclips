@@ -36419,6 +36419,9 @@ function parseClipJudgement(raw) {
 var PHASE_LABEL = { descarga: "bajando el clip", imagen: "sacando fotogramas", volumen: "midiendo el volumen", transcripcion: "transcribiendo con Whisper", modelo: "preguntando al modelo" };
 var MIN_WORDS_TO_JUDGE = 4;
 var MAX_FAILS = 2;
+var ModelBlocked = class extends Error {
+  blocked = true;
+};
 var CONCURRENCY = 2;
 var MIN_COMPATIBLE_VERSION = 5;
 var RETRY_AFTER_MS = 24 * 36e5;
@@ -36569,6 +36572,12 @@ var ClipScoreService = class {
         this.scores.set(clip.id, { ...meta, ...await this.score(clip) });
         this.lastError = null;
       } catch (e) {
+        if (e.blocked) {
+          this.blocker = `La IA no est\xE1 disponible: ${e.message}`;
+          this.lastError = e.message.slice(0, 240);
+          this.queue = [];
+          return;
+        }
         const prev = this.scores.get(clip.id);
         this.scores.set(clip.id, { ...meta, v: SCORE_VERSION, at: this.now(), fails: (prev?.fails ?? 0) + 1 });
         this.lastError = e.message.slice(0, 240);
@@ -36642,7 +36651,10 @@ var ClipScoreService = class {
           return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, "model")}${sig.frames?.length ? " (visto y o\xEDdo)" : ""}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: "model" };
         }
       } catch (e) {
-        this.d.log?.warn(`El modelo no valor\xF3 el clip ${clip.id}; se usan las se\xF1ales del propio clip: ${e.message}`);
+        const msg = e.message;
+        this.d.log?.warn(`El modelo no valor\xF3 el clip ${clip.id}: ${msg}`);
+        if (/no existe|rechaz|límite gratuito|Falta la clave/i.test(msg)) throw new ModelBlocked(msg);
+        throw new Error(`El modelo no pudo valorar el clip: ${msg}`);
       }
     }
     if (sig.words.length < MIN_WORDS_TO_JUDGE) return { v: SCORE_VERSION, at: this.now(), noText: true, reason: "Sin nota: casi no se oye hablar en este clip y el modelo no pudo valorarlo por la imagen." };
@@ -36652,7 +36664,7 @@ var ClipScoreService = class {
 
 // electron/services/llm.ts
 var LLM_PROVIDERS = {
-  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile", visionModel: "meta-llama/llama-4-scout-17b-16e-instruct" },
+  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", defaultModel: "openai/gpt-oss-120b", visionModel: "qwen/qwen3.8-27b" },
   gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-3.5-flash-lite" }
 };
 function visionConfig(cfg) {
@@ -36662,6 +36674,7 @@ function visionConfig(cfg) {
 function resolveModel(provider, model) {
   const m = model.trim();
   if (!m) return LLM_PROVIDERS[provider].defaultModel;
+  if (provider === "groq" && /^(meta-llama\/llama-4|llama-3\.[0-3]-70b|llama3-70b|llama-3\.2-)/.test(m)) return LLM_PROVIDERS.groq.defaultModel;
   if (provider === "gemini" && /^gemini-(1\.5|2\.0)/.test(m)) return LLM_PROVIDERS.gemini.defaultModel;
   return m;
 }
@@ -36795,6 +36808,10 @@ async function clipFrames(ffmpeg, file, dir, durationSec, n = 5) {
   return import_node_fs21.default.readdirSync(dir).filter((f) => f.endsWith(".jpg")).sort().map((f) => `data:image/jpeg;base64,${import_node_fs21.default.readFileSync(import_node_path19.default.join(dir, f)).toString("base64")}`);
 }
 function createClipScoreService(app, o) {
+  try {
+    for (const f of import_node_fs21.default.readdirSync(import_node_os8.default.tmpdir())) if (f.startsWith("streamclips-score-")) import_node_fs21.default.rmSync(import_node_path19.default.join(import_node_os8.default.tmpdir(), f), { recursive: true, force: true });
+  } catch {
+  }
   return new ClipScoreService({
     file: import_node_path19.default.join(o.userDataDir, "clip-scores.json"),
     notesFile: import_node_path19.default.join(o.userDataDir, "Notas de clips.md"),

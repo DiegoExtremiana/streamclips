@@ -48,6 +48,8 @@ export interface AutopilotSettings {
   music?: boolean;
   /** Vídeos por tema: junta los momentos de un mismo tema repartidos por el directo. Por defecto sí. */
   topics?: boolean;
+  /** Mirar el directo (fotogramas de los mejores momentos) además de oírlo al elegir y editar. Por defecto sí. */
+  vodVision?: boolean;
   /** Al terminar de sacar vídeos y clips, borrar el directo completo y los datos que ya no sirven. Por defecto sí. */
   cleanup?: boolean;
   /** Borrar un vídeo o clip (archivos incluidos) cuando ya se ha publicado en todas sus redes. Por defecto sí. */

@@ -69,6 +69,8 @@ Plan, en pasos pequeños, **cada uno con `npm run check` y e2e en verde antes de
 - `shared/sounds.ts` + `electron/services/soundBank.ts`: 11 efectos sintetizados + sustitución por archivos del usuario.
 - `shared/music.ts` + `electron/services/music.ts`: lofi generada por ambiente, mezcla con ducking y detección de sonido de fondo.
 
+- `shared/visual.ts` + `electron/services/visualJudge.ts`: fotogramas del VOD a los mejores momentos y nota visual (±1,5) en la selección.
+
 ### Pendiente / sin verificar con datos reales
 - Modelo de visión de Groq (`meta-llama/llama-4-scout-17b-16e-instruct`): nombre no comprobado contra su API; si falla, cae a solo texto (queda en el log).
 - El pack de efectos de YouTube de la lista del usuario son vídeos largos sin nombres por sonido: no se importaron; la vía es dejar archivos en la carpeta Sonidos.

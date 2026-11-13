@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
@@ -11,6 +12,7 @@ import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
 import { PhaseClock } from '../../shared/phaseClock';
 import { judgeCandidates } from '../services/momentJudge';
+import { judgeVisual } from '../services/visualJudge';
 import { applyEdits } from '../../shared/momentEdits';
 import { loadEdits, loadPrefs, saveSnapshot } from '../services/momentStore';
 import { applyPrefs, describePrefs } from '../../shared/preferences';
@@ -424,6 +426,27 @@ export class Autopilot {
             });
             judged = r.judged;
             notes.push(`Selección inteligente: ${r.judged.length} candidatos valorados${r.cached ? ` (${r.cached} ya estaban guardados)` : ''}${r.failedChunks ? `, ${r.failedChunks} lote(s) sin respuesta` : ''}.`);
+            // 3c-bis) mirar el directo: la imagen de los mejores momentos es otro factor de la nota
+            if (this.cfg.vodVision !== false && vod.filePath && fs.existsSync(vod.filePath)) {
+              clock.mark('imagen del directo');
+              task.update(60, 'Mirando los mejores momentos…');
+              const vr = await judgeVisual(llmConf!, words, judged, {
+                ffmpeg: this.d.tools().ffmpeg,
+                file: vod.filePath,
+                tmpDir: path.join(os.tmpdir(), `streamclips-vision-${vod.id}`),
+                cacheFile: this.d.judgeDir ? path.join(this.d.judgeDir, `${vod.id}.visual.json`) : undefined,
+                fetchFn: this.d.llmFetch,
+                signal: () => throwIfCancelled(),
+              }).catch((e) => {
+                if (isCancelled(e)) throw e;
+                return null;
+              });
+              fs.rmSync(path.join(os.tmpdir(), `streamclips-vision-${vod.id}`), { recursive: true, force: true });
+              if (vr && !vr.failed) {
+                judged = vr.judged;
+                notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ''}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ''}.`);
+              } else notes.push(`Sin vista del directo${vr?.error ? ` (${vr.error.split('\n')[0]})` : ''}: se eligió por lo que se oye.`);
+            }
           } catch (e) {
             if (isCancelled(e)) throw e;
             notes.push(`Selección inteligente no disponible (${(e as Error).message}); se usó el volumen y el chat.`);

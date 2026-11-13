@@ -53,6 +53,7 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.proEdit !== undefined) n.proEdit = bool(p.proEdit, 'La edición profesional');
   if (p.soundCues !== undefined) n.soundCues = bool(p.soundCues, 'Los efectos de sonido');
   if (p.music !== undefined) n.music = bool(p.music, 'La música de fondo');
+  if (p.vodVision !== undefined) n.vodVision = bool(p.vodVision, 'La vista del directo');
   if (p.topics !== undefined) n.topics = bool(p.topics, 'Los vídeos por tema');
   if (p.parallel !== undefined) {
     const v = Number(p.parallel);

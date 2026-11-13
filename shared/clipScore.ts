@@ -8,7 +8,7 @@ import type { Word } from './subtitles';
  */
 export const GOLD_MIN = 8;
 /** Cambiar el método de puntuar invalida las puntuaciones guardadas. */
-export const SCORE_VERSION = 6;
+export const SCORE_VERSION = 7;
 
 export interface ClipSignals {
   durationSec: number;

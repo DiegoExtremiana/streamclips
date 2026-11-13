@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.29.2
+
+- **Todos los clips se vuelven a valorar con el criterio nuevo** (resumen previo, referencias de 2, 5 y 8, pruebas comprobadas). Tus correcciones con «No estoy de acuerdo» se conservan. Empieza por los más recientes y, si Gemini agota su cuota gratuita del día, para y sigue solo al día siguiente.
+
 ## Novedades de la v0.29.1
 
 - **Animaciones**: los iconos del menú de la izquierda dan un saltito al pasar el ratón y las barras de cada clip se llenan una a una al abrirlo.

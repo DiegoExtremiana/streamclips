@@ -23,6 +23,8 @@ export default function ClipStudio(props: {
   range: TrimRange;
   onRange: (r: TrimRange) => void;
   vodDuration: number | null;
+  /** Aviso cuando no hay VOD y se trabaja con el propio vídeo del clip. */
+  clipOnlyNote?: string;
   canReedit: boolean;
   rendering: boolean;
   designOpen: boolean;
@@ -155,6 +157,7 @@ export default function ClipStudio(props: {
         </div>
       )}
 
+      {props.canReedit && props.clipOnlyNote && <p className="muted small" data-testid="studio-clip-only">{props.clipOnlyNote}</p>}
       {props.canReedit && (
         <div className="studio-trim">
           <ClipTimeline

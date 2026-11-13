@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { VodJob, VodOrigin } from '../../shared/types';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
 import type { ToolPaths } from '../services/tools';
 import type { SerialQueue } from '../services/queue';
-import { downloadVod, parseVodUrl } from '../services/downloader';
+import { downloadSection, downloadVod, parseVodUrl } from '../services/downloader';
 import { ensureFreeSpace, freeBytes, vodBytesEstimate } from '../services/files';
 import type { Notifier } from './notifier';
 
@@ -95,6 +96,24 @@ export class VodService {
       .finally(() => this.restores.delete(vodId));
     this.restores.set(vodId, p);
     return p;
+  }
+
+  /** Baja de Twitch solo el trozo [start, end] del directo (no el VOD entero). `dispose` borra el archivo temporal. */
+  async fetchSection(vodId: string, start: number, end: number): Promise<{ file: string; offset: number; dispose: () => void }> {
+    const job = this.d.store.data.vods.find((v) => v.id === vodId);
+    if (!job) throw new Error('El VOD no existe.');
+    if (!job.url || job.origin === 'clip') throw new Error('Este directo no se puede volver a bajar de Twitch.');
+    const offset = Math.max(0, start - 1);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamclips-tramo-'));
+    const dispose = () => fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      this.d.log.info(`Bajando solo el trozo ${Math.round(offset)}-${Math.round(end + 1)} s de "${job.title}".`);
+      const file = await downloadSection(this.d.tools(), job.url, offset, end + 1, dir);
+      return { file, offset, dispose };
+    } catch (e) {
+      dispose();
+      throw new Error(`No se pudo bajar de Twitch el trozo del directo: ${(e as Error).message.split('\n')[0]}`);
+    }
   }
 
   /** Borra del disco el directo completo (y lo que dejó la descarga junto a él). Devuelve los bytes liberados. */

@@ -6,6 +6,7 @@ import { planEdit, planLong } from '../../shared/autoEdit';
 import { defaultStyle, type StyleProfile } from '../../shared/styleProfile';
 import { chapterBlock, outputStarts } from '../../shared/chapters';
 import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
+import { PhaseClock } from '../../shared/phaseClock';
 import { judgeCandidates } from '../services/momentJudge';
 import { applyEdits } from '../../shared/momentEdits';
 import { loadEdits, loadPrefs, saveSnapshot } from '../services/momentStore';
@@ -240,11 +241,31 @@ export class Autopilot {
     }
   }
 
+  /** Guarda los tiempos por fase de los últimos análisis (userData/analysis-times.json) para ver qué conviene acelerar. */
+  private recordTimes(vod: VodJob, phases: Record<string, number>, totalSec: number): void {
+    if (!this.d.momentsDir) return;
+    try {
+      const file = path.join(path.dirname(this.d.momentsDir), 'analysis-times.json');
+      let list: unknown[] = [];
+      try {
+        list = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown[];
+      } catch {
+        /* primer registro */
+      }
+      list.push({ at: new Date().toISOString(), vod: vod.title || vod.id, vodSec: vod.durationSec ?? null, totalSec, phases });
+      fs.writeFileSync(file, JSON.stringify(list.slice(-40), null, 1));
+    } catch {
+      /* solo informativo */
+    }
+  }
+
   private async process(vod: VodJob): Promise<VodJob> {
     const task = this.d.tasks.start('analyze', `Piloto automático: ${vod.title || 'directo'}`, vod.id);
     const notes: string[] = [];
     try {
       const t0 = Date.now();
+      const clock = new PhaseClock();
+      clock.mark('lectura de audio y chat');
       const lap = (since: number) => {
         const s = Math.round((Date.now() - since) / 1000);
         return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
@@ -270,6 +291,7 @@ export class Autopilot {
           deferTranscribe = true;
         } else if (st.engine) {
           this.mark(vod, 'transcribing');
+          clock.mark('transcripción completa');
           task.update(2, 'Transcribiendo el directo (puede tardar)…');
           try {
             const ts = Date.now();
@@ -291,6 +313,7 @@ export class Autopilot {
 
       // 2) señales
       this.mark(vod, 'analyzing');
+      clock.mark('volumen y chat');
       task.update(30, 'Analizando audio y chat…');
       const duration = await this.d.clips.vodDuration(vod.id);
       let energyDb: number[] | undefined;
@@ -360,6 +383,7 @@ export class Autopilot {
       if (deferTranscribe) {
         const spans = [...moments, ...summary, ...mains, ...pool].map((g) => ({ start: g.start, end: g.end }));
         this.mark(vod, 'transcribing');
+        clock.mark('transcripción de lo elegido');
         task.update(40, 'Transcribiendo solo lo elegido…');
         try {
           const ts = Date.now();
@@ -381,6 +405,7 @@ export class Autopilot {
 
       // 3c) valoración con el modelo de lenguaje
       if (pool.length) {
+        clock.mark('modelo de lenguaje');
         task.update(56, 'Valorando los momentos candidatos…');
         let judged: Judged[] | null = null;
         if (!words.length) notes.push('Selección inteligente omitida: no hay transcripción.');
@@ -466,6 +491,7 @@ export class Autopilot {
           const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
           const need = this.d.speakers.pendingSeconds(vod.id, spans);
           if (need > 0) {
+            clock.mark('hablantes');
             task.update(60, 'Identificando hablantes…');
             try {
               const ts = Date.now();
@@ -481,6 +507,7 @@ export class Autopilot {
       }
 
       // 4) títulos
+      clock.mark('títulos');
       task.update(75, 'Poniendo títulos…');
       const titles = await this.titles(vod, words, moments, mains, notes);
       // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
@@ -500,6 +527,7 @@ export class Autopilot {
 
       // 5) montaje
       const tr = Date.now();
+      clock.mark('montaje');
       this.mark(vod, 'rendering');
       const created: OutputItem[] = [];
       const errors: string[] = [];
@@ -606,7 +634,9 @@ export class Autopilot {
           notes.push(`No se pudo borrar el directo completo: ${(e as Error).message}`);
         }
       }
-      notes.push(`Tiempos: ${tTranscribe ? `transcripción ${tTranscribe}, ` : ''}montaje ${lap(tr)}, total ${lap(t0)}.`);
+clock.mark(null);
+      notes.push(`Tiempos: ${clock.describe() || `montaje ${lap(tr)}`}; total ${lap(t0)}.`);
+      this.recordTimes(vod, clock.seconds(), Math.round((Date.now() - t0) / 1000));
       this.d.log.info(`Análisis de "${vod.title}": ${notes[notes.length - 1]}`);
       const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ` (${scheduled} programados)`}.`;
       this.mark(vod, 'done', [msg, ...errors, ...notes].join(' '));

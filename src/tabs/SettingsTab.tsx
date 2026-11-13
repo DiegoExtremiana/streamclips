@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ToolStatus, WhisperStatus } from '../../shared/types';
 import { errMsg } from '../lib';
+import StorageCard from './StorageCard';
 import { AutopilotCard, PublishingCard, AutoSubtitlesCard, AiCard, CoversStyleCard } from './AutopilotCards';
 import UpdatesCard from './UpdatesCard';
 import VocabularyCard from './VocabularyCard';
@@ -157,6 +158,7 @@ export default function SettingsTab() {
         )}
       </section>
 
+      <StorageCard />
       <UpdatesCard />
       </div>}
 

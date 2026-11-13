@@ -9,7 +9,8 @@ import { dstPixels, OUT_H, OUT_W, type VerticalLayout } from '../../shared/layou
 
 const ENCODE_CODEC = [
   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
-  '-c:a', 'aac', '-b:a', '160k', '-ar', '48000',
+  // siempre estéreo: los tramos se unen sin recodificar y, si uno saliera en mono y otro en estéreo, el audio se corrompe y se repite hasta el final
+  '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2',
   '-movflags', '+faststart',
 ];
 const ENCODE = ['-map', '0:v:0', '-map', '0:a:0?', ...ENCODE_CODEC];
@@ -153,8 +154,8 @@ async function cutSegment(tools: ToolPaths, input: string, start: number, end: n
     // vídeo y audio en un solo grafo: el audio original más cada efecto retrasado a su instante
     const inputs = sfx.flatMap((x) => ['-f', 'lavfi', '-i', SFX[x.sound].src]);
     const vchain = o.layout ? `${composeGraph(o.layout)};[base]${vf.length ? vf.join(',') : 'null'}[vout]` : `[0:v]${vf.length ? vf.join(',') : 'null'}[vout]`;
-    const mix = sfx.map((x, i) => `[${i + 1}:a]adelay=${Math.round(Math.max(0, x.at) * 1000)}:all=1,volume=${SFX[x.sound].vol}[s${i}]`).join(';');
-    const graph = `${vchain};[0:a]${af.length ? af.join(',') : 'anull'}[a0];${mix};[a0]${sfx.map((_, i) => `[s${i}]`).join('')}amix=inputs=${sfx.length + 1}:duration=first:dropout_transition=0:normalize=0[aout]`;
+    const mix = sfx.map((x, i) => `[${i + 1}:a]aformat=channel_layouts=stereo,adelay=${Math.round(Math.max(0, x.at) * 1000)}:all=1,volume=${SFX[x.sound].vol}[s${i}]`).join(';');
+    const graph = `${vchain};[0:a]aformat=channel_layouts=stereo${af.length ? `,${af.join(',')}` : ''}[a0];${mix};[a0]${sfx.map((_, i) => `[s${i}]`).join('')}amix=inputs=${sfx.length + 1}:duration=first:dropout_transition=0:normalize=0,aformat=channel_layouts=stereo[aout]`;
     await run(tools.ffmpeg, [
       '-y', '-hide_banner', '-loglevel', 'error',
       // la duración va ANTES de la entrada: después de ella se aplicaría a la siguiente (los efectos) y el montaje seguiría hasta el final del directo

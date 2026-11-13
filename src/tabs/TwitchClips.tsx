@@ -221,10 +221,17 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
             <>
               {scoring.waiting && <span className="small" data-testid="scoring-waiting">En pausa: {scoring.waiting}. Seguirá solo cuando termine.</span>}
               <span className="small">Valorando tus clips en segundo plano: {scoring.scored} de {scoring.total}. Solo trabaja cuando no hay directo ni análisis en marcha.</span>
+              {scoring.failed ? <span className="muted small">{scoring.failed} clip(s) han fallado{scoring.lastError ? `: ${scoring.lastError}` : ''}.</span> : null}
+              {scoring.working && <span className="muted small" data-testid="scoring-working">Ahora: {scoring.working}{scoring.secPerClip ? ` · unos ${scoring.secPerClip} s por clip, quedan ${scoring.etaMin! >= 90 ? `${Math.round(scoring.etaMin! / 60)} h` : `${scoring.etaMin} min`}` : ''}</span>}
               <div className="progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${progress}%` }} /></div>
             </>
           ) : (
             <span className="muted small">{scoring.failed ? `${scoring.failed} clip(s) no se han podido valorar${scoring.lastError ? `: ${scoring.lastError}` : ''}. ` : ''}La nota sale del contenido: humor, si se cuenta algo, si puede ser viral y si es un momento interesante. No mira visualizaciones.</span>
+          )}
+          {scoring.notesFile && scoring.scored > 0 && (
+            <span className="small">Las notas se guardan en un documento y no se repiten al abrir el programa.{' '}
+              <button className="btn ghost small" onClick={() => void window.api.openPath(scoring.notesFile!).catch(() => undefined)}>Abrir documento de notas</button>
+            </span>
           )}
         </div>
       )}

@@ -1,4 +1,16 @@
-# Notas para la próxima actualización (v0.26)
+# Estado tras la v0.26.0 y notas para la v0.27
+
+**Hecho en la 0.26.0:** arreglo del audio en bucle (mono/estéreo al unir tramos), diagnóstico real de la valoración de clips (2 a la vez, tiempos y estimación), documento `Notas de clips.md`, edición de clips sin el VOD (propio vídeo del clip o solo el trozo bajado de Twitch), cronómetro por fases en el análisis (`analysis-times.json`), tarjeta de espacio en disco y modularización de `shared/types.ts` (`shared/model/*`), IPC (`electron/ipc/handlers/*`) y valoración de clips (`electron/app/wiring/`).
+
+**Pendiente de modularizar:** `electron/domain/autopilot.ts` (~880 líneas), el resto de `electron/app/context.ts` (cableado por servicio), `src/library/ItemModal.tsx`, `src/tabs/LibraryTab.tsx` y partir `tests/e2e/gui-smoke.mjs`.
+
+**Pendiente de optimizar (con datos):** leer `analysis-times.json` tras unos directos reales y atacar la fase más lenta (caché de audio por VOD, Whisper cuantizado/VAD, cola por fases). Para clips: mirar los segundos por clip que enseña el panel y, si domina Whisper, probar un modelo más pequeño solo para clips.
+
+**Nuevo y sin probar en su PC:** bajar un trozo con `yt-dlp --download-sections` (alargar/mover clips sin VOD) y la tarjeta de espacio.
+
+---
+
+# Notas originales de la v0.26 (histórico)
 
 Petición de Diego (12/11/2026): **optimizar el programa y el tiempo de análisis de vídeos**, y **modularizar el código** (es lo más óptimo). Estas notas son el punto de partida; nada de esto está hecho todavía.
 

@@ -122,11 +122,12 @@ export default function ItemModal(props: {
   // ---- recorte y encuadre (clips)
   const [range, setRange] = useState<TrimRange>({ start: o.start ?? 0, end: o.end ?? 0 });
   const [vodDuration, setVodDuration] = useState<number | null>(null);
+  const [clipOnly, setClipOnly] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
   useEffect(() => {
     if (!canReedit) return;
     let alive = true;
-    window.api.clipContext(o.id).then((c) => alive && setVodDuration(c.vodDurationSec)).catch(() => undefined);
+    window.api.clipContext(o.id).then((c) => alive && (setVodDuration(c.vodDurationSec), setClipOnly(Boolean(c.clipOnly)))).catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -358,6 +359,7 @@ export default function ItemModal(props: {
           range={range}
           onRange={setRange}
           vodDuration={vodDuration}
+          clipOnlyNote={clipOnly ? 'El directo ya no está en el disco, y no hace falta: al acortar o cambiar las ventanas se usa el propio vídeo del clip, y al alargarlo o moverlo el programa baja de Twitch solo ese trozo.' : undefined}
           canReedit={canReedit}
           rendering={rendering}
           designOpen={designOpen}

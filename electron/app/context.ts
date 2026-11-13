@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../services/store';
 import { Logger } from '../services/logger';
@@ -18,10 +16,9 @@ import { LibraryService } from '../domain/library';
 import { TranscriptService } from '../domain/transcripts';
 import { SpeakerService } from '../domain/speakers';
 import { MomentsService } from '../domain/moments';
-import { ClipScoreService } from '../domain/clipScores';
-import { askJson } from '../services/llm';
-import { CLIP_JUDGE_SYSTEM, clipJudgePrompt, parseClipJudgement } from '../../shared/clipCriteria';
-import { audioEnergy as measureEnergy } from '../services/audioEnergy';
+import type { ClipScoreService } from '../domain/clipScores';
+import { createClipScoreService } from './wiring/clipScores';
+import { StorageService } from '../domain/storage';
 import { StyleService } from '../domain/style';
 import { CoverService } from '../domain/covers';
 import type { DiarizeEngine } from '../services/diarize';
@@ -111,6 +108,7 @@ export class AppContext {
   readonly speakers: SpeakerService;
   readonly moments: MomentsService;
   readonly clipScores: ClipScoreService;
+  readonly storage: StorageService;
   readonly style: StyleService;
   readonly covers: CoverService;
   readonly tasks: TaskTracker;
@@ -192,7 +190,7 @@ export class AppContext {
     const subtitles = { speakerColors: (words: Word[]) => this.speakers.colorsFor(words), words: (vodId: string) => this.transcripts.words(vodId), ensure: (vodId: string, ranges?: { start: number; end: number }[]) => this.transcripts.ensure(vodId, ranges), fontsDir: o.fontsDir };
     this.categories = new CategoryService({ store: this.store, log: this.log, tools, fetch: o.fetchChapters });
     this.clips = new ClipService({ categories: this.categories, store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, freeBytes: o.freeBytes, source: (id) => this.vods.ensureFile(id) });
-    this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, source: (id) => this.vods.ensureFile(id) });
+    this.library = new LibraryService({ store: this.store, log: this.log, notifier: o.notifier, queue: this.renderQueue, tools, subtitles, source: (id) => this.vods.ensureFile(id), section: (id, s, e) => this.vods.fetchSection(id, s, e) });
     this.groups = new GroupService(this.store, o.notifier);
     this.pubs = new PublicationService(this.store, o.notifier);
     this.channel = new ChannelMonitor({
@@ -235,40 +233,8 @@ export class AppContext {
       restore: (id) => this.vods.ensureFile(id),
       discardSource: (id) => this.vods.discardSource(id),
     });
-    this.clipScores = new ClipScoreService({
-      file: path.join(o.userDataDir, 'clip-scores.json'),
-      log: this.log,
-      enabled: () => this.store.data.settings.autopilot.scoreClips !== false,
-      canRun: () => !this.channel.isLive() && !this.autopilot.isBusy() && this.store.data.settings.autopilot.scoreClips !== false,
-      waitReason: () => (this.channel.isLive() ? 'hay un directo en marcha' : this.autopilot.isBusy() ? 'el piloto automático está analizando un directo' : null),
-      hasJudge: () => Boolean(this.autopilot.llmConf()),
-      ready: () => {
-        const w = this.transcripts.status();
-        if (!w.engine) return 'Falta Whisper (el motor que escucha los clips).';
-        if (!w.modelInstalled) return `Falta descargar el modelo de Whisper «${w.model}»: en Ajustes, Voz y subtítulos, pulsa «Descargar modelo». Sin él no se puede leer lo que se dice en los clips y no se valoran.`;
-        return null;
-      },
-      analyze: async (clip) => {
-        const t = this.tools();
-        const url = (await run(t.ytdlp, ['--no-warnings', '--no-playlist', '-g', '-f', 'b[height<=480]/b', '--', clip.url], 60_000)).stdout.trim().split('\n')[0] ?? '';
-        if (!/^https?:\/\//.test(url)) throw new Error('Twitch no dio una dirección válida para el clip.');
-        const wav = path.join(os.tmpdir(), `streamclips-score-${clip.id.replace(/[^A-Za-z0-9_-]/g, '_')}.wav`);
-        try {
-          await run(t.ffmpeg, ['-y', '-v', 'error', '-nostdin', '-i', url, '-vn', '-ac', '1', '-ar', '16000', '-t', '180', '-c:a', 'pcm_s16le', wav], 180_000);
-          const energyDb = await (o.energy ?? measureEnergy)(t, wav).catch(() => undefined);
-          const words = await this.transcripts.transcribeAudio(wav, [clip.title]);
-          return { durationSec: clip.durationSec, words, energyDb };
-        } finally {
-          fs.rmSync(wav, { force: true });
-        }
-      },
-      judge: async (clip, words) => {
-        const conf = this.autopilot.llmConf();
-        if (!conf) return null;
-        const raw = await askJson(conf, CLIP_JUDGE_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec), { temperature: 0.2 });
-        return parseClipJudgement(raw);
-      },
-    });
+    this.clipScores = createClipScoreService(this, o);
+    this.storage = new StorageService({ store: this.store, userDataDir: o.userDataDir, discard: (id) => this.autopilot.discard(id), isRunning: (id) => this.autopilot.isRunning(id) });
     this.channel.scores = this.clipScores;
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
     this.channel.onAnalyzeReady((job) => void this.autopilot.run(job.id).catch((e) => this.log.error('Piloto automático', e)));

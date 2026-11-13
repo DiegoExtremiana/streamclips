@@ -51,6 +51,8 @@ const api: Api = {
   cancelAutopilot: (id) => call(CHANNELS.autopilotCancel, id),
   pauseAutopilot: (id) => call(CHANNELS.autopilotPause, id),
   discardVod: (id) => call(CHANNELS.vodsDiscard, id),
+  storageReport: () => call(CHANNELS.storageReport),
+  freeStorage: () => call(CHANNELS.storageFree),
   setAutoImport: (on) => call(CHANNELS.channelAuto, on),
   onChannelUpdate: (cb) => {
     const h = (_e: unknown, s: Parameters<typeof cb>[0]) => cb(s);

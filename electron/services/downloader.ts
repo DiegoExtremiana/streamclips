@@ -29,6 +29,31 @@ function safeId(id: string): string {
   return clean && clean !== '.' && clean !== '..' ? clean : 'video';
 }
 
+/**
+ * Baja de un directo SOLO el trozo pedido (segundos), no el VOD entero: para recortar, alargar o mover un clip cuando el directo
+ * ya no está en el disco. El archivo queda en `dir` y empieza exactamente en `start`.
+ */
+export async function downloadSection(tools: ToolPaths, url: string, start: number, end: number, dir: string): Promise<string> {
+  if (!(end > start) || start < 0) throw new Error('El tramo pedido no es válido.');
+  fs.mkdirSync(dir, { recursive: true });
+  const out = path.join(dir, 'tramo.%(ext)s');
+  await run(
+    tools.ytdlp,
+    [
+      '--no-warnings', '--no-playlist',
+      '--download-sections', `*${start.toFixed(2)}-${end.toFixed(2)}`,
+      '--force-keyframes-at-cuts',
+      '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b',
+      '--merge-output-format', 'mp4', '--remux-video', 'mp4',
+      '-o', out, '--', url,
+    ],
+    30 * 60_000,
+  );
+  const file = fs.readdirSync(dir).map((f) => path.join(dir, f)).find((f) => /\.mp4$/i.test(f));
+  if (!file || fs.statSync(file).size === 0) throw new Error('Twitch no devolvió el trozo del directo (¿el VOD ya caducó?).');
+  return file;
+}
+
 // yt-dlp en Windows escribe en la página de códigos del sistema (cp1252) y los acentos llegaban rotos («D�A»). Se le pide UTF-8.
 process.env.PYTHONUTF8 = '1';
 process.env.PYTHONIOENCODING = 'utf-8';

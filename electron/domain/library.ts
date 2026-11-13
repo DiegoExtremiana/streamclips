@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ClipEdit, FramingPreview, OutputItem, OutputMeta, RenderKind } from '../../shared/types';
+import type { ClipEdit, FramingPreview, OutputItem, OutputMeta, RenderKind, VodJob } from '../../shared/types';
 import { MAX_TITLE_LEN, validateClipSpec, validateLongSpec } from '../../shared/plan';
 import { YT_DESC_MAX, YT_PLAYLIST_MAX, YT_TITLE_MAX, hasAngle } from '../../shared/youtube';
 import type { Store } from '../services/store';
@@ -26,6 +26,8 @@ export interface LibraryDeps {
   subtitles: SubtitleEnv;
   /** Ruta del archivo del directo, volviéndolo a descargar si se borró para liberar espacio. */
   source?: (vodId: string) => Promise<string>;
+  /** Baja de Twitch solo un trozo del directo (para editar un clip cuando el VOD ya no está en el disco). */
+  section?: (vodId: string, start: number, end: number) => Promise<{ file: string; offset: number; dispose: () => void }>;
 }
 
 /** Tamaño de las miniaturas elegidas a mano para vídeos largos (formato de YouTube). */
@@ -214,14 +216,27 @@ export class LibraryService {
   }
 
   /**
+   * Cuando el VOD ya no está (se borró para liberar espacio), el clip se puede reencuadrar y acortar a partir de su propio vídeo
+   * horizontal. Solo vale sin cortes internos (el horizontal los lleva ya aplicados) y dentro de lo que el clip ya contiene.
+   */
+  private clipOnlySource(o: OutputItem): string | undefined {
+    const f = o.files.horizontal;
+    if (o.kind !== 'clip' || o.start === undefined || o.end === undefined || o.cuts?.length || !f || !fs.existsSync(f)) return undefined;
+    return f;
+  }
+
+  /**
    * Recorta o reencuadra un clip volviendo a renderizar sus dos versiones desde el VOD
    * (también sirve para recuperar la versión que faltara). Los archivos nuevos se validan antes de
    * sustituir a los anteriores; si algo falla no cambia nada.
    */
   async reeditClip(id: string, edit: ClipEdit): Promise<OutputItem> {
     // si el directo se borró para liberar espacio, se vuelve a descargar ANTES de ocupar la cola de montaje
-    const src = this.find(id).vodId;
-    if (src) await this.d.source?.(src);
+    const cur = this.find(id);
+    const src = cur.vodId;
+    const vodThere = Boolean(this.d.store.data.vods.find((v) => v.id === src)?.filePath && fs.existsSync(this.d.store.data.vods.find((v) => v.id === src)!.filePath!));
+    // sin el directo en el disco no se baja entero: se reencuadra y acorta con el vídeo del propio clip y, si hay que alargarlo o moverlo, se baja solo ese trozo
+    if (src && !vodThere && !this.d.section) await this.d.source?.(src);
     return this.d.queue.run(async () => {
       const o = this.find(id);
       if (o.kind === 'long') return this.reeditLong(o, edit);
@@ -232,11 +247,36 @@ export class LibraryService {
         throw new Error('Se está publicando ahora mismo; espera a que termine.');
       }
       const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-      if (!vod?.filePath || !fs.existsSync(vod.filePath)) {
-        throw new Error('El VOD de origen ya no está en su sitio (¿lo has movido o borrado?).');
-      }
+      const vodFile = vod?.filePath && fs.existsSync(vod.filePath) ? vod.filePath : undefined;
       const start = edit.start ?? o.start;
       const end = edit.end ?? o.end;
+      // sin VOD: dentro de lo que el clip ya tiene se trabaja con su propio vídeo horizontal (tiempos relativos a su inicio)
+      const within = start >= o.start - 0.05 && end <= o.end + 0.05;
+      const clipFile = vodFile || !within ? undefined : this.clipOnlySource(o);
+      let section: { file: string; offset: number; dispose: () => void } | undefined;
+      if (!vodFile && !clipFile) {
+        // al alargar o mover el clip se baja de Twitch solo el trozo necesario
+        if (!this.d.section) throw new Error('El VOD de origen ya no está en su sitio (¿lo has movido o borrado?).');
+        if (end - start > 180) throw new Error('Un clip no puede durar más de 3 minutos.');
+        section = await this.d.section(o.vodId, start, end);
+      }
+      try {
+        return await this.reeditFrom(o as OutputItem & { vodId: string; start: number; end: number }, edit, { vod, vodFile, clipFile, section, start, end });
+      } finally {
+        section?.dispose();
+      }
+    });
+  }
+
+  private async reeditFrom(
+    o: OutputItem & { vodId: string; start: number; end: number },
+    edit: ClipEdit,
+    src: { vod?: VodJob; vodFile?: string; clipFile?: string; section?: { file: string; offset: number }; start: number; end: number },
+  ): Promise<OutputItem> {
+    {
+      const { vod, vodFile, clipFile, section, start, end } = src;
+      const sourceFile = (vodFile ?? clipFile ?? section?.file)!;
+      const shift = clipFile ? o.start : section ? section.offset : 0;
       const cropX = edit.cropX ?? o.cropX ?? 0.5;
       // la composición pedida manda; null vuelve al encuadre simple; sin valor se conserva la que tenga
       let layout = edit.layout === undefined ? o.layout : (edit.layout ?? undefined);
@@ -253,8 +293,10 @@ export class LibraryService {
       // al cambiar el tramo, los cortes y acercamientos que ya no caen dentro dejan de tener sentido
       const cuts = o.cuts?.filter((c) => c.start >= start && c.end <= end);
       const effects = o.effects?.filter((e) => e.type !== 'punch' || (e.at >= start && e.at <= end));
-      const vodDur = (await probe(this.d.tools(), vod.filePath)).durationSec;
-      const reason = validateClipSpec({ kind: 'both', start, end, title: o.title, cropX, layout, cuts, effects, subtitles }, vodDur);
+      const vodDur = clipFile || section ? (vod?.durationSec ?? Number.MAX_SAFE_INTEGER) : (await probe(this.d.tools(), sourceFile)).durationSec;
+      const reason = clipFile
+        ? validateClipSpec({ kind: 'both', start: Math.max(0, start - shift), end: end - shift, title: o.title, cropX, layout, subtitles }, (await probe(this.d.tools(), sourceFile)).durationSec + 0.5)
+        : validateClipSpec({ kind: 'both', start, end, title: o.title, cropX, layout, cuts, effects, subtitles }, vodDur);
       if (reason) throw new Error(`Clip no válido: ${reason}.`);
       const ranges = keptRanges(start, end, cuts);
       const expected = totalDuration(ranges);
@@ -265,11 +307,25 @@ export class LibraryService {
       try {
         const files: OutputItem['files'] = {};
         let durationSec = expected;
+        const trimmed = Math.abs(start - o.start) > 0.04 || Math.abs(end - o.end) > 0.04;
         for (const kind of ['horizontal', 'vertical'] as const) {
+          // desde el propio clip, la versión horizontal solo se toca si cambia el recorte (ya lleva los efectos aplicados)
+          if (clipFile && kind === 'horizontal' && !trimmed) {
+            files.horizontal = o.files.horizontal;
+            durationSec = o.durationSec;
+            continue;
+          }
           const out = uniqueOutputPath(outDir, kind, o.title);
           written.push(out);
           await withSubtitles(this.d.subtitles, o.vodId, subtitles, ranges, kind, (subs) =>
-            renderClip(this.d.tools(), vod.filePath!, { kind, start, end, cropX, layout, cuts, effects, subs }, out),
+            renderClip(
+              this.d.tools(),
+              sourceFile,
+              clipFile
+                ? { kind, start: Math.max(0, start - shift), end: end - shift, cropX, layout, subs }
+                : { kind, start: start - shift, end: end - shift, cropX, layout, cuts: cuts?.map((c) => ({ start: c.start - shift, end: c.end - shift })), effects: effects?.map((e) => ('at' in e ? { ...e, at: e.at - shift } : e)), subs },
+              out,
+            ),
           );
           const info = await validateRender(this.d.tools(), out, kind, expected, 1.5 + ranges.length * 0.2);
           files[kind] = out;
@@ -280,7 +336,8 @@ export class LibraryService {
         } catch (e) {
           this.d.log.warn(`Sin miniatura para "${o.title}": ${(e as Error).message}`);
         }
-        const oldFiles = allFiles(o);
+        const keep = new Set(Object.values(files));
+        const oldFiles = allFiles(o).filter((f) => !keep.has(f));
         const oldThumb = o.thumbnail;
         o.files = files;
         o.durationSec = durationSec;
@@ -303,7 +360,7 @@ export class LibraryService {
         this.d.log.error(`Reedición fallida ("${o.title}")`, e);
         throw e;
       }
-    });
+    }
   }
 
   /** Vídeo largo: solo cambian los subtítulos; se monta de nuevo desde los tramos guardados. */
@@ -377,10 +434,10 @@ export class LibraryService {
 
   /** Fotograma completo del VOD en medio del clip, para colocar el recuadro vertical sobre él. */
   /** Datos del directo de origen para dibujar la línea de tiempo del recorte (null si ya no está el archivo). */
-  async clipContext(id: string): Promise<{ vodDurationSec: number | null }> {
+  async clipContext(id: string): Promise<{ vodDurationSec: number | null; clipOnly?: boolean }> {
     const o = this.find(id);
     const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-    if (!vod?.filePath || !fs.existsSync(vod.filePath)) return { vodDurationSec: null };
+    if (!vod?.filePath || !fs.existsSync(vod.filePath)) return { vodDurationSec: vod?.durationSec ?? null, ...(vod?.url ? { clipOnly: true } : {}) };
     if (vod.durationSec) return { vodDurationSec: vod.durationSec };
     try {
       return { vodDurationSec: (await probe(this.d.tools(), vod.filePath)).durationSec };
@@ -394,12 +451,14 @@ export class LibraryService {
       const o = this.find(id);
       if (o.kind !== 'clip') throw new Error('Solo los clips tienen encuadre.');
       const vod = this.d.store.data.vods.find((v) => v.id === o.vodId);
-      if (o.start === undefined || o.end === undefined || !vod?.filePath || !fs.existsSync(vod.filePath)) {
-        throw new Error('No hay VOD de origen para mostrar el encuadre.');
+      const vodFile = vod?.filePath && fs.existsSync(vod.filePath) ? vod.filePath : undefined;
+      const clipFile = vodFile ? undefined : this.clipOnlySource(o);
+      if (o.start === undefined || o.end === undefined || (!vodFile && !clipFile)) {
+        throw new Error('No hay VOD de origen ni vídeo horizontal del clip para mostrar el encuadre.');
       }
       const tmp = thumbnailPath(this.d.store.data.settings.outputDir, `preview-${o.id}`);
       try {
-        await extractFrame(this.d.tools(), vod.filePath, (o.start + o.end) / 2, tmp, { maxWidth: 640 });
+        await extractFrame(this.d.tools(), (vodFile ?? clipFile)!, vodFile ? (o.start + o.end) / 2 : (o.end - o.start) / 2, tmp, { maxWidth: 640 });
         const info = await probe(this.d.tools(), tmp);
         return { dataUrl: `data:image/jpeg;base64,${fs.readFileSync(tmp).toString('base64')}`, width: info.width, height: info.height };
       } finally {

@@ -223,7 +223,7 @@ describe('puntuación de clips en segundo plano', () => {
   it('el diagnóstico dice por qué espera, cuántos fallaron y el último error', async () => {
     let free = false;
     let sleeps = 0;
-    const { svc } = make({ canRun: () => free, waitReason: () => 'hay un directo en marcha', sleep: async () => { if (++sleeps === 2) free = true; } });
+    const { svc } = make({ canRun: () => free, waitReason: () => 'hay un directo en marcha', sleep: async () => { if (++sleeps === 3) free = true; } });
     svc.enqueue([clip('c1')]);
     assert.equal(svc.diagnostics().waiting, 'hay un directo en marcha');
     await svc.idle();
@@ -242,5 +242,45 @@ describe('puntuación de clips en segundo plano', () => {
     svc.enqueue([clip('c1')]);
     await svc.idle();
     assert.deepEqual(analyzed, ['c1']);
+  });
+
+  it('guarda las notas en un documento legible, conserva el título y mide el tiempo por fase', async () => {
+    const file = tmp();
+    const notes = path.join(path.dirname(file), 'Notas de clips.md');
+    let t = 0;
+    const { svc } = make({ notesFile: notes, now: () => (t += 1000), analyze: async (_c, onPhase) => { onPhase?.('transcripcion'); return { durationSec: 30, words: hype, energyDb: loud }; } }, file);
+    svc.enqueue([clip('good1', { title: 'Mi clip | genial' })]);
+    await svc.idle();
+    const md = fs.readFileSync(notes, 'utf8');
+    assert.match(md, /Mi clip \/ genial/);
+    assert.match(md, /\| Nota \| Humor/);
+    const d = svc.diagnostics();
+    assert.ok((d.secPerClip ?? 0) > 0);
+    assert.ok(d.phases?.transcripcion !== undefined);
+    // al reabrir (otra instancia) la nota sigue y no se vuelve a analizar
+    const again = make({}, file);
+    again.svc.enqueue([clip('good1')]);
+    await again.svc.idle();
+    assert.deepEqual(again.analyzed, []);
+  });
+
+  it('valora varios clips a la vez sin repetir ninguno', async () => {
+    let live = 0;
+    let peak = 0;
+    const seen: string[] = [];
+    const { svc } = make({
+      analyze: async (c) => {
+        seen.push(c.id);
+        live++;
+        peak = Math.max(peak, live);
+        await new Promise((r) => setTimeout(r, 5));
+        live--;
+        return { durationSec: 30, words: hype, energyDb: loud };
+      },
+    });
+    svc.enqueue(many(8));
+    await svc.idle();
+    assert.equal(peak, 2);
+    assert.equal(new Set(seen).size, 8);
   });
 });

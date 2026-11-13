@@ -2,6 +2,16 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.26.0
+
+- **Arreglo grave del audio:** en algunos vídeos, de repente un sonido se repetía en bucle hasta el final. Causa encontrada y reproducida: los tramos con efecto de sonido salían en **mono** y los demás en **estéreo**, y al unirlos sin recodificar el audio se corrompía. Ahora todo sale en estéreo y hay una prueba que lo vigila (audio con frecuencia creciente: si algo se repite, falla). Los vídeos ya montados con el fallo hay que volver a montarlos desde la Biblioteca.
+- **Clips de tu canal:** la causa real del «0 valorados» de la 0.25.1 era que el aviso con el motivo se calculaba pero nunca llegaba a la pantalla. Ahora se ve qué clip y fase se está valorando, los segundos que tarda cada clip y cuánto falta. Se valoran **2 clips a la vez** (uno baja su audio mientras otro se transcribe) y las peticiones al modelo se espacian para no pasar el límite gratuito.
+- **Documento de notas:** las notas de todos los clips se guardan en `Notas de clips.md` (nota, cada criterio, título, fecha y motivo), con botón «Abrir documento de notas». Las notas se conservan al actualizar el programa y al abrirlo no se vuelve a valorar nada ya valorado.
+- **Editar clips sin el VOD:** en la Biblioteca se pueden reencuadrar (ventanas) y acortar usando el propio vídeo horizontal del clip, y **alargar o mover** el clip bajando de Twitch **solo el trozo necesario**, nunca el directo entero.
+- **Análisis de directos:** cada análisis mide el tiempo de cada fase (lectura de audio y chat, transcripción, modelo, hablantes, títulos, montaje) y lo anota en el resultado y en `analysis-times.json` para ver qué conviene acelerar.
+- **Espacio en disco:** nueva tarjeta en Ajustes, General: cuánto ocupa cada cosa y un botón «Liberar espacio» que borra los directos completos ya aprovechados y los temporales; vídeos, clips y transcripciones se conservan.
+- **Código modularizado, sin cambiar el comportamiento:** los tipos compartidos pasan de un archivo de 770 líneas a `shared/model/*` (settings, jobs, library, channel, api, ipc, moments), los canales IPC a `electron/ipc/handlers/*` y la valoración de clips a `electron/app/wiring/`.
+
 ## Novedades de la v0.25.1
 
 - **Los menús se parecen a los de Ajustes:** «Clips y publicación» (Clips de tu canal, Crear desde un VOD, Directos y actividad) y «Conexiones» (Estado y primeros pasos, Twitch, Redes sociales) pasan a un menú lateral con su explicación, y cada botón del menú principal lleva una línea que dice qué hay dentro. La Biblioteca y el calendario de Inicio mantienen sus interruptores de vista, que no son menús.

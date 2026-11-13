@@ -283,4 +283,13 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(peak, 2);
     assert.equal(new Set(seen).size, 8);
   });
+
+  it('los fallos de una sesión anterior no bloquean: al reabrir se vuelve a intentar', async () => {
+    const file = tmp();
+    fs.writeFileSync(file, JSON.stringify({ old1: { v: 5, at: Date.now(), fails: 2 } }));
+    const { svc, analyzed } = make({}, file);
+    svc.enqueue([clip('old1')]);
+    await svc.idle();
+    assert.deepEqual(analyzed, ['old1']);
+  });
 });

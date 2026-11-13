@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { fmtTime } from '../../shared/time';
 import { IconMute, IconPause, IconPlay, IconRestart, IconVolume } from '../icons';
 
@@ -10,6 +10,19 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [scrub, setScrub] = useState<number | null>(null);
+  const seekTimer = useRef<number | undefined>(undefined);
+  // arrastrar la barra dispara decenas de saltos seguidos y el audio del motor se queda repitiendo un trozo: se salta una sola vez, al soltar o tras una pausa breve
+  const seekTo = (t: number) => {
+    setScrub(t);
+    window.clearTimeout(seekTimer.current);
+    seekTimer.current = window.setTimeout(() => {
+      const v = videoRef.current;
+      if (v) v.currentTime = t;
+      setScrub(null);
+    }, 180);
+  };
+  useEffect(() => () => window.clearTimeout(seekTimer.current), []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -83,10 +96,8 @@ export default function Player(props: { videoRef: RefObject<HTMLVideoElement>; s
           min={0}
           max={duration || 0}
           step={0.05}
-          value={Math.min(time, duration || 0)}
-          onChange={(e) => {
-            if (videoRef.current) videoRef.current.currentTime = Number(e.target.value);
-          }}
+          value={Math.min(scrub ?? time, duration || 0)}
+          onChange={(e) => seekTo(Number(e.target.value))}
         />
         <span className="small muted time" aria-label="Tiempo">{fmtTime(time)} / {fmtTime(duration)}</span>
         <button

@@ -265,7 +265,9 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
       await run(tools.ffmpeg, [
         '-y', '-hide_banner', '-loglevel', 'error',
         '-f', 'concat', '-safe', '0', '-i', list,
-        '-c', 'copy', '-movflags', '+faststart', joined,
+        // el vídeo se copia; el audio se vuelve a codificar de una vez: unir trozos de AAC ya codificados deja saltos en cada unión y
+        // algunos reproductores (el del programa incluido) repiten un fragmento de sonido en bucle al saltar en la barra de tiempo
+        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', joined,
       ]);
     }
     if (music && musicFx) {

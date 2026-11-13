@@ -94,7 +94,12 @@ export class ClipScoreService {
     this.now = d.now ?? Date.now;
     try {
       const j = JSON.parse(fs.readFileSync(d.file, 'utf8')) as Record<string, Stored>;
-      for (const [id, v] of Object.entries(j)) if (v && typeof v === 'object' && v.v >= MIN_COMPATIBLE_VERSION && v.v <= SCORE_VERSION) this.scores.set(id, v);
+      for (const [id, v] of Object.entries(j)) {
+        if (!v || typeof v !== 'object' || v.v < MIN_COMPATIBLE_VERSION || v.v > SCORE_VERSION) continue;
+        // un intento fallido de una sesión anterior no se arrastra: tras actualizar el programa (o arreglar la causa) se vuelve a intentar
+        if (v.score === undefined && !v.noText) continue;
+        this.scores.set(id, v);
+      }
     } catch {
       /* sin puntuaciones guardadas */
     }

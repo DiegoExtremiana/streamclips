@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.28.1
+
+- **Clips del canal sin valorar**: los 1074 clips habían quedado marcados como «fallados» por la versión anterior y no se reintentaban nunca. Ahora los fallos de una sesión previa no se arrastran: al abrir el programa se vuelven a intentar (se valoran en directo desde Twitch, sin guardarlos).
+
 ## Novedades de la v0.28.0
 
 Edición temática (fases 1 a 6 del plan de la v28):

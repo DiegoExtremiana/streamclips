@@ -1,7 +1,7 @@
 import type { ClipCriteria } from './clipCriteria';
 
 /** Criterios que el streamer puede corregir a mano; «Puede ser viral» lo sigue valorando solo la IA (una persona no puede saberlo). */
-export const EDITABLE = ['humor', 'historia', 'interes'] as const;
+export const EDITABLE = ['historia', 'interes', 'humor'] as const;
 export type Editable = (typeof EDITABLE)[number];
 export type EditableScores = Record<Editable, number>;
 

@@ -4,10 +4,10 @@ import { peakRise, type ClipSignals } from './clipScore';
 
 /**
  * La nota de un clip sale de cuatro criterios, cada uno de 0 a 10, y siempre va acompañada de un motivo en una frase:
- * humor, si se cuenta algo (planteamiento y desarrollo), si puede ser viral y si es un momento interesante.
+ * si se cuenta algo (planteamiento y desarrollo), si es un momento interesante, humor y si puede ser viral (en ese orden).
  * Nada de esto mira visualizaciones ni popularidad.
  */
-export const CLIP_CRITERIA = ['humor', 'historia', 'viral', 'interes'] as const;
+export const CLIP_CRITERIA = ['historia', 'interes', 'humor', 'viral'] as const;
 export type ClipCriterion = (typeof CLIP_CRITERIA)[number];
 export type ClipCriteria = Record<ClipCriterion, number>;
 
@@ -148,13 +148,21 @@ export const CLIP_JUDGE_VISION_SYSTEM =
     .replace('no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice.', 'no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice Y lo que se ve: gestos y caras exageradas, disfraces o filtros, lo que pasa en el juego o la pantalla, texto en pantalla, fails visuales, el contraste entre lo que dicen y lo que se ve.') +
   ' Un clip puede ser gracioso solo por lo que se ve aunque casi no se hable.';
 
+/** Referencias para que cada nota signifique lo mismo: qué es un clip de 2, de 5 y de 8 en cada criterio. */
+const ANCHORS =
+  'Referencias de lo que vale cada criterio (de 0 a 10):\n' +
+  '- Se cuenta algo: 2 = frases sueltas sin situación; 5 = se entiende qué pasa pero se queda a medias o necesita contexto; 8 = principio, desarrollo y desenlace claros y se entiende solo.\n' +
+  '- Interesante: 2 = charla corriente o reacción a algo sin importancia; 5 = algo curioso o una reacción marcada; 8 = algo inesperado o raro que importa y se recordaría.\n' +
+  '- Humor: 2 = alguna sonrisa o broma floja; 5 = un chiste o reacción graciosa con remate claro; 8 = varios golpes seguidos, absurdo o actuación que haría reír a quien lo ve sin contexto.\n' +
+  '- Viral: 2 = solo le interesa a la comunidad; 5 = un momento citable pero que depende del contexto; 8 = un desconocido lo compartiría ya: frase de meme, reacción enorme o fail clarísimo.\n';
+
 export function clipJudgePrompt(title: string, words: Word[], durationSec: number, frames = 0, guide = ''): string {
   const text = words.map((w) => w.text).join(' ').slice(0, 1800);
   const qs = CLIP_CRITERIA.map((k) => `${k}:\n${RUBRIC[k].map((it) => `  - ${it.key}: ${it.label}`).join('\n')}`).join('\n');
-  const shape = `{${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(',')}}`).join(',')},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(',')}},"motivo":""}`;
+  const shape = `{"resumen":"",${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(',')}}`).join(',')},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(',')}},"motivo":""}`;
   return (
     `Evalúa este clip con estas preguntas (0, 1 o 2 cada una):\n${qs}\n` +
-    `Devuelve exactamente este JSON: ${shape}. En "pruebas" pon, por criterio, la cita literal más reveladora de la transcripción (vacía si no hay). ` +
+    `${ANCHORS}\nDevuelve exactamente este JSON: ${shape}. "resumen" va PRIMERO: en una o dos frases, qué pasa en el clip (quién, qué y cómo acaba), solo con lo que se oye o se ve; pensar eso antes evita puntuar por impresión. En "pruebas" pon, por criterio, la cita literal más reveladora de la transcripción (vacía si no hay). ` +
     '"motivo" es una frase corta en español que resume por qué el clip vale lo que vale.\n' +
     `Título que le puso quien lo creó: ${JSON.stringify(title)}. Duración: ${Math.round(durationSec)} s.` +
     guide +
@@ -166,6 +174,8 @@ export function clipJudgePrompt(title: string, words: Word[], durationSec: numbe
 export interface ClipJudgement {
   criteria: ClipCriteria;
   reason: string;
+  /** Qué pasa en el clip, en una o dos frases (lo escribe el modelo antes de puntuar). */
+  summary?: string;
   /** Respuesta de cada pregunta de la rúbrica (0, 1 o 2), por «criterio.pregunta». */
   items: RubricItems;
   evidence: Evidence;
@@ -212,5 +222,6 @@ export function parseClipJudgement(raw: unknown, ctx?: { transcript: string; vis
     criteria[k] = sum;
   }
   const reason = typeof r.motivo === 'string' ? r.motivo.trim().slice(0, 200) : '';
-  return { criteria, reason, items, evidence };
+  const summary = typeof r.resumen === 'string' && r.resumen.trim() ? r.resumen.trim().slice(0, 300) : undefined;
+  return { criteria, reason, ...(summary ? { summary } : {}), items, evidence };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { IconClose } from '../icons';
+import { IconChevron, IconClose } from '../icons';
 
 /** Ventana modal accesible: Escape y clic fuera la cierran, el foco entra en ella y vuelve a donde estaba. */
 export function Modal(props: { title: string; onClose: () => void; wide?: boolean | 'mid'; children: ReactNode }) {
@@ -77,5 +77,17 @@ export function ContextMenu(props: { x: number; y: number; items: MenuItem[]; on
         </button>
       ))}
     </div>
+  );
+}
+
+/** Sección de una ventana: título en mayúsculas con flecha; se pliega y se despliega (abierta por defecto) para ordenar fichas largas. */
+export function Fold(props: { label: string; title: ReactNode; open?: boolean; children: ReactNode }) {
+  return (
+    <section aria-label={props.label}>
+      <details className="fold" open={props.open ?? true}>
+        <summary><h3>{props.title}</h3><IconChevron size={14} /></summary>
+        <div className="fold-body">{props.children}</div>
+      </details>
+    </section>
   );
 }

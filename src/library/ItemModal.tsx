@@ -16,7 +16,7 @@ import ClipStudio from './ClipStudio';
 import { PlatformSwitch } from './PlatformSwitch';
 import VerticalEditor from './VerticalEditor';
 import { layoutFromCropX, normalizeLayout, type VerticalLayout } from '../../shared/layout';
-import { Modal } from './ui';
+import { Fold, Modal } from './ui';
 
 export const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
@@ -429,15 +429,14 @@ export default function ItemModal(props: {
           </div>
           <Notice msg={dlMsg} />
           {o.kind === 'long' && (
-            <section aria-label="Miniatura">
-              <h3>Miniatura</h3>
+            <Fold label="Miniatura" title="Miniatura">
               {o.thumbnail && <img className="thumbpreview" alt="Miniatura actual" src={mediaUrl(o.id, 'thumb', o.thumbnail)} />}
               <div className="row">
                 <button className="btn small" onClick={() => void thumbFromFrame()}>Usar el fotograma actual del vídeo</button>
                 <button className="btn ghost small" onClick={() => void thumbFromImage()}>Elegir una imagen…</button>
               </div>
               <Notice msg={thumbMsg} />
-            </section>
+            </Fold>
           )}
             </>
           )}
@@ -445,8 +444,7 @@ export default function ItemModal(props: {
 
         <div className="formcol">
           {(
-            <section aria-label="Datos de la publicación">
-              <h3>{o.kind === 'long' ? 'Datos de YouTube' : 'Datos de la publicación'}</h3>
+            <Fold label="Datos de la publicación" title={o.kind === 'long' ? 'Datos de YouTube' : 'Datos de la publicación'}>
               <form
                 className="ytform"
                 onSubmit={(e) => {
@@ -489,12 +487,11 @@ export default function ItemModal(props: {
                 </div>
               </form>
               <Notice msg={ytMsg} />
-            </section>
+            </Fold>
           )}
 
           {!o.remote && (
-          <section aria-label="Subtítulos">
-            <h3>Subtítulos</h3>
+          <Fold label="Subtítulos" title="Subtítulos">
             {!canSubtitle ? (
               <div className="muted small">Este vídeo no guarda de qué parte del VOD sale, así que no se le pueden añadir subtítulos.</div>
             ) : (
@@ -576,11 +573,10 @@ export default function ItemModal(props: {
               </>
             )}
             <Notice msg={subsMsg} />
-          </section>
+          </Fold>
           )}
 
-          <section aria-label="Publicación">
-            <h3>Cuándo se sube y dónde</h3>
+          <Fold label="Publicación" title="Cuándo se sube y dónde">
             {o.kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}
             {ownPlatforms.map(({ id, label }) => {
               const r = rowState(id);
@@ -598,13 +594,12 @@ export default function ItemModal(props: {
             </div>
             <div className="muted small">Desmarcar una red quita su programación pendiente. Lo ya publicado no se puede cambiar.</div>
             <Notice msg={schedMsg} />
-          </section>
+          </Fold>
 
-          <section aria-label="Eliminar">
-            <h3>Eliminar</h3>
+          <Fold label="Eliminar" title="Eliminar">
             <div className="muted small">Borra este vídeo del disco con todas sus versiones. El VOD de origen no se toca. Te pediremos confirmación.</div>
             <div className="row"><button className="btn danger small" onClick={props.onDelete}><IconTrash /> Eliminar este vídeo…</button></div>
-          </section>
+          </Fold>
         </div>
       </div>
     </Modal>

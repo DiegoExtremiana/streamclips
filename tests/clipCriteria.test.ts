@@ -102,4 +102,14 @@ describe('criterios de la nota de un clip', () => {
     const sinFotos = parseClipJudgement({ ...all2, pruebas: { viral: 'Imagen: derrama el cubo' } }, { transcript })!;
     assert.equal(sinFotos.criteria.viral, 5, 'sin fotogramas no se puede dar por vista una imagen');
   });
+
+  it('el orden es Se cuenta algo, Interesante, Humor, Viral; el prompt pide el resumen primero y lleva referencias', () => {
+    assert.deepEqual([...CLIP_CRITERIA], ['historia', 'interes', 'humor', 'viral']);
+    const p = clipJudgePrompt('t', [], 10);
+    assert.ok(p.indexOf('"resumen"') < p.indexOf('"historia"'));
+    assert.match(p, /Referencias de lo que vale cada criterio/);
+    const all1 = Object.fromEntries(CLIP_CRITERIA.map((k) => [k, Object.fromEntries(RUBRIC[k].map((it) => [it.key, 1]))]));
+    assert.equal(parseClipJudgement({ ...all1, resumen: '  Se le cae el cubo y se ríe.  ' })!.summary, 'Se le cae el cubo y se ríe.');
+    assert.equal(parseClipJudgement(all1)!.summary, undefined);
+  });
 });

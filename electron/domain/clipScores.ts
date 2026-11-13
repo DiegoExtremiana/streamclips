@@ -38,6 +38,7 @@ interface Stored {
   /** Respuestas de la rúbrica y pruebas (citas) del modelo. */
   items?: RubricItems;
   evidence?: Evidence;
+  summary?: string;
   /** El clip no tiene palabras que valorar: no se puntúa (y no se repite). */
   noText?: boolean;
   /** Qué IA y qué modelo hicieron esta valoración (la fecha del examen es `at`). */
@@ -148,9 +149,9 @@ export class ClipScoreService {
   }
 
   /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
-  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'user'; items?: RubricItems; evidence?: Evidence; ai?: AiStamp; at?: number } | undefined {
+  detailOf(id: string): { criteria: ClipCriteria; reason: string; by: 'model' | 'user'; items?: RubricItems; evidence?: Evidence; summary?: string; ai?: AiStamp; at?: number } | undefined {
     const s = this.scores.get(id);
-    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'model', items: s.items, evidence: s.evidence, ai: s.ai, at: s.at } : undefined;
+    return s?.crit && s.score !== undefined ? { criteria: s.crit, reason: s.reason ?? '', by: s.by ?? 'model', items: s.items, evidence: s.evidence, summary: s.summary, ai: s.ai, at: s.at } : undefined;
   }
 
   /**
@@ -385,6 +386,6 @@ export class ClipScoreService {
     }
     const criteria = withMeasuredViral(j.criteria, sig);
     const ai = j.ai ?? { provider: 'desconocida', model: 'desconocido' };
-    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: 'model', text: sig.words.map((w) => w.text).join(' ').slice(0, 500), ai };
+    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, summary: j.summary, v: SCORE_VERSION, at: this.now(), by: 'model', text: sig.words.map((w) => w.text).join(' ').slice(0, 500), ai };
   }
 }

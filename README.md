@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.29.1
+
+- **Animaciones**: los iconos del menú de la izquierda dan un saltito al pasar el ratón y las barras de cada clip se llenan una a una al abrirlo.
+- **Estadísticas ordenadas**: Se cuenta algo, Interesante, Humor y Viral. En la lista de clips solo se ve la nota total; las estadísticas están dentro de cada clip.
+- **Menú del clip rediseñado** con el mismo esquema que las demás ventanas: vídeo a la izquierda y, a la derecha, nota, resumen de lo que pasa, estadísticas desplegables (con el porqué y la prueba), tu valoración y quién examinó el clip. Las fichas de vídeos y clips de la Biblioteca usan ahora secciones plegables.
+- **Más criterio de la IA**: antes de puntuar resume qué pasa en el clip y lleva referencias de qué es un 2, un 5 y un 8 en cada estadística.
+
 ## Novedades de la v0.29.0
 
 - **«No estoy de acuerdo»** en cada clip valorado: corriges humor, «se cuenta algo» y «momento interesante»; la IA aprende de forma controlada (guarda tus correcciones, solo ajusta si hay una tendencia clara) y se puede deshacer.

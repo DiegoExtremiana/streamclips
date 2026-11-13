@@ -4,119 +4,20 @@ import type { ClipsResult, OutputItem, TwitchClip, VodJob } from '../../shared/t
 type ClipsResultScoring = NonNullable<ClipsResult['scoring']>;
 import { fmtDate, fmtTime } from '../../shared/time';
 import { clipLibraryState, defaultDir, filterClips, type ClipLibraryState, type ClipSort, type SortDir } from '../../shared/twitchClips';
-import { CLIP_CRITERIA, CRITERION_LABEL, POINTS_LABEL, RUBRIC } from '../../shared/clipCriteria';
 
 import { errMsg } from '../lib';
 import { IconPlus, IconSearch, IconSortAsc, IconSortDesc } from '../icons';
-import { Modal } from '../library/ui';
-import { EDITABLE, type EditableScores } from '../../shared/clipFeedback';
+import { Fold, Modal } from '../library/ui';
+import { ClipScorePanel, fmtScore } from './ClipScorePanel';
 
 const REFRESH_MS = 60_000;
 const SCORING_MS = 15_000; // mientras se valoran clips se vuelve a preguntar para que vayan saliendo las notas
 const LOADING_MS = 3_000; // mientras se lee el historial se vuelve a preguntar enseguida
 
-const fmtScore = (n: number) => n.toFixed(1).replace('.', ',');
-
-const PROVIDER_NAME: Record<string, string> = { gemini: 'Gemini', groq: 'Groq' };
-/** «Gemini · gemini-3.5-flash-lite · 13/11/2026»: quién examinó el clip y cuándo. */
-function stampText(w: NonNullable<TwitchClip['scoredWith']>): string {
-  const when = w.at ? ` · ${new Date(w.at).toLocaleDateString('es-ES')}` : '';
-  return `${PROVIDER_NAME[w.provider] ?? w.provider} · ${w.model}${w.vision ? ' (con imagen)' : ''}${when}`;
-}
-
-/** Los cuatro criterios de la nota como barras, con el motivo y cómo se calculó. */
-function Criteria({ clip, compact }: { clip: TwitchClip; compact?: boolean }) {
-  const cr = clip.criteria;
-  if (!cr) return null;
-  const by = clip.scoredBy === 'user' ? 'Corregido por ti.' : clip.scoredBy === 'model' ? 'Valorado por la IA.' : '';
-  return (
-    <div className={`crit${compact ? ' compact' : ''}`} data-testid={`crit-${clip.id}`} title={`${clip.reason ?? ''} ${by}`.trim()}>
-      {CLIP_CRITERIA.map((k) => (
-        <div key={k} className="crit-row">
-          <span className="crit-name">{CRITERION_LABEL[k]}</span>
-          <span className="crit-bar" role="img" aria-label={`${CRITERION_LABEL[k]}: ${fmtScore(cr[k])} de 10`}><i style={{ width: `${Math.min(100, cr[k] * 10)}%` }} /></span>
-          <span className="crit-val">{fmtScore(cr[k])}</span>
-        </div>
-      ))}
-      {cr.viral >= 8 && <div className="badge ok" data-testid={`viral-${clip.id}`} style={{ alignSelf: 'flex-start' }}>Puede ser viral</div>}
-      {!compact && clip.reason && <div className="crit-reason">{clip.reason}</div>}
-      {!compact && <div className="muted small" data-testid={`stamp-${clip.id}`}>{by}{clip.scoredWith ? ` Examinado con ${stampText(clip.scoredWith)}.` : ''}</div>}
-      {!compact && clip.items && (
-        <details className="crit-why" data-testid={`why-${clip.id}`}>
-          <summary>Ver por qué, pregunta a pregunta</summary>
-          {CLIP_CRITERIA.map((k) => (
-            <div key={k} className="crit-group">
-              <div className="crit-group-title">{CRITERION_LABEL[k]}: {fmtScore(cr[k])} de 10</div>
-              {RUBRIC[k].map((it) => (
-                <div key={it.key} className="crit-q">
-                  <span className={`crit-pts p${clip.items?.[`${k}.${it.key}`] ?? 0}`}>{POINTS_LABEL[clip.items?.[`${k}.${it.key}`] ?? 0]}</span>
-                  <span>{it.label}</span>
-                </div>
-              ))}
-              {clip.evidence?.[k] && <div className="crit-proof muted small">Prueba: «{clip.evidence[k]}»</div>}
-            </div>
-          ))}
-          <div className="muted small">«Puede ser viral» mezcla estas preguntas (75 %) con lo medido en el clip (25 %): duración adecuada, que se hable pronto y el pico de volumen.</div>
-        </details>
-      )}
-    </div>
-  );
-}
 
 const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'No está en la Biblioteca' };
 
 /** Vista previa de un clip de Twitch sin descargarlo: se pide la dirección directa del vídeo y se reproduce aquí. */
-/** «No estoy de acuerdo»: se mueven humor, «se cuenta algo» y momento interesante; «Puede ser viral» lo valora solo la IA. La IA aprende de estas correcciones. */
-function Disagree({ clip, onDone }: { clip: TwitchClip; onDone: () => void }) {
-  const cr = clip.criteria!;
-  const [open, setOpen] = useState(false);
-  const [vals, setVals] = useState<EditableScores>({ humor: cr.humor, historia: cr.historia, interes: cr.interes });
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const [fb, setFb] = useState<{ count: number; enough: boolean } | null>(null);
-  useEffect(() => { window.api.clipFeedback().then(setFb).catch(() => undefined); }, [clip.scoredBy]);
-  const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setErr('');
-    try {
-      await fn();
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      setErr(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="disagree" data-testid="disagree">
-      {!open ? (
-        <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn small" onClick={() => { setVals({ humor: cr.humor, historia: cr.historia, interes: cr.interes }); setOpen(true); }}>No estoy de acuerdo</button>
-          {clip.scoredBy === 'user' && <button className="btn ghost small" disabled={busy} onClick={() => void run(() => window.api.undoClipCorrection(clip.id))}>Volver a la nota de la IA</button>}
-          {fb && fb.count > 0 && <span className="muted small">La IA ha aprendido de {fb.count} corrección(es){fb.enough ? '' : ' (con 3 empieza a notar tu criterio)'}.</span>}
-        </div>
-      ) : (
-        <div className="disagree-edit">
-          {EDITABLE.map((k) => (
-            <label key={k} className="crit-row" style={{ alignItems: 'center' }}>
-              <span className="crit-name">{CRITERION_LABEL[k]}</span>
-              <input type="range" min={0} max={10} step={0.5} value={vals[k]} aria-label={`${CRITERION_LABEL[k]} según tú`} onChange={(e) => setVals((v) => ({ ...v, [k]: Number(e.target.value) }))} />
-              <span className="crit-val">{fmtScore(vals[k])}</span>
-            </label>
-          ))}
-          <div className="muted small">«Puede ser viral» lo valora solo la IA: una persona no puede saberlo. La IA usa tus correcciones como ejemplos para valorar mejor los próximos clips.</div>
-          {err && <div className="msg bad" role="alert">{err}</div>}
-          <div className="row" style={{ gap: 8, marginTop: 6 }}>
-            <button className="btn small" disabled={busy} onClick={() => void run(() => window.api.correctClipScore(clip.id, vals))}>{busy ? 'Guardando…' : 'Guardar mi valoración'}</button>
-            <button className="btn ghost small" disabled={busy} onClick={() => setOpen(false)}>Cancelar</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip: TwitchClip; state: ClipLibraryState; busy: boolean; onAdd: () => void; onClose: () => void; onCorrected: () => void }) {
   const [src, setSrc] = useState('');
   const [error, setError] = useState('');
@@ -127,28 +28,21 @@ function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip:
   }, [clip.id]);
   return (
     <Modal title={clip.title} wide onClose={onClose}>
-      <div className="clipprev" data-testid="clip-preview">
-        {error ? (
-          <div className="msg bad" role="alert">{error}</div>
-        ) : src ? (
-          <video className="player" data-testid="clip-preview-video" src={src} controls autoPlay playsInline />
-        ) : (
-          <div className="muted" role="status" style={{ padding: 30, textAlign: 'center' }}>Cargando el clip desde Twitch…</div>
-        )}
-        {clip.score === undefined && clip.reason && <div className="muted small" data-testid="clip-preview-noscore" style={{ marginTop: 8 }}>{clip.reason}</div>}
-        {clip.score !== undefined && (
-          <div className="clipprev-score" data-testid="clip-preview-score">
-            <div className={`bigscore${clip.gold ? ' gold' : ''}`}>{fmtScore(clip.score)}<small>/10</small></div>
-            <Criteria clip={clip} />
-            {clip.criteria && <Disagree clip={clip} onDone={onCorrected} />}
-          </div>
-        )}
-        <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
+      <div className="itemgrid scoregrid" data-testid="clip-preview">
+        <div className="playercol">
+          {error ? (
+            <div className="msg bad" role="alert">{error}</div>
+          ) : src ? (
+            <video className="player" data-testid="clip-preview-video" src={src} controls autoPlay playsInline />
+          ) : (
+            <div className="muted" role="status" style={{ padding: 30, textAlign: 'center' }}>Cargando el clip desde Twitch…</div>
+          )}
           <div className="muted small">{fmtDate(clip.createdAt)} · {fmtTime(Math.round(clip.durationSec))} · {clip.views} visualizaciones · por {clip.creator}</div>
-          <button className="btn small" disabled={state !== 'none' || busy} onClick={onAdd}>
+          <button className="btn" disabled={state !== 'none' || busy} onClick={onAdd}>
             {state === 'none' ? (busy ? 'Añadiendo…' : 'Añadir a la Biblioteca') : STATE_LABEL[state]}
           </button>
         </div>
+        {clip.score === undefined ? (clip.reason ? <div className="formcol"><Fold label="Nota" title="Nota del clip"><div className="muted small" data-testid="clip-preview-noscore">{clip.reason}</div></Fold></div> : null) : <ClipScorePanel clip={clip} onCorrected={onCorrected} />}
       </div>
     </Modal>
   );
@@ -363,7 +257,6 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
               </div>
               <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.title}</div>
               <div className="muted small" style={{ padding: '0 3px' }}>{fmtDate(c.createdAt)} · {c.views} vis.</div>
-              <Criteria clip={c} compact />
               <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
                 <span className={`badge twstate ${st}`} data-testid={`twstate-${c.id}`}>{STATE_LABEL[st]}</span>
                 {st === 'none' && (

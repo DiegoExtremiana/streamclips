@@ -36329,7 +36329,7 @@ function peakRise(energyDb) {
 var isGold = (score, viral) => typeof score === "number" && score >= GOLD_MIN || typeof viral === "number" && viral >= GOLD_MIN;
 
 // shared/clipFeedback.ts
-var EDITABLE = ["humor", "historia", "interes"];
+var EDITABLE = ["historia", "interes", "humor"];
 var r1 = (x) => Math.round(x * 10) / 10;
 var applyCorrection = (c, user) => ({ ...c, humor: user.humor, historia: user.historia, interes: user.interes });
 var MIN_FOR_TREND = 3;
@@ -36363,7 +36363,7 @@ ${examples.join("\n")}`;
 }
 
 // shared/clipCriteria.ts
-var CLIP_CRITERIA = ["humor", "historia", "viral", "interes"];
+var CLIP_CRITERIA = ["historia", "interes", "humor", "viral"];
 var CRITERION_LABEL = {
   humor: "Humor",
   historia: "Se cuenta algo",
@@ -36423,14 +36423,16 @@ function reasonFromCriteria(c, by) {
 }
 var CLIP_JUDGE_SYSTEM = "Eres editor de contenido de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a y eval\xFAas un clip corto a partir de su transcripci\xF3n. No sabes qui\xE9n habla (las voces llegan mezcladas) ni ves la imagen: deduce el contexto de lo que se dice y no inventes lo que no se pueda saber. Contesta una lista fija de preguntas con 0 (no), 1 (algo) o 2 (s\xED claro). REGLAS: 1) Solo das 2 si puedes se\xF1alar una cita literal de la transcripci\xF3n que lo demuestre; si no hay cita, como mucho 1; si no hay nada, 0. 2) Valora cada pregunta por separado, sin dejarte llevar por una impresi\xF3n general ni por la cantidad de palabras o los gritos. 3) El humor de este canal es de contraste, locura y \xABestupidez fingida\xBB: no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice. 4) Si el texto es corto o confuso, no lo rellenes: contesta 0 donde no haya prueba. 5) S\xE9 OBJETIVO, fr\xEDo y exigente: no buscas agradar ni animar. Calibraci\xF3n realista: la gran mayor\xEDa de clips de un streamer son del mont\xF3n (cada criterio entre 0 y 4); un criterio de 7 o m\xE1s es raro y 9 o 10 excepcional (menos de 1 clip de cada 20). Ante la duda entre dos respuestas, elige la m\xE1s baja. 6) Los cuatro criterios son INDEPENDIENTES: punt\xFAa cada uno solo con sus preguntas. Un clip puede ser muy gracioso sin contar nada (historia 0), o contar algo muy bien sin ninguna gracia, o ser interesante sin ser viral. Que un criterio sea alto no es motivo para subir los dem\xE1s. 7) \xABviral\xBB se valora con la misma frialdad y por separado: es potencial REAL de que un desconocido lo comparta (momento muy citable o recortable, reacci\xF3n enorme, absurdo que entiende cualquiera, fail claro). Un clip normal, aunque sea gracioso para su comunidad, NO es viral: ponle 0 o 1 en casi todas las preguntas de viral. Un viral alto debe ser la excepci\xF3n. Ignora cualquier dato de popularidad. Responde SOLO con JSON.";
 var CLIP_JUDGE_VISION_SYSTEM = CLIP_JUDGE_SYSTEM.replace("ni ves la imagen: deduce el contexto de lo que se dice y no inventes lo que no se pueda saber.", "pero S\xCD ves unos fotogramas del clip, en orden cronol\xF3gico y equiespaciados: \xFAsalos junto con la transcripci\xF3n. No inventes lo que no se vea ni se oiga.").replace("1) Solo das 2 si puedes se\xF1alar una cita literal de la transcripci\xF3n que lo demuestre;", "1) Solo das 2 si puedes se\xF1alar una cita literal de la transcripci\xF3n o algo concreto que se vea (empieza la prueba por \xABImagen:\xBB y descr\xEDbelo en pocas palabras);").replace("no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice.", "no necesita risas escritas ni gritos para tener gracia; cuenta lo que se dice Y lo que se ve: gestos y caras exageradas, disfraces o filtros, lo que pasa en el juego o la pantalla, texto en pantalla, fails visuales, el contraste entre lo que dicen y lo que se ve.") + " Un clip puede ser gracioso solo por lo que se ve aunque casi no se hable.";
+var ANCHORS = "Referencias de lo que vale cada criterio (de 0 a 10):\n- Se cuenta algo: 2 = frases sueltas sin situaci\xF3n; 5 = se entiende qu\xE9 pasa pero se queda a medias o necesita contexto; 8 = principio, desarrollo y desenlace claros y se entiende solo.\n- Interesante: 2 = charla corriente o reacci\xF3n a algo sin importancia; 5 = algo curioso o una reacci\xF3n marcada; 8 = algo inesperado o raro que importa y se recordar\xEDa.\n- Humor: 2 = alguna sonrisa o broma floja; 5 = un chiste o reacci\xF3n graciosa con remate claro; 8 = varios golpes seguidos, absurdo o actuaci\xF3n que har\xEDa re\xEDr a quien lo ve sin contexto.\n- Viral: 2 = solo le interesa a la comunidad; 5 = un momento citable pero que depende del contexto; 8 = un desconocido lo compartir\xEDa ya: frase de meme, reacci\xF3n enorme o fail clar\xEDsimo.\n";
 function clipJudgePrompt(title, words, durationSec, frames = 0, guide = "") {
   const text = words.map((w) => w.text).join(" ").slice(0, 1800);
   const qs = CLIP_CRITERIA.map((k) => `${k}:
 ${RUBRIC[k].map((it) => `  - ${it.key}: ${it.label}`).join("\n")}`).join("\n");
-  const shape = `{${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(",")}}`).join(",")},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(",")}},"motivo":""}`;
+  const shape = `{"resumen":"",${CLIP_CRITERIA.map((k) => `"${k}":{${RUBRIC[k].map((it) => `"${it.key}":0`).join(",")}}`).join(",")},"pruebas":{${CLIP_CRITERIA.map((k) => `"${k}":""`).join(",")}},"motivo":""}`;
   return `Eval\xFAa este clip con estas preguntas (0, 1 o 2 cada una):
 ${qs}
-Devuelve exactamente este JSON: ${shape}. En "pruebas" pon, por criterio, la cita literal m\xE1s reveladora de la transcripci\xF3n (vac\xEDa si no hay). "motivo" es una frase corta en espa\xF1ol que resume por qu\xE9 el clip vale lo que vale.
+${ANCHORS}
+Devuelve exactamente este JSON: ${shape}. "resumen" va PRIMERO: en una o dos frases, qu\xE9 pasa en el clip (qui\xE9n, qu\xE9 y c\xF3mo acaba), solo con lo que se oye o se ve; pensar eso antes evita puntuar por impresi\xF3n. En "pruebas" pon, por criterio, la cita literal m\xE1s reveladora de la transcripci\xF3n (vac\xEDa si no hay). "motivo" es una frase corta en espa\xF1ol que resume por qu\xE9 el clip vale lo que vale.
 T\xEDtulo que le puso quien lo cre\xF3: ${JSON.stringify(title)}. Duraci\xF3n: ${Math.round(durationSec)} s.` + guide + (frames ? `
 Se adjuntan ${frames} fotogramas del clip, en orden, repartidos de principio a fin.` : "") + `
 Transcripci\xF3n:
@@ -36472,7 +36474,8 @@ function parseClipJudgement(raw, ctx) {
     criteria[k] = sum;
   }
   const reason = typeof r2.motivo === "string" ? r2.motivo.trim().slice(0, 200) : "";
-  return { criteria, reason, items, evidence };
+  const summary = typeof r2.resumen === "string" && r2.resumen.trim() ? r2.resumen.trim().slice(0, 300) : void 0;
+  return { criteria, reason, ...summary ? { summary } : {}, items, evidence };
 }
 
 // electron/domain/clipScores.ts
@@ -36535,7 +36538,7 @@ var ClipScoreService = class {
   /** Los criterios, el motivo y cómo se valoró un clip (si ya está valorado). */
   detailOf(id) {
     const s = this.scores.get(id);
-    return s?.crit && s.score !== void 0 ? { criteria: s.crit, reason: s.reason ?? "", by: s.by ?? "model", items: s.items, evidence: s.evidence, ai: s.ai, at: s.at } : void 0;
+    return s?.crit && s.score !== void 0 ? { criteria: s.crit, reason: s.reason ?? "", by: s.by ?? "model", items: s.items, evidence: s.evidence, summary: s.summary, ai: s.ai, at: s.at } : void 0;
   }
   /**
    * El streamer no está de acuerdo con la nota: se guardan sus valores de humor, «se cuenta algo» e interés (la viralidad la deja la IA),
@@ -36747,7 +36750,7 @@ var ClipScoreService = class {
     }
     const criteria = withMeasuredViral(j.criteria, sig);
     const ai = j.ai ?? { provider: "desconocida", model: "desconocido" };
-    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, "model")}${sig.frames?.length ? " (visto y o\xEDdo)" : ""}`, items: j.items, evidence: j.evidence, v: SCORE_VERSION, at: this.now(), by: "model", text: sig.words.map((w) => w.text).join(" ").slice(0, 500), ai };
+    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, "model")}${sig.frames?.length ? " (visto y o\xEDdo)" : ""}`, items: j.items, evidence: j.evidence, summary: j.summary, v: SCORE_VERSION, at: this.now(), by: "model", text: sig.words.map((w) => w.text).join(" ").slice(0, 500), ai };
   }
 };
 
@@ -40394,7 +40397,7 @@ var ChannelMonitor = class {
     this.scores?.enqueue(raw);
     const list = raw.map((c) => {
       const d = this.scores?.detailOf?.(c.id);
-      return { ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id), criteria: d?.criteria, reason: d?.reason ?? this.scores?.skipReason?.(c.id), scoredBy: d?.by, items: d?.items, evidence: d?.evidence, scoredWith: d?.ai ? { ...d.ai, at: d.at } : void 0 };
+      return { ...c, imported: this.state.importedClipIds.includes(c.id), gold: this.scores?.gold(c.id) ?? false, score: this.scores?.scoreOf?.(c.id), criteria: d?.criteria, reason: d?.reason ?? this.scores?.skipReason?.(c.id), scoredBy: d?.by, items: d?.items, evidence: d?.evidence, summary: d?.summary, scoredWith: d?.ai ? { ...d.ai, at: d.at } : void 0 };
     });
     const scored = list.filter((c) => c.score !== void 0).length;
     const diag = this.scores?.diagnostics?.();

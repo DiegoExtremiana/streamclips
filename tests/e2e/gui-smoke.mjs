@@ -539,6 +539,7 @@ try {
   log('controles propios con iconos: reproducir, pausa, volver al inicio y silenciar actúan sobre el vídeo');
   await player.evaluate((v) => new Promise((res) => { v.addEventListener('seeked', () => res(), { once: true }); v.currentTime = 4; }));
 
+  await dlg.getByRole('tab', { name: 'Miniatura', exact: true }).click();
   const thumbBefore = await dlg.getByAltText('Miniatura actual').getAttribute('src');
   await dlg.getByRole('button', { name: 'Usar el fotograma actual del vídeo' }).click();
   await dlg.getByText(/Miniatura actualizada/).waitFor();
@@ -550,6 +551,7 @@ try {
   await shot(page, '7-modal-largo');
   log('vídeo largo: «usar el fotograma actual» crea una miniatura 1280×720 y borra la anterior');
 
+  await dlg.getByRole('tab', { name: 'Datos de YouTube', exact: true }).click();
   assert.equal(await dlg.getByRole('radio', { name: /Privado/ }).isChecked(), true, 'por defecto privado');
   await dlg.locator('#yt-title').fill('Resumen <malo>');
   await dlg.getByRole('button', { name: 'Guardar datos' }).click();
@@ -815,6 +817,7 @@ try {
   // subtítulos: desactivados por defecto, vista previa en vivo, estilos y render
   await page.getByTestId('item-Mi clip vertical').click();
   await dlg.waitFor();
+  await dlg.getByRole('tab', { name: 'Subtítulos', exact: true }).click();
   const sw = dlg.getByRole('switch', { name: 'Poner subtítulos' });
   assert.equal(await sw.isChecked(), false, 'los subtítulos deben estar desactivados por defecto');
   assert.equal(await dlg.getByTestId('caption-layer').count(), 0);

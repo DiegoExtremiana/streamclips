@@ -1282,6 +1282,7 @@ try {
   log('plan del día: la hora de una subida se cambia ahí mismo y se guarda');
   await dayClips.getByRole('button', { name: 'Abrir Mi clip vertical' }).first().click();
   const full = page.getByRole('dialog', { name: 'Mi clip vertical' });
+  await full.getByRole('tab', { name: 'Datos', exact: true }).click();
   await full.locator('#yt-desc').fill('Descripción puesta desde el plan del día');
   await full.getByRole('button', { name: 'Guardar datos' }).click();
   await poll(() => dataNow().outputs.find((o) => o.id === clipId).description === 'Descripción puesta desde el plan del día');

@@ -179,7 +179,7 @@ describe('puntuación de clips en segundo plano', () => {
     assert.match(md, /gemini-3\.5-flash-lite \(con imagen\)/);
     assert.match(md, /2027-01-15 08:00/);
     // la base de datos: una fila por clip con un campo por columna, incluido «Modificado» (Sí/No)
-    const csv = fs.readFileSync(path.join(path.dirname(file), 'n - base de datos.csv'), 'utf8');
+    const csv = fs.readFileSync(path.join(path.dirname(file), 'Base de datos', 'Clips de Twitch.csv'), 'utf8');
     const [head, row] = csv.replace('\ufeff', '').split('\r\n');
     assert.match(head, /;Dorado;Modificado;Nota de la IA;/);
     const cols = head.split(';');

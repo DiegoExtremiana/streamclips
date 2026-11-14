@@ -54,7 +54,7 @@ export function applyVisual(judged: Judged[], vis: VisualJudgement[]): Judged[] 
     if (!v) return j;
     const total = Math.round(Math.min(10, Math.max(0, j.total + (v.visual - 5) * VISUAL_SWING)) * 100) / 100;
     const reason = `${j.judgement.reason}${v.note ? ` Imagen (${v.visual.toFixed(0)}/10): ${v.note}` : ''}`.trim().slice(0, 320);
-    return { ...j, total, judgement: { ...j.judgement, reason, discard: j.judgement.discard || (v.dead && v.visual <= 3) } };
+    return { ...j, total, visual: { score: v.visual, note: v.note }, judgement: { ...j.judgement, reason, discard: j.judgement.discard || (v.dead && v.visual <= 3) } };
   });
 }
 

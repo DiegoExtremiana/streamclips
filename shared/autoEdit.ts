@@ -101,10 +101,11 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
 export function planLong(words: Word[], segs: Range[], o: EditOpts = {}): { segments: Range[]; effects: Effect[] } {
   const segments: Range[] = [];
   const body: Effect[] = [];
-  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  // el orden de los tramos es el del montaje (el director puede poner un gancho del final al principio): no se reordena
+  const sorted = [...segs];
   for (const [i, s] of sorted.entries()) {
     // el salto entre dos momentos distintos del directo lleva un «whoosh», como las transiciones de los resúmenes de los canales grandes
-    if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3) body.push({ type: 'sfx', at: s.start + 0.05, sound: 'whoosh' });
+    if (i > 0 && Math.abs(s.start - sorted[i - 1].end) > 5 && s.end - s.start > 3) body.push({ type: 'sfx', at: s.start + 0.05, sound: 'whoosh' });
     const p = planEdit(words, s, o);
     segments.push(...keptRanges(s.start, s.end, p.cuts));
     body.push(...p.effects.filter((e) => e.type === 'punch' || e.type === 'sfx'));
@@ -127,4 +128,21 @@ export function withMusic(effects: Effect[], mood: MusicMood, volume = 0.16): Ef
   const polish = rest.filter((e) => e.type === 'polish');
   const others = rest.filter((e) => e.type !== 'polish').slice(0, MAX_EFFECTS - polish.length - 1);
   return [...others, ...polish, { type: 'music', mood, volume }];
+}
+
+/**
+ * Añade los rótulos en pantalla (capítulos, frases, gancho) dejando sitio dentro del máximo: si hace falta, se quitan antes
+ * acercamientos y sonidos (lo que menos se nota) y nunca los fundidos, la música ni las transiciones.
+ */
+export function withTitles(effects: Effect[], titles: Extract<Effect, { type: 'title' }>[]): Effect[] {
+  if (!titles.length) return effects;
+  const keep = effects.filter((e) => e.type !== 'title');
+  const room = MAX_EFFECTS - titles.length;
+  let out = keep;
+  if (out.length > room) {
+    const essential = out.filter((e) => e.type !== 'sfx' && e.type !== 'punch');
+    const optional = out.filter((e) => e.type === 'sfx' || e.type === 'punch');
+    out = [...optional.slice(0, Math.max(0, room - essential.length)), ...essential];
+  }
+  return [...out, ...titles];
 }

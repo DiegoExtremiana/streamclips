@@ -54,6 +54,8 @@ export interface OutputItem {
   /** Vídeo largo: tramos del VOD que lo forman (permite volver a montarlo). */
   segments?: { start: number; end: number }[];
   effects?: Effect[];
+  /** Frase de la portada (si la decidió el director de edición). */
+  coverText?: string;
   /** Estilo de subtítulos grabados en los archivos; ausente = vídeo limpio. */
   subtitles?: SubtitleStyleId;
   /** Miniatura (JPG) en la carpeta de salida. */
@@ -141,6 +143,11 @@ export interface DeleteResult {
  *  - punch: acercamiento breve a un momento clave (sube y baja suave).
  *  - fadeIn / fadeOut: fundido desde / a negro al principio / final.
  */
+export type TitleKind = 'capitulo' | 'frase' | 'gancho';
+export const TITLE_KINDS: readonly TitleKind[] = ['capitulo', 'frase', 'gancho'];
+/** Rótulo en pantalla: de 1 a 8 segundos; 3 por defecto. */
+export const TITLE = { minDur: 1, maxDur: 8, defaultDur: 3, maxLen: 60 };
+
 export type Effect =
   | { type: 'punch'; at: number; duration?: number; zoom?: number }
   | { type: 'fadeIn'; duration?: number }
@@ -149,7 +156,9 @@ export type Effect =
   | { type: 'music'; mood: MusicMood; /** Volumen de la música respecto a su nivel normal (0,04-0,4); baja más aún cuando se habla. */ volume?: number }
   /** Fundido breve a negro (con su audio) en cada salto entre momentos distintos del directo, para que no se note como un corte brusco. */
   | { type: 'joints'; duration?: number }
-  | { type: 'polish' };
+  | { type: 'polish' }
+  /** Rótulo en pantalla: «capitulo» (cartela del capítulo), «frase» (una frase clave) o «gancho» (el aviso del arranque). */
+  | { type: 'title'; at: number; text: string; duration?: number; kind?: TitleKind };
 
 export interface ClipSpec {
   kind?: ClipFormat; // por defecto: las dos versiones
@@ -171,6 +180,8 @@ export interface LongSpec {
   segments: { start: number; end: number }[];
   effects?: Effect[];
   subtitles?: SubtitleStyleId;
+  /** Frase corta para la portada (2-4 palabras); si falta sale del título. */
+  coverText?: string;
 }
 
 /** Formato en el que Claude devolverá sus decisiones de edición. */

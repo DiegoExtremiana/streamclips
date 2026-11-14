@@ -24,7 +24,24 @@ const clock = (sec: number): string => {
  * que se conserva antes de él.
  */
 export function outputStarts(segs: Range[], kept: Range[]): number[] {
-  return segs.map((s) => kept.filter((k) => k.end <= s.start + 0.01).reduce((a, k) => a + (k.end - k.start), 0));
+  // los trozos conservados vienen en el orden del montaje, cada uno dentro de un tramo: se recorren con un puntero sobre los
+  // tramos, así vale también cuando el orden no es cronológico (un gancho del final al principio) o un trozo se repite
+  const starts = segs.map(() => Infinity);
+  let j = 0;
+  let offset = 0;
+  const inside = (k: Range, s: Range) => k.start >= s.start - 0.01 && k.end <= s.end + 0.01;
+  for (const k of kept) {
+    let n = j;
+    while (n < segs.length && !inside(k, segs[n])) n++;
+    if (n < segs.length) {
+      j = n;
+      starts[j] = Math.min(starts[j], offset);
+    }
+    offset += k.end - k.start;
+  }
+  // un tramo del que no quedó nada (todo silencio) empieza donde el siguiente
+  for (let i = segs.length - 1; i >= 0; i--) if (!Number.isFinite(starts[i])) starts[i] = i + 1 < segs.length ? starts[i + 1] : offset;
+  return starts;
 }
 
 /**

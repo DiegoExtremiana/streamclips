@@ -94,6 +94,7 @@ export function AutopilotCard() {
       <Check checked={a.requireApproval} onChange={(v) => up({ requireApproval: v })} title="Pedir mi visto bueno antes de programar">Si lo desactivas, se programa solo.</Check>
       </div>)}
       {pt === 'edita' && (<div className="aptab" role="tabpanel">
+      <Check checked={a.director !== false} onChange={(v) => up({ director: v })} title="Director de edición para YouTube">Con los momentos ya valorados (lo que se dice, lo que se ve, el volumen y el chat), la IA decide la estructura del vídeo largo como un editor: un gancho con lo más fuerte en los primeros segundos, capítulos con sentido y ritmo, un cierre, rótulos en pantalla, el título, la descripción con capítulos y la frase de la miniatura. Si no puede, se monta el resumen de mejores momentos de siempre.</Check>
       <Check checked={a.proEdit !== false} onChange={(v) => up({ proEdit: v })} title="Edición profesional">Quita silencios y tiempos muertos, acerca la imagen en los momentos fuertes, añade efectos de sonido y fundidos e iguala el volumen.</Check>
       <Check checked={a.soundCues !== false} onChange={(v) => up({ soundCues: v })} title="Efectos de sonido según lo que digo">Pone un sonido cuando dices «ganamos», «dinero», «he muerto»… (sonidos propios, sin derechos de autor; puedes sustituir cualquiera dejando un archivo con su nombre, por ejemplo tada.mp3, en %APPDATA%\\StreamClips\\Sonidos).</Check>
       <Check checked={a.music !== false} onChange={(v) => up({ music: v })} title="Música lofi de fondo">Si el vídeo no tiene ya música o sonido de fondo, añade una lofi sin letra, siempre por debajo de las voces, según el tema (café, viaje, noche, charla, juego). Puedes poner tu propia música con ese nombre (cafe.mp3…) en %APPDATA%\\StreamClips\\Música.</Check>
@@ -161,7 +162,7 @@ export function AutopilotCard() {
         onClick={() => {
           const minQuality = Number(q.replace(',', '.'));
           void save({
-            enabled: a.enabled, requireApproval: a.requireApproval, proEdit: a.proEdit !== false, soundCues: a.soundCues !== false, music: a.music !== false, topics: a.topics !== false, vodVision: a.vodVision !== false, fastAnalysis: a.fastAnalysis !== false, chatCapture: a.chatCapture,
+            enabled: a.enabled, requireApproval: a.requireApproval, proEdit: a.proEdit !== false, director: a.director !== false, soundCues: a.soundCues !== false, music: a.music !== false, topics: a.topics !== false, vodVision: a.vodVision !== false, fastAnalysis: a.fastAnalysis !== false, chatCapture: a.chatCapture,
             cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, maxVideos: a.maxVideos, maxClips: a.maxClips, summaryMinutes: a.summaryMinutes,
             mainMinutes: a.mainMinutes, parallel: a.parallel ?? 2, series: a.series, ...(Number.isFinite(minQuality) && q.trim() !== '' ? { minQuality } : {}),
           }).then(() => setCounts(null));

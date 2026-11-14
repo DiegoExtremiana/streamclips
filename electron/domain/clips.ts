@@ -55,6 +55,7 @@ export class ClipService {
     tolerance: number,
     extra: Partial<OutputItem>,
     renders: { render: RenderKind; run: (input: string, out: string) => Promise<void> }[],
+    coverText?: string,
   ): Promise<OutputItem> {
     const input = this.vodFile(vodId);
     const outDir = this.d.store.data.settings.outputDir;
@@ -84,7 +85,7 @@ export class ClipService {
       // La miniatura es un extra: si falla, el elemento (ya validado) se conserva sin ella.
       const main = primaryRender(item);
       try {
-        if (main) item.thumbnail = await autoThumbnail(this.d.tools(), outDir, item.id, main, files[main]!, durationSec, this.coverOpts(title));
+        if (main) item.thumbnail = await autoThumbnail(this.d.tools(), outDir, item.id, main, files[main]!, durationSec, this.coverOpts(coverText || title));
       } catch (e) {
         this.d.log.warn(`Sin miniatura para "${title}": ${(e as Error).message}`);
       }
@@ -151,7 +152,7 @@ export class ClipService {
           render: k,
           run: (input, out) =>
             withSubtitles(this.d.subtitles, vodId, clip.subtitles, ranges, k, (subs) =>
-              renderClip(this.d.tools(), input, { kind: k, start: clip.start, end: clip.end, cropX, layout: clip.layout, cuts: clip.cuts, effects: clip.effects, subs }, out),
+              renderClip(this.d.tools(), input, { kind: k, start: clip.start, end: clip.end, cropX, layout: clip.layout, cuts: clip.cuts, effects: clip.effects, subs, fontsDir: this.d.subtitles.fontsDir }, out),
             ),
         })),
       );
@@ -178,15 +179,16 @@ export class ClipService {
       if (category) extra.category = category;
       if (long.effects) extra.effects = long.effects;
       if (long.subtitles) extra.subtitles = long.subtitles;
+      if (long.coverText) extra.coverText = long.coverText;
       return this.build(vodId, 'long', long.title, expected, tolerance, extra, [
         {
           render: 'long',
           run: (input, out) =>
             withSubtitles(this.d.subtitles, vodId, long.subtitles, long.segments, 'long', (subs) =>
-              renderLong(this.d.tools(), input, long, out, subs),
+              renderLong(this.d.tools(), input, long, out, subs, this.d.subtitles.fontsDir),
             ),
         },
-      ]);
+      ], long.coverText);
     });
   }
 

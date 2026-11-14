@@ -1,29 +1,20 @@
 import type { SubtitleStyleId } from '../../shared/subtitles';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { AutoNameResult, AutopilotSettings, OutputItem, VodJob, AutoRole } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
 import { planEdit, planLong, withJoints, withMusic } from '../../shared/autoEdit';
-import { buildProposal, decideFormat, dedupeProposals, parseThemes, THEME_SYSTEM, themePrompt, transcriptBlocks, type ThemeProposal, type ThemeUnit } from '../../shared/themes';
+import { buildProposal, dedupeProposals, parseThemes, THEME_SYSTEM, themePrompt, transcriptBlocks, type ThemeProposal, type ThemeUnit } from '../../shared/themes';
 import { guessMood, MOOD_SYSTEM, moodPrompt, parseMood, type MusicMood } from '../../shared/music';
 import { hasBackgroundSound } from '../services/music';
 import { defaultStyle, type StyleProfile } from '../../shared/styleProfile';
-import { chapterBlock, outputStarts } from '../../shared/chapters';
-import { bestStretches, buildSummary, dedupeTitles, findMoments, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg, type Signals } from '../../shared/highlights';
-import { PhaseClock } from '../../shared/phaseClock';
-import { judgeCandidates } from '../services/momentJudge';
-import { judgeVisual } from '../services/visualJudge';
-import { applyEdits } from '../../shared/momentEdits';
-import { loadEdits, loadPrefs, saveSnapshot } from '../services/momentStore';
-import { applyPrefs, describePrefs } from '../../shared/preferences';
-import { judgeText, kindSummary, selectBest, textFn, type Candidate, type Judged } from '../../shared/judge';
+import { dedupeTitles, isAutoNameable, isGenericAutoTitle, shortDescription, shortTitle, textOf, type Seg } from '../../shared/highlights';
+import { judgeText, type Judged } from '../../shared/judge';
 import { nextFreeSlot } from '../../shared/slots';
-import { seriesFor, seriesTitles } from '../../shared/series';
 import { ChatBins } from '../services/chatlog';
-import { CancelledError, isCancelled, throwIfCancelled, withAbort } from '../services/abort';
+import { CancelledError, isCancelled, withAbort } from '../services/abort';
 import type { Range } from '../../shared/timeline';
-import { audioEnergy } from '../services/audioEnergy';
+import { type audioEnergy } from '../services/audioEnergy';
 import { askJson, resolveModel, type LlmConfig } from '../services/llm';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
@@ -35,9 +26,12 @@ import type { TranscriptService } from './transcripts';
 import type { SpeakerService } from './speakers';
 import type { ClipService } from './clips';
 import type { CategoryService } from './categories';
-import { categoryOf, dominantCategory, fitToCategory, hasCategoryLine, withCategoryLine } from '../../shared/categories';
+import { categoryOf, hasCategoryLine, withCategoryLine } from '../../shared/categories';
 import type { LibraryService } from './library';
 import type { PublicationService } from './publications';
+import { runPipeline } from './pipeline';
+import { themeDescription } from './pipeline/render';
+import type { Host, Titles } from './pipeline/context';
 
 export interface AutopilotDeps {
   store: Store;
@@ -77,21 +71,7 @@ export interface AutopilotDeps {
   canTranscribe?: (durationSec: number) => string | null;
 }
 
-/** Notas mínimas (0-10) para que un momento entre: el modelo puntúa 5 lo normal, 7 lo bueno. Antes un vídeo corto y bueno que uno largo con relleno. */
-const DEFAULT_QUALITY = 6.5;
-/** Un resumen de menos de esto no merece publicarse. */
-const MIN_SUMMARY_SEC = 150;
 
-/** Descripción del vídeo temático: de qué va y los capítulos de su estructura. */
-function themeDescription(p: ThemeProposal): string {
-  const parts = [p.context || `Todo lo que se habló sobre «${p.title}» durante el directo.`];
-  return parts.join('\n\n');
-}
-
-interface Titles {
-  title: string;
-  description: string;
-}
 
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
@@ -100,17 +80,17 @@ const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.re
  * monta resumen, vídeo principal y clips. Los deja pendientes de tu visto bueno (o los programa si lo desactivas).
  * Lo que decide los tramos son siempre las señales locales; el modelo de lenguaje solo pone títulos y descripciones.
  */
-export class Autopilot {
-  constructor(private d: AutopilotDeps) {}
+export class Autopilot implements Host {
+  constructor(readonly d: AutopilotDeps) {}
 
-  private get cfg(): AutopilotSettings {
+  get cfg(): AutopilotSettings {
     return this.d.store.data.settings.autopilot;
   }
   private get now(): number {
     return (this.d.now ?? Date.now)();
   }
 
-  private mark(vod: VodJob, status: NonNullable<VodJob['autopilot']>['status'], note?: string): void {
+  mark(vod: VodJob, status: NonNullable<VodJob['autopilot']>['status'], note?: string): void {
     vod.autopilot = { status, ...(note ? { note } : {}), at: new Date(this.now).toISOString() };
     this.d.store.save();
     this.d.notifier.vod(vod);
@@ -199,7 +179,7 @@ export class Autopilot {
     return n;
   }
 
-  private markPaused(vod: VodJob, interrupted = false): void {
+  markPaused(vod: VodJob, interrupted = false): void {
     const kept = this.d.transcripts.hasCheckpoint(vod.id) ? ' Lo ya transcrito se conserva.' : '';
     this.mark(vod, 'paused', `${interrupted ? 'Se interrumpió al cerrar el programa o apagar el equipo.' : 'En pausa.'}${kept} Pulsa «Reanudar» cuando quieras.`);
   }
@@ -245,7 +225,7 @@ export class Autopilot {
     return undefined;
   }
 
-  private chatFor(vod: VodJob): number[] | undefined {
+  chatFor(vod: VodJob): number[] | undefined {
     const f = this.chatFileFor(vod);
     if (!f) return undefined;
     try {
@@ -256,7 +236,7 @@ export class Autopilot {
   }
 
   /** Guarda los tiempos por fase de los últimos análisis (userData/analysis-times.json) para ver qué conviene acelerar. */
-  private recordTimes(vod: VodJob, phases: Record<string, number>, totalSec: number): void {
+  recordTimes(vod: VodJob, phases: Record<string, number>, totalSec: number): void {
     if (!this.d.momentsDir) return;
     try {
       const file = path.join(path.dirname(this.d.momentsDir), 'analysis-times.json');
@@ -273,466 +253,20 @@ export class Autopilot {
     }
   }
 
-  private async process(vod: VodJob): Promise<VodJob> {
-    const task = this.d.tasks.start('analyze', `Piloto automático: ${vod.title || 'directo'}`, vod.id);
-    const notes: string[] = [];
-    try {
-      const t0 = Date.now();
-      const clock = new PhaseClock();
-      clock.mark('lectura de audio y chat');
-      const lap = (since: number) => {
-        const s = Math.round((Date.now() - since) / 1000);
-        return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
-      };
-      // El volumen del audio no depende de la transcripción: se calcula a la vez (ffmpeg y Whisper no se estorban) y se recoge después.
-      const energyJob = (async () => {
-        try {
-          return { v: await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath!, () => undefined) };
-        } catch (e) {
-          return { e };
-        }
-      })();
-      // 1) transcripción (si se puede)
-      let words = this.d.transcripts.words(vod.id);
-      let tTranscribe = '';
-      let deferTranscribe = false;
-      if (!this.d.transcripts.isFull(vod.id)) {
-        const st = this.d.transcripts.status();
-        const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? (await this.d.clips.vodDuration(vod.id))) : null;
-        if (skip) notes.push(`Sin transcripción: ${skip}.`);
-        else if (st.engine && this.cfg.fastAnalysis !== false && !this.d.transcripts.hasCheckpoint(vod.id)) {
-          // análisis rápido: primero se eligen los momentos con el volumen y el chat, y luego se transcribe solo lo elegido
-          deferTranscribe = true;
-        } else if (st.engine) {
-          this.mark(vod, 'transcribing');
-          clock.mark('transcripción completa');
-          task.update(2, 'Transcribiendo el directo (puede tardar)…');
-          try {
-            const ts = Date.now();
-            // la transcripción ocupa del 2 % al 30 % de la barra del análisis (y es casi todo el tiempo)
-            await this.d.transcripts.transcribe(vod.id, undefined, {
-              onProgress: (pct, detail) => task.update(2 + pct * 0.28, detail ? `Transcribiendo (${detail})…` : undefined),
-              onEstimate: (sec) => task.estimate(sec / 0.28),
-            });
-            words = this.d.transcripts.words(vod.id);
-            tTranscribe = lap(ts);
-            const mins = (vod.durationSec ?? 0) / 60;
-            this.d.log.info(`Transcripción de "${vod.title}": ${tTranscribe}${mins ? ` (${(mins / Math.max(0.05, (Date.now() - ts) / 60000)).toFixed(1)}× tiempo real)` : ''}`);
-          } catch (e) {
-            if (isCancelled(e)) throw e;
-            notes.push(`Sin transcripción: ${(e as Error).message}`);
-          }
-        } else notes.push('Sin transcripción: Whisper no está disponible.');
-      }
-
-      // 2) señales
-      this.mark(vod, 'analyzing');
-      clock.mark('volumen y chat');
-      task.update(30, 'Analizando audio y chat…');
-      const duration = await this.d.clips.vodDuration(vod.id);
-      let energyDb: number[] | undefined;
-      const er = await energyJob;
-      if ('v' in er) energyDb = er.v;
-      else {
-        if (isCancelled(er.e)) throw er.e;
-        notes.push(`Sin análisis de volumen: ${(er.e as Error).message}`);
-      }
-      task.update(50);
-      throwIfCancelled();
-      const chat = this.chatFor(vod);
-      if (!chat && this.cfg.chatCapture) notes.push('Sin datos de chat de este directo.');
-      const sig: Signals = { durationSec: duration, energyDb, chat, words: words.length ? words : undefined };
-      if (!energyDb && !chat && !words.length) throw new Error('No hay ninguna señal para analizar (ni audio, ni chat, ni transcripción).');
-
-      // 3) tramos
-      let moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
-      let summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
-      // el resumen cuenta como uno de los vídeos del directo; el resto son tramos continuos distintos
-      let mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
-      if (!this.cfg.maxVideos) summary.length = 0;
-      // Cada clip y cada vídeo es de una sola categoría de Twitch: se recorta a la del momento y lo que no cabe se descarta.
-      const cats = await this.d.categories.ensure(vod.id);
-      if (new Set(cats.map((c) => c.title)).size > 1) {
-        const before = moments.length + mains.length;
-        moments = moments.flatMap((m) => {
-          const f = fitToCategory(m, cats, 15);
-          return f ? [{ ...m, start: f.start, end: f.end }] : [];
-        });
-        mains = mains.flatMap((m) => {
-          const f = fitToCategory(m, cats, 90);
-          return f ? [f] : [];
-        });
-        const dom = dominantCategory(summary, cats, 8);
-        if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
-        summary = dom.segs;
-        if (before !== moments.length + mains.length) notes.push('Algunos momentos se recortaron o descartaron para no mezclar categorías.');
-      }
-      // Selección inteligente: más candidatos de los necesarios, para que el modelo de lenguaje elija los buenos de verdad
-      const llmConf = this.llmConf();
-      let pool: Candidate[] = [];
-      if (llmConf && this.cfg.smartSelect !== false && (this.cfg.maxClips > 0 || this.cfg.maxVideos > 0)) {
-        const need = this.cfg.maxClips + (this.cfg.maxVideos ? Math.ceil((this.cfg.summaryMinutes * 60) / 40) : 0);
-        pool = findMoments(sig, { count: Math.min(60, Math.max(16, need * 2)), minLen: 25, maxLen: 75, gap: 45 }).flatMap((m, i) => {
-          const f = new Set(cats.map((c) => c.title)).size > 1 ? fitToCategory(m, cats, 15) : { start: m.start, end: m.end };
-          return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
-        });
-      }
-      const legacy = { moments, summary, mains };
-      if (pool.length) {
-        // lo que se transcribe es el conjunto de candidatos; la selección por señales solo se transcribe si el modelo falla
-        moments = [];
-        summary = [];
-      }
-      /** Nombre que dio el modelo a cada momento del resumen (por su inicio), para los capítulos. */
-      const chapterLabels = new Map<number, string>();
-      let summaryMeta: { score: number; kind: string; reason: string } | undefined;
-      const meta = new Map<Seg, { score: number; kind: string; reason: string }>();
-      /** Vídeos por tema: los momentos de un mismo asunto repartidos por el directo, juntos y en orden. */
-      const topicLongs: ThemeProposal[] = [];
-      const topicShorts: ThemeProposal[] = [];
-      const askProposals: ThemeProposal[] = [];
-      if (!moments.length && !summary.length && !mains.length && !pool.length) {
-        this.mark(vod, 'skipped', ['No se encontraron momentos que destaquen en este directo.', ...notes].join(' '));
-        task.done('Sin momentos destacados');
-        return vod;
-      }
-
-      // 3b) análisis rápido: se transcribe solo lo elegido (tramos de clips, resumen y vídeos)
-      if (deferTranscribe) {
-        const spans = [...moments, ...summary, ...mains, ...pool].map((g) => ({ start: g.start, end: g.end }));
-        this.mark(vod, 'transcribing');
-        clock.mark('transcripción de lo elegido');
-        task.update(40, 'Transcribiendo solo lo elegido…');
-        try {
-          const ts = Date.now();
-          const est = this.d.transcripts.estimate(vod.id, spans);
-          if (est.sec > 0) task.estimate(est.eta / 0.15);
-          await this.d.transcripts.ensure(vod.id, spans, {
-            onProgress: (doneSec, totalSec) => task.update(40 + (totalSec ? (doneSec / totalSec) * 15 : 15), `Transcribiendo lo elegido (${Math.round(doneSec / 60)} de ${Math.round(totalSec / 60)} min)…`),
-          });
-          words = this.d.transcripts.words(vod.id);
-          tTranscribe = lap(ts);
-          this.d.log.info(`Transcripción de lo elegido en "${vod.title}": ${tTranscribe} (${Math.round(est.sec / 60)} min de audio, de ${Math.round((vod.durationSec ?? duration) / 60)} del directo)`);
-          notes.push(`Análisis rápido: se transcribieron ${Math.round(est.sec / 60)} min de ${Math.round(duration / 60)}.`);
-        } catch (e) {
-          if (isCancelled(e)) throw e;
-          notes.push(`Sin transcripción: ${(e as Error).message}`);
-        }
-        this.mark(vod, 'analyzing');
-      }
-
-      // 3c) valoración con el modelo de lenguaje
-      if (pool.length) {
-        clock.mark('modelo de lenguaje');
-        task.update(56, 'Valorando los momentos candidatos…');
-        let judged: Judged[] | null = null;
-        if (!words.length) notes.push('Selección inteligente omitida: no hay transcripción.');
-        else {
-          try {
-            const r = await judgeCandidates(llmConf!, words, pool, {
-              fetchFn: this.d.llmFetch,
-              cacheFile: this.d.judgeDir ? path.join(this.d.judgeDir, `${vod.id}.json`) : undefined,
-              onProgress: (done, total) => task.update(56 + (total ? (done / total) * 4 : 4), `Valorando candidatos (${done}/${total})…`),
-              signal: () => throwIfCancelled(),
-            });
-            judged = r.judged;
-            notes.push(`Selección inteligente: ${r.judged.length} candidatos valorados${r.cached ? ` (${r.cached} ya estaban guardados)` : ''}${r.failedChunks ? `, ${r.failedChunks} lote(s) sin respuesta` : ''}.`);
-            // 3c-bis) mirar el directo: la imagen de los mejores momentos es otro factor de la nota
-            if (this.cfg.vodVision !== false && vod.filePath && fs.existsSync(vod.filePath)) {
-              clock.mark('imagen del directo');
-              task.update(60, 'Mirando los mejores momentos…');
-              const vr = await judgeVisual(llmConf!, words, judged, {
-                ffmpeg: this.d.tools().ffmpeg,
-                file: vod.filePath,
-                tmpDir: path.join(os.tmpdir(), `streamclips-vision-${vod.id}`),
-                cacheFile: this.d.judgeDir ? path.join(this.d.judgeDir, `${vod.id}.visual.json`) : undefined,
-                fetchFn: this.d.llmFetch,
-                signal: () => throwIfCancelled(),
-              }).catch((e) => {
-                if (isCancelled(e)) throw e;
-                return null;
-              });
-              fs.rmSync(path.join(os.tmpdir(), `streamclips-vision-${vod.id}`), { recursive: true, force: true });
-              if (vr && !vr.failed) {
-                judged = vr.judged;
-                notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ''}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ''}.`);
-              } else notes.push(`Sin vista del directo${vr?.error ? ` (${vr.error.split('\n')[0]})` : ''}: se eligió por lo que se oye.`);
-            }
-          } catch (e) {
-            if (isCancelled(e)) throw e;
-            notes.push(`Selección inteligente no disponible (${(e as Error).message}); se usó el volumen y el chat.`);
-          }
-        }
-        if (judged) {
-          const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
-          if (this.d.prefsFile) {
-            const prefs = loadPrefs(this.d.prefsFile);
-            const act = describePrefs(prefs).filter((x) => x.active);
-            if (prefs.enabled && act.length) {
-              judged = applyPrefs(judged, prefs);
-              notes.push(`Preferencias aprendidas aplicadas: ${act.map((x) => `${x.kind} ${x.bias > 0 ? '+' : ''}${x.bias}`).join(', ')}.`);
-            }
-          }
-          const raw = judged;
-          if (this.d.momentsDir) {
-            const edits = loadEdits(this.d.momentsDir, vod.id);
-            const n = edits.exclude.length + edits.pin.length + Object.keys(edits.trims).length + edits.extra.length;
-            if (n) {
-              judged = applyEdits(judged, edits);
-              notes.push(`Se aplicaron ${n} corrección(es) tuyas a la selección de momentos.`);
-            }
-          }
-          const textFor = textFn(words);
-          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
-          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
-          if (clips) {
-            moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
-            clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
-            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota mínima (${quality}/10); no se rellenó con momentos flojos.`);
-          }
-          if (this.d.momentsDir) saveSnapshot(this.d.momentsDir, vod.id, raw, [...(clips?.chosen ?? []), ...(sum?.chosen ?? [])].map((c) => c.start), quality);
-          if (sum && sum.chosen.length) {
-            if (sum.totalSec >= MIN_SUMMARY_SEC) {
-              summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
-              const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
-              notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < this.cfg.summaryMinutes * 60 * 0.85 ? ' Más corto de lo configurado: no había más momentos buenos.' : ''}`);
-              if (new Set(cats.map((c) => c.title)).size > 1) {
-                const dom = dominantCategory(summary, cats, 8);
-                if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
-                summary = dom.segs;
-              }
-              for (const c of sum.chosen) if (c.judgement.title) chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
-              summaryMeta = { score: avg, kind: 'resumen', reason: kindSummary(sum) };
-            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
-          } else if (sum) notes.push(`Ningún momento supera la nota mínima del resumen (${quality}/10).`);
-          if (this.cfg.topics !== false && (this.cfg.maxVideos > 0 || this.cfg.maxClips > 0)) {
-            clock.mark('temas');
-            const found = await this.findThemes(vod, judged, words, llmConf!, notes);
-            for (const p of found) {
-              const how = decideFormat(p);
-              if (how === 'ask') askProposals.push(p);
-              else if (how === 'long') topicLongs.push(p);
-              else if (how === 'shorts') topicShorts.push(p);
-            }
-          }
-        } else {
-          // el modelo no estuvo disponible: selección por señales de siempre, transcribiendo lo que haga falta
-          ({ moments, summary } = legacy);
-          try {
-            await this.d.transcripts.ensure(vod.id, [...moments, ...summary].map((g) => ({ start: g.start, end: g.end })));
-            words = this.d.transcripts.words(vod.id);
-          } catch (e) {
-            if (isCancelled(e)) throw e;
-          }
-        }
-        if (!moments.length && !summary.length && !mains.length) {
-          this.mark(vod, 'skipped', ['Ningún momento supera la nota mínima de calidad: no se genera nada para no publicar relleno.', ...notes].join(' '));
-          task.done('Sin momentos con la calidad mínima');
-          return vod;
-        }
-      }
-
-      // 3d) hablantes: quién habla en lo elegido (para colorear los subtítulos por voz)
-      if (this.cfg.speakers !== false && words.length) {
-        const avail = this.d.speakers.available();
-        if (!avail.ok) notes.push(`Hablantes sin identificar: ${avail.reason}`);
-        else {
-          const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
-          const need = this.d.speakers.pendingSeconds(vod.id, spans);
-          if (need > 0) {
-            clock.mark('hablantes');
-            task.update(60, 'Identificando hablantes…');
-            try {
-              const ts = Date.now();
-              const r = await this.d.speakers.diarize(vod.id, spans, (done, total) => task.update(60 + (total ? (done / total) * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total / 60)} min)…`));
-              words = this.d.transcripts.words(vod.id);
-              notes.push(`Hablantes: ${r.voices} voz/voces en ${Math.round(r.sec / 60)} min de audio (${lap(ts)}).`);
-            } catch (e) {
-              if (isCancelled(e)) throw e;
-              notes.push(`Hablantes sin identificar: ${(e as Error).message}`);
-            }
-          }
-        }
-      }
-
-      // 4) títulos
-      clock.mark('títulos');
-      task.update(75, 'Poniendo títulos…');
-      const titles = await this.titles(vod, words, moments, mains, notes);
-      // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
-      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
-      if (ser) {
-        const st = seriesTitles(ser, mains.length);
-        titles.summary = { title: clean(st.summary, 100), description: titles.summary.description };
-        titles.mains = titles.mains.map((t, i) => ({ title: clean(st.mains[i], 100), description: t.description || `En este vídeo: ${t.title}` }));
-        notes.push(`Serie «${ser.name}», día ${ser.day}.`);
-        if (!ser.fromTitle) {
-          // el día se reserva ya: con varios directos a la vez, dos no pueden coger el mismo número; al repetir este directo conserva el suyo
-          vod.seriesDay = ser.day;
-          this.cfg.series.nextDay = Math.max(this.cfg.series.nextDay, ser.day + 1);
-          this.d.store.save();
-        }
-      }
-
-      // 5) montaje
-      const tr = Date.now();
-      clock.mark('montaje');
-      this.mark(vod, 'rendering');
-      const created: OutputItem[] = [];
-      const errors: string[] = [];
-      const total = (summary.length ? 1 : 0) + mains.length + topicLongs.length + topicShorts.reduce((n, p) => n + p.shorts.length, 0) + moments.length;
-      let doneCount = 0;
-      const step = async (role: AutoRole, label: string, fn: () => Promise<OutputItem>, t: Titles, m?: { score: number; kind: string; reason: string }) => {
-        try {
-          const item = await fn();
-          item.auto = { role, review: 'pending', ...(m ? { score: Math.round(m.score * 10) / 10, kind: m.kind, reason: m.reason } : {}) };
-          item.titleSource = 'auto';
-          item.visibility = this.cfg.visibility;
-          const ch = chapterOf.get(item.id);
-          if (t.description || item.category || ch) {
-            const base = withCategoryLine(t.description, item.category);
-            this.d.library.setAutoDescription(item.id, ch ? `${base}${base ? '\n\n' : ''}${ch}` : base);
-          }
-          this.d.store.save();
-          created.push(item);
-        } catch (e) {
-          if (isCancelled(e)) throw e;
-          errors.push(`${label}: ${(e as Error).message}`);
-        }
-        task.update(76 + (++doneCount / total) * 19, `Montando (${doneCount}/${total})…`);
-      };
-      const pro = this.cfg.proEdit !== false && words.length > 0;
-      if (this.cfg.proEdit !== false && !words.length) notes.push('Edición profesional omitida: no hay transcripción.');
-      const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
-      // si la edición profesional falla (efecto no válido, ffmpeg…), el vídeo se monta igualmente sin ella
-      const safely = async <T>(edited: boolean, withEdit: () => Promise<T>, plain: () => Promise<T>): Promise<T> => {
-        if (!edited) return plain();
-        try {
-          return await withEdit();
-        } catch (err) {
-          if (isCancelled(err)) throw err;
-          this.d.log.warn(`Edición profesional falló, se monta sin ella: ${(err as Error).message.split('\n')[0]}`);
-          return plain();
-        }
-      };
-      // los silencios de más de lo que dijo el creador (2 s por defecto) se cortan; su estilo manda sobre el criterio general
-      const style = this.d.style?.() ?? defaultStyle();
-      const editOpts = { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false };
-      const musicFor = (title: string, segs: Seg[], smart: boolean) => this.musicFor(vod, words, title, segs, smart, llmConf);
-      // capítulos con marca de tiempo para la descripción del resumen (como los vídeos de los canales grandes)
-      const chapterOf = new Map<string, string>();
-      const longMake = async (title: string, segs: Seg[], chapters = false, themed = false) => {
-        let e = pro ? planLong(words, segs, editOpts) : null;
-        if (e && themed) e = { ...e, effects: withJoints(e.effects) };
-        const mood = e ? await musicFor(title, segs, true) : null;
-        if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
-        const item = await safely(
-          Boolean(e),
-          () => this.d.clips.createLong(vod.id, { title, segments: e!.segments, effects: e!.effects, ...subs }),
-          () => this.d.clips.createLong(vod.id, { title, segments: segs, ...subs }),
-        );
-        if (chapters && segs.length >= 3) {
-          try {
-            const starts = outputStarts(segs, item.segments ?? segs);
-            const block = chapterBlock(
-              segs.map((g, i) => ({ at: starts[i], label: chapterLabels.get(Math.round(g.start)) ?? (i === 0 ? 'Inicio' : shortTitle(words, g, i) || `Momento ${i + 1}`) })),
-              item.durationSec,
-            );
-            if (block) chapterOf.set(item.id, block);
-          } catch (err) {
-            this.d.log.warn(`Sin capítulos en "${title}": ${(err as Error).message}`);
-          }
-        }
-        return item;
-      };
-      if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary, true), titles.summary, summaryMeta);
-      for (const [i, m] of mains.entries()) {
-        const t = titles.mains[i];
-        await step('main', `vídeo ${i + 1}`, () => longMake(t.title, [m]), t);
-      }
-      for (const p of topicLongs) {
-        const t: Titles = { title: clean(p.title, 100), description: themeDescription(p) };
-        for (const piece of p.pieces) if (piece.title) chapterLabels.set(Math.round(piece.start), piece.title);
-        await step('main', `tema «${p.title}»`, () => longMake(t.title, p.long.segs, true, true), t, { score: 8, kind: 'tema', reason: `Tema recurrente: ${p.context || p.title}`.slice(0, 200) });
-      }
-      for (const p of topicShorts) {
-        for (const sh of p.shorts) {
-          const t: Titles = { title: clean(sh.title, 100), description: p.context };
-          await step('clip', `corto «${sh.title}»`, () => this.makeShort(vod.id, words, llmConf, sh.title, sh.segs[0], subs), t, { score: 7.5, kind: 'tema', reason: `Parte del tema «${p.title}».` });
-        }
-      }
-      for (const [i, m] of moments.entries()) {
-        const t = titles.clips[i];
-        let e = pro ? planEdit(words, m, editOpts) : null;
-        const mood = e ? await musicFor(t.title, [m], false) : null;
-        if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
-        await step('clip', `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e!.cuts, effects: e!.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, meta.get(m));
-      }
-      if (!created.length) throw new Error(`No se pudo montar ningún vídeo. ${errors.join(' ')}`);
-
-      // un análisis repetido sustituye a los vídeos del anterior que seguían pendientes de revisión (sin publicar ni tocar por ti)
-      const prior = this.d.store.data.outputs.filter(
-        (x) => x.vodId === vod.id && x.auto?.review === 'pending' && !created.includes(x) && x.titleSource !== 'manual' && x.descSource !== 'manual' && !this.d.store.data.publications.some((p) => p.outputId === x.id),
-      );
-      if (prior.length) {
-        const r = this.d.library.removeMany(prior.map((x) => x.id));
-        if (r.removed) notes.push(`Se sustituyeron ${r.removed} vídeo(s) pendientes de revisión de un análisis anterior.`);
-      }
-
-      // 6) visto bueno o programación
-      let scheduled = 0;
-      if (!this.cfg.requireApproval) {
-        for (const o of created) {
-          try {
-            this.approve(o.id);
-            scheduled++;
-          } catch (e) {
-            errors.push(`${o.title}: ${(e as Error).message}`); // se queda para revisar a mano
-          }
-        }
-      }
-      // temas con dos formas buenas de aprovecharlos: se te pregunta cuál prefieres (ventana en la aplicación)
-      if (askProposals.length && this.d.themes) {
-        this.d.themes.put(vod.id, askProposals);
-        notes.push(`${askProposals.length} tema(s) esperan que elijas formato: ${askProposals.map((p) => `«${p.title}»`).join(', ')}.`);
-      }
-      // ya están los vídeos y los clips: el directo completo y lo que solo servía para sacarlos se borra
-      if (this.cfg.cleanup !== false && this.d.discardSource && !this.d.themes?.hasPending(vod.id)) {
-        try {
-          const r = this.discard(vod.id, { fromRun: true });
-          notes.push(`Directo completo borrado del disco (${(r.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r.kept} vídeo(s) y clip(s) con sus transcripciones.`);
-        } catch (e) {
-          notes.push(`No se pudo borrar el directo completo: ${(e as Error).message}`);
-        }
-      }
-clock.mark(null);
-      notes.push(`Tiempos: ${clock.describe() || `montaje ${lap(tr)}`}; total ${lap(t0)}.`);
-      this.recordTimes(vod, clock.seconds(), Math.round((Date.now() - t0) / 1000));
-      this.d.log.info(`Análisis de "${vod.title}": ${notes[notes.length - 1]}`);
-      const msg = `${created.length} vídeo(s) listos${this.cfg.requireApproval ? ' para revisar' : ` (${scheduled} programados)`}.`;
-      this.mark(vod, 'done', [msg, ...errors, ...notes].join(' '));
-      task.done(msg);
-      return vod;
-    } catch (e) {
-      if (isCancelled(e)) {
-        const paused = this.pauseRequested.delete(vod.id);
-        if (paused) this.markPaused(vod);
-        else this.mark(vod, 'error', 'Análisis cancelado.');
-        task.fail(paused ? 'En pausa' : 'Cancelado');
-        this.d.log.info(`Análisis ${paused ? 'en pausa' : 'cancelado'}: "${vod.title}".`);
-        throw e;
-      }
-      this.mark(vod, 'error', (e as Error).message);
-      task.fail((e as Error).message);
-      this.d.log.error('Piloto automático fallido', e);
-      throw e;
-    }
+  /** El análisis entero, por fases (electron/domain/pipeline). */
+  private process(vod: VodJob): Promise<VodJob> {
+    return runPipeline(this, vod, this.pauseRequested);
   }
 
   /** Configuración del modelo de lenguaje si hay uno elegido y con clave; si no, null. */
   /** ¿Está analizando algún directo? (El trabajo en segundo plano se aparta mientras tanto.) */
   isBusy(): boolean {
     return this.running.size > 0;
+  }
+
+  /** Perfil de estilo del creador (o los valores de la entrevista). */
+  style(): StyleProfile {
+    return this.d.style?.() ?? defaultStyle();
   }
 
   /** Modelo de lenguaje configurado (clave incluida), o null si no hay. */
@@ -743,7 +277,7 @@ clock.mark(null);
     return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
   }
 
-  private async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]) {
+  async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]): Promise<{ summary: Titles; mains: Titles[]; clips: Titles[] }> {
     const base = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: '' },
       mains: mains.map((m, i) => ({ title: clean(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean(shortDescription(words, m), 500) })),
@@ -935,7 +469,7 @@ clock.mark(null);
   }
 
   /** Música de fondo si el vídeo no tiene ya sonido de fondo; el ambiente sale del tema (con modelo si `smart`, si no por palabras). */
-  private async musicFor(vod: VodJob, words: Word[], title: string, segs: Seg[], smart: boolean, llmConf: LlmConfig | null | undefined): Promise<MusicMood | null> {
+  async musicFor(vod: VodJob, words: Word[], title: string, segs: Seg[], smart: boolean, llmConf: LlmConfig | null | undefined): Promise<MusicMood | null> {
     if (this.cfg.music === false || !vod.filePath || !fs.existsSync(vod.filePath)) return null;
     try {
       const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
@@ -961,7 +495,7 @@ clock.mark(null);
   }
 
   /** Un corto temático: un tramo continuo con la edición profesional (cortes, sonidos, música) y, si falla, sin ella. */
-  private async makeShort(vodId: string, words: Word[], llmConf: LlmConfig | null | undefined, title: string, seg: Seg, subs: { subtitles?: SubtitleStyleId }): Promise<OutputItem> {
+  async makeShort(vodId: string, words: Word[], llmConf: LlmConfig | null | undefined, title: string, seg: Seg, subs: { subtitles?: SubtitleStyleId }): Promise<OutputItem> {
     const vod = this.d.store.data.vods.find((v) => v.id === vodId)!;
     const style = this.d.style?.() ?? defaultStyle();
     let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
@@ -982,7 +516,7 @@ clock.mark(null);
    * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
    * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
    */
-  private async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[]): Promise<ThemeProposal[]> {
+  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[]): Promise<ThemeProposal[]> {
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
     const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c, 380), title: c.judgement.title, total: c.total }));
     const blocks = transcriptBlocks(words, cand).slice(0, 20);

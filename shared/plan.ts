@@ -1,4 +1,5 @@
-import type { ClipSpec, Effect, EditPlan, LongSpec } from './types';
+import type { ClipSpec, Effect, EditPlan, LongSpec, TitleKind } from './types';
+import { TITLE, TITLE_KINDS } from './types';
 import { isSubtitleStyleId } from './subtitles';
 import { SOUND_IDS, isSoundId } from './sounds';
 import { MUSIC_MOODS, isMusicMood } from './music';
@@ -12,7 +13,7 @@ export const MAX_TITLE_LEN = 120;
 export const MAX_CLIPS_PER_PLAN = 50;
 export const MAX_LONG_SEGMENTS = 200;
 export const MAX_CUTS = 40;
-export const MAX_EFFECTS = 30;
+export const MAX_EFFECTS = 80;
 export const PUNCH = { minDur: 0.3, maxDur: 3, defaultDur: 1, minZoom: 1.05, maxZoom: 1.5, defaultZoom: 1.2 };
 export const FADE = { min: 0.1, max: 2, default: 0.5 };
 
@@ -125,8 +126,15 @@ export function validateEffects(effects: unknown, ranges: Range[]): string | nul
     } else if (e.type === 'polish') {
       if (polish) return 'solo puede haber un polish';
       polish = true;
+    } else if (e.type === 'title') {
+      const at = e.at;
+      if (!isNum(at)) return `el efecto ${i + 1} (title) necesita "at" numérico`;
+      if (!ranges.some((r) => at >= r.start && at <= r.end)) return `el efecto ${i + 1} (title) cae en una parte cortada o fuera del vídeo`;
+      if (typeof e.text !== 'string' || !e.text.trim() || e.text.trim().length > TITLE.maxLen) return `el efecto ${i + 1} (title) necesita un texto de 1 a ${TITLE.maxLen} caracteres`;
+      if (e.duration !== undefined && (!isNum(e.duration) || e.duration < TITLE.minDur || e.duration > TITLE.maxDur)) return `el efecto ${i + 1}: la duración del rótulo debe estar entre ${TITLE.minDur} y ${TITLE.maxDur} s`;
+      if (e.kind !== undefined && !TITLE_KINDS.includes(e.kind as TitleKind)) return `el efecto ${i + 1}: el tipo de rótulo debe ser ${TITLE_KINDS.join(', ')}`;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music, joints o polish)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music, joints, polish o title)`;
     }
   }
   return null;
@@ -152,6 +160,7 @@ export function validateLongSpec(l: unknown, vodDurationSec?: number): string | 
   const fx = validateEffects(l.effects, l.segments as Range[]);
   if (fx) return fx;
   if (l.subtitles !== undefined && !isSubtitleStyleId(l.subtitles)) return 'el estilo de subtítulos no existe';
+  if (l.coverText !== undefined && (typeof l.coverText !== 'string' || l.coverText.trim().length > 40)) return 'la frase de la portada debe ser texto de 40 caracteres como máximo';
   return null;
 }
 
@@ -172,6 +181,7 @@ export function normalizeEffects(list: Effect[]): Effect[] {
     if (e.type === 'polish') return { type: 'polish' };
     if (e.type === 'joints') return { type: 'joints', duration: e.duration ?? 0.25 };
     if (e.type === 'music') return { type: 'music', mood: e.mood, volume: e.volume ?? 0.16 };
+    if (e.type === 'title') return { type: 'title', at: e.at, text: e.text.replace(/\s+/g, ' ').trim().slice(0, TITLE.maxLen), duration: e.duration ?? TITLE.defaultDur, kind: e.kind ?? 'frase' };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });
 }
@@ -183,6 +193,7 @@ export function normalizeLong(l: LongSpec): LongSpec {
   };
   if (l.effects?.length) out.effects = normalizeEffects(l.effects);
   if (l.subtitles) out.subtitles = l.subtitles;
+  if (l.coverText?.trim()) out.coverText = l.coverText.replace(/\s+/g, ' ').trim().slice(0, 40);
   return out;
 }
 

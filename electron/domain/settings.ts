@@ -51,6 +51,7 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.enabled !== undefined) n.enabled = bool(p.enabled, 'El interruptor del piloto automático');
   if (p.requireApproval !== undefined) n.requireApproval = bool(p.requireApproval, 'La aprobación previa');
   if (p.proEdit !== undefined) n.proEdit = bool(p.proEdit, 'La edición profesional');
+  if (p.director !== undefined) n.director = bool(p.director, 'El director de edición');
   if (p.soundCues !== undefined) n.soundCues = bool(p.soundCues, 'Los efectos de sonido');
   if (p.music !== undefined) n.music = bool(p.music, 'La música de fondo');
   if (p.vodVision !== undefined) n.vodVision = bool(p.vodVision, 'La vista del directo');

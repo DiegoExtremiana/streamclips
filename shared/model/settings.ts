@@ -42,6 +42,8 @@ export interface AutopilotSettings {
   chatCapture: boolean;
   /** Edición profesional automática: cortes de silencios, acercamientos, efectos de sonido, fundidos y volumen parejo. */
   proEdit?: boolean;
+  /** Director de edición para YouTube: el modelo decide la estructura del vídeo largo (gancho, capítulos, cierre, rótulos, título, miniatura). Por defecto sí. */
+  director?: boolean;
   /** Efectos de sonido según lo que se dice (ganar, dinero, morir…). Por defecto sí. */
   soundCues?: boolean;
   /** Música lofi sin letra de fondo cuando el vídeo no tiene ya sonido de fondo. Por defecto sí. */

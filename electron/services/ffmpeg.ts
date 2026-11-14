@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { run, type ToolPaths } from './tools';
-import type { Effect, LongSpec, RenderKind } from '../../shared/types';
+import { TITLE, type Effect, type LongSpec, type RenderKind } from '../../shared/types';
 import type { SoundId } from '../../shared/sounds';
 import { sfxInput } from './soundBank';
 import { mixMusic, musicFile } from './music';
-import { keptRanges, totalDuration, type Range } from '../../shared/timeline';
+import { keptRanges, toOutputTime, totalDuration, type Range } from '../../shared/timeline';
+import { buildOverlayAss, type Overlay } from '../../shared/overlays';
 import { FADE, PUNCH } from '../../shared/plan';
 import { dstPixels, OUT_H, OUT_W, type VerticalLayout } from '../../shared/layout';
 
@@ -93,6 +94,9 @@ export interface BurnSubs {
   ass: string;
   fontsDir?: string;
 }
+
+/** Una pasada de grabado de texto (subtítulos o rótulos) tras el montaje. */
+type AssPass = { ass: string; fontsDir?: string };
 
 /** Ruta para usar dentro de un filtro de ffmpeg (barras normales, ":" y comillas escapados). */
 export function filterPath(p: string): string {
@@ -190,6 +194,7 @@ export interface RenderClipSpec {
   cuts?: Range[];
   effects?: Effect[];
   subs?: BurnSubs;
+  fontsDir?: string;
 }
 
 interface TimelineSpec {
@@ -199,6 +204,8 @@ interface TimelineSpec {
   size: { w: number; h: number };
   effects?: Effect[];
   subs?: BurnSubs;
+  /** Carpeta de fuentes para los rótulos cuando no hay subtítulos. */
+  fontsDir?: string;
 }
 
 /**
@@ -241,8 +248,8 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
         {
           vf,
           layout: t.layout,
-          fadeIn: i === 0 ? (fadeIn ? clampFade(fadeIn.duration) : undefined) : joints && r.start - t.ranges[i - 1].end > JOINT_MIN_GAP ? jointDur : undefined,
-          fadeOut: i === t.ranges.length - 1 ? (fadeOut ? clampFade(fadeOut.duration) : undefined) : joints && t.ranges[i + 1].start - r.end > JOINT_MIN_GAP ? jointDur : undefined,
+          fadeIn: i === 0 ? (fadeIn ? clampFade(fadeIn.duration) : undefined) : joints && Math.abs(r.start - t.ranges[i - 1].end) > JOINT_MIN_GAP ? jointDur : undefined,
+          fadeOut: i === t.ranges.length - 1 ? (fadeOut ? clampFade(fadeOut.duration) : undefined) : joints && Math.abs(t.ranges[i + 1].start - r.end) > JOINT_MIN_GAP ? jointDur : undefined,
           polish,
           sfx: hasAudio ? allSfx.filter((e) => e.at >= r.start && e.at <= r.end).map((e) => ({ at: e.at - r.start, sound: e.sound ?? 'pop' })) : undefined,
         },
@@ -253,7 +260,7 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
     const musicFx = fx.find((e): e is Extract<Effect, { type: 'music' }> => e.type === 'music');
     const music = musicFx ? await musicFile(tools, musicFx.mood) : null;
     // un solo tramo, sin subtítulos ni música: el propio tramo es el resultado
-    if (parts.length === 1 && !t.subs && !music) {
+    if (parts.length === 1 && !t.subs && !music && !fx.some((e) => e.type === 'title')) {
       fs.copyFileSync(parts[0], out);
       return;
     }
@@ -272,15 +279,28 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
     }
     if (music && musicFx) {
       // la música va debajo de las voces: baja sola cuando se habla (el audio del vídeo gobierna su volumen)
-      const mixed = t.subs ? path.join(tmp, 'music.mp4') : out;
+      const mixed = t.subs || fx.some((e) => e.type === 'title') ? path.join(tmp, 'music.mp4') : out;
       await mixMusic(tools, joined, music, musicFx.volume ?? 0.16, mixed);
       joined = mixed;
     }
-    if (t.subs) {
+    // rótulos en pantalla: cada «title» cae en un tramo conservado; se pasa al tiempo del vídeo resultante y se graba como ASS aparte
+    const titles = fx.filter((e): e is Extract<Effect, { type: 'title' }> => e.type === 'title');
+    const overlays: Overlay[] = titles.flatMap((e) => {
+      const at = toOutputTime(e.at, t.ranges);
+      return at === null ? [] : [{ start: at, end: Math.min(total, at + (e.duration ?? TITLE.defaultDur)), text: e.text, kind: e.kind ?? 'frase' }];
+    });
+    const passes: AssPass[] = [];
+    if (t.subs) passes.push(t.subs);
+    if (overlays.length) {
+      const f = path.join(tmp, 'overlays.ass');
+      fs.writeFileSync(f, buildOverlayAss(overlays, t.size.w, t.size.h));
+      passes.push({ ass: f, fontsDir: t.subs?.fontsDir ?? t.fontsDir });
+    }
+    if (passes.length) {
       await run(tools.ffmpeg, [
         '-y', '-hide_banner', '-loglevel', 'error',
         '-i', joined,
-        '-vf', assFilter(t.subs),
+        '-vf', passes.map(assFilter).join(','),
         '-map', '0:v:0', '-map', '0:a:0?',
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
         '-c:a', 'copy', '-movflags', '+faststart',
@@ -306,6 +326,7 @@ export async function renderClip(tools: ToolPaths, input: string, spec: RenderCl
       size: vertical ? { w: 1080, h: 1920 } : { w: 1920, h: 1080 },
       effects: spec.effects,
       subs: spec.subs,
+      fontsDir: spec.fontsDir,
     },
     out,
   );
@@ -317,11 +338,11 @@ export function concatLine(file: string): string {
 }
 
 /** Vídeo largo 1920x1080: cada tramo se codifica igual y luego se concatenan sin recodificar. */
-export async function renderLong(tools: ToolPaths, input: string, spec: LongSpec, out: string, subs?: BurnSubs): Promise<void> {
+export async function renderLong(tools: ToolPaths, input: string, spec: LongSpec, out: string, subs?: BurnSubs, fontsDir?: string): Promise<void> {
   await renderTimeline(
     tools,
     input,
-    { ranges: spec.segments, baseVf: VF_HORIZONTAL, size: { w: 1920, h: 1080 }, effects: spec.effects, subs },
+    { ranges: spec.segments, baseVf: VF_HORIZONTAL, size: { w: 1920, h: 1080 }, effects: spec.effects, subs, fontsDir },
     out,
   );
 }

@@ -1,11 +1,16 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { IconChevron, IconClose } from '../icons';
+import { IconChevron, IconChevronLeft, IconClose } from '../icons';
 
 /** Ventana modal accesible: Escape y clic fuera la cierran, el foco entra en ella y vuelve a donde estaba. */
-export function Modal(props: { title: string; onClose: () => void; wide?: boolean | 'mid'; children: ReactNode }) {
+/** Flechas de la cabecera para pasar al elemento anterior o siguiente (con el teclado lo gestiona quien abre la ventana). */
+export interface ModalNav { onPrev?: () => void; onNext?: () => void; prevLabel: string; nextLabel: string }
+
+export function Modal(props: { title: string; onClose: () => void; wide?: boolean | 'mid'; children: ReactNode; nav?: ModalNav; /** Entra deslizándose desde ese lado. */ enter?: 'left' | 'right'; /** Copia de la ventana que sale deslizándose hacia ese lado: sin foco ni teclas. */ leave?: 'left' | 'right' }) {
   const ref = useRef<HTMLDivElement>(null);
   const { onClose } = props;
+  const leaving = !!props.leave;
   useEffect(() => {
+    if (leaving) return undefined;
     const previous = document.activeElement as HTMLElement | null;
     if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -19,11 +24,18 @@ export function Modal(props: { title: string; onClose: () => void; wide?: boolea
       document.removeEventListener('keydown', onKey);
       previous?.focus?.();
     };
-  }, [onClose]);
+  }, [onClose, leaving]);
+  const slide = props.leave ? ` leave-${props.leave}` : props.enter ? ` enter-${props.enter}` : '';
   return (
-    <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => e.stopPropagation()}>
-      <div ref={ref} className={`modal ${props.wide === 'mid' ? 'mid' : props.wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={props.title} tabIndex={-1}>
+    <div className={`backdrop${leaving ? ' ghost' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => e.stopPropagation()} aria-hidden={leaving || undefined}>
+      <div ref={ref} className={`modal ${props.wide === 'mid' ? 'mid' : props.wide ? 'wide' : ''}${slide}`} role={leaving ? undefined : 'dialog'} aria-modal={leaving ? undefined : 'true'} aria-label={props.title} tabIndex={-1}>
         <div className="modal-head">
+          {props.nav && (
+            <div className="modal-nav">
+              <button className="btn ghost small" aria-label={props.nav.prevLabel} title={`${props.nav.prevLabel} (flecha izquierda)`} disabled={!props.nav.onPrev} onClick={props.nav.onPrev} data-testid="modal-prev"><IconChevronLeft /></button>
+              <button className="btn ghost small" aria-label={props.nav.nextLabel} title={`${props.nav.nextLabel} (flecha derecha)`} disabled={!props.nav.onNext} onClick={props.nav.onNext} data-testid="modal-next"><IconChevron /></button>
+            </div>
+          )}
           <h2>{props.title}</h2>
           <button className="btn ghost small" aria-label="Cerrar" onClick={onClose}><IconClose /></button>
         </div>

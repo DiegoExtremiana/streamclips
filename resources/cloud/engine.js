@@ -36493,9 +36493,9 @@ var VIRAL_CHECK_VERSION = 1;
 var isGold = (viral) => typeof viral === "number" && viral >= GOLD_VIRAL_MIN;
 
 // shared/clipFeedback.ts
-var EDITABLE = ["historia", "interes", "humor", "viral"];
+var EDITABLE = ["historia", "interes", "humor"];
 var r1 = (x) => Math.round(x * 10) / 10;
-var applyCorrection = (c, user) => ({ ...c, humor: user.humor, historia: user.historia, interes: user.interes, viral: user.viral ?? c.viral });
+var applyCorrection = (c, user) => ({ ...c, humor: user.humor, historia: user.historia, interes: user.interes });
 var MIN_FOR_TREND = 3;
 var TREND_THRESHOLD = 1;
 var MAX_EXAMPLES = 6;
@@ -36503,14 +36503,12 @@ function trend(list) {
   const out = {};
   if (list.length < MIN_FOR_TREND) return out;
   for (const k of EDITABLE) {
-    const rel = list.filter((c) => typeof c.user[k] === "number" && typeof c.ai[k] === "number");
-    if (rel.length < MIN_FOR_TREND) continue;
-    const mean = rel.reduce((a, c) => a + (c.user[k] - c.ai[k]), 0) / rel.length;
+    const mean = list.reduce((a, c) => a + (c.user[k] - c.ai[k]), 0) / list.length;
     if (Math.abs(mean) >= TREND_THRESHOLD) out[k] = r1(mean);
   }
   return out;
 }
-var NAME = { humor: "humor", historia: "\xABse cuenta algo\xBB", interes: "\xABmomento interesante\xBB", viral: "\xABpuede ser viral\xBB" };
+var NAME = { humor: "humor", historia: "\xABse cuenta algo\xBB", interes: "\xABmomento interesante\xBB" };
 function feedbackGuide(list) {
   const usable = list.filter((c) => c.text.trim().length >= 20);
   if (!usable.length) return "";
@@ -36522,7 +36520,7 @@ function feedbackGuide(list) {
     lines.push(`- En ${list.length} correcciones suyas, de media pone el ${NAME[k]} ${Math.abs(d).toString().replace(".", ",")} puntos ${d > 0 ? "M\xC1S alto" : "M\xC1S bajo"} que t\xFA. Ajusta tu criterio en esa direcci\xF3n cuando haya pruebas.`);
   }
   const ex = [...usable].sort((a, b) => b.at - a.at).slice(0, MAX_EXAMPLES);
-  const examples = ex.map((c) => `\xB7 \xAB${c.text.replace(/\s+/g, " ").trim().slice(0, 220)}\xBB \u2192 t\xFA: humor ${c.ai.humor}, historia ${c.ai.historia}, inter\xE9s ${c.ai.interes}${c.ai.viral !== void 0 ? `, viral ${c.ai.viral}` : ""}; \xE9l: humor ${c.user.humor}, historia ${c.user.historia}, inter\xE9s ${c.user.interes}${c.user.viral !== void 0 ? `, viral ${c.user.viral}` : ""}`);
+  const examples = ex.map((c) => `\xB7 \xAB${c.text.replace(/\s+/g, " ").trim().slice(0, 220)}\xBB \u2192 t\xFA: humor ${c.ai.humor}, historia ${c.ai.historia}, inter\xE9s ${c.ai.interes}; \xE9l: humor ${c.user.humor}, historia ${c.user.historia}, inter\xE9s ${c.user.interes}`);
   return "\nCALIBRACI\xD3N con correcciones del propio streamer (\xFAsala solo como referencia de su gusto; no copies sus notas, sigue puntuando con la r\xFAbrica y las citas):\n" + (lines.length ? `${lines.join("\n")}
 ` : "") + `Ejemplos de clips que corrigi\xF3:
 ${examples.join("\n")}`;
@@ -36702,7 +36700,7 @@ function parseViralCheck(raw, ctx) {
 }
 
 // electron/domain/clipScores.ts
-var isGoldStored = (s) => !!s.crit && isGold(s.crit.viral) && (s.by === "user" || s.vc === VIRAL_CHECK_VERSION);
+var isGoldStored = (s) => !!s.crit && isGold(s.crit.viral) && s.vc === VIRAL_CHECK_VERSION;
 var PHASE_LABEL = { descarga: "bajando el clip", imagen: "sacando fotogramas", volumen: "midiendo el volumen", transcripcion: "transcribiendo con Whisper", modelo: "preguntando al modelo" };
 var MIN_WORDS_TO_JUDGE = 4;
 var MAX_FAILS = 2;
@@ -36776,7 +36774,7 @@ var ClipScoreService = class {
     const crit = applyCorrection(s.crit, user);
     const score = overall(crit);
     this.scores.set(id, { ...s, crit, aiCrit: ai, score, by: "user", reason: "Corregido por ti." });
-    this.d.feedback?.add({ clipId: id, title: s.title ?? "", text: s.text ?? "", ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes, viral: ai.viral }, user, at: this.now() });
+    this.d.feedback?.add({ clipId: id, title: s.title ?? "", text: s.text ?? "", ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes }, user, at: this.now() });
     this.save();
     this.writeNotes();
     return { score };

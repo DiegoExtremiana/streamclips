@@ -18,13 +18,12 @@ const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-fb-')); 
 describe('correcciones del streamer a las notas', () => {
   it('valida los valores: 0 a 10 con un decimal y los tres criterios', () => {
     assert.deepEqual(cleanScores({ humor: 12, historia: -3, interes: 4.26 }), { humor: 10, historia: 0, interes: 4.3 });
-    assert.deepEqual(cleanScores({ humor: 1, historia: 2, interes: 3, viral: 9.46 }), { humor: 1, historia: 2, interes: 3, viral: 9.5 });
+    assert.deepEqual(cleanScores({ humor: 1, historia: 2, interes: 3, viral: 9.46 }), { humor: 1, historia: 2, interes: 3 }, 'la viralidad no se puede corregir: se ignora');
     assert.equal(cleanScores({ humor: 5 }), null);
     assert.equal(cleanScores('x'), null);
   });
 
-  it('la viralidad se corrige también; si no la tocas se queda como la dejó la IA', () => {
-    assert.equal(applyCorrection({ humor: 1, historia: 2, viral: 7, interes: 3 }, { humor: 9, historia: 8, interes: 7, viral: 2 }).viral, 2);
+  it('solo cambia humor, historia e interés: la viralidad se queda como la dejó la IA', () => {
     const r = applyCorrection({ humor: 1, historia: 2, viral: 7, interes: 3 }, { humor: 9, historia: 8, interes: 7 });
     assert.deepEqual(r, { humor: 9, historia: 8, viral: 7, interes: 7 });
   });
@@ -85,19 +84,24 @@ describe('corregir la nota de un clip', () => {
     return { svc, feedback, asked: () => asked };
   }
 
-  it('el dorado es solo «Puede ser viral» de 9,5 o más: si lo corriges, vale tu nota hasta que la cambies o la deshagas', async () => {
-    const { svc } = await scored();
-    assert.equal(svc.gold('k1'), false);
-    svc.correct('k1', { humor: 10, historia: 10, interes: 10 });
-    assert.equal(svc.gold('k1'), false, 'las otras notas no dan dorado');
-    svc.correct('k1', { humor: 3, historia: 3, interes: 3, viral: 9.5 });
-    assert.equal(svc.gold('k1'), true, 'tu viral de 9,5 lo vuelve dorado');
-    assert.equal(svc.detailOf('k1')!.criteria.viral, 9.5);
-    svc.correct('k1', { humor: 3, historia: 3, interes: 3, viral: 9 });
-    assert.equal(svc.gold('k1'), false, 'al bajarlo de nuevo deja de serlo');
-    svc.correct('k1', { humor: 3, historia: 3, interes: 3, viral: 10 });
+  it('el dorado no cambia al corregir: depende solo de la viralidad de la IA y tú no puedes tocarla', async () => {
+    const m = { criteria: { humor: 1, historia: 4, viral: 9.6, interes: 3 }, reason: 'x', items: {}, evidence: {} };
+    const svc = new ClipScoreService({
+      file: path.join(tmp(), 's.json'), canRun: () => true, sleep: async () => undefined, feedback: new ClipFeedbackStore(path.join(tmp(), 'f.json')),
+      analyze: async () => ({ durationSec: 30, words, energyDb: [...Array.from({ length: 24 }, () => -40), ...Array.from({ length: 6 }, () => -14)] }),
+      judge: async () => ({ ...m, items: Object.fromEntries(['gancho', 'citable', 'emocion', 'universal', 'cierre', 'compartible', 'retencion', 'sinDefectos'].map((k) => [`viral.${k}`, 2])) }),
+      verifyViral: async () => ({ items: Object.fromEntries(['gancho', 'citable', 'emocion', 'universal', 'cierre', 'compartible', 'retencion', 'sinDefectos'].map((k) => [`viral.${k}`, 2])), stay: 6, total: 6, refutation: '' }),
+    });
+    svc.enqueue([clip]);
+    await svc.idle();
+    const viral = svc.detailOf('k1')!.criteria.viral;
+    assert.ok(viral >= 9.5);
+    assert.equal(svc.gold('k1'), true);
+    svc.correct('k1', { humor: 0, historia: 0, interes: 0 });
+    assert.equal(svc.detailOf('k1')!.criteria.viral, viral, 'tu corrección no toca la viralidad');
+    assert.equal(svc.gold('k1'), true, 'sigue dorado');
     svc.undoCorrection('k1');
-    assert.equal(svc.gold('k1'), false, 'volver a la nota de la IA quita el dorado que diste tú');
+    assert.equal(svc.gold('k1'), true);
   });
 
   it('recalcula la nota con lo que dices, conserva la viralidad de la IA y guarda la corrección con lo que se decía', async () => {

@@ -7,7 +7,7 @@ import { clipLibraryState, defaultDir, filterClips, type ClipLibraryState, type 
 
 import { errMsg } from '../lib';
 import { IconPlus, IconSearch, IconSortAsc, IconSortDesc } from '../icons';
-import { Fold, Modal } from '../library/ui';
+import { Fold, Modal, type ModalNav } from '../library/ui';
 import { ClipScorePanel, fmtScore } from './ClipScorePanel';
 
 const REFRESH_MS = 60_000;
@@ -18,7 +18,7 @@ const LOADING_MS = 3_000; // mientras se lee el historial se vuelve a preguntar 
 const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'Añadir a la Biblioteca' };
 
 /** Vista previa de un clip de Twitch sin descargarlo: se pide la dirección directa del vídeo y se reproduce aquí. */
-function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip: TwitchClip; state: ClipLibraryState; busy: boolean; onAdd: () => void; onClose: () => void; onCorrected: () => void }) {
+function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected, nav, enter }: { clip: TwitchClip; state: ClipLibraryState; busy: boolean; onAdd: () => void; onClose: () => void; onCorrected: () => void; nav: ModalNav; enter?: 'left' | 'right' }) {
   const [src, setSrc] = useState('');
   const [error, setError] = useState('');
   useEffect(() => {
@@ -27,7 +27,7 @@ function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip:
     return () => { alive = false; };
   }, [clip.id]);
   return (
-    <Modal title={clip.title} wide onClose={onClose}>
+    <Modal title={clip.title} wide onClose={onClose} nav={nav} enter={enter}>
       <div className="itemgrid scoregrid" data-testid="clip-preview">
         <div className="playercol">
           {error ? (
@@ -48,6 +48,18 @@ function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip:
   );
 }
 
+/** La ventana que se va mientras entra la siguiente: solo la foto del clip, sin vídeo ni teclas. */
+function ClipGhost({ clip, leave }: { clip: TwitchClip; leave: 'left' | 'right' }) {
+  return (
+    <Modal title={clip.title} wide onClose={() => undefined} leave={leave}>
+      <div className="itemgrid scoregrid">
+        <div className="playercol">{clip.thumbnail ? <img className="player" src={clip.thumbnail} alt="" draggable={false} /> : <div className="player" />}</div>
+      </div>
+    </Modal>
+  );
+}
+
+const SLIDE_MS = 230;
 const PAGE = 60;
 type Show = 'all' | 'new' | 'library' | 'gold';
 
@@ -133,6 +145,33 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   }, [clips, query, sort, dir, show, vods, outputs]);
   const shown = matching.slice(0, limit);
   const current = clips?.find((c) => c.id === open) ?? null;
+  // clip anterior / siguiente dentro de la lista que se está viendo (con el filtro y el orden actuales), con deslizamiento
+  const [slide, setSlide] = useState<{ enter: 'left' | 'right'; from: TwitchClip } | null>(null);
+  const idx = current ? matching.findIndex((c) => c.id === current.id) : -1;
+  const step = useCallback((by: -1 | 1) => {
+    const target = idx < 0 ? undefined : matching[idx + by];
+    if (!current || !target) return;
+    setSlide({ enter: by > 0 ? 'right' : 'left', from: current });
+    setOpen(target.id);
+  }, [idx, matching, current]);
+  useEffect(() => {
+    if (!slide) return undefined;
+    const t = window.setTimeout(() => setSlide(null), SLIDE_MS);
+    return () => window.clearTimeout(t);
+  }, [slide]);
+  useEffect(() => {
+    if (!current) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      // en un campo de texto o un deslizador las flechas son suyas
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      step(e.key === 'ArrowRight' ? 1 : -1);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [current, step]);
 
   async function importClip(id: string) {
     setBusy(id);
@@ -274,7 +313,9 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           <button className="btn ghost" onClick={() => setLimit(limit + PAGE)}>Mostrar más ({matching.length - shown.length} restantes)</button>
         </div>
       )}
-      {current && <ClipPreview clip={current} state={stateOf(current)} busy={busy === current.id} onAdd={() => void importClip(current.id)} onClose={() => setOpen(null)} onCorrected={() => void load(false)} />}
+      {slide && <ClipGhost clip={slide.from} leave={slide.enter === 'right' ? 'left' : 'right'} />}
+      {current && <ClipPreview key={current.id} clip={current} state={stateOf(current)} busy={busy === current.id} onAdd={() => void importClip(current.id)} onClose={() => setOpen(null)} onCorrected={() => void load(false)}
+        nav={{ prevLabel: 'Clip anterior', nextLabel: 'Clip siguiente', onPrev: idx > 0 ? () => step(-1) : undefined, onNext: idx >= 0 && idx < matching.length - 1 ? () => step(1) : undefined }} enter={slide?.enter} />}
     </section>
   );
 }

@@ -22,6 +22,7 @@ export const IconMore = (p: P) => <Svg {...p}><circle cx="5" cy="12" r="1.6" fil
 export const IconPlus = (p: P) => <Svg {...p}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></Svg>;
 export const IconClose = (p: P) => <Svg {...p}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></Svg>;
 export const IconChevron = (p: P) => <Svg {...p}><polyline points="9 6 15 12 9 18" /></Svg>;
+export const IconChevronLeft = (p: P) => <Svg {...p}><polyline points="15 6 9 12 15 18" /></Svg>;
 export const IconPanel = (p: P) => <Svg {...p}><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></Svg>;
 export const IconScissors = (p: P) => <Svg {...p}><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><line x1="20" y1="4" x2="8.1" y2="15.9" /><line x1="14.5" y1="14.5" x2="20" y2="20" /><line x1="8.1" y1="8.1" x2="12" y2="12" /></Svg>;
 export const IconLink = (p: P) => <Svg {...p}><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></Svg>;

@@ -49,8 +49,8 @@ interface Stored {
   viralCheck?: { stay: number; total: number; refutation: string };
 }
 
-/** ¿Es dorado? Solo «Puede ser viral» de 9,5 o más, y con el examen estricto pasado (o corregido por ti). */
-const isGoldStored = (s: Stored): boolean => !!s.crit && isGold(s.crit.viral) && (s.by === 'user' || s.vc === VIRAL_CHECK_VERSION);
+/** ¿Es dorado? Solo «Puede ser viral» de 9,5 o más, y con el examen estricto pasado. Tú no puedes tocar esa nota. */
+const isGoldStored = (s: Stored): boolean => !!s.crit && isGold(s.crit.viral) && s.vc === VIRAL_CHECK_VERSION;
 
 /** Fases de valorar un clip, para medir dónde se va el tiempo. */
 export type ScorePhase = 'descarga' | 'imagen' | 'volumen' | 'transcripcion' | 'modelo';
@@ -176,7 +176,7 @@ export class ClipScoreService {
     const crit = applyCorrection(s.crit, user);
     const score = overall(crit);
     this.scores.set(id, { ...s, crit, aiCrit: ai, score, by: 'user', reason: 'Corregido por ti.' });
-    this.d.feedback?.add({ clipId: id, title: s.title ?? '', text: s.text ?? '', ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes, viral: ai.viral }, user, at: this.now() });
+    this.d.feedback?.add({ clipId: id, title: s.title ?? '', text: s.text ?? '', ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes }, user, at: this.now() });
     this.save();
     this.writeNotes();
     return { score };
@@ -235,7 +235,7 @@ export class ClipScoreService {
   /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
     const s = this.scores.get(id);
-    // solo cuenta «Puede ser viral» (9,5 o más): el de la IA solo si pasó el examen estricto; si lo has corregido tú, el tuyo
+    // solo cuenta «Puede ser viral» (9,5 o más) de la IA y solo si pasó el examen estricto; corregir las otras notas no lo cambia
     return s ? isGoldStored(s) : false;
   }
 

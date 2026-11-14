@@ -349,10 +349,24 @@ try {
   await page.getByTestId('clip-preview-video').waitFor();
   assert.equal(await page.getByTestId('clip-preview-video').getAttribute('src'), 'https://clips-media-assets2.twitch.tv/clip.mp4', 'se ve con la dirección directa, sin descargar nada');
   assert.equal(JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).vods.filter((v) => v.origin === 'clip').length, 0, 'verlo no lo añade a la Biblioteca');
+  // clip anterior / siguiente: botones y flechas del teclado, con deslizamiento
+  const clipDlg = () => page.getByRole('dialog');
+  assert.equal(await clipDlg().getAttribute('aria-label'), 'Susto en la cueva');
+  await page.keyboard.press('ArrowRight');
+  await page.getByRole('dialog', { name: 'Pentakill increíble' }).waitFor();
+  assert.equal(await page.getByTestId('modal-next').isDisabled(), true, 'es el último de la lista: no hay siguiente');
+  await page.getByTestId('modal-prev').click();
+  await page.getByRole('dialog', { name: 'Susto en la cueva' }).waitFor();
+  await page.keyboard.press('ArrowLeft');
+  await page.getByRole('dialog', { name: 'Fallo épico' }).waitFor();
+  assert.equal(await page.getByTestId('modal-prev').isDisabled(), true, 'es el primero de la lista: no hay anterior');
+  await page.getByTestId('modal-next').click();
+  await page.getByRole('dialog', { name: 'Susto en la cueva' }).waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 1, 'al terminar el deslizamiento solo queda la ventana del clip actual');
   await shot(page, '3b-clips-twitch');
   await page.keyboard.press('Escape');
   await prev.waitFor({ state: 'detached' });
-  log('clips de Twitch: más recientes arriba, cuadrícula con miniaturas, lupa que busca por nombre, filtros por estado y vista previa sin descargar ni añadir a la Biblioteca');
+  log('clips de Twitch: flechas anterior/siguiente (botones y teclado) con deslizamiento; más recientes arriba, cuadrícula con miniaturas, lupa que busca por nombre, filtros por estado y vista previa sin descargar ni añadir a la Biblioteca');
 
   // comprobador de directos: cuadrícula leída de Twitch y «Analizar» cuando quieras
   await sub(page, 'Directos y actividad');

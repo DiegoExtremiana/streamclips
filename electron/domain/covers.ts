@@ -120,6 +120,7 @@ export class CoverService {
     const a = this.get(id);
     fs.rmSync(this.fileOf(a), { force: true });
     fs.rmSync(this.thumbOf(a), { force: true });
+    fs.rmSync(path.join(this.d.dir, 'thumbs', `${a.id}-full.png`), { force: true });
     this.items = this.items.filter((x) => x.id !== id);
     this.save();
   }
@@ -133,6 +134,30 @@ export class CoverService {
       if (!fs.existsSync(out)) {
         fs.mkdirSync(path.dirname(out), { recursive: true });
         await run(this.d.tools().ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', this.fileOf(a), '-frames:v', '1', '-vf', 'scale=480:-2', out], 30_000);
+      }
+      return `data:image/png;base64,${fs.readFileSync(out).toString('base64')}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Guarda un PNG ya hecho (del editor) como portada de la biblioteca. Si `replaceId` existe, sustituye a esa portada. */
+  addCover(name: string, png: Buffer, replaceId?: string | null): CoverAsset {
+    if (!png.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) throw new Error('La portada no es un PNG válido.');
+    const old = replaceId ? this.items.find((x) => x.id === replaceId && x.kind === 'portada') : undefined;
+    if (old) this.remove(old.id);
+    return this.insert('portada.png', png, 'portada', name);
+  }
+
+  /** Imagen de la pieza a buen tamaño (hasta 1920 px, con transparencia) para trabajar con ella en el editor. */
+  async full(id: string): Promise<string | null> {
+    const a = this.get(id);
+    if (!a.isImage) return null;
+    const out = path.join(this.d.dir, 'thumbs', `${a.id}-full.png`);
+    try {
+      if (!fs.existsSync(out)) {
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        await run(this.d.tools().ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', this.fileOf(a), '-frames:v', '1', '-vf', "scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease", out], 30_000);
       }
       return `data:image/png;base64,${fs.readFileSync(out).toString('base64')}`;
     } catch {

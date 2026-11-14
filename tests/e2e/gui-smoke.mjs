@@ -187,6 +187,7 @@ try {
 
   // ── Portadas ──
   await tab(page, 'Portadas');
+  await sub(page, 'Mis piezas');
   const solid = (hex) => Buffer.from(hex, 'base64');
   const PNG_RED = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAFCAIAAAD38zoCAAAAEUlEQVR4nGM4ISeHFTHQQQIABrMooTYkvzkAAAAASUVORK5CYII=';
   await page.getByTestId('cover-input').setInputFiles([
@@ -203,14 +204,55 @@ try {
   assert.equal(await page.getByTestId('cover-piece').count(), 1);
   await page.getByRole('button', { name: 'Todas' }).click();
   log('Portadas: se añaden piezas (imágenes y documentos), se renombran y se filtran por tipo');
+  await sub(page, 'Portada rápida');
   await page.locator('#cv-bg').selectOption({ label: 'Fondo_Ciudad' });
   await page.locator('#cv-subject').selectOption({ label: 'Diego_Feliz' });
   await page.locator('#cv-text').fill('no lo esperaba');
   await page.getByRole('button', { name: 'Crear portada' }).click();
   await page.getByTestId('cover-made').waitFor();
+  await sub(page, 'Mis piezas');
   assert.equal(await page.getByTestId('cover-piece').count(), 4);
   await shot(page, '1-portadas');
   log('Portadas: se compone una portada con fondo, pieza y frase y queda en la biblioteca');
+
+  // editor de portadas: capas, texto, imagen, ajustes, guardar y volver a abrir
+  await sub(page, 'Diseñar portadas');
+  await page.getByRole('button', { name: /Nueva portada/ }).click();
+  const coverEd = page.getByTestId('cover-editor');
+  await coverEd.waitFor();
+  await coverEd.getByRole('button', { name: '+ Texto' }).click();
+  await coverEd.getByLabel('Texto de la capa').fill('GRAN SUSTO');
+  assert.equal(await coverEd.getByTestId('cover-layer').count(), 1);
+  await coverEd.getByRole('button', { name: '+ Imagen' }).click();
+  await coverEd.getByRole('option', { name: /Diego_Feliz/ }).click();
+  await coverEd.getByTestId('cover-props-image').waitFor();
+  assert.equal(await coverEd.getByTestId('cover-layer').count(), 2, 'texto + imagen');
+  await coverEd.getByLabel('Brillo').fill('140');
+  await coverEd.getByRole('button', { name: 'Voltear' }).click();
+  await coverEd.getByRole('button', { name: /^Bajar / }).first().click();
+  const stage = await coverEd.getByTestId('cover-stage').boundingBox();
+  await page.mouse.move(stage.x + stage.width / 2, stage.y + stage.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(stage.x + stage.width / 2 + 40, stage.y + stage.height / 2 + 20, { steps: 5 });
+  await page.mouse.up();
+  await coverEd.getByRole('button', { name: 'Deshacer' }).click();
+  await coverEd.getByLabel('Nombre de la portada').fill('Susto grande');
+  await coverEd.getByRole('button', { name: 'Guardar portada' }).click();
+  await coverEd.getByRole('button', { name: /Guardada/ }).waitFor({ timeout: 30000 });
+  const designsOnDisk = JSON.parse(fs.readFileSync(path.join(userData, 'covers', 'designs.json'), 'utf8'));
+  assert.equal(designsOnDisk.length, 1);
+  assert.equal(designsOnDisk[0].name, 'Susto_grande');
+  assert.equal(designsOnDisk[0].design.layers.length, 2);
+  assert.ok(designsOnDisk[0].design.layers.some((l) => l.type === 'text' && l.text === 'GRAN SUSTO'));
+  assert.ok(designsOnDisk[0].design.layers.some((l) => l.type === 'image' && l.flipX === true && l.adjust.brightness === 140));
+  await shot(page, '1b-editor-portadas');
+  await coverEd.getByRole('button', { name: /Volver/ }).click();
+  await page.getByTestId('cover-design').waitFor();
+  await page.getByTestId('cover-design').getByRole('button', { name: 'Editar' }).click();
+  await coverEd.waitFor();
+  assert.equal(await coverEd.getByTestId('cover-layer').count(), 2, 'al reabrir el diseño siguen sus capas');
+  await coverEd.getByRole('button', { name: /Volver/ }).click();
+  log('Portadas: el editor crea capas de texto e imagen, aplica ajustes, deshace, guarda el proyecto y lo reabre con sus capas');
 
   // ── Conexiones ──
   await tab(page, 'Conexiones');

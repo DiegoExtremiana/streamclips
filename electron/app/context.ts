@@ -25,6 +25,7 @@ import { StorageService } from '../domain/storage';
 import { setAssetFolders } from '../services/soundBank';
 import { StyleService } from '../domain/style';
 import { CoverService } from '../domain/covers';
+import { CoverDesignService } from '../domain/coverDesigns';
 import type { DiarizeEngine } from '../services/diarize';
 import type { Word } from '../../shared/subtitles';
 import { GroupService } from '../domain/groups';
@@ -119,6 +120,7 @@ export class AppContext {
   readonly storage: StorageService;
   readonly style: StyleService;
   readonly covers: CoverService;
+  readonly coverDesigns: CoverDesignService;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -192,6 +194,7 @@ export class AppContext {
     });
     this.style = new StyleService(path.join(o.userDataDir, 'style-profile.json'));
     this.covers = new CoverService({ dir: path.join(o.userDataDir, 'covers'), tools, fontsDir: o.fontsDir });
+    this.coverDesigns = new CoverDesignService(path.join(o.userDataDir, 'covers'), this.covers);
     this.moments = new MomentsService({
       dir: path.join(o.userDataDir, 'moments'),
       prefsFile: path.join(o.userDataDir, 'preferences.json'),

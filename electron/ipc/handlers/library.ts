@@ -111,6 +111,11 @@ export function registerLibrary({ handle, ctx, platform }: IpcContext): void {
     const img = await platform.pickImage();
     return img ? ctx.library.setThumbnailFromImage(outputId, img) : null;
   });
+  handle(CHANNELS.outputsThumbCover, (id, assetId) => {
+    const outputId = str(id, 'id');
+    if (!ctx.store.data.outputs.some((o) => o.id === outputId)) throw new Error('El vídeo no existe.');
+    return ctx.library.setThumbnailFromImage(outputId, ctx.covers.filePath(str(assetId, 'portada')));
+  });
   handle(CHANNELS.outputsReedit, (id, edit) => ctx.library.reeditClip(str(id, 'id'), obj(edit, 'edición') as ClipEdit));
   handle(CHANNELS.outputsExport, async (id, version) => {
     const outputId = str(id, 'id');

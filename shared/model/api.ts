@@ -1,5 +1,6 @@
 import type { StorageFreed, StorageReport } from '../storage';
 import type { AssetKind, ComposeOpts, CoverAsset } from '../covers';
+import type { CoverFont, Design, DesignRecord } from '../coverDesign';
 import type { StyleProfile } from '../styleProfile';
 import type { Vocabulary } from '../vocab';
 import type { Word } from '../subtitles';
@@ -136,6 +137,15 @@ export interface Api {
   coversPreview(id: string): Promise<string | null>;
   coversCompose(opts: ComposeOpts): Promise<CoverAsset>;
   coversReveal(id: string): Promise<void>;
+  coversFull(id: string): Promise<string | null>;
+  designsList(): Promise<DesignRecord[]>;
+  designsSave(input: { id?: string | null; name: string; design: Design; png: Uint8Array }): Promise<DesignRecord>;
+  designsRemove(id: string, alsoImage: boolean): Promise<void>;
+  fontsList(): Promise<CoverFont[]>;
+  fontsAdd(fileName: string, data: Uint8Array): Promise<CoverFont>;
+  fontsRemove(id: string): Promise<void>;
+  fontsData(id: string): Promise<string>;
+  setThumbnailFromCover(outputId: string, assetId: string): Promise<OutputItem>;
   setStyle(patch: Partial<StyleProfile>): Promise<StyleProfile>;
   addLore(name: string, note?: string, triggers?: string[]): Promise<StyleProfile>;
   removeLore(id: string): Promise<StyleProfile>;

@@ -17,6 +17,7 @@ import { PlatformSwitch } from './PlatformSwitch';
 import VerticalEditor from './VerticalEditor';
 import { layoutFromCropX, normalizeLayout, type VerticalLayout } from '../../shared/layout';
 import { Fold, Modal } from './ui';
+import type { CoverAsset } from '../../shared/covers';
 
 export const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
@@ -38,6 +39,23 @@ const SUBTITLES_HELP: Record<SubtitleStyleId, string> = {
   pop: 'Pocas palabras, grandes, al centro.',
   minimal: 'Pequeño sobre caja translúcida.',
 };
+
+function CoverChoice({ a, onPick }: { a: CoverAsset; onPick: () => void }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void window.api.coversPreview(a.id).then((x) => alive && setSrc(x)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [a.id]);
+  return (
+    <button className="cve-pick" role="option" aria-selected={false} onClick={onPick} title={a.name}>
+      <span className="cv-thumb">{src ? <img src={src} alt="" /> : null}</span>
+      <span className="small title-ellipsis">{a.name}</span>
+    </button>
+  );
+}
 
 function Notice({ msg }: { msg: Msg }) {
   return msg ? <div className={`msg small ${msg.ok ? 'ok' : 'bad'}`} role="alert" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : null;
@@ -102,6 +120,25 @@ export default function ItemModal(props: {
       await window.api.setThumbnailFromFrame(o.id, videoRef.current?.currentTime ?? 0);
       await props.onChanged();
       setThumbMsg({ ok: true, text: 'Miniatura actualizada con el fotograma actual.' });
+    } catch (e) {
+      setThumbMsg({ ok: false, text: errMsg(e) });
+    }
+  }
+  const [coverPick, setCoverPick] = useState<CoverAsset[] | null>(null);
+  async function openCoverPick() {
+    setThumbMsg(null);
+    try {
+      setCoverPick((await window.api.coversList()).filter((a) => a.kind === 'portada'));
+    } catch (e) {
+      setThumbMsg({ ok: false, text: errMsg(e) });
+    }
+  }
+  async function thumbFromCover(a: CoverAsset) {
+    setCoverPick(null);
+    try {
+      await window.api.setThumbnailFromCover(o.id, a.id);
+      await props.onChanged();
+      setThumbMsg({ ok: true, text: `Miniatura actualizada con la portada «${a.name}».` });
     } catch (e) {
       setThumbMsg({ ok: false, text: errMsg(e) });
     }
@@ -433,8 +470,15 @@ export default function ItemModal(props: {
               {o.thumbnail && <img className="thumbpreview" alt="Miniatura actual" src={mediaUrl(o.id, 'thumb', o.thumbnail)} />}
               <div className="row">
                 <button className="btn small" onClick={() => void thumbFromFrame()}>Usar el fotograma actual del vídeo</button>
+                <button className="btn ghost small" onClick={() => void openCoverPick()}>Usar una de mis portadas…</button>
                 <button className="btn ghost small" onClick={() => void thumbFromImage()}>Elegir una imagen…</button>
               </div>
+              {coverPick && (
+                <div className="cve-picker" role="listbox" aria-label="Tus portadas" data-testid="thumb-cover-picker">
+                  {coverPick.length === 0 && <div className="muted small">Aún no tienes portadas. Crea una en la pestaña Portadas.</div>}
+                  {coverPick.map((a) => <CoverChoice key={a.id} a={a} onPick={() => void thumbFromCover(a)} />)}
+                </div>
+              )}
               <Notice msg={thumbMsg} />
             </Fold>
           )}

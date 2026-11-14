@@ -48,6 +48,21 @@ export function registerContent({ handle, ctx, platform }: IpcContext): void {
     });
   });
   handle(CHANNELS.coversReveal, (id) => platform.showItem(ctx.covers.filePath(str(id, 'id'))));
+  handle(CHANNELS.coversFull, (id) => ctx.covers.full(str(id, 'id')));
+  handle(CHANNELS.designsList, () => ctx.coverDesigns.list());
+  handle(CHANNELS.designsSave, (i) => {
+    const r = obj(i, 'diseño');
+    if (!(r.png instanceof Uint8Array)) throw new Error('Parámetro no válido: imagen.');
+    return ctx.coverDesigns.save({ id: typeof r.id === 'string' && r.id ? r.id : null, name: typeof r.name === 'string' ? r.name : 'Portada', design: r.design, png: Buffer.from(r.png) });
+  });
+  handle(CHANNELS.designsRemove, (id, img) => ctx.coverDesigns.remove(str(id, 'id'), img === true));
+  handle(CHANNELS.fontsList, () => ctx.coverDesigns.fontList());
+  handle(CHANNELS.fontsAdd, (n, d) => {
+    if (!(d instanceof Uint8Array)) throw new Error('Parámetro no válido: archivo.');
+    return ctx.coverDesigns.fontAdd(str(n, 'nombre'), Buffer.from(d));
+  });
+  handle(CHANNELS.fontsRemove, (id) => ctx.coverDesigns.fontRemove(str(id, 'id')));
+  handle(CHANNELS.fontsData, (id) => ctx.coverDesigns.fontData(str(id, 'id')));
   handle(CHANNELS.styleGet, () => ctx.style.get());
   handle(CHANNELS.styleSet, (p) => ctx.style.set(p));
   handle(CHANNELS.styleAddLore, (n, note, tr) => ctx.style.addLore(str(n, 'name'), typeof note === 'string' ? note : '', Array.isArray(tr) ? tr.filter((x): x is string => typeof x === 'string') : []));

@@ -649,3 +649,41 @@ button.btn.danger-text { color: var(--bad); }
 .ctl-sel.movable { pointer-events: auto; cursor: grab; touch-action: none; }
 .ctl-sel.movable:active { cursor: grabbing; }
 .ctl-sel:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ── Editor de portadas ── */
+.cv-name-static { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cve { display: flex; flex-direction: column; gap: 12px; }
+.cve-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cve-name { flex: 1; min-width: 160px; max-width: 320px; font-weight: 700; }
+.cve-grid { display: grid; grid-template-columns: 240px minmax(0, 1fr) 270px; gap: 14px; align-items: start; }
+@media (max-width: 1180px) { .cve-grid { grid-template-columns: 220px minmax(0, 1fr); } .cve-grid > aside:last-child { grid-column: 1 / -1; } }
+.cve-side { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+.cve-side h3 { margin: 4px 0 0; }
+.cve-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.cve-center { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cve-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cve-field input[type=color] { width: 100%; height: 30px; padding: 0; border: 1px solid var(--line-strong); border-radius: 8px; background: none; }
+.cve-props { display: flex; flex-direction: column; gap: 10px; }
+.cve-empty { padding: 8px 2px; }
+.cve-picker { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 260px; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.cve-pick { display: flex; flex-direction: column; gap: 4px; padding: 4px; background: none; border: 1px solid transparent; border-radius: 8px; color: var(--text); cursor: pointer; text-align: left; min-width: 0; }
+.cve-pick:hover { border-color: var(--accent-2); }
+.cve-layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow: auto; }
+.cve-layer { display: flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 10px; padding: 2px; background: var(--surface-2); }
+.cve-layer.on { border-color: var(--accent-2); background: rgba(161, 139, 255, .16); }
+.cve-layer .btn { padding: 2px 5px; min-width: 0; }
+.cve-layer-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none; border: 0; color: var(--text); cursor: pointer; text-align: left; padding: 4px 6px; font-size: 13px; }
+.cve-layer-ic { width: 18px; text-align: center; color: var(--muted); }
+.cvs-wrap { outline: none; border-radius: 12px; }
+.cvs-wrap:focus-visible { box-shadow: 0 0 0 2px var(--accent-2); }
+.cvs-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: repeating-conic-gradient(#2a2a33 0% 25%, #202027 0% 50%) 50% / 20px 20px; touch-action: none; user-select: none; cursor: default; }
+.cvs-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cvs-sel { position: absolute; border: 2px solid #9b6bff; box-shadow: 0 0 0 1px rgba(255,255,255,.4); pointer-events: none; }
+.cvs-h { position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid #9b6bff; border-radius: 3px; pointer-events: auto; }
+.cvs-h.nw { left: -7px; top: -7px; cursor: nwse-resize; } .cvs-h.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+.cvs-h.sw { left: -7px; bottom: -7px; cursor: nesw-resize; } .cvs-h.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.cvs-rot { position: absolute; left: 50%; top: -28px; width: 14px; height: 14px; margin-left: -7px; background: #9b6bff; border: 2px solid #fff; border-radius: 50%; pointer-events: auto; cursor: grab; }
+.cve-layer { flex-wrap: wrap; }
+.cve-layer-main { flex: 1 0 100%; }
+.cve-layer .btn { flex: 1; }
+.cve-props textarea { min-height: 0; height: 64px; resize: vertical; }

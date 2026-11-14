@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { ASSET_KINDS, KIND_LABEL, MAX_ASSET_BYTES, PHRASE_MAX_CHARS, cleanPhrase, type AssetKind, type CoverAsset } from '../../shared/covers';
 import { IconImage, IconPlus, IconTrash } from '../icons';
 import { errMsg } from '../lib';
+import { SideNav, useSubTab } from '../SubTabs';
+import type { CoverFont, DesignRecord } from '../../shared/coverDesign';
+import CoverEditor from '../cover/CoverEditor';
+import DesignGallery from '../cover/DesignGallery';
 
 type Msg = { ok: boolean; text: string } | null;
 type Filter = 'todas' | AssetKind;
@@ -87,6 +91,16 @@ export default function CoversTab() {
   const [title, setTitle] = useState('');
   const [made, setMade] = useState<CoverAsset | null>(null);
   const [making, setMaking] = useState(false);
+  const [sub, setSub] = useSubTab('streamclips.covers.sub', ['disenar', 'piezas', 'rapida']);
+  const [designs, setDesigns] = useState<DesignRecord[]>([]);
+  const [fonts, setFonts] = useState<CoverFont[]>([]);
+  /** Diseño que se está editando: un registro guardado, 'new' (en blanco) o null (se ve la galería). */
+  const [editing, setEditing] = useState<DesignRecord | 'new' | null>(null);
+  const loadDesigns = useCallback(() => {
+    window.api.designsList().then(setDesigns).catch(() => undefined);
+    window.api.fontsList().then(setFonts).catch(() => undefined);
+  }, []);
+  useEffect(loadDesigns, [loadDesigns]);
 
   const load = useCallback(() => {
     window.api.coversList().then(setItems).catch((e) => setMsg({ ok: false, text: errMsg(e) }));
@@ -139,9 +153,35 @@ export default function CoversTab() {
     }
   }
 
+  // mientras se edita una portada, el editor ocupa todo el ancho (sin el menú lateral)
+  if (sub === 'disenar' && editing) {
+    return (
+      <CoverEditor
+        key={editing === 'new' ? 'new' : editing.id}
+        record={editing === 'new' ? null : editing}
+        assets={items}
+        fonts={fonts}
+        onFontsChanged={loadDesigns}
+        onSaved={() => { loadDesigns(); load(); }}
+        onClose={() => { setEditing(null); loadDesigns(); }}
+      />
+    );
+  }
+
   return (
+    <SideNav
+      label="Portadas"
+      value={sub}
+      onChange={(id) => { setSub(id); setEditing(null); }}
+      tabs={[
+        { id: 'disenar', label: 'Diseñar portadas', hint: 'El editor: mezcla tus imágenes, fondos y textos en capas y guarda tus portadas para usarlas en los vídeos.' },
+        { id: 'piezas', label: 'Mis piezas', hint: 'Tus PNG sin fondo, fondos, fotos y documentos, con el nombre que quieras.' },
+        { id: 'rapida', label: 'Portada rápida', hint: 'Fondo + pieza principal + frase con el estilo de los canales grandes, en un paso.' },
+      ]}
+    >
     <div className="stack">
-      <section className="card">
+      {sub === 'disenar' && <DesignGallery designs={designs} onNew={() => setEditing('new')} onEdit={setEditing} onChanged={() => { loadDesigns(); load(); }} />}
+      {sub === 'piezas' && <section className="card">
         <h2>Tus piezas</h2>
         <div className="muted small">
           Suelta aquí tus PNG (tú sorprendido, un logo), fondos, fotos y documentos de referencia. Ponles el nombre que quieras (por ejemplo Diego_Sorprendido o Fondo_Ciudad): con ellas se componen las portadas.
@@ -179,9 +219,9 @@ export default function CoversTab() {
         ) : (
           <div className="cv-grid">{shown.map((a) => <Piece key={a.id} a={a} onChanged={load} onMsg={setMsg} />)}</div>
         )}
-      </section>
+      </section>}
 
-      <section className="card">
+      {sub === 'rapida' && <section className="card">
         <h2>Crear una portada</h2>
         <div className="muted small">
           Elige un fondo y, si quieres, una pieza principal (va grande a la derecha, ideal para un PNG recortado de ti). La frase sale grande a la izquierda con contorno, al estilo de los canales grandes. La portada (1280×720) se guarda en la biblioteca.
@@ -219,7 +259,8 @@ export default function CoversTab() {
         </div>
         <button className="btn" disabled={!bg || making} onClick={() => void make()}>{making ? 'Creando…' : 'Crear portada'}</button>
         {made && <div className="cv-made" data-testid="cover-made"><Thumb a={made} /><div className="muted small">{made.name}</div></div>}
-      </section>
+      </section>}
     </div>
+    </SideNav>
   );
 }

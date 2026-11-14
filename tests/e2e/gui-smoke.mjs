@@ -369,6 +369,23 @@ try {
   await shot(page, '3c-comprobador-directos');
   log('comprobador de directos: cuadrícula leída de Twitch con miniaturas y estado de cada directo');
   await openCut(page);
+  {
+    // el directo completo se ve dentro de la ventana, con marcar inicio/fin y ver el tramo
+    const cd = page.getByRole('dialog', { name: 'Cortar un clip' });
+    await cd.getByTestId('cut-player').waitFor();
+    await cd.getByTestId('vod-chat').waitFor();
+    await page.waitForFunction(() => { const v = document.querySelector('[data-testid=cut-player] video'); return v && v.readyState >= 1 && v.duration > 3; }, null, { timeout: 30000 });
+    await cd.getByRole('slider', { name: 'Moverse por el directo' }).fill('2');
+    await cd.getByTestId('cut-mark-start').click();
+    assert.match(await cd.getByLabel('Inicio', { exact: true }).inputValue(), /^0:0?2/);
+    await cd.getByRole('slider', { name: 'Moverse por el directo' }).fill('4');
+    await cd.getByTestId('cut-mark-end').click();
+    assert.match(await cd.getByLabel('Fin', { exact: true }).inputValue(), /^0:0?4/);
+    await cd.getByTestId('clip-timeline').waitFor();
+    await cd.getByTestId('cut-preview').click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=cut-player] video').currentTime >= 1.9);
+    log('cortar un clip: el directo completo se reproduce en la ventana, «Empezar/Acabar aquí» rellenan los tiempos y «Ver el clip» reproduce el tramo');
+  }
   await page.getByLabel('Inicio', { exact: true }).fill('abc');
   await page.getByLabel('Fin', { exact: true }).fill('4');
   await page.getByRole('button', { name: 'Crear clip' }).click();

@@ -536,8 +536,9 @@ try {
   }
   // las dos versiones muestran imagen de verdad nada más abrir (sin pulsar play): se mira lo que se pinta en pantalla
   for (const v of ['horizontal', 'vertical']) {
+    const meanOf = async () => {
     const png = await dlg.getByTestId(`player-Reproductor ${v}`).screenshot();
-    const mean = await page.evaluate(async (b64) => {
+    return await page.evaluate(async (b64) => {
       const img = new Image();
       img.src = `data:image/png;base64,${b64}`;
       await img.decode();
@@ -550,6 +551,10 @@ try {
       for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
       return sum / (d.length / 4) / 3;
     }, png.toString('base64'));
+    };
+    // el primer fotograma tarda un instante en pintarse: se reintenta hasta 6 s antes de dar por negro el reproductor
+    let mean = await meanOf();
+    for (let i = 0; i < 12 && !(mean > 20); i++) { await page.waitForTimeout(500); mean = await meanOf(); }
     assert.ok(mean > 20, `la versión ${v} se ve en negro nada más abrir (brillo ${Math.round(mean)})`);
   }
   // el sonido: la horizontal suena (la vertical va en silencio para no duplicarlo) y la barra única manda sobre las dos

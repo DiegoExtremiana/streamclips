@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.33.0
+
+- **Director de edición para YouTube** (Ajustes › Piloto automático › Edita): con los momentos ya valorados, el modelo decide la estructura del vídeo largo como un editor: un **gancho** de 5-20 s con lo más fuerte al principio (y ese momento vuelve entero en su sitio), **capítulos** con sentido y ritmo (3 a 8), un **cierre**, **rótulos en pantalla** (cartela de cada capítulo, frases clave, aviso del gancho), el **título**, la **descripción con capítulos** y la **frase de la miniatura**. Decide con lo que se dice, lo que se ve (nota de imagen), el volumen y el chat, y respeta la duración del perfil de estilo (10-15 min por defecto). Si no hay material o el modelo falla, se monta el resumen de mejores momentos de siempre. El plan se guarda por directo para no gastar modelo al repetir el análisis.
+- **Rótulos en pantalla** como efecto de montaje («title»): se graban en un ASS aparte de los subtítulos y entran y salen con fundido. El montaje respeta el orden que decide el director (ya no reordena los tramos por tiempo), con transiciones también en los saltos hacia atrás.
+- **Código**: el piloto automático se ha partido en fases (`electron/domain/pipeline`: transcripción, señales, valoración, director, nota mínima, hablantes, títulos, montaje, cierre), cada una con su contexto y probada por separado; el comportamiento anterior se conserva.
+
 ## Novedades de la v0.32.4
 
 - **Conectar las redes, paso a paso y comprobado**: en Conexiones › Redes sociales, cada red (YouTube, TikTok, Instagram) lleva instrucciones concretas y actualizadas a lo que hoy enseñan Google Cloud, developers.tiktok.com y developers.facebook.com, con el tiempo que lleva y lo que hace falta antes de empezar.

@@ -722,3 +722,8 @@ button.btn.danger-text { color: var(--bad); }
 .cutchat h3 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
 .chatbox { height: 52vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; font-size: 13px; word-break: break-word; }
 .chattime { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.probe { display: grid; gap: 6px; margin-top: 10px; }
+.probe-row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.4; }
+.probe-row .probe-icon { flex: none; width: 18px; height: 18px; display: inline-flex; margin-top: 1px; }
+.probe-row.ok .probe-icon { color: var(--ok, #4cd38a); }
+.probe-row.bad .probe-icon { color: var(--warn, #f0b35a); }

@@ -8,7 +8,7 @@ import type { Word } from '../subtitles';
 import type { ThemeProposal } from '../themes';
 import type { AutoNameResult, ChannelStatus, ClipsResult, ScheduleEntry, ToolStatus, TwitchVod, WhisperStatus } from './channel';
 import type { Platform, RenderKind } from './core';
-import type { CloudStatus, ConnectionInfo, EngineStatus, TaskInfo, UpdateStatus, YoutubePlaylist } from './jobs';
+import type { CloudStatus, CloudTestResult, ConnectionInfo, ConnectionProbe, EngineStatus, TaskInfo, UpdateStatus, YoutubePlaylist } from './jobs';
 import type { ClipEdit, ClipSpec, DeleteResult, FramingPreview, Group, GroupKind, GroupPatch, LongSpec, OutputItem, OutputMeta, Publication, ScheduleResult, Section, VodJob } from './library';
 import type { MomentsView, PrefsView } from './moments';
 import type { Settings, SettingsPatch } from './settings';
@@ -45,6 +45,10 @@ export interface Api {
   setConnectionApp(platform: Platform, clientId: string, clientSecret: string): Promise<ConnectionInfo[]>;
   /** Abre el navegador para que autorices; se completa cuando vuelves. */
   connectPlatform(platform: Platform): Promise<ConnectionInfo[]>;
+  /** Comprueba las claves de la app con la propia red, sin abrir el navegador. */
+  checkPlatformApp(platform: Platform): Promise<void>;
+  /** Prueba una red ya conectada: cuenta, permisos y qué puede publicar. */
+  probePlatform(platform: Platform): Promise<ConnectionProbe>;
   cancelConnect(): Promise<void>;
   disconnectPlatform(platform: Platform): Promise<ConnectionInfo[]>;
   youtubePlaylists(): Promise<YoutubePlaylist[]>;
@@ -57,6 +61,8 @@ export interface Api {
   /** Conecta el repositorio privado de GitHub, instala el publicador y sube los permisos de tus redes. */
   cloudSetup(repo: string, token: string): Promise<CloudStatus>;
   cloudSync(): Promise<CloudStatus>;
+  /** Ejecución real de prueba en GitHub Actions (no publica nada). */
+  cloudTest(): Promise<CloudTestResult>;
   /** Apaga el modo nube: borra lo subido y vuelve a publicar desde el PC. */
   cloudDisable(): Promise<CloudStatus>;
   engineStatus(): Promise<EngineStatus>;

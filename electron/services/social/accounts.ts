@@ -27,7 +27,7 @@ export async function lookupAccount(platform: Platform, t: TokenSet, env: Accoun
     if (!r.ok || (j.error?.code && j.error.code !== 'ok')) throw new PublishError(`TikTok: ${j.error?.message ?? r.status}`);
     return { account: j.data?.user?.display_name ?? 'Cuenta de TikTok' };
   }
-  const r = await timedFetch(f, `${env.graph ?? 'https://graph.facebook.com/v21.0'}/me/accounts?fields=name,instagram_business_account%7Bid,username%7D&access_token=${encodeURIComponent(t.accessToken)}`, {});
+  const r = await timedFetch(f, `${env.graph ?? 'https://graph.facebook.com/v25.0'}/me/accounts?fields=name,instagram_business_account%7Bid,username%7D&access_token=${encodeURIComponent(t.accessToken)}`, {});
   const j = (await r.json().catch(() => ({}))) as { data?: { name?: string; instagram_business_account?: { id: string; username?: string } }[]; error?: { message?: string } };
   if (!r.ok) throw new PublishError(`Instagram: ${j.error?.message ?? r.status}`);
   const page = j.data?.find((p) => p.instagram_business_account?.id);

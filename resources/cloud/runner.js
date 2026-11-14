@@ -56,13 +56,14 @@ var PROVIDERS = {
   meta: {
     id: "meta",
     label: "Instagram (Meta)",
-    authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
-    tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
+    authUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+    tokenUrl: "https://graph.facebook.com/v25.0/oauth/access_token",
     scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement", "business_management"],
     scopeSeparator: ",",
     clientIdParam: "client_id",
     pkce: false,
-    port: 53684
+    port: 53684,
+    redirectHost: "localhost"
   }
 };
 async function tokenRequest(p, body, d) {
@@ -368,7 +369,7 @@ async function publishTiktok(d, o) {
 
 // electron/services/social/instagram.ts
 var import_node_fs4 = __toESM(require("node:fs"));
-var IG_GRAPH = "https://graph.facebook.com/v21.0";
+var IG_GRAPH = "https://graph.facebook.com/v25.0";
 var POLL_MS2 = 5e3;
 var POLL_MAX2 = 120;
 function instagramFile(o) {
@@ -404,7 +405,7 @@ async function publishInstagram(d, o) {
     })
   );
   if (!create.id) throw new PublishError("Instagram no cre\xF3 el contenedor del v\xEDdeo.");
-  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v21.0/${create.id}`;
+  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v25.0/${create.id}`;
   const up = await timedFetch(
     f,
     uploadUri,
@@ -569,12 +570,97 @@ var Github = class {
     const r = await this.req("DELETE", `/repos/${this.o.repo}/actions/secrets/${name}`);
     if (!r.ok && r.status !== 404) await this.fail(r, `borrar el secreto ${name}`);
   }
-  async dispatch(workflowFile, ref) {
-    const r = await this.req("POST", `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref } });
+  async dispatch(workflowFile, ref, inputs) {
+    const r = await this.req("POST", `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref, ...inputs ? { inputs } : {} } });
     if (!r.ok) await this.fail(r, "lanzar el flujo de publicaci\xF3n");
   }
 };
 var encodePath = (p) => p.split("/").map(encodeURIComponent).join("/");
+
+// electron/services/social/probe.ts
+var GOOGLE_TOKENINFO = "https://oauth2.googleapis.com/tokeninfo";
+var ok = (label, detail) => ({ label, ok: true, detail });
+var bad = (label, detail) => ({ label, ok: false, detail });
+async function probeConnection(platform, t, env = {}) {
+  const f = env.fetchFn ?? fetch;
+  const auth = { Authorization: `Bearer ${t.accessToken}` };
+  const checks = [];
+  let account = "";
+  let canPublishPublic;
+  if (platform === "youtube") {
+    const api = env.ytApi ?? YT_ENDPOINTS.api;
+    const r2 = await timedFetch(f, `${api}/channels?part=snippet,statistics&mine=true`, { headers: auth });
+    if (!r2.ok) throw new PublishError(`YouTube: ${await apiMessage(r2)}`);
+    const j2 = await r2.json();
+    const ch = j2.items?.[0];
+    if (!ch?.snippet?.title) throw new PublishError("La cuenta de Google no tiene un canal de YouTube. Crea uno en youtube.com y vuelve a conectar.");
+    account = ch.snippet.title;
+    checks.push(ok("Canal", `${account}${ch.statistics?.videoCount ? ` \xB7 ${ch.statistics.videoCount} v\xEDdeos` : ""}${ch.statistics?.subscriberCount ? ` \xB7 ${ch.statistics.subscriberCount} suscriptores` : ""}`));
+    const info = await timedFetch(f, `${env.googleTokenInfo ?? GOOGLE_TOKENINFO}?access_token=${encodeURIComponent(t.accessToken)}`, {}).catch(() => null);
+    const ti = info && info.ok ? await info.json().catch(() => ({})) : null;
+    const scopes = (ti?.scope ?? t.scope ?? "").split(/[ ,]+/).filter(Boolean);
+    if (scopes.length) {
+      const upload = scopes.some((s) => /youtube\.upload$|\/auth\/youtube$/.test(s));
+      checks.push(upload ? ok("Permiso para subir v\xEDdeos", "Concedido") : bad("Permiso para subir v\xEDdeos", "No concedido: vuelve a conectar y acepta todas las casillas que pide Google."));
+    }
+    checks.push(ok("Permanencia", "Si la pantalla de consentimiento de tu proyecto est\xE1 \xABEn producci\xF3n\xBB, la conexi\xF3n no caduca. Si est\xE1 \xABEn pruebas\xBB, Google la corta a los 7 d\xEDas."));
+    checks.push(ok("Qu\xE9 pasa al subir", "Hasta que Google verifique tu proyecto, los v\xEDdeos subidos por la API quedan privados; la cuota gratuita da para unas 6 subidas al d\xEDa."));
+    return { platform, account, checks, canPublishPublic };
+  }
+  if (platform === "tiktok") {
+    const api = env.tiktokApi ?? TT_API;
+    const u = await timedFetch(f, `${api}/user/info/?fields=display_name,open_id,username`, { headers: auth });
+    const uj = await u.json().catch(() => ({}));
+    if (!u.ok || uj.error?.code && uj.error.code !== "ok") throw new PublishError(`TikTok: ${uj.error?.message ?? u.status}`);
+    account = uj.data?.user?.username ? `@${uj.data.user.username}` : uj.data?.user?.display_name ?? "Cuenta de TikTok";
+    checks.push(ok("Cuenta", account));
+    const c = await timedFetch(f, `${api}/post/publish/creator_info/query/`, { method: "POST", headers: { ...auth, "Content-Type": "application/json; charset=UTF-8" }, body: "{}" });
+    const cj = await c.json().catch(() => ({}));
+    if (!c.ok || cj.error?.code && cj.error.code !== "ok") {
+      const code = cj.error?.code ?? String(c.status);
+      checks.push(bad("Permiso para publicar", /scope/i.test(code) ? "La app no tiene concedido \xABvideo.publish\xBB: a\xF1ade el producto Content Posting API (Direct Post) y vuelve a conectar." : `TikTok: ${cj.error?.message ?? code}`));
+      return { platform, account, checks, canPublishPublic: false };
+    }
+    const opts = cj.data?.privacy_level_options ?? [];
+    canPublishPublic = opts.includes("PUBLIC_TO_EVERYONE");
+    checks.push(ok("Permiso para publicar", "Concedido (Content Posting API)"));
+    checks.push(canPublishPublic ? ok("Visibilidad", "Puede publicar en p\xFAblico.") : bad("Visibilidad", "Solo puede publicar en privado (\xABsolo yo\xBB): la app no est\xE1 auditada por TikTok. Para publicar en p\xFAblico hay que enviarla a revisi\xF3n en developers.tiktok.com."));
+    if (cj.data?.max_video_post_duration_sec) checks.push(ok("Duraci\xF3n m\xE1xima", `${Math.round(cj.data.max_video_post_duration_sec / 60)} min por v\xEDdeo`));
+    return { platform, account, checks, canPublishPublic };
+  }
+  const graph = env.graph ?? IG_GRAPH;
+  const tok = `access_token=${encodeURIComponent(t.accessToken)}`;
+  const r = await timedFetch(f, `${graph}/me/accounts?fields=name,instagram_business_account%7Bid,username%7D&${tok}`, {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new PublishError(`Instagram: ${j.error?.message ?? r.status}`);
+  const pages = j.data ?? [];
+  const page = pages.find((p) => p.instagram_business_account?.id);
+  if (!page?.instagram_business_account) {
+    checks.push(bad("Cuenta profesional", pages.length ? `Tus p\xE1ginas (${pages.map((p) => p.name).filter(Boolean).join(", ")}) no tienen ninguna cuenta de Instagram profesional enlazada.` : "La cuenta de Facebook no administra ninguna p\xE1gina."));
+    return { platform, account: "", checks, canPublishPublic: false };
+  }
+  const ig = page.instagram_business_account;
+  account = ig.username ? `@${ig.username}` : page.name ?? "Instagram";
+  checks.push(ok("Cuenta profesional", `${account} (enlazada a la p\xE1gina \xAB${page.name ?? ""}\xBB)`));
+  const perms = await timedFetch(f, `${graph}/me/permissions?${tok}`, {}).catch(() => null);
+  const pj = perms && perms.ok ? await perms.json().catch(() => ({})) : null;
+  if (pj?.data) {
+    const granted = new Set(pj.data.filter((p) => p.status === "granted").map((p) => p.permission));
+    const need = ["instagram_basic", "instagram_content_publish", "pages_show_list"];
+    const missing = need.filter((p) => !granted.has(p));
+    checks.push(missing.length ? bad("Permisos", `Faltan: ${missing.join(", ")}. Vuelve a conectar y acepta todo lo que pide Meta.`) : ok("Permisos", "Concedidos (leer la cuenta y publicar contenido)"));
+  }
+  const lim = await timedFetch(f, `${graph}/${encodeURIComponent(ig.id)}/content_publishing_limit?fields=quota_usage,config&${tok}`, {}).catch(() => null);
+  const lj = lim && lim.ok ? await lim.json().catch(() => ({})) : null;
+  const usage = lj?.data?.[0];
+  if (usage && typeof usage.quota_usage === "number") {
+    const total = usage.config?.quota_total ?? 100;
+    checks.push(ok("Publicaciones por la API", `${usage.quota_usage} de ${total} usadas en las \xFAltimas 24 h`));
+  }
+  canPublishPublic = true;
+  checks.push(ok("Qu\xE9 pasa al subir", "Los Reels salen p\xFAblicos con tu cuenta (la app en modo desarrollo funciona con tus propias cuentas sin revisi\xF3n de Meta)."));
+  return { platform, account, checks, canPublishPublic };
+}
 
 // electron/services/cloud/jobs.ts
 function parseJob(text) {
@@ -689,12 +775,37 @@ async function runQueue(gh, creds, env = {}, now = Date.now) {
   }
   return res;
 }
+var CHECK_PATH = "status/check.json";
+async function runCheck(gh, creds, env = {}, now = Date.now, version = "runner") {
+  const out = { at: new Date(now()).toISOString(), runner: version, networks: {} };
+  for (const platform of ["youtube", "tiktok", "instagram"]) {
+    if (!creds[platform]) continue;
+    try {
+      const t = await tokenFor(platform, creds, env);
+      const probe = await probeConnection(platform, { accessToken: t.accessToken, expiresAt: 0 }, { fetchFn: env.fetchFn, ytApi: env.youtube?.api, tiktokApi: env.tiktokApi, graph: env.graph });
+      out.networks[platform] = { ok: true, probe };
+      log(`Prueba ${platform}: ${probe.account}`);
+    } catch (e) {
+      out.networks[platform] = { ok: false, error: e.message.slice(0, 300) };
+      log(`Prueba ${platform} fallida: ${e.message}`);
+    }
+  }
+  const cur = await gh.getContent(CHECK_PATH);
+  await gh.putContent(CHECK_PATH, JSON.stringify(out, null, 1), "StreamClips: prueba de la nube", cur?.sha);
+  return out;
+}
 async function main() {
   const repo = process.env.GITHUB_REPOSITORY;
   const token = process.env.GITHUB_TOKEN;
   if (!repo || !token) throw new Error("Faltan GITHUB_REPOSITORY o GITHUB_TOKEN.");
   const creds = JSON.parse(process.env.STREAMCLIPS_CREDS || "{}");
   const gh = new Github({ token, repo, api: process.env.STREAMCLIPS_GITHUB_API || void 0, uploads: process.env.STREAMCLIPS_GITHUB_UPLOADS || void 0 });
+  if (process.env.STREAMCLIPS_CHECK === "true") {
+    const c = await runCheck(gh, creds, {}, Date.now, process.env.STREAMCLIPS_RUNNER_VERSION || "runner");
+    const n = Object.values(c.networks);
+    log(`Prueba de la nube: ${n.filter((x) => x.ok).length} de ${n.length} redes en orden`);
+    return;
+  }
   const r = await runQueue(gh, creds);
   log(`Publicados: ${r.published.length}, fallidos: ${r.failed.length}, en espera: ${r.skipped.length}`);
 }

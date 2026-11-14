@@ -6,7 +6,9 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { OutputItem } from '../shared/types';
 import { MASKED_SECRET } from '../shared/types';
-import { PROVIDERS, buildAuthUrl, pkcePair, type OAuthProvider } from '../electron/services/oauth';
+import { PROVIDERS, buildAuthUrl, pkcePair, redirectUri, waitForCode, type OAuthProvider } from '../electron/services/oauth';
+import { checkAppCredentials } from '../electron/services/social/appCheck';
+import { probeConnection } from '../electron/services/social/probe';
 import { publishYoutube, listPlaylists } from '../electron/services/social/youtube';
 import { publishTiktok } from '../electron/services/social/tiktok';
 import { publishInstagram } from '../electron/services/social/instagram';
@@ -75,6 +77,9 @@ describe('OAuth', () => {
   });
 });
 
+/** Un ID de cliente de Google con la forma real (la comprobación de claves la exige). */
+const CID = 'cid.apps.googleusercontent.com';
+
 describe('conexiones: flujo completo contra servidores simulados', () => {
   let e: TestEnv;
   afterEach(() => e?.cleanup());
@@ -101,14 +106,16 @@ describe('conexiones: flujo completo contra servidores simulados', () => {
 
   it('autoriza, guarda las claves cifradas y el nombre de la cuenta; nada sensible llega a la interfaz', async () => {
     const { tok } = await setup(53701, () => ({ json: { access_token: 'AT1', refresh_token: 'RT1', expires_in: 3600 } }));
-    e.ctx.connections.setApp('youtube', ' CID ', 'SECRETO');
+    e.ctx.connections.setApp('youtube', ` ${CID} `, 'SECRETO');
     const list = await e.ctx.connections.connect('youtube');
     const yt = list.find((x) => x.platform === 'youtube')!;
     assert.deepEqual([yt.hasCredentials, yt.connected, yt.account], [true, true, 'Canal de Diego']);
-    const body = new URLSearchParams(tok.reqs[0].body.toString());
+    // antes de abrir el navegador se comprueban las claves con la propia red (una petición de renovación de prueba)
+    assert.equal(new URLSearchParams(tok.reqs[0].body.toString()).get('grant_type'), 'refresh_token');
+    const body = new URLSearchParams(tok.reqs[1].body.toString());
     assert.equal(body.get('grant_type'), 'authorization_code');
     assert.equal(body.get('code'), 'CODE');
-    assert.equal(body.get('client_id'), 'CID');
+    assert.equal(body.get('client_id'), CID);
     assert.ok(body.get('code_verifier'));
     const disk = fs.readFileSync(e.ctx.store.file, 'utf8');
     for (const secret of ['SECRETO', 'AT1', 'RT1']) assert.ok(!disk.includes(secret), `${secret} no debe estar en claro en data.json`);
@@ -122,12 +129,12 @@ describe('conexiones: flujo completo contra servidores simulados', () => {
       const grant = new URLSearchParams(r.body.toString()).get('grant_type');
       return grant === 'refresh_token' ? { json: { access_token: 'AT2', expires_in: 3600 } } : { json: { access_token: 'AT1', refresh_token: 'RT1', expires_in: 60 } };
     });
-    e.ctx.connections.setApp('youtube', 'CID', 'S');
+    e.ctx.connections.setApp('youtube', CID, 'S');
     await e.ctx.connections.connect('youtube');
     const t = await e.ctx.connections.accessToken('youtube');
     assert.equal(t?.accessToken, 'AT2');
     assert.equal(t?.refreshToken, 'RT1');
-    assert.equal(n, 2);
+    assert.equal(n, 3, 'comprobación de claves + cambio del código + renovación');
     // dos peticiones a la vez renuevan una sola vez
     n = 0;
     const conn = (e.ctx.store.data.connections.youtube!);
@@ -137,14 +144,17 @@ describe('conexiones: flujo completo contra servidores simulados', () => {
   });
 
   it('si el usuario deniega o la app es rechazada, error claro y no queda conectada', async () => {
-    await setup(53703, () => ({ status: 400, json: { error: 'invalid_client', error_description: 'secreto incorrecto' } }));
-    e.ctx.connections.setApp('youtube', 'CID', 'S');
-    await assert.rejects(() => e.ctx.connections.connect('youtube'), /rechazó la autorización: secreto incorrecto/);
+    await setup(53703, () => ({ status: 401, json: { error: 'invalid_client', error_description: 'The OAuth client was not found.' } }));
+    e.ctx.connections.setApp('youtube', CID, 'S');
+    // las claves malas se detectan antes de abrir el navegador, con un mensaje que dice dónde copiarlas
+    await assert.rejects(() => e.ctx.connections.connect('youtube'), /Google no reconoce ese ID de cliente/);
     assert.equal(e.ctx.connections.list()[0].connected, false);
-    // el puerto queda libre para reintentar
-    const e2 = e;
-    void e2;
-    await assert.rejects(() => e.ctx.connections.connect('youtube'), /rechazó/);
+    await assert.rejects(() => e.ctx.connections.checkApp('youtube'), /Google no reconoce/);
+    // si las claves pasan pero Google rechaza el código, el error es el de la red
+    await setup(53708, (r) => (new URLSearchParams(r.body.toString()).get('grant_type') === 'refresh_token' ? { status: 400, json: { error: 'invalid_grant' } } : { status: 400, json: { error: 'invalid_client', error_description: 'secreto incorrecto' } }));
+    e.ctx.connections.setApp('youtube', CID, 'S');
+    await assert.rejects(() => e.ctx.connections.connect('youtube'), /rechazó la autorización: secreto incorrecto/);
+    await assert.rejects(() => e.ctx.connections.connect('youtube'), /rechazó/, 'el puerto queda libre para reintentar');
   });
 
   it('error en el navegador (access_denied) y cancelación', async () => {
@@ -154,13 +164,13 @@ describe('conexiones: flujo completo contra servidores simulados', () => {
       back.searchParams.set('error', 'access_denied');
       setTimeout(() => void fetch(back).catch(() => undefined), 20);
     };
-    await setup(53704, () => ({ json: {} }), denied);
-    e.ctx.connections.setApp('youtube', 'CID', 'S');
+    const { tok } = await setup(53704, () => ({ json: {} }), denied);
+    e.ctx.connections.setApp('youtube', CID, 'S');
     await assert.rejects(() => e.ctx.connections.connect('youtube'), /no autorizó la conexión \(access_denied\)/);
     const never = async () => undefined;
-    const e3 = makeEnv({ openUrl: never, oauthProviders: { ...PROVIDERS, google: { ...PROVIDERS.google, port: 53705 } as OAuthProvider } });
+    const e3 = makeEnv({ openUrl: never, oauthProviders: { ...PROVIDERS, google: { ...PROVIDERS.google, port: 53705, tokenUrl: `${tok.base}/token` } as OAuthProvider } });
     try {
-      e3.ctx.connections.setApp('youtube', 'CID', 'S');
+      e3.ctx.connections.setApp('youtube', CID, 'S');
       const p = e3.ctx.connections.connect('youtube');
       await new Promise((r) => setTimeout(r, 100));
       await assert.rejects(() => e3.ctx.connections.connect('youtube'), /Ya hay una conexión en curso/);
@@ -185,18 +195,18 @@ describe('conexiones: flujo completo contra servidores simulados', () => {
       }).catch(() => undefined), 20);
     };
     const { tok } = await setup(53706, () => ({ json: { access_token: 'AT', expires_in: 3600, refresh_token: 'R' } }), sneaky);
-    e.ctx.connections.setApp('youtube', 'CID', 'S');
+    e.ctx.connections.setApp('youtube', CID, 'S');
     await e.ctx.connections.connect('youtube');
-    assert.equal(new URLSearchParams(tok.reqs[0].body.toString()).get('code'), 'GOOD');
+    assert.equal(new URLSearchParams(tok.reqs[1].body.toString()).get('code'), 'GOOD');
   });
 
   it('cambiar el ID de la app desconecta; el secreto enmascarado no pisa el guardado; desconectar borra las claves', async () => {
     await setup(53707, () => ({ json: { access_token: 'AT', expires_in: 3600, refresh_token: 'R' } }));
-    e.ctx.connections.setApp('youtube', 'CID', 'S');
+    e.ctx.connections.setApp('youtube', CID, 'S');
     await e.ctx.connections.connect('youtube');
-    e.ctx.connections.setApp('youtube', 'CID', MASKED_SECRET);
+    e.ctx.connections.setApp('youtube', CID, MASKED_SECRET);
     assert.equal(e.ctx.connections.list()[0].connected, true);
-    e.ctx.connections.setApp('youtube', 'OTRO', MASKED_SECRET);
+    e.ctx.connections.setApp('youtube', 'otro.apps.googleusercontent.com', MASKED_SECRET);
     assert.equal(e.ctx.connections.list()[0].connected, false);
     assert.equal(e.ctx.connections.list()[0].hasCredentials, true);
     await e.ctx.connections.connect('youtube');
@@ -432,3 +442,118 @@ describe('cuentas conectadas', () => {
 });
 
 void makeVideo;
+
+describe('comprobar las claves de la app antes de abrir el navegador (respuestas reales capturadas el 14/11/2026)', () => {
+  const providersAt = (base: string) => ({
+    google: { ...PROVIDERS.google, tokenUrl: `${base}/google/token` } as OAuthProvider,
+    tiktok: { ...PROVIDERS.tiktok, tokenUrl: `${base}/tiktok/token` } as OAuthProvider,
+    meta: { ...PROVIDERS.meta, tokenUrl: `${base}/meta/oauth/access_token` } as OAuthProvider,
+  });
+
+  it('Google: claves malas → invalid_client con mensaje de dónde copiarlas; buenas → invalid_grant y pasa', async () => {
+    const srv = await server((r) => {
+      const b = new URLSearchParams(r.body.toString());
+      assert.equal(b.get('grant_type'), 'refresh_token');
+      return b.get('client_secret') === 'BUENO' ? { status: 400, json: { error: 'invalid_grant', error_description: 'Bad Request' } } : { status: 401, json: { error: 'invalid_client', error_description: 'The OAuth client was not found.' } };
+    });
+    const env = { providers: providersAt(srv.base) };
+    await assert.rejects(() => checkAppCredentials('youtube', 'x.apps.googleusercontent.com', 'MALO', env), /Google no reconoce ese ID de cliente.*Credenciales/);
+    await assert.rejects(() => checkAppCredentials('youtube', 'sin-sufijo', 'BUENO', env), /apps\.googleusercontent\.com/);
+    await checkAppCredentials('youtube', 'x.apps.googleusercontent.com', 'BUENO', env);
+  });
+
+  it('TikTok: responde 200 siempre y el error va en el cuerpo (invalid_client / invalid_request / invalid_grant)', async () => {
+    const srv = await server((r) => {
+      const b = new URLSearchParams(r.body.toString());
+      assert.equal(b.get('client_key'), b.get('client_key'));
+      if (b.get('client_key') === 'bad') return { json: { error: 'invalid_request', error_description: 'The request parameters are malformed.' } };
+      if (b.get('client_secret') !== 'BUENO') return { json: { error: 'invalid_client', error_description: 'Client key or secret is incorrect.' } };
+      return { json: { error: 'invalid_grant', error_description: 'Refresh token is invalid or expired.' } };
+    });
+    const env = { providers: providersAt(srv.base) };
+    await assert.rejects(() => checkAppCredentials('tiktok', 'bad', 'x', env), /formato de esa Client key/);
+    await assert.rejects(() => checkAppCredentials('tiktok', 'awabcdefghijklmnop', 'MALO', env), /Client key o el Client secret no son correctos.*sbaw/);
+    await checkAppCredentials('tiktok', 'sbawabcdefghijklmnop', 'BUENO', env);
+  });
+
+  it('Meta: el token de aplicación sale con claves buenas; con malas, error 101', async () => {
+    const srv = await server((r) => {
+      const u = new URL(r.url, 'http://x');
+      assert.equal(u.searchParams.get('grant_type'), 'client_credentials');
+      return u.searchParams.get('client_secret') === 'BUENO' ? { json: { access_token: '123|abc', token_type: 'bearer' } } : { status: 400, json: { error: { message: 'Invalid Client ID', type: 'OAuthException', code: 101 } } };
+    });
+    const env = { providers: providersAt(srv.base) };
+    await assert.rejects(() => checkAppCredentials('instagram', 'abc', 'BUENO', env), /número largo/);
+    await assert.rejects(() => checkAppCredentials('instagram', '1234567890', 'MALO', env), /Meta no reconoce ese ID de la app.*Básica/);
+    await checkAppCredentials('instagram', '1234567890', 'BUENO', env);
+  });
+
+  it('sin red, el aviso es de conexión y no de claves', async () => {
+    const env = { providers: providersAt('http://127.0.0.1:1') };
+    await assert.rejects(() => checkAppCredentials('tiktok', 'awabcdefghijklmnop', 'S', env), /No se pudo conectar/);
+  });
+});
+
+describe('probar una conexión ya autorizada (sin publicar nada)', () => {
+  const tok = { accessToken: 'AT', expiresAt: 0 };
+
+  it('YouTube: canal, permiso de subida (por tokeninfo) y lo que pasa al subir', async () => {
+    const srv = await server((r) => {
+      if (r.url.startsWith('/channels')) return { json: { items: [{ snippet: { title: 'Don Diegons' }, statistics: { videoCount: '12', subscriberCount: '340' } }] } };
+      if (r.url.startsWith('/tokeninfo')) return { json: { scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube' } };
+      return undefined;
+    });
+    const r = await probeConnection('youtube', tok, { ytApi: srv.base, googleTokenInfo: `${srv.base}/tokeninfo` });
+    assert.equal(r.account, 'Don Diegons');
+    assert.ok(r.checks.every((c) => c.ok), JSON.stringify(r.checks));
+    assert.match(r.checks[0].detail, /12 vídeos · 340 suscriptores/);
+    assert.match(r.checks[1].label, /subir/);
+    const sin = await server((r) => (r.url.startsWith('/channels') ? { json: { items: [{ snippet: { title: 'X' } }] } } : r.url.startsWith('/tokeninfo') ? { json: { scope: 'openid' } } : undefined));
+    const r2 = await probeConnection('youtube', tok, { ytApi: sin.base, googleTokenInfo: `${sin.base}/tokeninfo` });
+    assert.equal(r2.checks.find((c) => /subir/.test(c.label))!.ok, false);
+  });
+
+  it('TikTok: cuenta, permiso de publicar y si puede publicar en público', async () => {
+    const srv = await server((r) => {
+      if (r.url.startsWith('/user/info')) return { json: { data: { user: { display_name: 'Diego', username: 'don_diegons' } }, error: { code: 'ok' } } };
+      if (r.url.startsWith('/post/publish/creator_info')) return { json: { data: { privacy_level_options: ['SELF_ONLY'], max_video_post_duration_sec: 600 }, error: { code: 'ok' } } };
+      return undefined;
+    });
+    const r = await probeConnection('tiktok', tok, { tiktokApi: srv.base });
+    assert.equal(r.account, '@don_diegons');
+    assert.equal(r.canPublishPublic, false);
+    assert.match(r.checks.find((c) => c.label === 'Visibilidad')!.detail, /Solo puede publicar en privado.*revisión/);
+    assert.match(r.checks.find((c) => c.label === 'Duración máxima')!.detail, /10 min/);
+    const noScope = await server((r) => (r.url.startsWith('/user/info') ? { json: { data: { user: { display_name: 'Diego' } }, error: { code: 'ok' } } } : { status: 401, json: { error: { code: 'scope_not_authorized', message: 'x' } } }));
+    const r2 = await probeConnection('tiktok', tok, { tiktokApi: noScope.base });
+    assert.match(r2.checks.find((c) => c.label === 'Permiso para publicar')!.detail, /video\.publish/);
+  });
+
+  it('Instagram: cuenta profesional enlazada, permisos y cuota del día; sin cuenta enlazada lo dice', async () => {
+    const srv = await server((r) => {
+      if (r.url.startsWith('/me/accounts')) return { json: { data: [{ name: 'Página Diego', instagram_business_account: { id: 'IG1', username: 'don_diegons' } }] } };
+      if (r.url.startsWith('/me/permissions')) return { json: { data: [{ permission: 'instagram_basic', status: 'granted' }, { permission: 'instagram_content_publish', status: 'granted' }, { permission: 'pages_show_list', status: 'granted' }] } };
+      if (r.url.startsWith('/IG1/content_publishing_limit')) return { json: { data: [{ quota_usage: 3, config: { quota_total: 100 } }] } };
+      return undefined;
+    });
+    const r = await probeConnection('instagram', tok, { graph: srv.base });
+    assert.equal(r.account, '@don_diegons');
+    assert.ok(r.checks.every((c) => c.ok), JSON.stringify(r.checks));
+    assert.match(r.checks.find((c) => /API/.test(c.label))!.detail, /3 de 100/);
+    const none = await server((r) => (r.url.startsWith('/me/accounts') ? { json: { data: [{ name: 'Página sin IG' }] } } : undefined));
+    const r2 = await probeConnection('instagram', tok, { graph: none.base });
+    assert.equal(r2.checks[0].ok, false);
+    assert.match(r2.checks[0].detail, /Página sin IG/);
+  });
+
+  it('Meta vuelve por «localhost» (único nombre con http que admite) y el receptor local lo atiende', async () => {
+    assert.equal(redirectUri(PROVIDERS.meta), 'http://localhost:53684/callback');
+    assert.equal(redirectUri(PROVIDERS.google), 'http://127.0.0.1:53682/callback');
+    const p = { ...PROVIDERS.meta, port: 53709 } as OAuthProvider;
+    const w = waitForCode(p, 'ST');
+    await w.ready;
+    const r = await fetch(`http://localhost:53709/callback?code=C1&state=ST`);
+    assert.equal(r.status, 200);
+    assert.equal(await w.code, 'C1');
+  });
+});

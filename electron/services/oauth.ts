@@ -13,6 +13,11 @@ export interface OAuthProvider {
   pkce: boolean;
   extraAuthParams?: Record<string, string>;
   port: number;
+  /**
+   * Nombre con el que se registra la dirección de vuelta. Google y TikTok admiten «127.0.0.1»; Meta solo deja http (sin
+   * certificado) con «localhost» y mientras la app está en modo desarrollo, así que para Meta se usa ese nombre.
+   */
+  redirectHost?: 'localhost' | '127.0.0.1';
 }
 
 export const PROVIDERS = {
@@ -42,13 +47,14 @@ export const PROVIDERS = {
   meta: {
     id: 'meta',
     label: 'Instagram (Meta)',
-    authUrl: 'https://www.facebook.com/v21.0/dialog/oauth',
-    tokenUrl: 'https://graph.facebook.com/v21.0/oauth/access_token',
+    authUrl: 'https://www.facebook.com/v25.0/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/v25.0/oauth/access_token',
     scopes: ['instagram_basic', 'instagram_content_publish', 'pages_show_list', 'pages_read_engagement', 'business_management'],
     scopeSeparator: ',',
     clientIdParam: 'client_id',
     pkce: false,
     port: 53684,
+    redirectHost: 'localhost',
   },
 } satisfies Record<string, OAuthProvider>;
 
@@ -77,7 +83,7 @@ export function pkcePair(): { verifier: string; challenge: string } {
   return { verifier, challenge: crypto.createHash('sha256').update(verifier).digest('base64url') };
 }
 
-export const redirectUri = (p: OAuthProvider): string => `http://127.0.0.1:${p.port}/callback`;
+export const redirectUri = (p: OAuthProvider): string => `http://${p.redirectHost ?? '127.0.0.1'}:${p.port}/callback`;
 
 export function buildAuthUrl(p: OAuthProvider, c: OAuthCreds, state: string, challenge?: string): string {
   const q = new URLSearchParams({
@@ -144,6 +150,15 @@ export function waitForCode(p: OAuthProvider, state: string, timeoutMs = 5 * 60_
       done(new Error(m));
     });
     srv.listen(p.port, '127.0.0.1', resolveReady);
+    // «localhost» puede resolver a ::1 (IPv6) en Windows: se escucha también ahí; si no hay IPv6, no pasa nada
+    const srv6 = http.createServer((req, res) => srv.emit('request', req, res));
+    srv6.once('error', () => undefined);
+    srv6.listen(p.port, '::1');
+    const closeAll = () => {
+      srv6.close();
+      srv6.closeAllConnections?.();
+    };
+    srv.once('close', closeAll);
   });
   code.catch(() => undefined);
   return { ready, code, close };

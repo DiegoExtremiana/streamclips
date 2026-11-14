@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { OutputItem, Publication, VodJob } from '../../shared/types';
+import type { CloudStatus, OutputItem, Publication, VodJob } from '../../shared/types';
 import { mediaUrl } from '../../shared/media';
 import { dayLabel, localDayKey } from '../../shared/agenda';
 import { fmtTime } from '../../shared/time';
@@ -58,6 +58,13 @@ export default function ScheduleTab(props: {
   const [askDelete, setAskDelete] = useState<OutputItem | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
 
+  // ¿se publicará con el PC apagado? Depende de que la nube esté activa; se enseña junto a las subidas para que no haya sorpresas
+  const [cloud, setCloud] = useState<CloudStatus | null>(null);
+  useEffect(() => {
+    const load = () => window.api.cloudStatus().then(setCloud).catch(() => undefined);
+    void load();
+    return window.api.onDataChanged(() => void load());
+  }, []);
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(t);
@@ -213,6 +220,16 @@ export default function ScheduleTab(props: {
               <button className="btn small" onClick={() => setDialog({ type: 'add' })}><IconCalendar /> Añadir subida</button>
             </div>
           </div>
+          {cloud && (
+            <div className={`msg ${cloud.enabled && !cloud.error ? 'ok' : 'bad'} small`} data-testid="cloud-notice" style={{ marginTop: 8 }}>
+              {cloud.enabled
+                ? cloud.error
+                  ? `La nube tiene un problema (${cloud.error}): hasta que se arregle, las subidas solo saldrán con el PC encendido.`
+                  : `Las subidas programadas se publican a su hora desde la nube, aunque el PC esté apagado${cloud.queued ? ` (${cloud.queued} ya esperando allí)` : ''}.`
+                : 'Con el PC apagado no se publicará nada: activa «Publicar con el PC apagado» en Ajustes para que las subidas salgan solas a su hora.'}
+              {!cloud.enabled && <> <button className="btn ghost small" onClick={() => props.onNavigate('ajustes')}>Ir a Ajustes</button></>}
+            </div>
+          )}
           {!(view === 'calendar' && openDay) && (<>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <div className="row" style={{ gap: 6 }}>

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import type { OutputItem } from '../../../shared/types';
 import { PublishError, defaultSleep, timedFetch, type SocialDeps } from './common';
 
-export const IG_GRAPH = 'https://graph.facebook.com/v21.0';
+export const IG_GRAPH = 'https://graph.facebook.com/v25.0';
 const POLL_MS = 5000;
 const POLL_MAX = 120; // 10 minutos
 
@@ -49,7 +49,7 @@ export async function publishInstagram(d: InstagramDeps, o: OutputItem): Promise
     }),
   );
   if (!create.id) throw new PublishError('Instagram no creó el contenedor del vídeo.');
-  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v21.0/${create.id}`;
+  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v25.0/${create.id}`;
 
   // 2) subir el archivo (en flujo: no se carga entero en memoria)
   const up = await timedFetch(

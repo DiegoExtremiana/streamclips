@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import sodium from 'libsodium-wrappers';
-import type { CloudStatus, OutputItem, Platform, Publication } from '../../shared/types';
+import type { CloudStatus, CloudTestResult, OutputItem, Platform, Publication } from '../../shared/types';
 import { MASKED_SECRET } from '../../shared/types';
 import type { Store } from '../services/store';
 import type { Secrets } from '../services/secrets';
@@ -10,7 +10,7 @@ import type { SerialQueue } from '../services/queue';
 import { Github, GithubError, type GithubOpts } from '../services/cloud/github';
 import { jobPath, parseJob, releaseTag, serializeJob, type CloudJob } from '../services/cloud/jobs';
 import { cronLines, workflowYaml } from '../services/cloud/workflow';
-import type { CloudCreds } from '../services/cloud/runner';
+import { CHECK_PATH, type CloudCheck, type CloudCreds } from '../services/cloud/runner';
 import type { ConnectionService } from './connections';
 import type { TaskTracker } from './tasks';
 import type { Notifier } from './notifier';
@@ -35,6 +35,9 @@ export interface CloudDeps {
   now?: () => number;
   /** Motor nocturno (sin tus redes conectadas): no toca el secreto con las claves de tus redes. */
   headless?: boolean;
+  sleep?: (ms: number) => Promise<void>;
+  /** Cuánto se espera a que Actions termine la prueba de la nube. */
+  testTimeoutMs?: number;
 }
 
 const WORKFLOW = '.github/workflows/publish.yml';
@@ -170,8 +173,8 @@ export class CloudService {
     this.d.store.save();
   }
 
-  /** Sube las claves de tus redes como secreto cifrado del repositorio. */
-  async syncCreds(gh: Github = this.gh()): Promise<void> {
+  /** Sube las claves de tus redes como secreto cifrado del repositorio. Devuelve las redes que han llegado a la nube. */
+  async syncCreds(gh: Github = this.gh()): Promise<Platform[]> {
     const creds: CloudCreds = {};
     const raw = this.d.store.data.connections;
     for (const p of ['youtube', 'tiktok'] as const) {
@@ -184,6 +187,39 @@ export class CloudService {
     if (ig && igt?.extra?.igUserId) creds.instagram = { clientId: ig.clientId, clientSecret: this.d.secrets.decode(ig.clientSecret), accessToken: igt.accessToken, igUserId: igt.extra.igUserId };
     const pk = await gh.publicKey();
     await gh.putSecret(SECRET, await sealSecret(pk.key, JSON.stringify(creds)), pk.keyId);
+    return (Object.keys(creds) as Platform[]);
+  }
+
+  /**
+   * «Probar la nube»: sube las claves al día, pide a GitHub Actions una ejecución de prueba (no publica nada) y espera su
+   * resultado. Si llega, es la prueba de que todo el camino funciona con el PC apagado: Actions arranca, el secreto llega
+   * y desde la nube se habla con cada red.
+   */
+  async test(): Promise<CloudTestResult> {
+    if (!this.st.enabled) throw new Error('Activa primero «Publicar con el PC apagado».');
+    const sleep = this.d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    return this.d.queue.run(async () => {
+      const gh = this.gh();
+      const inCloud = await this.syncCreds(gh);
+      this.credsAt = this.now();
+      const connected = (['youtube', 'tiktok', 'instagram'] as const).filter((p) => this.d.store.data.connections[p]?.tokens);
+      const missing = connected.filter((p) => !inCloud.includes(p));
+      const before = await gh.getContent(CHECK_PATH);
+      const prevAt = before ? (JSON.parse(before.text) as CloudCheck).at : '';
+      const info = await gh.repoInfo();
+      await this.installRunner(gh, info.defaultBranch); // publicador y flujo al día (el modo prueba es nuevo)
+      const started = this.now();
+      await gh.dispatch('publish.yml', info.defaultBranch, { check: 'true' });
+      const limit = this.d.testTimeoutMs ?? 6 * 60_000;
+      while (this.now() - started < limit) {
+        await sleep(Math.min(10_000, limit));
+        const c = await gh.getContent(CHECK_PATH);
+        if (!c) continue;
+        const r = JSON.parse(c.text) as CloudCheck;
+        if (r.at && r.at !== prevAt) return { at: r.at, tookSec: Math.round((this.now() - started) / 1000), networks: r.networks, missing };
+      }
+      throw new Error('GitHub Actions no ha devuelto la prueba en el tiempo esperado. Mira la pestaña Actions del repositorio: si el flujo «Publicar» no aparece o falló, ahí sale el motivo.');
+    });
   }
 
   private filesFor(o: OutputItem, platform: Platform): { video: string; thumb?: string } {

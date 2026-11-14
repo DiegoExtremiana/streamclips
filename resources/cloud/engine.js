@@ -26875,9 +26875,9 @@ var require_libsodium = __commonJS({
                   return ba(ca);
                 }(info);
               }, instantiate: function(binary, info) {
-                return { then: function(ok) {
+                return { then: function(ok2) {
                   var module3 = new WebAssembly2.Module(binary);
-                  ok({ instance: new WebAssembly2.Instance(module3, info) });
+                  ok2({ instance: new WebAssembly2.Instance(module3, info) });
                 } };
               }, RuntimeError: Error, isWasm2js: true };
               if (WebAssembly2.isWasm2js) {
@@ -31168,8 +31168,8 @@ function learnCorrections(before, after) {
   const flush = () => {
     if (delA.length && addB.length && delA.length <= MAX_SPAN && addB.length <= MAX_SPAN) {
       const fromKey = delA.map(normToken).join(" ");
-      const bad = !fromKey || fromKey === addB.map(normToken).join(" ") || delA.length === 1 && (COMMON.has(fromKey) || fromKey.length < 3);
-      if (!bad) out.push({ from: delA.map((w) => splitPunct(w).core).join(" "), to: addB.map((w) => splitPunct(w).core).join(" ") });
+      const bad2 = !fromKey || fromKey === addB.map(normToken).join(" ") || delA.length === 1 && (COMMON.has(fromKey) || fromKey.length < 3);
+      if (!bad2) out.push({ from: delA.map((w) => splitPunct(w).core).join(" "), to: addB.map((w) => splitPunct(w).core).join(" ") });
     }
     delA = [];
     addB = [];
@@ -31271,8 +31271,8 @@ function defaults(defaultOutputDir) {
 }
 var HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 function times(v, fallback) {
-  const ok = Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === "string" && HHMM_RE.test(x)))].sort() : [];
-  return ok.length ? ok : [...fallback];
+  const ok2 = Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === "string" && HHMM_RE.test(x)))].sort() : [];
+  return ok2.length ? ok2 : [...fallback];
 }
 var MAX_SEEN = 2e3;
 var BACKUP_EVERY_MS = 10 * 6e4;
@@ -34650,8 +34650,8 @@ async function downloadModel(dir, name, onProgress, o = {}) {
     const onDisk = import_node_crypto4.default.createHash("sha256");
     await (0, import_promises.pipeline)(import_node_fs15.default.createReadStream(part), onDisk);
     if (onDisk.digest("hex") !== streamed) throw new Error("El modelo de Whisper se descarg\xF3 da\xF1ado (lo guardado en el disco no coincide con lo recibido; revisa el disco o el antivirus).");
-    const bad = ggmlProblem(part);
-    if (bad) throw new Error(`El modelo de Whisper se descarg\xF3 da\xF1ado (${bad}). Vuelve a intentarlo.`);
+    const bad2 = ggmlProblem(part);
+    if (bad2) throw new Error(`El modelo de Whisper se descarg\xF3 da\xF1ado (${bad2}). Vuelve a intentarlo.`);
     import_node_fs15.default.renameSync(part, dest);
     onProgress(100);
     return dest;
@@ -35102,9 +35102,9 @@ var TranscriptService = class {
     const name = this.d.store.data.settings.whisperModel;
     if (!isKnownModel(name)) throw new Error(`Modelo de Whisper desconocido: ${name} (usa tiny, base, small o medium).`);
     if (modelInstalled(this.modelsDir, name)) {
-      const bad = ggmlProblem(modelPath(this.modelsDir, name));
-      if (!bad) return this.status();
-      this.d.log.warn(`El modelo de Whisper \xAB${name}\xBB est\xE1 da\xF1ado (${bad}); se descarga otra vez.`);
+      const bad2 = ggmlProblem(modelPath(this.modelsDir, name));
+      if (!bad2) return this.status();
+      this.d.log.warn(`El modelo de Whisper \xAB${name}\xBB est\xE1 da\xF1ado (${bad2}); se descarga otra vez.`);
       import_node_fs16.default.rmSync(modelPath(this.modelsDir, name), { force: true });
     }
     const task = this.d.tasks.start("model", `Descargando el modelo de Whisper (${name}, ~${WHISPER_MODELS[name].approxMb} MB)`);
@@ -38266,8 +38266,8 @@ var Github = class {
     const r2 = await this.req("DELETE", `/repos/${this.o.repo}/actions/secrets/${name}`);
     if (!r2.ok && r2.status !== 404) await this.fail(r2, `borrar el secreto ${name}`);
   }
-  async dispatch(workflowFile, ref) {
-    const r2 = await this.req("POST", `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref } });
+  async dispatch(workflowFile, ref, inputs) {
+    const r2 = await this.req("POST", `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref, ...inputs ? { inputs } : {} } });
     if (!r2.ok) await this.fail(r2, "lanzar el flujo de publicaci\xF3n");
   }
 };
@@ -38307,6 +38307,11 @@ function workflowYaml(crons) {
 name: Publicar
 on:
   workflow_dispatch:
+    inputs:
+      check:
+        description: 'Solo probar la nube (no publica nada)'
+        type: boolean
+        default: false
   schedule:
 ${crons.map((c) => `    - cron: '${c}'`).join("\n")}
 concurrency:
@@ -38329,7 +38334,192 @@ jobs:
         env:
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           STREAMCLIPS_CREDS: \${{ secrets.STREAMCLIPS_CREDS }}
+          STREAMCLIPS_CHECK: \${{ inputs.check }}
 `;
+}
+
+// electron/services/oauth.ts
+var import_node_crypto10 = __toESM(require("node:crypto"));
+var import_node_http = __toESM(require("node:http"));
+var PROVIDERS = {
+  google: {
+    id: "google",
+    label: "Google (YouTube)",
+    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.readonly"],
+    scopeSeparator: " ",
+    clientIdParam: "client_id",
+    pkce: true,
+    extraAuthParams: { access_type: "offline", prompt: "consent" },
+    port: 53682
+  },
+  tiktok: {
+    id: "tiktok",
+    label: "TikTok",
+    authUrl: "https://www.tiktok.com/v2/auth/authorize/",
+    tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
+    scopes: ["user.info.basic", "video.publish", "video.upload"],
+    scopeSeparator: ",",
+    clientIdParam: "client_key",
+    pkce: true,
+    port: 53683
+  },
+  meta: {
+    id: "meta",
+    label: "Instagram (Meta)",
+    authUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+    tokenUrl: "https://graph.facebook.com/v25.0/oauth/access_token",
+    scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement", "business_management"],
+    scopeSeparator: ",",
+    clientIdParam: "client_id",
+    pkce: false,
+    port: 53684,
+    redirectHost: "localhost"
+  }
+};
+function pkcePair() {
+  const verifier = import_node_crypto10.default.randomBytes(48).toString("base64url");
+  return { verifier, challenge: import_node_crypto10.default.createHash("sha256").update(verifier).digest("base64url") };
+}
+var redirectUri = (p) => `http://${p.redirectHost ?? "127.0.0.1"}:${p.port}/callback`;
+function buildAuthUrl(p, c, state, challenge) {
+  const q = new URLSearchParams({
+    [p.clientIdParam]: c.clientId,
+    redirect_uri: redirectUri(p),
+    response_type: "code",
+    scope: p.scopes.join(p.scopeSeparator),
+    state,
+    ...p.extraAuthParams ?? {}
+  });
+  if (p.pkce && challenge) {
+    q.set("code_challenge", challenge);
+    q.set("code_challenge_method", "S256");
+  }
+  return `${p.authUrl}${p.authUrl.includes("?") ? "&" : "?"}${q}`;
+}
+var PAGE = (title, body) => `<!doctype html><meta charset="utf-8"><title>StreamClips</title><body style="font-family:system-ui;background:#0e0f14;color:#eee;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1>${title}</h1><p>${body}</p></div>`;
+function waitForCode(p, state, timeoutMs = 5 * 6e4) {
+  let close = () => void 0;
+  let resolveReady;
+  let rejectReady;
+  const ready = new Promise((res, rej) => (resolveReady = res, rejectReady = rej));
+  const code = new Promise((resolve, reject) => {
+    const srv = import_node_http.default.createServer((req, res) => {
+      const u = new URL(req.url ?? "/", `http://127.0.0.1:${p.port}`);
+      if (u.pathname !== "/callback") {
+        res.writeHead(404).end();
+        return;
+      }
+      const err = u.searchParams.get("error");
+      const gotState = u.searchParams.get("state");
+      const c = u.searchParams.get("code");
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      if (err) {
+        res.writeHead(400).end(PAGE("No se pudo conectar", "Puedes cerrar esta pesta\xF1a y volver a intentarlo desde el programa."));
+        done(new Error(`${p.label} no autoriz\xF3 la conexi\xF3n (${err}).`));
+      } else if (gotState !== state || !c) {
+        res.writeHead(400).end(PAGE("Respuesta no v\xE1lida", "Vuelve al programa y reint\xE9ntalo."));
+      } else {
+        res.writeHead(200).end(PAGE("Conectado", "Ya puedes cerrar esta pesta\xF1a y volver a StreamClips."));
+        done(void 0, c);
+      }
+    });
+    const timer = setTimeout(() => done(new Error("Se agot\xF3 el tiempo esperando la autorizaci\xF3n en el navegador.")), timeoutMs);
+    let finished = false;
+    function done(e, c) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      srv.close();
+      srv.closeAllConnections?.();
+      if (e) reject(e);
+      else resolve(c);
+    }
+    close = () => done(new Error("Conexi\xF3n cancelada."));
+    srv.once("error", (e) => {
+      const m = e.code === "EADDRINUSE" ? `El puerto ${p.port} est\xE1 ocupado. Cierra otra conexi\xF3n en curso y reint\xE9ntalo.` : `No se pudo abrir el receptor local: ${e.message}`;
+      rejectReady(new Error(m));
+      done(new Error(m));
+    });
+    srv.listen(p.port, "127.0.0.1", resolveReady);
+    const srv6 = import_node_http.default.createServer((req, res) => srv.emit("request", req, res));
+    srv6.once("error", () => void 0);
+    srv6.listen(p.port, "::1");
+    const closeAll = () => {
+      srv6.close();
+      srv6.closeAllConnections?.();
+    };
+    srv.once("close", closeAll);
+  });
+  code.catch(() => void 0);
+  return { ready, code, close };
+}
+async function tokenRequest(p, body, d) {
+  const f = d.fetchFn ?? fetch;
+  let res;
+  try {
+    res = await f(p.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams(body),
+      signal: AbortSignal.timeout(3e4)
+    });
+  } catch {
+    throw new Error(`No se pudo conectar con ${p.label}. Comprueba tu conexi\xF3n a internet.`);
+  }
+  const j = await res.json().catch(() => ({}));
+  const data = typeof j.data === "object" && j.data !== null ? j.data : j;
+  if (!res.ok || typeof data.access_token !== "string") {
+    const why = String(j.error_description ?? j.error?.message ?? j.error ?? res.status);
+    throw new Error(`${p.label} rechaz\xF3 la autorizaci\xF3n: ${why}`);
+  }
+  const ttl = Number(data.expires_in ?? 0);
+  return {
+    accessToken: data.access_token,
+    ...typeof data.refresh_token === "string" ? { refreshToken: data.refresh_token } : {},
+    expiresAt: ttl > 0 ? (d.now ?? Date.now)() + ttl * 1e3 : 0,
+    ...typeof data.scope === "string" ? { scope: data.scope } : {}
+  };
+}
+function exchangeCode(p, c, code, verifier, d = {}) {
+  return tokenRequest(
+    p,
+    {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri(p),
+      [p.clientIdParam]: c.clientId,
+      client_secret: c.clientSecret,
+      ...verifier ? { code_verifier: verifier } : {}
+    },
+    d
+  );
+}
+async function refreshToken(p, c, t, d = {}) {
+  if (p.id === "meta") {
+    const n2 = await tokenRequest(p, { grant_type: "fb_exchange_token", client_id: c.clientId, client_secret: c.clientSecret, fb_exchange_token: t.accessToken }, d);
+    return { ...t, ...n2 };
+  }
+  if (!t.refreshToken) throw new Error(`La conexi\xF3n con ${p.label} caduc\xF3. Vuelve a conectarla en la pesta\xF1a Conexiones.`);
+  const n = await tokenRequest(p, { grant_type: "refresh_token", refresh_token: t.refreshToken, [p.clientIdParam]: c.clientId, client_secret: c.clientSecret }, d);
+  return { ...t, ...n, refreshToken: n.refreshToken ?? t.refreshToken };
+}
+async function authorize(p, c, openUrl, d = {}) {
+  if (!c.clientId || !c.clientSecret) throw new Error(`Faltan el ID y el secreto de la app de ${p.label}.`);
+  const state = import_node_crypto10.default.randomBytes(16).toString("hex");
+  const pk = p.pkce ? pkcePair() : void 0;
+  const w = waitForCode(p, state, d.timeoutMs);
+  d.onCancel?.(w.close);
+  await w.ready;
+  try {
+    await openUrl(buildAuthUrl(p, c, state, pk?.challenge));
+  } catch (e) {
+    w.close();
+    throw new Error(`No se pudo abrir el navegador: ${e.message}`);
+  }
+  const code = await w.code;
+  return exchangeCode(p, c, code, pk?.verifier, d);
 }
 
 // electron/services/social/youtube.ts
@@ -38554,7 +38744,7 @@ async function publishTiktok(d, o) {
 
 // electron/services/social/instagram.ts
 var import_node_fs32 = __toESM(require("node:fs"));
-var IG_GRAPH = "https://graph.facebook.com/v21.0";
+var IG_GRAPH = "https://graph.facebook.com/v25.0";
 var POLL_MS2 = 5e3;
 var POLL_MAX2 = 120;
 function instagramFile(o) {
@@ -38590,7 +38780,7 @@ async function publishInstagram(d, o) {
     })
   );
   if (!create.id) throw new PublishError("Instagram no cre\xF3 el contenedor del v\xEDdeo.");
-  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v21.0/${create.id}`;
+  const uploadUri = create.uri ?? `https://rupload.facebook.com/ig-api-upload/v25.0/${create.id}`;
   const up = await timedFetch(
     f,
     uploadUri,
@@ -38625,6 +38815,94 @@ async function publishInstagram(d, o) {
   if (!pub.id) throw new PublishError("Instagram no confirm\xF3 la publicaci\xF3n.");
   return { mediaId: pub.id };
 }
+
+// electron/services/social/probe.ts
+var GOOGLE_TOKENINFO = "https://oauth2.googleapis.com/tokeninfo";
+var ok = (label, detail) => ({ label, ok: true, detail });
+var bad = (label, detail) => ({ label, ok: false, detail });
+async function probeConnection(platform, t, env = {}) {
+  const f = env.fetchFn ?? fetch;
+  const auth = { Authorization: `Bearer ${t.accessToken}` };
+  const checks = [];
+  let account = "";
+  let canPublishPublic;
+  if (platform === "youtube") {
+    const api = env.ytApi ?? YT_ENDPOINTS.api;
+    const r3 = await timedFetch(f, `${api}/channels?part=snippet,statistics&mine=true`, { headers: auth });
+    if (!r3.ok) throw new PublishError(`YouTube: ${await apiMessage(r3)}`);
+    const j2 = await r3.json();
+    const ch = j2.items?.[0];
+    if (!ch?.snippet?.title) throw new PublishError("La cuenta de Google no tiene un canal de YouTube. Crea uno en youtube.com y vuelve a conectar.");
+    account = ch.snippet.title;
+    checks.push(ok("Canal", `${account}${ch.statistics?.videoCount ? ` \xB7 ${ch.statistics.videoCount} v\xEDdeos` : ""}${ch.statistics?.subscriberCount ? ` \xB7 ${ch.statistics.subscriberCount} suscriptores` : ""}`));
+    const info = await timedFetch(f, `${env.googleTokenInfo ?? GOOGLE_TOKENINFO}?access_token=${encodeURIComponent(t.accessToken)}`, {}).catch(() => null);
+    const ti = info && info.ok ? await info.json().catch(() => ({})) : null;
+    const scopes = (ti?.scope ?? t.scope ?? "").split(/[ ,]+/).filter(Boolean);
+    if (scopes.length) {
+      const upload = scopes.some((s) => /youtube\.upload$|\/auth\/youtube$/.test(s));
+      checks.push(upload ? ok("Permiso para subir v\xEDdeos", "Concedido") : bad("Permiso para subir v\xEDdeos", "No concedido: vuelve a conectar y acepta todas las casillas que pide Google."));
+    }
+    checks.push(ok("Permanencia", "Si la pantalla de consentimiento de tu proyecto est\xE1 \xABEn producci\xF3n\xBB, la conexi\xF3n no caduca. Si est\xE1 \xABEn pruebas\xBB, Google la corta a los 7 d\xEDas."));
+    checks.push(ok("Qu\xE9 pasa al subir", "Hasta que Google verifique tu proyecto, los v\xEDdeos subidos por la API quedan privados; la cuota gratuita da para unas 6 subidas al d\xEDa."));
+    return { platform, account, checks, canPublishPublic };
+  }
+  if (platform === "tiktok") {
+    const api = env.tiktokApi ?? TT_API;
+    const u = await timedFetch(f, `${api}/user/info/?fields=display_name,open_id,username`, { headers: auth });
+    const uj = await u.json().catch(() => ({}));
+    if (!u.ok || uj.error?.code && uj.error.code !== "ok") throw new PublishError(`TikTok: ${uj.error?.message ?? u.status}`);
+    account = uj.data?.user?.username ? `@${uj.data.user.username}` : uj.data?.user?.display_name ?? "Cuenta de TikTok";
+    checks.push(ok("Cuenta", account));
+    const c = await timedFetch(f, `${api}/post/publish/creator_info/query/`, { method: "POST", headers: { ...auth, "Content-Type": "application/json; charset=UTF-8" }, body: "{}" });
+    const cj = await c.json().catch(() => ({}));
+    if (!c.ok || cj.error?.code && cj.error.code !== "ok") {
+      const code = cj.error?.code ?? String(c.status);
+      checks.push(bad("Permiso para publicar", /scope/i.test(code) ? "La app no tiene concedido \xABvideo.publish\xBB: a\xF1ade el producto Content Posting API (Direct Post) y vuelve a conectar." : `TikTok: ${cj.error?.message ?? code}`));
+      return { platform, account, checks, canPublishPublic: false };
+    }
+    const opts = cj.data?.privacy_level_options ?? [];
+    canPublishPublic = opts.includes("PUBLIC_TO_EVERYONE");
+    checks.push(ok("Permiso para publicar", "Concedido (Content Posting API)"));
+    checks.push(canPublishPublic ? ok("Visibilidad", "Puede publicar en p\xFAblico.") : bad("Visibilidad", "Solo puede publicar en privado (\xABsolo yo\xBB): la app no est\xE1 auditada por TikTok. Para publicar en p\xFAblico hay que enviarla a revisi\xF3n en developers.tiktok.com."));
+    if (cj.data?.max_video_post_duration_sec) checks.push(ok("Duraci\xF3n m\xE1xima", `${Math.round(cj.data.max_video_post_duration_sec / 60)} min por v\xEDdeo`));
+    return { platform, account, checks, canPublishPublic };
+  }
+  const graph = env.graph ?? IG_GRAPH;
+  const tok = `access_token=${encodeURIComponent(t.accessToken)}`;
+  const r2 = await timedFetch(f, `${graph}/me/accounts?fields=name,instagram_business_account%7Bid,username%7D&${tok}`, {});
+  const j = await r2.json().catch(() => ({}));
+  if (!r2.ok) throw new PublishError(`Instagram: ${j.error?.message ?? r2.status}`);
+  const pages = j.data ?? [];
+  const page = pages.find((p) => p.instagram_business_account?.id);
+  if (!page?.instagram_business_account) {
+    checks.push(bad("Cuenta profesional", pages.length ? `Tus p\xE1ginas (${pages.map((p) => p.name).filter(Boolean).join(", ")}) no tienen ninguna cuenta de Instagram profesional enlazada.` : "La cuenta de Facebook no administra ninguna p\xE1gina."));
+    return { platform, account: "", checks, canPublishPublic: false };
+  }
+  const ig = page.instagram_business_account;
+  account = ig.username ? `@${ig.username}` : page.name ?? "Instagram";
+  checks.push(ok("Cuenta profesional", `${account} (enlazada a la p\xE1gina \xAB${page.name ?? ""}\xBB)`));
+  const perms = await timedFetch(f, `${graph}/me/permissions?${tok}`, {}).catch(() => null);
+  const pj = perms && perms.ok ? await perms.json().catch(() => ({})) : null;
+  if (pj?.data) {
+    const granted = new Set(pj.data.filter((p) => p.status === "granted").map((p) => p.permission));
+    const need = ["instagram_basic", "instagram_content_publish", "pages_show_list"];
+    const missing = need.filter((p) => !granted.has(p));
+    checks.push(missing.length ? bad("Permisos", `Faltan: ${missing.join(", ")}. Vuelve a conectar y acepta todo lo que pide Meta.`) : ok("Permisos", "Concedidos (leer la cuenta y publicar contenido)"));
+  }
+  const lim = await timedFetch(f, `${graph}/${encodeURIComponent(ig.id)}/content_publishing_limit?fields=quota_usage,config&${tok}`, {}).catch(() => null);
+  const lj = lim && lim.ok ? await lim.json().catch(() => ({})) : null;
+  const usage = lj?.data?.[0];
+  if (usage && typeof usage.quota_usage === "number") {
+    const total2 = usage.config?.quota_total ?? 100;
+    checks.push(ok("Publicaciones por la API", `${usage.quota_usage} de ${total2} usadas en las \xFAltimas 24 h`));
+  }
+  canPublishPublic = true;
+  checks.push(ok("Qu\xE9 pasa al subir", "Los Reels salen p\xFAblicos con tu cuenta (la app en modo desarrollo funciona con tus propias cuentas sin revisi\xF3n de Meta)."));
+  return { platform, account, checks, canPublishPublic };
+}
+
+// electron/services/cloud/runner.ts
+var CHECK_PATH = "status/check.json";
 
 // electron/domain/cloud.ts
 var WORKFLOW = ".github/workflows/publish.yml";
@@ -38739,7 +39017,7 @@ var CloudService = class {
     this.st.workflowCrons = key;
     this.d.store.save();
   }
-  /** Sube las claves de tus redes como secreto cifrado del repositorio. */
+  /** Sube las claves de tus redes como secreto cifrado del repositorio. Devuelve las redes que han llegado a la nube. */
   async syncCreds(gh = this.gh()) {
     const creds = {};
     const raw = this.d.store.data.connections;
@@ -38753,6 +39031,38 @@ var CloudService = class {
     if (ig && igt?.extra?.igUserId) creds.instagram = { clientId: ig.clientId, clientSecret: this.d.secrets.decode(ig.clientSecret), accessToken: igt.accessToken, igUserId: igt.extra.igUserId };
     const pk = await gh.publicKey();
     await gh.putSecret(SECRET, await sealSecret(pk.key, JSON.stringify(creds)), pk.keyId);
+    return Object.keys(creds);
+  }
+  /**
+   * «Probar la nube»: sube las claves al día, pide a GitHub Actions una ejecución de prueba (no publica nada) y espera su
+   * resultado. Si llega, es la prueba de que todo el camino funciona con el PC apagado: Actions arranca, el secreto llega
+   * y desde la nube se habla con cada red.
+   */
+  async test() {
+    if (!this.st.enabled) throw new Error("Activa primero \xABPublicar con el PC apagado\xBB.");
+    const sleep = this.d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
+    return this.d.queue.run(async () => {
+      const gh = this.gh();
+      const inCloud = await this.syncCreds(gh);
+      this.credsAt = this.now();
+      const connected = ["youtube", "tiktok", "instagram"].filter((p) => this.d.store.data.connections[p]?.tokens);
+      const missing = connected.filter((p) => !inCloud.includes(p));
+      const before = await gh.getContent(CHECK_PATH);
+      const prevAt = before ? JSON.parse(before.text).at : "";
+      const info = await gh.repoInfo();
+      await this.installRunner(gh, info.defaultBranch);
+      const started = this.now();
+      await gh.dispatch("publish.yml", info.defaultBranch, { check: "true" });
+      const limit = this.d.testTimeoutMs ?? 6 * 6e4;
+      while (this.now() - started < limit) {
+        await sleep(Math.min(1e4, limit));
+        const c = await gh.getContent(CHECK_PATH);
+        if (!c) continue;
+        const r2 = JSON.parse(c.text);
+        if (r2.at && r2.at !== prevAt) return { at: r2.at, tookSec: Math.round((this.now() - started) / 1e3), networks: r2.networks, missing };
+      }
+      throw new Error("GitHub Actions no ha devuelto la prueba en el tiempo esperado. Mira la pesta\xF1a Actions del repositorio: si el flujo \xABPublicar\xBB no aparece o fall\xF3, ah\xED sale el motivo.");
+    });
   }
   filesFor(o, platform) {
     const video = platform === "youtube" ? youtubeFile(o).file : platform === "tiktok" ? tiktokFile(o) : instagramFile(o);
@@ -39412,12 +39722,12 @@ var PhaseClock = class {
 };
 
 // electron/services/momentJudge.ts
-var import_node_crypto10 = __toESM(require("node:crypto"));
+var import_node_crypto11 = __toESM(require("node:crypto"));
 var import_node_fs34 = __toESM(require("node:fs"));
 var import_node_path27 = __toESM(require("node:path"));
 var VERSION = "v2";
 var CHUNK2 = 6;
-var keyOf = (words, c) => import_node_crypto10.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
+var keyOf = (words, c) => import_node_crypto11.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
 function loadCache(file) {
   if (!file) return {};
   try {
@@ -39477,7 +39787,7 @@ async function judgeCandidates(conf, words, cands, d = {}) {
 }
 
 // electron/services/visualJudge.ts
-var import_node_crypto11 = __toESM(require("node:crypto"));
+var import_node_crypto12 = __toESM(require("node:crypto"));
 var import_node_fs35 = __toESM(require("node:fs"));
 var import_node_path28 = __toESM(require("node:path"));
 
@@ -39523,13 +39833,13 @@ function frameTimes(seg, n) {
 // electron/services/visualJudge.ts
 var VERSION2 = "v1";
 async function vodFrame(ffmpeg, file, at, tmpDir) {
-  const out = import_node_path28.default.join(tmpDir, `f${import_node_crypto11.default.randomBytes(4).toString("hex")}.jpg`);
+  const out = import_node_path28.default.join(tmpDir, `f${import_node_crypto12.default.randomBytes(4).toString("hex")}.jpg`);
   await run(ffmpeg, ["-y", "-v", "error", "-nostdin", "-ss", String(Math.max(0, at)), "-i", file, "-frames:v", "1", "-an", "-vf", "scale=512:-2", "-q:v", "6", out], 6e4);
   const b64 = import_node_fs35.default.readFileSync(out).toString("base64");
   import_node_fs35.default.rmSync(out, { force: true });
   return `data:image/jpeg;base64,${b64}`;
 }
-var keyOf2 = (c, words) => import_node_crypto11.default.createHash("sha1").update(`${VERSION2}|${Math.round(c.start)}|${Math.round(c.end)}|${words.length}`).digest("hex").slice(0, 20);
+var keyOf2 = (c, words) => import_node_crypto12.default.createHash("sha1").update(`${VERSION2}|${Math.round(c.start)}|${Math.round(c.end)}|${words.length}`).digest("hex").slice(0, 20);
 async function judgeVisual(conf, words, judged, o) {
   const vconf = visionConfig(conf);
   const perCand = conf.provider === "groq" && !conf.baseUrl ? 2 : 3;
@@ -41315,7 +41625,7 @@ var Scheduler = class {
 };
 
 // electron/domain/engine.ts
-var import_node_crypto12 = __toESM(require("node:crypto"));
+var import_node_crypto13 = __toESM(require("node:crypto"));
 
 // electron/engine/workflow.ts
 function engineCrons(offsetMinutes = (/* @__PURE__ */ new Date()).getTimezoneOffset(), fromHour = 20, toHour = 4) {
@@ -41491,7 +41801,7 @@ var EngineService = class {
     };
   }
   hash(payload, crons) {
-    return import_node_crypto12.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
+    return import_node_crypto13.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
   async put(gh, path33, text, msg) {
     const cur = await gh.getContent(path33);
@@ -41602,179 +41912,41 @@ var EngineService = class {
   }
 };
 
-// electron/services/oauth.ts
-var import_node_crypto13 = __toESM(require("node:crypto"));
-var import_node_http = __toESM(require("node:http"));
-var PROVIDERS = {
-  google: {
-    id: "google",
-    label: "Google (YouTube)",
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.readonly"],
-    scopeSeparator: " ",
-    clientIdParam: "client_id",
-    pkce: true,
-    extraAuthParams: { access_type: "offline", prompt: "consent" },
-    port: 53682
-  },
-  tiktok: {
-    id: "tiktok",
-    label: "TikTok",
-    authUrl: "https://www.tiktok.com/v2/auth/authorize/",
-    tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
-    scopes: ["user.info.basic", "video.publish", "video.upload"],
-    scopeSeparator: ",",
-    clientIdParam: "client_key",
-    pkce: true,
-    port: 53683
-  },
-  meta: {
-    id: "meta",
-    label: "Instagram (Meta)",
-    authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
-    tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
-    scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement", "business_management"],
-    scopeSeparator: ",",
-    clientIdParam: "client_id",
-    pkce: false,
-    port: 53684
+// electron/services/social/appCheck.ts
+var LABEL2 = { youtube: "Google", tiktok: "TikTok", instagram: "Meta" };
+async function checkAppCredentials(platform, clientId, clientSecret, env = {}) {
+  const f = env.fetchFn ?? fetch;
+  const prov = env.providers ?? PROVIDERS;
+  const id = clientId.trim();
+  const secret = clientSecret.trim();
+  if (!id || !secret) throw new PublishError(`Faltan el ID y el secreto de la app de ${LABEL2[platform]}.`);
+  const form = (o) => ({ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, body: new URLSearchParams(o) });
+  if (platform === "youtube") {
+    if (!/\.apps\.googleusercontent\.com$/.test(id)) throw new PublishError("El ID de cliente de Google termina en \xAB.apps.googleusercontent.com\xBB. C\xF3pialo entero desde Credenciales.");
+    const r3 = await timedFetch(f, prov.google.tokenUrl, form({ grant_type: "refresh_token", refresh_token: "streamclips-comprobacion", client_id: id, client_secret: secret }), 2e4);
+    const j2 = await r3.json().catch(() => ({}));
+    if (j2.error === "invalid_client") throw new PublishError("Google no reconoce ese ID de cliente, o el secreto no es el suyo. Copia los dos desde \xABCredenciales\xBB del mismo cliente OAuth (tipo \xABAplicaci\xF3n de escritorio\xBB).");
+    if (j2.error === "invalid_grant" || j2.error === "unauthorized_client" || !j2.error) return;
+    throw new PublishError(`Google respondi\xF3 algo inesperado al comprobar las claves: ${j2.error_description ?? j2.error ?? `HTTP ${r3.status}`}`);
   }
-};
-function pkcePair() {
-  const verifier = import_node_crypto13.default.randomBytes(48).toString("base64url");
-  return { verifier, challenge: import_node_crypto13.default.createHash("sha256").update(verifier).digest("base64url") };
-}
-var redirectUri = (p) => `http://127.0.0.1:${p.port}/callback`;
-function buildAuthUrl(p, c, state, challenge) {
-  const q = new URLSearchParams({
-    [p.clientIdParam]: c.clientId,
-    redirect_uri: redirectUri(p),
-    response_type: "code",
-    scope: p.scopes.join(p.scopeSeparator),
-    state,
-    ...p.extraAuthParams ?? {}
-  });
-  if (p.pkce && challenge) {
-    q.set("code_challenge", challenge);
-    q.set("code_challenge_method", "S256");
+  if (platform === "tiktok") {
+    const r3 = await timedFetch(f, prov.tiktok.tokenUrl, form({ grant_type: "refresh_token", refresh_token: "rft.streamclips-comprobacion", client_key: id, client_secret: secret }), 2e4);
+    const j2 = await r3.json().catch(() => ({}));
+    if (j2.error === "invalid_client") throw new PublishError("TikTok dice que la Client key o el Client secret no son correctos. C\xF3pialos desde la p\xE1gina de tu app en developers.tiktok.com (si la app est\xE1 en Sandbox, la Client key empieza por \xABsbaw\xBB).");
+    if (j2.error === "invalid_request") throw new PublishError("TikTok no acepta el formato de esa Client key. Copia la Client key tal cual (sin espacios) desde la p\xE1gina de tu app.");
+    if (j2.error === "invalid_grant" || !j2.error) return;
+    throw new PublishError(`TikTok respondi\xF3 algo inesperado al comprobar las claves: ${j2.error_description ?? j2.error}`);
   }
-  return `${p.authUrl}${p.authUrl.includes("?") ? "&" : "?"}${q}`;
-}
-var PAGE = (title, body) => `<!doctype html><meta charset="utf-8"><title>StreamClips</title><body style="font-family:system-ui;background:#0e0f14;color:#eee;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1>${title}</h1><p>${body}</p></div>`;
-function waitForCode(p, state, timeoutMs = 5 * 6e4) {
-  let close = () => void 0;
-  let resolveReady;
-  let rejectReady;
-  const ready = new Promise((res, rej) => (resolveReady = res, rejectReady = rej));
-  const code = new Promise((resolve, reject) => {
-    const srv = import_node_http.default.createServer((req, res) => {
-      const u = new URL(req.url ?? "/", `http://127.0.0.1:${p.port}`);
-      if (u.pathname !== "/callback") {
-        res.writeHead(404).end();
-        return;
-      }
-      const err = u.searchParams.get("error");
-      const gotState = u.searchParams.get("state");
-      const c = u.searchParams.get("code");
-      res.setHeader("content-type", "text/html; charset=utf-8");
-      if (err) {
-        res.writeHead(400).end(PAGE("No se pudo conectar", "Puedes cerrar esta pesta\xF1a y volver a intentarlo desde el programa."));
-        done(new Error(`${p.label} no autoriz\xF3 la conexi\xF3n (${err}).`));
-      } else if (gotState !== state || !c) {
-        res.writeHead(400).end(PAGE("Respuesta no v\xE1lida", "Vuelve al programa y reint\xE9ntalo."));
-      } else {
-        res.writeHead(200).end(PAGE("Conectado", "Ya puedes cerrar esta pesta\xF1a y volver a StreamClips."));
-        done(void 0, c);
-      }
-    });
-    const timer = setTimeout(() => done(new Error("Se agot\xF3 el tiempo esperando la autorizaci\xF3n en el navegador.")), timeoutMs);
-    let finished = false;
-    function done(e, c) {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      srv.close();
-      srv.closeAllConnections?.();
-      if (e) reject(e);
-      else resolve(c);
-    }
-    close = () => done(new Error("Conexi\xF3n cancelada."));
-    srv.once("error", (e) => {
-      const m = e.code === "EADDRINUSE" ? `El puerto ${p.port} est\xE1 ocupado. Cierra otra conexi\xF3n en curso y reint\xE9ntalo.` : `No se pudo abrir el receptor local: ${e.message}`;
-      rejectReady(new Error(m));
-      done(new Error(m));
-    });
-    srv.listen(p.port, "127.0.0.1", resolveReady);
-  });
-  code.catch(() => void 0);
-  return { ready, code, close };
-}
-async function tokenRequest(p, body, d) {
-  const f = d.fetchFn ?? fetch;
-  let res;
-  try {
-    res = await f(p.tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: new URLSearchParams(body),
-      signal: AbortSignal.timeout(3e4)
-    });
-  } catch {
-    throw new Error(`No se pudo conectar con ${p.label}. Comprueba tu conexi\xF3n a internet.`);
+  const graph = env.graph ?? prov.meta.tokenUrl.replace(/\/oauth\/access_token$/, "");
+  if (!/^\d{5,}$/.test(id)) throw new PublishError("El ID de la app de Meta es un n\xFAmero largo (sale arriba del panel de la app). Comprueba que no has pegado otra cosa.");
+  const q = new URLSearchParams({ client_id: id, client_secret: secret, grant_type: "client_credentials" });
+  const r2 = await timedFetch(f, `${graph}/oauth/access_token?${q}`, { headers: { Accept: "application/json" } }, 2e4);
+  const j = await r2.json().catch(() => ({}));
+  if (typeof j.access_token === "string" && j.access_token) return;
+  if (j.error?.code === 101 || /Invalid Client ID|Error validating application|client secret/i.test(j.error?.message ?? "")) {
+    throw new PublishError("Meta no reconoce ese ID de la app, o la clave secreta no es la suya. C\xF3pialos desde \xABConfiguraci\xF3n de la app \u203A B\xE1sica\xBB (pulsa \xABMostrar\xBB en la clave secreta).");
   }
-  const j = await res.json().catch(() => ({}));
-  const data = typeof j.data === "object" && j.data !== null ? j.data : j;
-  if (!res.ok || typeof data.access_token !== "string") {
-    const why = String(j.error_description ?? j.error?.message ?? j.error ?? res.status);
-    throw new Error(`${p.label} rechaz\xF3 la autorizaci\xF3n: ${why}`);
-  }
-  const ttl = Number(data.expires_in ?? 0);
-  return {
-    accessToken: data.access_token,
-    ...typeof data.refresh_token === "string" ? { refreshToken: data.refresh_token } : {},
-    expiresAt: ttl > 0 ? (d.now ?? Date.now)() + ttl * 1e3 : 0,
-    ...typeof data.scope === "string" ? { scope: data.scope } : {}
-  };
-}
-function exchangeCode(p, c, code, verifier, d = {}) {
-  return tokenRequest(
-    p,
-    {
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri(p),
-      [p.clientIdParam]: c.clientId,
-      client_secret: c.clientSecret,
-      ...verifier ? { code_verifier: verifier } : {}
-    },
-    d
-  );
-}
-async function refreshToken(p, c, t, d = {}) {
-  if (p.id === "meta") {
-    const n2 = await tokenRequest(p, { grant_type: "fb_exchange_token", client_id: c.clientId, client_secret: c.clientSecret, fb_exchange_token: t.accessToken }, d);
-    return { ...t, ...n2 };
-  }
-  if (!t.refreshToken) throw new Error(`La conexi\xF3n con ${p.label} caduc\xF3. Vuelve a conectarla en la pesta\xF1a Conexiones.`);
-  const n = await tokenRequest(p, { grant_type: "refresh_token", refresh_token: t.refreshToken, [p.clientIdParam]: c.clientId, client_secret: c.clientSecret }, d);
-  return { ...t, ...n, refreshToken: n.refreshToken ?? t.refreshToken };
-}
-async function authorize(p, c, openUrl, d = {}) {
-  if (!c.clientId || !c.clientSecret) throw new Error(`Faltan el ID y el secreto de la app de ${p.label}.`);
-  const state = import_node_crypto13.default.randomBytes(16).toString("hex");
-  const pk = p.pkce ? pkcePair() : void 0;
-  const w = waitForCode(p, state, d.timeoutMs);
-  d.onCancel?.(w.close);
-  await w.ready;
-  try {
-    await openUrl(buildAuthUrl(p, c, state, pk?.challenge));
-  } catch (e) {
-    w.close();
-    throw new Error(`No se pudo abrir el navegador: ${e.message}`);
-  }
-  const code = await w.code;
-  return exchangeCode(p, c, code, pk?.verifier, d);
+  throw new PublishError(`Meta respondi\xF3 algo inesperado al comprobar las claves: ${j.error?.message ?? `HTTP ${r2.status}`}`);
 }
 
 // electron/domain/connections.ts
@@ -41827,11 +41999,32 @@ var ConnectionService = class {
     this.d.notifier.changed();
     return this.list();
   }
+  /** Comprueba con la propia red que el ID y el secreto de la app son correctos (sin abrir el navegador ni tocar tu cuenta). */
+  async checkApp(platform) {
+    const c = this.conns[platform];
+    if (!c?.clientId || !c.clientSecret) throw new Error("Primero guarda el ID y el secreto de tu app.");
+    const env = { fetchFn: this.d.fetchFn, providers: this.d.providers, graph: this.d.graph };
+    await checkAppCredentials(platform, c.clientId, this.d.secrets.decode(c.clientSecret), env);
+  }
+  /** Habla con la red con la clave guardada y cuenta qué cuenta es, qué permisos tiene y qué puede publicar. No publica nada. */
+  async probe(platform) {
+    const t = await this.accessToken(platform);
+    if (!t) throw new Error("Esta red no est\xE1 conectada todav\xEDa.");
+    const r2 = await probeConnection(platform, t, { fetchFn: this.d.fetchFn, ...this.d.probeEnv });
+    const c = this.conns[platform];
+    if (c && r2.account && c.account !== r2.account) {
+      c.account = r2.account;
+      this.d.store.save();
+      this.d.notifier.changed();
+    }
+    return r2;
+  }
   /** Abre el navegador y guarda las claves de acceso al volver. */
   async connect(platform) {
     const c = this.conns[platform];
     if (!c?.clientId || !c.clientSecret) throw new Error("Primero guarda el ID y el secreto de tu app.");
     if (this.cancel) throw new Error("Ya hay una conexi\xF3n en curso.");
+    await this.checkApp(platform);
     const p = this.provider(platform);
     try {
       const tokens2 = await authorize(p, { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret) }, this.d.openUrl, {
@@ -41912,7 +42105,7 @@ async function lookupAccount(platform, t, env = {}) {
     if (!r3.ok || j2.error?.code && j2.error.code !== "ok") throw new PublishError(`TikTok: ${j2.error?.message ?? r3.status}`);
     return { account: j2.data?.user?.display_name ?? "Cuenta de TikTok" };
   }
-  const r2 = await timedFetch(f, `${env.graph ?? "https://graph.facebook.com/v21.0"}/me/accounts?fields=name,instagram_business_account%7Bid,username%7D&access_token=${encodeURIComponent(t.accessToken)}`, {});
+  const r2 = await timedFetch(f, `${env.graph ?? "https://graph.facebook.com/v25.0"}/me/accounts?fields=name,instagram_business_account%7Bid,username%7D&access_token=${encodeURIComponent(t.accessToken)}`, {});
   const j = await r2.json().catch(() => ({}));
   if (!r2.ok) throw new PublishError(`Instagram: ${j.error?.message ?? r2.status}`);
   const page = j.data?.find((p) => p.instagram_business_account?.id);
@@ -42094,7 +42287,9 @@ var AppContext = class {
       }),
       providers: o.oauthProviders,
       fetchFn: o.socialEnv?.fetchFn,
-      afterConnect: (platform, tokens2) => lookupAccount(platform, tokens2, { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api })
+      afterConnect: (platform, tokens2) => lookupAccount(platform, tokens2, { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api }),
+      probeEnv: { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api, googleTokenInfo: o.socialEnv?.googleTokenInfo },
+      graph: o.socialEnv?.graph
     });
     this.updates = new UpdateService({
       updater: o.updater ?? null,
@@ -42116,6 +42311,8 @@ var AppContext = class {
       }),
       github: o.github,
       intervalMs: o.cloudIntervalMs,
+      sleep: o.cloudSleep,
+      testTimeoutMs: o.cloudTestTimeoutMs,
       headless: o.headless,
       onPublished: (id) => this.library.purgeIfPublished(id)
     });

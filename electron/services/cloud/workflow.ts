@@ -22,6 +22,11 @@ export function workflowYaml(crons: string[]): string {
 name: Publicar
 on:
   workflow_dispatch:
+    inputs:
+      check:
+        description: 'Solo probar la nube (no publica nada)'
+        type: boolean
+        default: false
   schedule:
 ${crons.map((c) => `    - cron: '${c}'`).join('\n')}
 concurrency:
@@ -44,5 +49,6 @@ jobs:
         env:
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           STREAMCLIPS_CREDS: \${{ secrets.STREAMCLIPS_CREDS }}
+          STREAMCLIPS_CHECK: \${{ inputs.check }}
 `;
 }

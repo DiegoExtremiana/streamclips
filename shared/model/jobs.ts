@@ -48,6 +48,22 @@ export interface ConnectionInfo {
   caveat: string;
 }
 
+/** Una comprobación de la prueba de conexión de una red: qué se miró y cómo salió. */
+export interface ConnectionCheck {
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+/** Resultado de «Probar la conexión» de una red: se habla con la red con la clave guardada, sin publicar nada. */
+export interface ConnectionProbe {
+  platform: Platform;
+  account: string;
+  checks: ConnectionCheck[];
+  /** Si se sabe: ¿la cuenta puede publicar en público (y no solo en privado)? */
+  canPublishPublic?: boolean;
+}
+
 export interface YoutubePlaylist {
   id: string;
   title: string;
@@ -77,6 +93,17 @@ export interface EngineStatus {
   cloudReady: boolean;
   /** Estado que dejó la última ejecución del motor, si se ha podido leer. */
   last?: { at: string; processed: number; pending: number; note?: string };
+}
+
+/** Resultado de «Probar la nube»: la ejecución real en GitHub Actions habló con cada red con las claves del secreto. */
+export interface CloudTestResult {
+  /** Cuándo terminó la prueba en la nube. */
+  at: string;
+  /** Cuánto tardó en responder GitHub Actions, en segundos. */
+  tookSec: number;
+  networks: Partial<Record<Platform, { ok: true; probe: ConnectionProbe } | { ok: false; error: string }>>;
+  /** Redes conectadas en el PC que no han llegado a la nube (p. ej. Google sin clave de renovación). */
+  missing: Platform[];
 }
 
 export interface CloudStatus {

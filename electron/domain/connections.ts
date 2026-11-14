@@ -1,10 +1,12 @@
 import { MASKED_SECRET } from '../../shared/types';
-import type { ConnectionInfo, Platform } from '../../shared/types';
+import type { ConnectionInfo, ConnectionProbe, Platform } from '../../shared/types';
 import type { Store, StoredConnection } from '../services/store';
 import type { Secrets } from '../services/secrets';
 import type { Logger } from '../services/logger';
 import { PROVIDERS, authorize, refreshToken, type OAuthProvider, type TokenSet } from '../services/oauth';
 import type { Notifier } from './notifier';
+import { checkAppCredentials, type AppCheckEnv } from '../services/social/appCheck';
+import { probeConnection, type ProbeEnv } from '../services/social/probe';
 
 export const PLATFORM_PROVIDER: Record<Platform, keyof typeof PROVIDERS> = { youtube: 'google', tiktok: 'tiktok', instagram: 'meta' };
 
@@ -25,6 +27,10 @@ export interface ConnectionDeps {
   now?: () => number;
   /** Para completar datos de la cuenta tras autorizar (nombre, id de Instagram...). */
   afterConnect?: (platform: Platform, tokens: TokenSet) => Promise<{ account?: string; extra?: Record<string, string> }>;
+  /** Direcciones de las APIs para «Probar la conexión» (en las pruebas, servidores locales). */
+  probeEnv?: ProbeEnv;
+  /** Raíz de la API de Meta para comprobar las claves de la app (en las pruebas, un servidor local). */
+  graph?: string;
 }
 
 /** Margen para renovar el token antes de que caduque. */
@@ -76,11 +82,35 @@ export class ConnectionService {
     return this.list();
   }
 
+  /** Comprueba con la propia red que el ID y el secreto de la app son correctos (sin abrir el navegador ni tocar tu cuenta). */
+  async checkApp(platform: Platform): Promise<void> {
+    const c = this.conns[platform];
+    if (!c?.clientId || !c.clientSecret) throw new Error('Primero guarda el ID y el secreto de tu app.');
+    const env: AppCheckEnv = { fetchFn: this.d.fetchFn, providers: this.d.providers, graph: this.d.graph };
+    await checkAppCredentials(platform, c.clientId, this.d.secrets.decode(c.clientSecret), env);
+  }
+
+  /** Habla con la red con la clave guardada y cuenta qué cuenta es, qué permisos tiene y qué puede publicar. No publica nada. */
+  async probe(platform: Platform): Promise<ConnectionProbe> {
+    const t = await this.accessToken(platform);
+    if (!t) throw new Error('Esta red no está conectada todavía.');
+    const r = await probeConnection(platform, t, { fetchFn: this.d.fetchFn, ...this.d.probeEnv });
+    const c = this.conns[platform];
+    if (c && r.account && c.account !== r.account) {
+      c.account = r.account;
+      this.d.store.save();
+      this.d.notifier.changed();
+    }
+    return r;
+  }
+
   /** Abre el navegador y guarda las claves de acceso al volver. */
   async connect(platform: Platform): Promise<ConnectionInfo[]> {
     const c = this.conns[platform];
     if (!c?.clientId || !c.clientSecret) throw new Error('Primero guarda el ID y el secreto de tu app.');
     if (this.cancel) throw new Error('Ya hay una conexión en curso.');
+    // antes de abrir el navegador se comprueban las claves: así un error de copia se explica aquí y no en una página de la red
+    await this.checkApp(platform);
     const p = this.provider(platform);
     try {
       const tokens = await authorize(p, { clientId: c.clientId, clientSecret: this.d.secrets.decode(c.clientSecret) }, this.d.openUrl, {

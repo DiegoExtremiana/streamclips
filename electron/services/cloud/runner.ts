@@ -7,6 +7,8 @@ import { publishYoutube, type YoutubeEndpoints } from '../social/youtube';
 import { publishTiktok } from '../social/tiktok';
 import { publishInstagram } from '../social/instagram';
 import { Github } from './github';
+import { probeConnection } from '../social/probe';
+import type { ConnectionProbe } from '../../../shared/types';
 import { jobPath, parseJob, serializeJob, type CloudJob } from './jobs';
 
 export interface CloudCreds {
@@ -146,13 +148,52 @@ export async function runQueue(gh: Github, creds: CloudCreds, env: RunnerEnv = {
 
 export { jobPath };
 
-/** Punto de entrada en Actions. */
+/** Dónde deja la nube el resultado de «Probar la nube» (lo lee el programa). */
+export const CHECK_PATH = 'status/check.json';
+
+export interface CloudCheck {
+  at: string;
+  /** Qué publicador hizo la prueba (para saber que corre la versión instalada). */
+  runner: string;
+  networks: Partial<Record<Platform, { ok: true; probe: ConnectionProbe } | { ok: false; error: string }>>;
+}
+
+/**
+ * «Probar la nube»: sin publicar nada, demuestra que el flujo de Actions arranca, que el secreto con tus redes llega y
+ * que desde la nube se pueden renovar las claves y hablar con cada red. Deja el resultado en el repositorio.
+ */
+export async function runCheck(gh: Github, creds: CloudCreds, env: RunnerEnv = {}, now: () => number = Date.now, version = 'runner'): Promise<CloudCheck> {
+  const out: CloudCheck = { at: new Date(now()).toISOString(), runner: version, networks: {} };
+  for (const platform of ['youtube', 'tiktok', 'instagram'] as const) {
+    if (!creds[platform]) continue;
+    try {
+      const t = await tokenFor(platform, creds, env);
+      const probe = await probeConnection(platform, { accessToken: t.accessToken, expiresAt: 0 }, { fetchFn: env.fetchFn, ytApi: env.youtube?.api, tiktokApi: env.tiktokApi, graph: env.graph });
+      out.networks[platform] = { ok: true, probe };
+      log(`Prueba ${platform}: ${probe.account}`);
+    } catch (e) {
+      out.networks[platform] = { ok: false, error: (e as Error).message.slice(0, 300) };
+      log(`Prueba ${platform} fallida: ${(e as Error).message}`);
+    }
+  }
+  const cur = await gh.getContent(CHECK_PATH);
+  await gh.putContent(CHECK_PATH, JSON.stringify(out, null, 1), 'StreamClips: prueba de la nube', cur?.sha);
+  return out;
+}
+
+/** Punto de entrada en Actions. Con STREAMCLIPS_CHECK=true solo hace la prueba de la nube. */
 export async function main(): Promise<void> {
   const repo = process.env.GITHUB_REPOSITORY;
   const token = process.env.GITHUB_TOKEN;
   if (!repo || !token) throw new Error('Faltan GITHUB_REPOSITORY o GITHUB_TOKEN.');
   const creds = JSON.parse(process.env.STREAMCLIPS_CREDS || '{}') as CloudCreds;
   const gh = new Github({ token, repo, api: process.env.STREAMCLIPS_GITHUB_API || undefined, uploads: process.env.STREAMCLIPS_GITHUB_UPLOADS || undefined });
+  if (process.env.STREAMCLIPS_CHECK === 'true') {
+    const c = await runCheck(gh, creds, {}, Date.now, process.env.STREAMCLIPS_RUNNER_VERSION || 'runner');
+    const n = Object.values(c.networks);
+    log(`Prueba de la nube: ${n.filter((x) => x.ok).length} de ${n.length} redes en orden`);
+    return;
+  }
   const r = await runQueue(gh, creds);
   log(`Publicados: ${r.published.length}, fallidos: ${r.failed.length}, en espera: ${r.skipped.length}`);
 }

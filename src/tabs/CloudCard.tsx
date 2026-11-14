@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MASKED_SECRET } from '../../shared/types';
-import type { CloudStatus } from '../../shared/types';
+import type { CloudStatus, CloudTestResult, Platform } from '../../shared/types';
+import { IconAlert, IconCheck } from '../icons';
 import { fmtDate } from '../../shared/time';
 import { errMsg } from '../lib';
 import { CLOUD_REPO_NAME, DEFAULT_CLOUD_REPO, newRepoUrl, newTokenUrl } from '../../shared/github';
@@ -11,6 +12,8 @@ export default function CloudCard() {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [test, setTest] = useState<CloudTestResult | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     const load = () => window.api.cloudStatus().then((x) => { setS(x); setRepo((r) => r || x.repo || DEFAULT_CLOUD_REPO); if (x.hasToken) setToken((t) => t || MASKED_SECRET); }).catch(() => undefined);
@@ -31,6 +34,24 @@ export default function CloudCard() {
       setBusy(false);
     }
   }
+
+  async function runTest() {
+    setTesting(true);
+    setMsg(null);
+    setTest(null);
+    try {
+      const r = await window.api.cloudTest();
+      setTest(r);
+      const n = Object.values(r.networks);
+      const okN = n.filter((x) => x.ok).length;
+      setMsg({ ok: okN === n.length && !r.missing.length, text: n.length ? `La nube respondió en ${r.tookSec} s: ${okN} de ${n.length} redes en orden.` : `La nube respondió en ${r.tookSec} s, pero no tiene ninguna red: conecta tus redes en Conexiones y repite la prueba.` });
+    } catch (e) {
+      setMsg({ ok: false, text: errMsg(e) });
+    } finally {
+      setTesting(false);
+    }
+  }
+  const NAME: Record<Platform, string> = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' };
 
   return (
     <section className="card" aria-label="Publicar con el PC apagado">
@@ -68,11 +89,32 @@ export default function CloudCard() {
           </button>
         )}
         {s?.enabled && <button className="btn ghost" disabled={busy} onClick={() => void run(() => window.api.cloudSync(), 'Sincronizado.')}>Sincronizar ahora</button>}
+        {s?.enabled && <button className="btn ghost" disabled={busy || testing} onClick={() => void runTest()} data-testid="cloud-test">{testing ? 'Probando en GitHub (hasta 5 min)…' : 'Probar la nube'}</button>}
         {s?.enabled && <button className="btn ghost" disabled={busy} onClick={() => void run(() => window.api.cloudDisable(), 'Modo nube desactivado; se ha borrado lo subido.')}>Desactivar</button>}
       </div>
       {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="status">{msg.text}</div>}
+      {test && (
+        <div className="probe" data-testid="cloud-test-result">
+          <div className="muted small">Ejecución real en GitHub Actions ({fmtDate(test.at)}), sin publicar nada: las claves llegaron a la nube y desde allí se habló con cada red.</div>
+          {(Object.keys(test.networks) as Platform[]).map((p) => {
+            const r = test.networks[p]!;
+            return (
+              <div key={p} className={`probe-row ${r.ok ? 'ok' : 'bad'}`}>
+                <span className="probe-icon" aria-hidden="true">{r.ok ? <IconCheck /> : <IconAlert />}</span>
+                <span><strong>{NAME[p]}:</strong> {r.ok ? `${r.probe.account}${r.probe.canPublishPublic === false ? ' (solo puede publicar en privado)' : ''}` : r.error}</span>
+              </div>
+            );
+          })}
+          {test.missing.map((p) => (
+            <div key={p} className="probe-row bad">
+              <span className="probe-icon" aria-hidden="true"><IconAlert /></span>
+              <span><strong>{NAME[p]}:</strong> está conectada en el PC pero no ha llegado a la nube. Vuelve a conectarla en Conexiones (hace falta la clave de renovación) y repite la prueba.</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="muted small" style={{ marginTop: 10 }}>
-        Límites del plan gratuito de GitHub: unos 2.000 minutos de Actions al mes en repositorios privados y 2 GB como máximo por vídeo. GitHub puede
+        Si la prueba sale bien, lo que programes se publicará a su hora aunque el PC esté apagado. Límites del plan gratuito de GitHub: unos 2.000 minutos de Actions al mes en repositorios privados y 2 GB como máximo por vídeo. GitHub puede
         retrasar unos minutos la hora exacta. Las claves de tus redes se guardan cifradas como secreto del repositorio.
       </div>
     </section>

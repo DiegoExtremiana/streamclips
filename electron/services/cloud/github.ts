@@ -161,8 +161,8 @@ export class Github {
     if (!r.ok && r.status !== 404) await this.fail(r, `borrar el secreto ${name}`);
   }
 
-  async dispatch(workflowFile: string, ref: string): Promise<void> {
-    const r = await this.req('POST', `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref } });
+  async dispatch(workflowFile: string, ref: string, inputs?: Record<string, string>): Promise<void> {
+    const r = await this.req('POST', `/repos/${this.o.repo}/actions/workflows/${workflowFile}/dispatches`, { json: { ref, ...(inputs ? { inputs } : {}) } });
     if (!r.ok) await this.fail(r, 'lanzar el flujo de publicación');
   }
 }

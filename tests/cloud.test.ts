@@ -12,7 +12,7 @@ import { cronLines, workflowYaml } from '../electron/services/cloud/workflow';
 import { jobPath, parseJob, releaseTag, serializeJob, type CloudJob } from '../electron/services/cloud/jobs';
 import { parseRepo, sealSecret } from '../electron/domain/cloud';
 import { Github } from '../electron/services/cloud/github';
-import { runQueue } from '../electron/services/cloud/runner';
+import { runCheck, runQueue } from '../electron/services/cloud/runner';
 import { PROVIDERS, type OAuthProvider } from '../electron/services/oauth';
 import { makeEnv, rmDir, tmpDir, type TestEnv } from './helpers';
 import { fakeGithub } from './fakeGithub';
@@ -293,5 +293,69 @@ describe('nube: de punta a punta', () => {
     assert.match(out, /Publicados: 0, fallidos: 1/);
     assert.equal(parseJob(gh.files.get('queue/z__youtube.json')!)!.status, 'failed');
     assert.ok(os.tmpdir());
+  });
+});
+
+describe('nube: probar la nube (ejecución real de Actions, simulada aquí)', () => {
+  async function connectYoutube(e: TestEnv) {
+    const secretsApi = (e.ctx.connections as unknown as { d: { secrets: { encode(s: string): string } } }).d.secrets;
+    e.ctx.connections.setApp('youtube', 'CID', 'CSECRET');
+    e.ctx.store.data.connections.youtube!.tokens = secretsApi.encode(JSON.stringify({ accessToken: 'AT', refreshToken: 'RT', expiresAt: 0 }));
+  }
+
+  it('el flujo generado admite la ejecución de prueba y el publicador en modo prueba habla con cada red y deja el resultado', async () => {
+    const yaml = workflowYaml(['0 8 * * *']);
+    assert.match(yaml, /workflow_dispatch:\n {4}inputs:\n {6}check:/);
+    assert.match(yaml, /STREAMCLIPS_CHECK: \$\{\{ inputs\.check \}\}/);
+    const gh = await fakeGithub();
+    created.push(gh.close);
+    const yt = await fakeYoutube();
+    created.push(yt.close);
+    const ytApi = http.createServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(req.url?.startsWith('/channels') ? { items: [{ snippet: { title: 'Canal nube' } }] } : {}));
+    });
+    await new Promise<void>((r) => ytApi.listen(0, '127.0.0.1', r));
+    created.push(() => ytApi.close());
+    const api = `http://127.0.0.1:${(ytApi.address() as AddressInfo).port}`;
+    const providers = { ...PROVIDERS, google: { ...PROVIDERS.google, tokenUrl: `${yt.base}/token` } as OAuthProvider };
+    const client = new Github({ token: 'GHTOKEN', repo: 'diego/nube', api: gh.base, uploads: gh.base });
+    const r = await runCheck(client, { youtube: { clientId: 'CID', clientSecret: 'S', refreshToken: 'RT' }, tiktok: { clientId: 'K', clientSecret: 'S', refreshToken: 'RT' } }, { providers, youtube: { api, upload: api }, tiktokApi: 'http://127.0.0.1:1' }, () => 1_800_000_000_000, 'v-test');
+    assert.equal(r.networks.youtube?.ok, true);
+    assert.equal((r.networks.youtube as { probe: { account: string } }).probe.account, 'Canal nube');
+    assert.equal(r.networks.tiktok?.ok, false, 'TikTok sin servidor: fallo anotado, la prueba sigue');
+    assert.equal(r.networks.instagram, undefined, 'sin claves no se prueba');
+    const saved = JSON.parse(gh.files.get('status/check.json')!);
+    assert.equal(saved.runner, 'v-test');
+    assert.equal(saved.at, '2027-01-15T08:00:00.000Z');
+  });
+
+  it('desde el programa: sube las claves, pide la ejecución de prueba y espera su resultado; si no llega, lo dice', async () => {
+    const gh = await fakeGithub();
+    created.push(gh.close);
+    const yt = await fakeYoutube();
+    created.push(yt.close);
+    const providers = { ...PROVIDERS, google: { ...PROVIDERS.google, tokenUrl: `${yt.base}/token` } as OAuthProvider };
+    const e = makeEnv({ github: { api: gh.base, uploads: gh.base }, runnerSource: () => '// runner\n', cloudIntervalMs: 3_600_000, oauthProviders: providers, cloudSleep: async () => undefined, cloudTestTimeoutMs: 2000 });
+    created.push(() => e.cleanup());
+    await connectYoutube(e);
+    await assert.rejects(() => e.ctx.cloud.test(), /Activa primero/);
+    await e.ctx.cloud.setup('diego/nube', 'GHTOKEN');
+    // sin «Actions» que responda: aviso claro de dónde mirar
+    await assert.rejects(() => e.ctx.cloud.test(), /pestaña Actions/);
+    assert.match(gh.dispatches.at(-1)!, /dispatches\?check=true$/);
+    // ahora un «Actions» de mentira: en cuanto ve la petición de prueba, ejecuta el publicador en modo prueba
+    const client = new Github({ token: 'GHTOKEN', repo: 'diego/nube', api: gh.base, uploads: gh.base });
+    const before = gh.dispatches.length;
+    const actions = (async () => {
+      while (gh.dispatches.length === before) await new Promise((r) => setTimeout(r, 20));
+      const creds = JSON.parse(gh.decryptSecret('STREAMCLIPS_CREDS'));
+      await runCheck(client, creds, { providers, youtube: { api: 'http://127.0.0.1:1', upload: '' } });
+    })();
+    const r = await e.ctx.cloud.test();
+    await actions;
+    assert.equal(r.networks.youtube?.ok, false, 'el servidor de YouTube no existe: fallo anotado, pero la nube SÍ respondió');
+    assert.deepEqual(r.missing, []);
+    assert.ok(r.tookSec >= 0);
   });
 });

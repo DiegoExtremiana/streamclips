@@ -95,7 +95,8 @@ export async function fakeGithub(opts: { isPrivate?: boolean; repos?: Record<str
       }
       if (sec && req.method === 'DELETE') return secrets.delete(sec[1]) ? send(204) : send(404, { message: 'Not Found' });
       if (/^\/actions\/workflows\/.+\/dispatches$/.test(p)) {
-        dispatches.push(p);
+        const b = JSON.parse(body.toString() || '{}') as { inputs?: Record<string, string> };
+        dispatches.push(b.inputs ? `${p}?${new URLSearchParams(b.inputs)}` : p);
         return send(204);
       }
       return send(404, { message: `sin ruta ${p}` });

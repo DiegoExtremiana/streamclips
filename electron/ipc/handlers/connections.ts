@@ -12,6 +12,8 @@ export function registerConnections({ handle, ctx }: IpcContext): void {
   handle(CHANNELS.connList, () => ctx.connections.list());
   handle(CHANNELS.connSet, (p, id, secret) => ctx.connections.setApp(platformArg(p), str(id, 'id'), str(secret, 'secreto')));
   handle(CHANNELS.connConnect, (p) => ctx.connections.connect(platformArg(p)));
+  handle(CHANNELS.connCheck, (p) => ctx.connections.checkApp(platformArg(p)));
+  handle(CHANNELS.connProbe, (p) => ctx.connections.probe(platformArg(p)));
   handle(CHANNELS.connCancel, () => ctx.connections.cancelConnect());
   handle(CHANNELS.connDisconnect, (p) => ctx.connections.disconnect(platformArg(p)));
   handle(CHANNELS.ytPlaylists, () => ctx.playlists());
@@ -29,4 +31,5 @@ export function registerConnections({ handle, ctx }: IpcContext): void {
     return ctx.cloud.sync();
   });
   handle(CHANNELS.cloudDisable, () => ctx.cloud.disable());
+  handle(CHANNELS.cloudTest, () => ctx.cloud.test());
 }

@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.32.4
+
+- **Conectar las redes, paso a paso y comprobado**: en Conexiones › Redes sociales, cada red (YouTube, TikTok, Instagram) lleva instrucciones concretas y actualizadas a lo que hoy enseñan Google Cloud, developers.tiktok.com y developers.facebook.com, con el tiempo que lleva y lo que hace falta antes de empezar.
+- **Comprobar las claves** antes de abrir el navegador: el programa pregunta a la propia red si el ID y el secreto de tu app son correctos (probado contra las tres APIs reales) y, si no, dice exactamente dónde copiarlos. También se hace solo al pulsar «Guardar y conectar».
+- **Probar la conexión** de una red ya conectada, sin publicar nada: cuenta, permisos concedidos y qué puede publicar (TikTok: si solo privado hasta la revisión; Instagram: cuenta profesional enlazada y cuota del día; YouTube: canal y permiso de subida).
+- **Instagram vuelve por `localhost`** (Meta solo admite http con ese nombre y la app en modo desarrollo) y la API de Meta pasa a la versión v25.0.
+- **Probar la nube** (Ajustes › Publicar con el PC apagado): una ejecución real en GitHub Actions, sin publicar nada, que demuestra que el flujo arranca, que tus claves llegan cifradas y que desde la nube se habla con cada red. Si sale bien, lo programado se publica a su hora con el PC apagado.
+- En Programación se ve siempre si las subidas saldrán con el PC apagado (nube activa) o no, con el acceso directo a Ajustes.
+
 ## Novedades de la v0.32.3
 
 - **Clip anterior y siguiente**: en la ventana de un clip hay dos flechas (también con las flechas izquierda y derecha del teclado) que pasan al clip anterior o siguiente de la lista que estás viendo, con un deslizamiento hacia el lado correspondiente.

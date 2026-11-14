@@ -83,12 +83,15 @@ export interface ContextOptions {
   /** Solo pruebas: GitHub. */
   github?: Partial<GithubOpts>;
   cloudIntervalMs?: number;
+  /** Para las pruebas: espera entre consultas y tiempo máximo de «Probar la nube». */
+  cloudSleep?: (ms: number) => Promise<void>;
+  cloudTestTimeoutMs?: number;
   updater?: UpdaterLike | null;
   appVersion?: string;
   openUrl?: (url: string) => Promise<void> | void;
   /** Solo pruebas: direcciones de las redes sociales. */
   oauthProviders?: Record<keyof typeof PROVIDERS, OAuthProvider>;
-  socialEnv?: PublisherEnv & AccountEnv;
+  socialEnv?: PublisherEnv & AccountEnv & { googleTokenInfo?: string };
   chatPort?: number;
   energy?: typeof audioEnergy;
   /** Enviar fotogramas del clip al modelo al valorarlo (por defecto sí; las pruebas lo desactivan para no depender de ffmpeg). */
@@ -277,6 +280,8 @@ export class AppContext {
       providers: o.oauthProviders,
       fetchFn: o.socialEnv?.fetchFn,
       afterConnect: (platform, tokens) => lookupAccount(platform, tokens, { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api }),
+      probeEnv: { ...o.socialEnv, ytApi: o.socialEnv?.youtube?.api, googleTokenInfo: o.socialEnv?.googleTokenInfo },
+      graph: o.socialEnv?.graph,
     });
     this.updates = new UpdateService({
       updater: o.updater ?? null,
@@ -296,6 +301,8 @@ export class AppContext {
       runnerSource: o.runnerSource ?? (() => { throw new Error('El publicador de la nube no está incluido en esta instalación.'); }),
       github: o.github,
       intervalMs: o.cloudIntervalMs,
+      sleep: o.cloudSleep,
+      testTimeoutMs: o.cloudTestTimeoutMs,
       headless: o.headless,
       onPublished: (id) => this.library.purgeIfPublished(id),
     });

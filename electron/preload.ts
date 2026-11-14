@@ -124,6 +124,7 @@ const api: Api = {
   setVocabulary: (v) => call(CHANNELS.vocabSet, v),
   clipContext: (id) => call(CHANNELS.clipContext, id),
   suggestTitle: (vodId, start, end) => call(CHANNELS.suggestTitle, vodId, start, end),
+  databaseInfo: () => call(CHANNELS.databaseInfo),
   vodChat: (vodId, fromSec) => call(CHANNELS.vodChat, vodId, fromSec),
   autoNameLibrary: () => call(CHANNELS.autoName),
   claudePrompt: (vodId) => call(CHANNELS.transcriptPrompt, vodId),

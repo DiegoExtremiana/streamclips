@@ -344,9 +344,16 @@ export class ClipScoreService {
     }
   }
 
+  /** Cuántos clips tienen nota (filas de la tabla «Clips de Twitch»). */
+  scoredCount(): number {
+    let n = 0;
+    for (const v of this.scores.values()) if (v.score !== undefined) n++;
+    return n;
+  }
+
   /** Ruta de la base de datos de clips (CSV, se abre con Excel o una hoja de cálculo), junto al documento de notas. */
   databasePath(): string | undefined {
-    return this.d.notesFile ? this.d.notesFile.replace(/\.[^./\\]+$/, '') + ' - base de datos.csv' : undefined;
+    return this.d.notesFile ? path.join(path.dirname(this.d.notesFile), 'Base de datos', 'Clips de Twitch.csv') : undefined;
   }
 
   /**
@@ -367,6 +374,7 @@ export class ClipScoreService {
       isGold(v.score, v.by === 'user' ? undefined : v.crit?.viral) ? 'Sí' : 'No', v.by === 'user' ? 'Sí' : 'No', v.by === 'user' && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
       v.ai?.provider ?? '', v.ai?.model ?? '', v.ai?.vision ? 'Sí' : 'No', new Date(v.at).toISOString().slice(0, 16).replace('T', ' '), v.reason ?? '', v.summary ?? '',
     ]);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, '\ufeff' + [head, ...body].map((r) => r.map(q).join(';')).join('\r\n') + '\r\n');
   }
 

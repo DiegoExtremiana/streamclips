@@ -115,6 +115,7 @@ export const CHANNELS = {
   vocabSet: 'vocab:set',
   suggestTitle: 'title:suggest',
   vodChat: 'vod:chat',
+  databaseInfo: 'database:info',
   autoName: 'title:auto',
   clipContext: 'outputs:clipContext',
   transcriptPrompt: 'transcript:prompt',

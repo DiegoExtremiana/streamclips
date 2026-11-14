@@ -17,6 +17,7 @@ export function registerContent({ handle, ctx, platform }: IpcContext): void {
   handle(CHANNELS.clipContext, (id) => ctx.library.clipContext(str(id, 'id')));
   handle(CHANNELS.autoName, async () => (await ctx.autopilot.refreshLibraryAtStart({ generic: false })) ?? { renamed: 0, described: 0, noTranscript: 0, kept: 0 });
   handle(CHANNELS.suggestTitle, (vodId, start, end) => ctx.autopilot.suggestTitle(str(vodId, 'vodId'), num(start, 'start'), num(end, 'end')));
+  handle(CHANNELS.databaseInfo, async () => ({ dir: ctx.database.dir, tables: await ctx.database.refresh() }));
   handle(CHANNELS.vodChat, async (vodId, from) => {
     const job = ctx.store.data.vods.find((v) => v.id === str(vodId, 'vodId'));
     const vid = job ? twitchVideoId(job) : null;

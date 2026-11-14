@@ -11,6 +11,7 @@ import type { downloadVod } from '../services/downloader';
 import { SettingsService } from '../domain/settings';
 import { VodService } from '../domain/vods';
 import { VodChatService } from '../services/vodChat';
+import { DatabaseWriter } from '../services/database';
 import { ClipService } from '../domain/clips';
 import { CategoryService } from '../domain/categories';
 import type { Chapter } from '../../shared/categories';
@@ -123,6 +124,8 @@ export class AppContext {
   readonly covers: CoverService;
   readonly coverDesigns: CoverDesignService;
   readonly vodChat = new VodChatService();
+  readonly database: DatabaseWriter;
+  private dbTimer: NodeJS.Timeout | null = null;
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;
@@ -255,6 +258,11 @@ export class AppContext {
     });
     this.clipFeedback = new ClipFeedbackStore(path.join(o.userDataDir, 'clip-feedback.json'));
     this.clipScores = createClipScoreService(this, o);
+    this.database = new DatabaseWriter(
+      path.join(o.userDataDir, 'Base de datos'),
+      () => ({ vods: this.store.data.vods, outputs: this.store.data.outputs, pubs: this.store.data.publications, groups: this.store.data.groups, covers: this.covers.list(), designs: this.coverDesigns.list() }),
+      () => [{ name: 'Clips de Twitch', file: 'Clips de Twitch.csv', about: 'Los clips de tu canal con su nota, los cuatro criterios, si el dorado es suyo y si la nota está Modificada por ti (Sí/No).', rows: this.clipScores.scoredCount() }],
+    );
     this.storage = new StorageService({ store: this.store, userDataDir: o.userDataDir, discard: (id) => this.autopilot.discard(id), isRunning: (id) => this.autopilot.isRunning(id), busy: () => this.isBusy(), log: this.log });
     this.channel.scores = this.clipScores;
     this.channel.onLiveVodReady((job) => this.autopilot.onLiveVod(job));
@@ -350,6 +358,8 @@ export class AppContext {
     this.cloud.start();
     this.engine.start();
     this.storage.start();
+    void this.database.refresh().catch(() => undefined);
+    this.dbTimer = setInterval(() => void this.database.refresh().catch(() => undefined), 60_000);
     for (const d of ['Sonidos', 'Música']) fs.mkdirSync(path.join(this.userDataDir, d), { recursive: true });
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${(e as Error).message}`));
     void this.autopilot.refreshLibraryAtStart();
@@ -363,5 +373,6 @@ export class AppContext {
     this.cloud.stop();
     this.engine.stop();
     this.storage.stop();
+    if (this.dbTimer) clearInterval(this.dbTimer);
   }
 }

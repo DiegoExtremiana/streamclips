@@ -4,6 +4,7 @@ import { errMsg } from '../lib';
 import StorageCard from './StorageCard';
 import { AutopilotCard, PublishingCard, AutoSubtitlesCard, AiCard, CoversStyleCard } from './AutopilotCards';
 import UpdatesCard from './UpdatesCard';
+import DatabaseCard from './DatabaseCard';
 import VocabularyCard from './VocabularyCard';
 import SpeakersCard from './SpeakersCard';
 import PrefsCard from './PrefsCard';
@@ -232,6 +233,7 @@ export default function SettingsTab() {
           { id: 'carpeta', label: 'Carpeta de salida', node: folderCard },
           { id: 'herramientas', label: 'Herramientas', node: toolsCard },
           { id: 'espacio', label: 'Espacio en disco', node: <StorageCard /> },
+          { id: 'basedatos', label: 'Base de datos', node: <DatabaseCard /> },
           { id: 'actualizaciones', label: 'Actualizaciones', node: <UpdatesCard /> },
         ]} />
       )}

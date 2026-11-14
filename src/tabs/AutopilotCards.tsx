@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { AutopilotSettings, Platform } from '../../shared/types';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS } from '../../shared/subtitles';
 import { errMsg } from '../lib';
-import { Fold } from '../library/ui';
+import { SubTabs, useSubTab } from '../SubTabs';
 
 const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
@@ -63,9 +63,12 @@ function Loading(props: { title: string }) {
 
 const Status = ({ msg }: { msg: Msg }) => (msg ? <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="status">{msg.text}</div> : null);
 
+const AP_TABS = [{ id: 'publicar', label: 'Antes de publicar' },{ id: 'edita', label: 'Cómo edita' },{ id: 'busca', label: 'Cómo busca los momentos' },{ id: 'limpieza', label: 'Limpieza' },{ id: 'prepara', label: 'Cuánto prepara' },{ id: 'serie', label: 'Serie en curso' }];
+
 /** Qué hace el programa solo al acabar un directo. */
 export function AutopilotCard() {
   const { a, up, save, msg } = useAutopilot();
+  const [pt, setPt] = useSubTab('streamclips.ap.tab', AP_TABS.map((t) => t.id));
   const [counts, setCounts] = useState<{ minQuality: string } | null>(null);
   if (!a) return <Loading title="Piloto automático" />;
   const q = counts?.minQuality ?? String(a.minQuality ?? 6.5);
@@ -85,26 +88,27 @@ export function AutopilotCard() {
         </span>
       </div>
       <Check checked={a.enabled} onChange={(v) => up({ enabled: v })} title="Activar el piloto automático" />
+      <SubTabs label="Bloques del piloto automático" tabs={AP_TABS} value={pt} onChange={setPt} />
 
-      <Fold label="Antes de publicar" title="Antes de publicar">
+      {pt === 'publicar' && (<div className="aptab" role="tabpanel">
       <Check checked={a.requireApproval} onChange={(v) => up({ requireApproval: v })} title="Pedir mi visto bueno antes de programar">Si lo desactivas, se programa solo.</Check>
-      </Fold>
-      <Fold label="Edición automática" title="Cómo edita">
+      </div>)}
+      {pt === 'edita' && (<div className="aptab" role="tabpanel">
       <Check checked={a.proEdit !== false} onChange={(v) => up({ proEdit: v })} title="Edición profesional">Quita silencios y tiempos muertos, acerca la imagen en los momentos fuertes, añade efectos de sonido y fundidos e iguala el volumen.</Check>
       <Check checked={a.soundCues !== false} onChange={(v) => up({ soundCues: v })} title="Efectos de sonido según lo que digo">Pone un sonido cuando dices «ganamos», «dinero», «he muerto»… (sonidos propios, sin derechos de autor; puedes sustituir cualquiera dejando un archivo con su nombre, por ejemplo tada.mp3, en %APPDATA%\\StreamClips\\Sonidos).</Check>
       <Check checked={a.music !== false} onChange={(v) => up({ music: v })} title="Música lofi de fondo">Si el vídeo no tiene ya música o sonido de fondo, añade una lofi sin letra, siempre por debajo de las voces, según el tema (café, viaje, noche, charla, juego). Puedes poner tu propia música con ese nombre (cafe.mp3…) en %APPDATA%\\StreamClips\\Música.</Check>
-      </Fold>
-      <Fold label="Análisis del directo" title="Cómo busca los momentos">
+      </div>)}
+      {pt === 'busca' && (<div className="aptab" role="tabpanel">
       <Check checked={a.fastAnalysis !== false} onChange={(v) => up({ fastAnalysis: v })} title="Análisis rápido">Elige los momentos por volumen y chat y solo transcribe lo elegido (mucho más rápido). Si lo desactivas, se transcribe todo antes de elegir y los momentos también cuentan por lo que se dice.</Check>
       <Check checked={a.vodVision !== false} onChange={(v) => up({ vodVision: v })} title="Mirar el directo, no solo oírlo">De los mejores momentos saca fotogramas y el modelo puntúa lo que se ve (gestos, pantalla, gags visuales) y descarta los momentos con la imagen muerta (pantalla de espera, menú). Es un factor más de la nota.</Check>
       <Check checked={a.topics !== false} onChange={(v) => up({ topics: v })} title="Vídeos por tema">Busca temas e historias que se retoman a lo largo del directo y, si hay material, hace un vídeo con sentido o te pregunta si prefieres uno largo o varios cortos.</Check>
       <Check checked={a.chatCapture} onChange={(v) => up({ chatCapture: v })} title="Guardar la actividad del chat durante el directo">Es anónimo: solo cuenta mensajes.</Check>
-      </Fold>
-      <Fold label="Limpieza" title="Limpieza de archivos">
+      </div>)}
+      {pt === 'limpieza' && (<div className="aptab" role="tabpanel">
       <Check checked={a.cleanup !== false} onChange={(v) => up({ cleanup: v })} title="Borrar el directo completo al terminar">Se conservan los vídeos, los clips y sus transcripciones; si hace falta el directo más adelante, se vuelve a descargar solo.</Check>
       <Check checked={a.purgePublished !== false} onChange={(v) => up({ purgePublished: v })} title="Borrar cada vídeo o clip cuando ya está publicado en todas sus redes">En Inicio queda el registro de lo publicado.</Check>
-      </Fold>
-      <Fold label="Cuánto prepara" title="Cuánto prepara">
+      </div>)}
+      {pt === 'prepara' && (<div className="aptab" role="tabpanel">
       <div className="row">
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="ap-videos">Vídeos por directo (resumen incluido)</label>
@@ -135,8 +139,8 @@ export function AutopilotCard() {
         <div className="muted small">Se reparten los núcleos del procesador: el total no acaba antes, pero ninguno espera a que termine otro. Con 1 se hacen de uno en uno.</div>
       </div>
 
-      </Fold>
-      <Fold label="Serie en curso" title="Serie en curso" open={false}>
+      </div>)}
+      {pt === 'serie' && (<div className="aptab" role="tabpanel">
       <div className="row">
         <div className="field" style={{ flex: 2 }}>
           <label htmlFor="ap-series">Nombre de la serie (opcional)</label>
@@ -151,7 +155,7 @@ export function AutopilotCard() {
         Con una serie, los vídeos de cada directo se llaman «{a.series.name.trim() || 'Minecraft extremo'} Día {a.series.nextDay}» (y «- Resumen» o «- Parte 2» si hay varios),
         y el tema concreto va a la descripción. El día sube solo con cada directo. Si el título del directo ya dice «… día 3», se usa ese.
       </div>
-      </Fold>
+      </div>)}
       <button
         className="btn"
         onClick={() => {

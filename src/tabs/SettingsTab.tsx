@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { ToolStatus, WhisperStatus } from '../../shared/types';
 import { errMsg } from '../lib';
 import StorageCard from './StorageCard';
@@ -10,7 +10,7 @@ import PrefsCard from './PrefsCard';
 import StyleCard from './StyleCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
-import { SideNav, useSubTab } from '../SubTabs';
+import { SideNav, SubTabs, useSubTab } from '../SubTabs';
 
 const SECTIONS = [
   { id: 'general', label: 'General', hint: 'Dónde se guardan los vídeos, las herramientas que usa el programa y las actualizaciones.' },
@@ -20,6 +20,17 @@ const SECTIONS = [
   { id: 'estilo', label: 'Mi estilo', hint: 'Cómo quieres que edite: ritmo, silencios, música, títulos, portadas y lo que ha aprendido de ti.' },
   { id: 'nube', label: 'PC apagado', hint: 'Opcional: que un servicio gratuito de GitHub prepare y suba los vídeos mientras tu PC está apagado.' },
 ];
+
+/** Varias tarjetas de una sección, de una en una: pestañas arriba y solo se ve la elegida. */
+function Panels(props: { id: string; items: { id: string; label: string; node: ReactNode }[] }) {
+  const [t, setT] = useSubTab(`streamclips.settings.${props.id}`, props.items.map((i) => i.id));
+  const cur = props.items.find((i) => i.id === t) ?? props.items[0];
+  return (
+    <SubTabs label={`Bloques de ${props.id}`} tabs={props.items.map(({ id, label }) => ({ id, label }))} value={cur.id} onChange={setT}>
+      <div className="grid">{cur.node}</div>
+    </SubTabs>
+  );
+}
 
 export default function SettingsTab() {
   const [outputDir, setOutputDir] = useState('');
@@ -123,62 +134,7 @@ export default function SettingsTab() {
       </div>
     );
 
-  return (
-    <SideNav label="Ajustes" tabs={SECTIONS} value={sub} onChange={setSub}>
-      {sub === 'general' && <div className="grid">
-      <section className="card">
-        <h2>Carpeta de salida</h2>
-        <div className="muted small">Aquí se guardan los VODs descargados (subcarpeta vods) y los clips (vertical, horizontal y long).</div>
-        <div className="row">
-          <input type="text" aria-label="Carpeta de salida" value={outputDir} onChange={(e) => setOutputDir(e.target.value)} />
-          <button className="btn ghost" onClick={() => void pick()}>Elegir…</button>
-        </div>
-        <button className="btn" onClick={() => void save()}>Guardar</button>
-        {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
-      </section>
-
-      <section className="card">
-        <h2>Herramientas</h2>
-        <div className="muted small">ffmpeg y yt-dlp son las herramientas que cortan y descargan los vídeos. Si el programa las encuentra solo, no hay nada que tocar.</div>
-        <details className="adv">
-          <summary>Rutas de las herramientas (solo si no las encuentra)</summary>
-          <div className="adv-body">
-            <div className="muted small">Si están en el PATH de Windows, deja los campos vacíos.</div>
-        <div className="field">
-          <label htmlFor="ffmpeg-path">Ruta de ffmpeg.exe (opcional; ffprobe debe estar en la misma carpeta)</label>
-          <input id="ffmpeg-path" type="text" value={ffmpegPath} onChange={(e) => setFfmpegPath(e.target.value)} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
-        </div>
-        <div className="field">
-          <label htmlFor="ytdlp-path">Ruta de yt-dlp.exe (opcional)</label>
-          <input id="ytdlp-path" type="text" value={ytdlpPath} onChange={(e) => setYtdlpPath(e.target.value)} placeholder="C:\tools\yt-dlp.exe" />
-        </div>
-          </div>
-        </details>
-        <button className="btn" onClick={() => void check()}>Guardar y comprobar</button>
-        {tools && (
-          <div className="list">
-            {status('ffmpeg', tools.ffmpeg)}
-            {status('ffprobe', tools.ffprobe)}
-            {status('yt-dlp', tools.ytdlp)}
-          </div>
-        )}
-      </section>
-
-      <StorageCard />
-      <UpdatesCard />
-      </div>}
-
-      {sub === 'ia' && <div className="grid">
-        <AiCard />
-      </div>}
-
-      {sub === 'piloto' && <div className="grid">
-        <AutopilotCard />
-        <PublishingCard />
-        <CoversStyleCard />
-      </div>}
-
-      {sub === 'voz' && <div className="grid">
+  const whisperCard = (
       <section className="card">
         <h2>Transcripción (Whisper)</h2>
         <div className="muted small">
@@ -226,20 +182,94 @@ export default function SettingsTab() {
         <button className="btn" onClick={() => void save()}>Guardar transcripción</button>
         {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
       </section>
-        <AutoSubtitlesCard />
-        <SpeakersCard />
-        <VocabularyCard />
+  );
+
+  const folderCard = (
+      <section className="card">
+        <h2>Carpeta de salida</h2>
+        <div className="muted small">Aquí se guardan los VODs descargados (subcarpeta vods) y los clips (vertical, horizontal y long).</div>
+        <div className="row">
+          <input type="text" aria-label="Carpeta de salida" value={outputDir} onChange={(e) => setOutputDir(e.target.value)} />
+          <button className="btn ghost" onClick={() => void pick()}>Elegir…</button>
+        </div>
+        <button className="btn" onClick={() => void save()}>Guardar</button>
+        {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
+      </section>
+  );
+  const toolsCard = (
+      <section className="card">
+        <h2>Herramientas</h2>
+        <div className="muted small">ffmpeg y yt-dlp son las herramientas que cortan y descargan los vídeos. Si el programa las encuentra solo, no hay nada que tocar.</div>
+        <details className="adv">
+          <summary>Rutas de las herramientas (solo si no las encuentra)</summary>
+          <div className="adv-body">
+            <div className="muted small">Si están en el PATH de Windows, deja los campos vacíos.</div>
+        <div className="field">
+          <label htmlFor="ffmpeg-path">Ruta de ffmpeg.exe (opcional; ffprobe debe estar en la misma carpeta)</label>
+          <input id="ffmpeg-path" type="text" value={ffmpegPath} onChange={(e) => setFfmpegPath(e.target.value)} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
+        </div>
+        <div className="field">
+          <label htmlFor="ytdlp-path">Ruta de yt-dlp.exe (opcional)</label>
+          <input id="ytdlp-path" type="text" value={ytdlpPath} onChange={(e) => setYtdlpPath(e.target.value)} placeholder="C:\tools\yt-dlp.exe" />
+        </div>
+          </div>
+        </details>
+        <button className="btn" onClick={() => void check()}>Guardar y comprobar</button>
+        {tools && (
+          <div className="list">
+            {status('ffmpeg', tools.ffmpeg)}
+            {status('ffprobe', tools.ffprobe)}
+            {status('yt-dlp', tools.ytdlp)}
+          </div>
+        )}
+      </section>
+  );
+
+  return (
+    <SideNav label="Ajustes" tabs={SECTIONS} value={sub} onChange={setSub}>
+      {sub === 'general' && (
+        <Panels id="general" items={[
+          { id: 'carpeta', label: 'Carpeta de salida', node: folderCard },
+          { id: 'herramientas', label: 'Herramientas', node: toolsCard },
+          { id: 'espacio', label: 'Espacio en disco', node: <StorageCard /> },
+          { id: 'actualizaciones', label: 'Actualizaciones', node: <UpdatesCard /> },
+        ]} />
+      )}
+
+      {sub === 'ia' && <div className="grid">
+        <AiCard />
       </div>}
 
-      {sub === 'estilo' && <div className="grid">
-        <StyleCard />
-        <PrefsCard />
-      </div>}
+      {sub === 'piloto' && (
+        <Panels id="piloto" items={[
+          { id: 'hace', label: 'Qué hace solo', node: <AutopilotCard /> },
+          { id: 'publica', label: 'Qué publica y cuándo', node: <PublishingCard /> },
+          { id: 'portadas', label: 'Portadas automáticas', node: <CoversStyleCard /> },
+        ]} />
+      )}
 
-      {sub === 'nube' && <div className="grid">
-        <CloudCard />
-        <EngineCard />
-      </div>}
+      {sub === 'voz' && (
+        <Panels id="voz" items={[
+          { id: 'whisper', label: 'Transcripción', node: whisperCard },
+          { id: 'subs', label: 'Subtítulos', node: <AutoSubtitlesCard /> },
+          { id: 'hablantes', label: 'Quién habla', node: <SpeakersCard /> },
+          { id: 'vocab', label: 'Mi vocabulario', node: <VocabularyCard /> },
+        ]} />
+      )}
+
+      {sub === 'estilo' && (
+        <Panels id="estilo" items={[
+          { id: 'estilo', label: 'Tu estilo de edición', node: <StyleCard /> },
+          { id: 'prefs', label: 'Preferencias aprendidas', node: <PrefsCard /> },
+        ]} />
+      )}
+
+      {sub === 'nube' && (
+        <Panels id="nube" items={[
+          { id: 'publicar', label: 'Publicar con el PC apagado', node: <CloudCard /> },
+          { id: 'editar', label: 'Editar de noche', node: <EngineCard /> },
+        ]} />
+      )}
     </SideNav>
   );
 }

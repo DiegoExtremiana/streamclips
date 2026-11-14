@@ -146,6 +146,7 @@ try {
   assert.ok(fs.statSync(outDir).isDirectory());
   log('la carpeta de salida válida se guarda y se crea en disco');
 
+  await page.getByRole('tab', { name: 'Herramientas', exact: true }).click();
   await page.getByText('Rutas de las herramientas (solo si no las encuentra)').click();
   await page.locator('#ytdlp-path').fill(`"${fakeYtdlp}"`); // con comillas, como "Copiar como ruta"
   await page.getByRole('button', { name: 'Guardar y comprobar' }).click();
@@ -177,6 +178,7 @@ try {
   await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings.autopilot.llm.provider === 'groq');
   assert.ok(!fs.readFileSync(path.join(userData, 'data.json'), 'utf8').includes('gsk_clave_de_prueba'), 'la clave no se guarda en claro');
   await sub(page, 'Piloto automático');
+  await page.getByRole('tab', { name: 'Cuánto prepara', exact: true }).click();
   await page.locator('#ap-clips').fill('4');
   await page.getByRole('button', { name: 'Guardar piloto automático' }).click();
   await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings.autopilot.maxClips === 4);

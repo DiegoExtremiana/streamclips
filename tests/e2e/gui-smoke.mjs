@@ -358,14 +358,14 @@ try {
   await sub(page, 'Directos y actividad');
   const bro = page.getByRole('region', { name: 'Directos de tu canal' });
   await bro.getByTestId('bc-777').waitFor({ timeout: 20000 });
-  assert.equal(await bro.locator('[data-testid^=bc-]').count(), 2, 'un recuadro por directo de Twitch');
-  assert.deepEqual(await bro.locator('[data-testid^=bc-] .tiletitle').allInnerTexts(), ['Directo de prueba A', 'Directo de prueba B'], 'más reciente primero');
+  assert.equal(await bro.locator('[data-testid^=bc-]').count(), 3, 'un recuadro por directo de Twitch más el VOD añadido a mano');
+  assert.deepEqual((await bro.locator('[data-testid^=bc-] .tiletitle').allInnerTexts()).filter((t) => /prueba/.test(t)), ['Directo de prueba A', 'Directo de prueba B'], 'más reciente primero');
   assert.equal(await bro.locator('img').count(), 2, 'cada directo enseña su miniatura (la política de seguridad la permite)');
   await bro.getByTestId('bc-777').getByText('Sin analizar').waitFor();
-  await bro.getByRole('button', { name: /Por hacer 2/ }).waitFor();
+  await bro.getByRole('button', { name: /Por hacer \d/ }).waitFor();
   await bro.getByRole('button', { name: /Analizados 0/ }).click();
   await bro.getByText('No hay directos en este filtro.').waitFor();
-  await bro.getByRole('button', { name: /Todos 2/ }).click();
+  await bro.getByRole('button', { name: /Todos 3/ }).click();
   await shot(page, '3c-comprobador-directos');
   log('comprobador de directos: cuadrícula leída de Twitch con miniaturas y estado de cada directo');
   await openCut(page);

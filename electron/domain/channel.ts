@@ -49,7 +49,7 @@ export class ChannelMonitor {
   private busy = false;
   private stream: TwitchStream | null = null;
   /** Puntuación de los clips del canal: la nota y si son «dorados» (8 o más). */
-  scores?: { gold: (id: string) => boolean; scoreOf?: (id: string) => number | undefined; detailOf?: (id: string) => { criteria: TwitchClip['criteria'] & object; reason: string; by: 'model' | 'user'; items?: TwitchClip['items']; evidence?: TwitchClip['evidence']; summary?: string; ai?: { provider: string; model: string; vision?: boolean }; at?: number } | undefined; skipReason?: (id: string) => string | undefined; problem?: () => string | undefined; diagnostics?: () => { waiting?: string; failed: number; lastError?: string; working?: string; secPerClip?: number; etaMin?: number }; pending?: () => number; enabled?: () => boolean; notesPath?: () => string | undefined; enqueue: (clips: TwitchClip[]) => void };
+  scores?: { gold: (id: string) => boolean; scoreOf?: (id: string) => number | undefined; detailOf?: (id: string) => { criteria: TwitchClip['criteria'] & object; reason: string; by: 'model' | 'user'; items?: TwitchClip['items']; evidence?: TwitchClip['evidence']; summary?: string; ai?: { provider: string; model: string; vision?: boolean }; at?: number } | undefined; skipReason?: (id: string) => string | undefined; problem?: () => string | undefined; diagnostics?: () => { waiting?: string; failed: number; lastError?: string; working?: string; secPerClip?: number; etaMin?: number }; pending?: () => number; enabled?: () => boolean; notesPath?: () => string | undefined; databasePath?: () => string | undefined; enqueue: (clips: TwitchClip[]) => void };
   /** Clips de otros canales consultados (se recuerdan unos minutos). */
   private others = new Map<string, { at: number; byId: Map<string, TwitchClip> }>();
   private lastCheck: string | null = null;
@@ -339,6 +339,7 @@ export class ChannelMonitor {
           total: list.length,
           enabled: this.scores.enabled?.() ?? true,
           ...(this.scores.notesPath?.() ? { notesFile: this.scores.notesPath() } : {}),
+          ...(this.scores.databasePath?.() ? { databaseFile: this.scores.databasePath() } : {}),
           ...(problem ? { problem } : {}),
           ...(diag?.waiting ? { waiting: diag.waiting } : {}),
           ...(diag?.failed ? { failed: diag.failed } : {}),

@@ -39,7 +39,7 @@ export function obj(v: unknown, name: string): Record<string, unknown> {
 export function isAllowedPath(ctx: AppContext, p: string): boolean {
   const { store } = ctx;
   if (isInside(store.data.settings.outputDir, p)) return true;
-  if (p === ctx.clipScores.notesPath()) return true;
+  if (p === ctx.clipScores.notesPath() || p === ctx.clipScores.databasePath()) return true;
   return store.data.vods.some((v) => v.filePath === p) || store.data.outputs.some((o) => allFiles(o).includes(p));
 }
 

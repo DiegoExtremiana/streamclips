@@ -63,7 +63,7 @@ export function ClipScorePanel({ clip, onCorrected }: { clip: TwitchClip; onCorr
           <div className="score-tags">
             {clip.gold && <span className="badge ok">Clip destacado</span>}
             {cr.viral >= 8 && <span className="badge ok" data-testid={`viral-${clip.id}`}>Puede ser viral</span>}
-            {clip.scoredBy === 'user' && <span className="badge">Corregido por ti</span>}
+            <span className={`badge ${clip.scoredBy === 'user' ? 'warn' : ''}`} data-testid={`modified-${clip.id}`}>Modificado: {clip.scoredBy === 'user' ? 'Sí' : 'No'}</span>
           </div>
         </div>
         {clip.summary && <p className="score-summary" data-testid={`summary-${clip.id}`}>{clip.summary}</p>}

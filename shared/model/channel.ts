@@ -43,7 +43,7 @@ export interface ClipsResult {
   loading: boolean;
   warning: string;
   /** Cómo va la valoración en segundo plano de los clips de tu canal (ausente en otros canales). */
-  scoring?: { scored: number; pending: number; total: number; enabled: boolean; /** Lo que impide valorar ahora (p. ej. falta el modelo de Whisper). */ problem?: string; /** Por qué espera ahora (directo en marcha…). */ waiting?: string; /** Clips que han fallado al valorarse. */ failed?: number; /** Último error al valorar un clip. */ lastError?: string; /** Documento con las notas de todos los clips. */ notesFile?: string; /** Qué clip y fase se está valorando ahora. */ working?: string; /** Segundos por clip medidos y minutos que faltan. */ secPerClip?: number; etaMin?: number };
+  scoring?: { scored: number; pending: number; total: number; enabled: boolean; /** Lo que impide valorar ahora (p. ej. falta el modelo de Whisper). */ problem?: string; /** Por qué espera ahora (directo en marcha…). */ waiting?: string; /** Clips que han fallado al valorarse. */ failed?: number; /** Último error al valorar un clip. */ lastError?: string; /** Documento con las notas de todos los clips. */ notesFile?: string; /** Base de datos (CSV) con un campo por columna de cada clip, incluido si la nota está modificada. */ databaseFile?: string; /** Qué clip y fase se está valorando ahora. */ working?: string; /** Segundos por clip medidos y minutos que faltan. */ secPerClip?: number; etaMin?: number };
 }
 
 export interface TwitchClip {

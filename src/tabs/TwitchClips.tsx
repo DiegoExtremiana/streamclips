@@ -186,6 +186,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           {scoring.notesFile && scoring.scored > 0 && (
             <span className="small">Las notas se guardan en un documento y no se repiten al abrir el programa.{' '}
               <button className="btn ghost small" onClick={() => void window.api.openPath(scoring.notesFile!).catch(() => undefined)}>Abrir documento de notas</button>
+              {scoring.databaseFile && <button className="btn ghost small" title="Una fila por clip con su nota, los criterios y si la has modificado (Sí/No); se abre con Excel" onClick={() => void window.api.openPath(scoring.databaseFile!).catch(() => undefined)}>Abrir base de datos</button>}
             </span>
           )}
         </div>

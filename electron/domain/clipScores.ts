@@ -331,16 +331,43 @@ export class ClipScoreService {
         'Lo escribe StreamClips solo. Cada clip lo examina la IA una vez y la nota queda aquí con la IA, el modelo y la fecha del examen; si no hay IA disponible (o el modelo está retirado) no se guarda ninguna nota y se examina cuando la haya.',
         'Nota de 0 a 10. Dorado: nota de 8 o más, o «Viral» de 8 o más. Se mide el contenido, nunca las visualizaciones.',
         '',
-        '| Nota | Humor | Se cuenta algo | Viral | Interesante | Clip | Fecha del clip | IA | Modelo | Examinado | Motivo |',
-        '|---|---|---|---|---|---|---|---|---|---|---|',
-        ...rows.map(([id, v]) => `| ${c(v.score)} | ${c(v.crit?.humor)} | ${c(v.crit?.historia)} | ${c(v.crit?.viral)} | ${c(v.crit?.interes)} | ${(v.title ?? id).replace(/\|/g, '/')} | ${(v.createdAt ?? '').slice(0, 10)} | ${v.by === 'user' ? `${v.ai?.provider ?? ''} + corregido por ti` : (v.ai?.provider ?? '')} | ${(v.ai?.model ?? '').replace(/\|/g, '/')}${v.ai?.vision ? ' (con imagen)' : ''} | ${new Date(v.at).toISOString().slice(0, 16).replace('T', ' ')} | ${(v.reason ?? '').replace(/[|\n]/g, ' ')} |`),
+        '| Nota | Humor | Se cuenta algo | Viral | Interesante | Modificado | Clip | Fecha del clip | IA | Modelo | Examinado | Motivo |',
+        '|---|---|---|---|---|---|---|---|---|---|---|---|',
+        ...rows.map(([id, v]) => `| ${c(v.score)} | ${c(v.crit?.humor)} | ${c(v.crit?.historia)} | ${c(v.crit?.viral)} | ${c(v.crit?.interes)} | ${v.by === 'user' ? 'Sí' : 'No'} | ${(v.title ?? id).replace(/\|/g, '/')} | ${(v.createdAt ?? '').slice(0, 10)} | ${v.by === 'user' ? `${v.ai?.provider ?? ''} + corregido por ti` : (v.ai?.provider ?? '')} | ${(v.ai?.model ?? '').replace(/\|/g, '/')}${v.ai?.vision ? ' (con imagen)' : ''} | ${new Date(v.at).toISOString().slice(0, 16).replace('T', ' ')} | ${(v.reason ?? '').replace(/[|\n]/g, ' ')} |`),
         '',
       ];
       fs.mkdirSync(path.dirname(this.d.notesFile), { recursive: true });
       fs.writeFileSync(this.d.notesFile, lines.join('\n'));
+      this.writeDatabase(rows);
     } catch {
       /* el documento es una comodidad: si no se escribe, las notas siguen guardadas */
     }
+  }
+
+  /** Ruta de la base de datos de clips (CSV, se abre con Excel o una hoja de cálculo), junto al documento de notas. */
+  databasePath(): string | undefined {
+    return this.d.notesFile ? this.d.notesFile.replace(/\.[^./\\]+$/, '') + ' - base de datos.csv' : undefined;
+  }
+
+  /**
+   * La misma información que las notas, pero con un campo por columna para poder ordenar, filtrar y cruzar:
+   * una fila por clip, con su nota, los cuatro criterios, si el dorado es suyo y si la nota está modificada por ti (Sí/No).
+   */
+  private writeDatabase(rows: [string, Stored][]): void {
+    const file = this.databasePath();
+    if (!file) return;
+    const q = (x: unknown) => {
+      const t = String(x ?? '').replace(/\r?\n/g, ' ');
+      return /[;"]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const n = (v: number | undefined) => (v === undefined ? '' : String(Math.round(v * 10) / 10).replace('.', ','));
+    const head = ['Id del clip', 'Clip', 'Enlace', 'Fecha del clip', 'Nota', 'Humor', 'Se cuenta algo', 'Interesante', 'Viral', 'Dorado', 'Modificado', 'Nota de la IA', 'IA', 'Modelo', 'Con imagen', 'Examinado', 'Motivo', 'Resumen'];
+    const body = rows.map(([id, v]) => [
+      id, v.title ?? '', `https://clips.twitch.tv/${id}`, (v.createdAt ?? '').slice(0, 10), n(v.score), n(v.crit?.humor), n(v.crit?.historia), n(v.crit?.interes), n(v.crit?.viral),
+      isGold(v.score, v.by === 'user' ? undefined : v.crit?.viral) ? 'Sí' : 'No', v.by === 'user' ? 'Sí' : 'No', v.by === 'user' && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
+      v.ai?.provider ?? '', v.ai?.model ?? '', v.ai?.vision ? 'Sí' : 'No', new Date(v.at).toISOString().slice(0, 16).replace('T', ' '), v.reason ?? '', v.summary ?? '',
+    ]);
+    fs.writeFileSync(file, '\ufeff' + [head, ...body].map((r) => r.map(q).join(';')).join('\r\n') + '\r\n');
   }
 
   private async score(clip: TwitchClip): Promise<Stored> {

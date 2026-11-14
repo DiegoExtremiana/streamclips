@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.32.2
+
+- **«Puede ser viral» mucho más exigente**: ocho preguntas (gancho, frase citable, emoción, que lo entienda cualquiera, cierre, compartible, simulación de scroll y ausencia de defectos). Cinco de ellas son puertas: si una falla, la nota tiene tope (6 si es un «no», 8,9 si es un «algo»). Cada «sí» exige una cita real o una imagen concreta.
+- **Dorado solo con 9,5 o más de viral**: los clips que pasan de 9 se examinan una segunda vez con un evaluador escéptico que intenta demostrar que NO se viralizarían y seis espectadores simulados que deciden si verían el clip entero y lo compartirían. Si uno falla, no es dorado. El resto de clips no llevan fondo: basta con la nota.
+- **Corregir también «Puede ser viral»**: tu nota manda para el dorado hasta que la cambies o la deshagas, y la IA aprende de cómo la corriges (tendencia y ejemplos, como con humor, historia e interés).
+- Los clips puntuados antes de esta versión conservan su nota, pero no son dorados hasta que se vuelvan a examinar.
+
 ## Novedades de la v0.32.1
 
 - **Clips dorados según la nota final**: un clip es dorado solo si su nota final llega a 8/10. Si tú corriges la nota, vale la tuya hasta que la vuelvas a cambiar; ya no lo mantiene dorado el potencial viral que vio la IA.

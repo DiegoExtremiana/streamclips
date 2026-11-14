@@ -83,12 +83,12 @@ export function ClipScorePanel({ clip, onCorrected }: { clip: TwitchClip; onCorr
   );
 }
 
-/** «No estoy de acuerdo»: se mueven «se cuenta algo», momento interesante y humor; «Puede ser viral» lo valora solo la IA. La IA aprende de estas correcciones. */
+/** «No estoy de acuerdo»: se mueven los cuatro criterios (el dorado depende de «Puede ser viral»). La IA aprende de estas correcciones. */
 function Disagree({ clip, onDone }: { clip: TwitchClip; onDone: () => void }) {
   const cr = clip.criteria!;
-  const start = (): EditableScores => ({ humor: cr.humor, historia: cr.historia, interes: cr.interes });
+  const start = (): Required<EditableScores> => ({ humor: cr.humor, historia: cr.historia, interes: cr.interes, viral: cr.viral });
   const [open, setOpen] = useState(false);
-  const [vals, setVals] = useState<EditableScores>(start);
+  const [vals, setVals] = useState<Required<EditableScores>>(start);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [fb, setFb] = useState<{ count: number; enough: boolean } | null>(null);
@@ -123,7 +123,7 @@ function Disagree({ clip, onDone }: { clip: TwitchClip; onDone: () => void }) {
               <span className="crit-val">{fmtScore(vals[k])}</span>
             </label>
           ))}
-          <div className="muted small">«Puede ser viral» lo valora solo la IA: una persona no puede saberlo. La IA usa tus correcciones como ejemplos para valorar mejor los próximos clips.</div>
+          <div className="muted small">El fondo dorado es solo para «Puede ser viral» de 9,5 o más: pon esa nota solo si apostarías a que ese clip se viraliza en TikTok, Instagram y Shorts. La IA usa tus correcciones como ejemplos para valorar mejor los próximos clips.</div>
           {err && <div className="msg bad" role="alert">{err}</div>}
           <div className="row" style={{ gap: 8, marginTop: 6 }}>
             <button className="btn small" disabled={busy} onClick={() => void run(() => window.api.correctClipScore(clip.id, vals))}>{busy ? 'Guardando…' : 'Guardar mi valoración'}</button>

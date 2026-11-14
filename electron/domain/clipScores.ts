@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { TwitchClip } from '../../shared/types';
 import type { Word } from '../../shared/subtitles';
-import { isGold, SCORE_VERSION, type ClipSignals } from '../../shared/clipScore';
+import { isGold, SCORE_VERSION, VIRAL_CHECK_VERSION, type ClipSignals } from '../../shared/clipScore';
 import { applyCorrection, type EditableScores } from '../../shared/clipFeedback';
 import type { ClipFeedbackStore } from './clipFeedback';
-import { overall, reasonFromCriteria, withMeasuredViral, type ClipCriteria, type ClipJudgement, type Evidence, type RubricItems } from '../../shared/clipCriteria';
+import { combineViral, overall, reasonFromCriteria, withMeasuredViral, type ViralCheck, type ClipCriteria, type ClipJudgement, type Evidence, type RubricItems } from '../../shared/clipCriteria';
 
 /** La IA que valoró un clip: proveedor y modelo exactos (el de imagen si lo vio). */
 export interface AiStamp {
@@ -43,7 +43,14 @@ interface Stored {
   noText?: boolean;
   /** Qué IA y qué modelo hicieron esta valoración (la fecha del examen es `at`). */
   ai?: AiStamp;
+  /** Versión del examen de viralidad que pasó este clip (sin ella no puede ser dorado, salvo que lo valores tú). */
+  vc?: number;
+  /** Resultado de la comprobación escéptica (solo en clips con más de 9 de viralidad). */
+  viralCheck?: { stay: number; total: number; refutation: string };
 }
+
+/** ¿Es dorado? Solo «Puede ser viral» de 9,5 o más, y con el examen estricto pasado (o corregido por ti). */
+const isGoldStored = (s: Stored): boolean => !!s.crit && isGold(s.crit.viral) && (s.by === 'user' || s.vc === VIRAL_CHECK_VERSION);
 
 /** Fases de valorar un clip, para medir dónde se va el tiempo. */
 export type ScorePhase = 'descarga' | 'imagen' | 'volumen' | 'transcripcion' | 'modelo';
@@ -57,6 +64,8 @@ export interface ClipScoreDeps {
   analyze: (clip: TwitchClip, onPhase?: (phase: ScorePhase) => void) => Promise<ClipSignals>;
   /** Valoración del contenido por el modelo de lenguaje (cuatro criterios y motivo); null si no hay modelo o no respondió. */
   judge?: (clip: TwitchClip, words: Word[], frames?: string[]) => Promise<(ClipJudgement & { ai?: AiStamp }) | null>;
+  /** Segundo examen de viralidad con un evaluador escéptico y espectadores simulados; null si no hay IA o no respondió. */
+  verifyViral?: (clip: TwitchClip, words: Word[], frames: string[] | undefined, first: { summary?: string; viral: number }) => Promise<ViralCheck | null>;
   /** Texto con lo que falta para poder valorar (p. ej. el modelo de Whisper); null si todo está listo. */
   ready?: () => string | null;
   /** ¿Hay un modelo de lenguaje configurado ahora? Si lo hay, los clips puntuados sin él se vuelven a valorar. */
@@ -167,7 +176,7 @@ export class ClipScoreService {
     const crit = applyCorrection(s.crit, user);
     const score = overall(crit);
     this.scores.set(id, { ...s, crit, aiCrit: ai, score, by: 'user', reason: 'Corregido por ti.' });
-    this.d.feedback?.add({ clipId: id, title: s.title ?? '', text: s.text ?? '', ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes }, user, at: this.now() });
+    this.d.feedback?.add({ clipId: id, title: s.title ?? '', text: s.text ?? '', ai: { humor: ai.humor, historia: ai.historia, interes: ai.interes, viral: ai.viral }, user, at: this.now() });
     this.save();
     this.writeNotes();
     return { score };
@@ -226,8 +235,8 @@ export class ClipScoreService {
   /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
     const s = this.scores.get(id);
-    // solo manda la nota final (la tuya si la has corregido, hasta que la vuelvas a corregir)
-    return isGold(s?.score);
+    // solo cuenta «Puede ser viral» (9,5 o más): el de la IA solo si pasó el examen estricto; si lo has corregido tú, el tuyo
+    return s ? isGoldStored(s) : false;
   }
 
   /** El análisis en segundo plano está activado (Ajustes). */
@@ -331,7 +340,7 @@ export class ClipScoreService {
         '# Notas de tus clips de Twitch',
         '',
         'Lo escribe StreamClips solo. Cada clip lo examina la IA una vez y la nota queda aquí con la IA, el modelo y la fecha del examen; si no hay IA disponible (o el modelo está retirado) no se guarda ninguna nota y se examina cuando la haya.',
-        'Nota de 0 a 10. Dorado: nota final de 8 o más. Se mide el contenido, nunca las visualizaciones.',
+        'Nota de 0 a 10. Dorado: solo «Puede ser viral» de 9,5 o más. Se mide el contenido, nunca las visualizaciones.',
         '',
         '| Nota | Humor | Se cuenta algo | Viral | Interesante | Modificado | Clip | Fecha del clip | IA | Modelo | Examinado | Motivo |',
         '|---|---|---|---|---|---|---|---|---|---|---|---|',
@@ -373,7 +382,7 @@ export class ClipScoreService {
     const head = ['Id del clip', 'Clip', 'Enlace', 'Fecha del clip', 'Nota', 'Humor', 'Se cuenta algo', 'Interesante', 'Viral', 'Dorado', 'Modificado', 'Nota de la IA', 'IA', 'Modelo', 'Con imagen', 'Examinado', 'Motivo', 'Resumen'];
     const body = rows.map(([id, v]) => [
       id, v.title ?? '', `https://clips.twitch.tv/${id}`, (v.createdAt ?? '').slice(0, 10), n(v.score), n(v.crit?.humor), n(v.crit?.historia), n(v.crit?.interes), n(v.crit?.viral),
-      isGold(v.score) ? 'Sí' : 'No', v.by === 'user' ? 'Sí' : 'No', v.by === 'user' && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
+      isGoldStored(v) ? 'Sí' : 'No', v.by === 'user' ? 'Sí' : 'No', v.by === 'user' && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
       v.ai?.provider ?? '', v.ai?.model ?? '', v.ai?.vision ? 'Sí' : 'No', new Date(v.at).toISOString().slice(0, 16).replace('T', ' '), v.reason ?? '', v.summary ?? '',
     ]);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -422,8 +431,30 @@ export class ClipScoreService {
       if (sig.words.length < MIN_WORDS_TO_JUDGE) return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip y la IA no pudo valorarlo por la imagen.' };
       throw new ModelBlocked(NO_AI);
     }
-    const criteria = withMeasuredViral(j.criteria, sig);
+    // viralidad estricta: puertas, tope sin comprobar (9,4) y, si pasa de 9, segundo examen escéptico con espectadores simulados
+    const first = combineViral(j.items, null);
+    let criteria = withMeasuredViral({ ...j.criteria, viral: first.viral }, sig, first.cap);
+    let items = j.items;
+    let viralCheck: Stored['viralCheck'];
+    if (criteria.viral >= 9 && this.d.verifyViral) {
+      mark('modelo');
+      let check: ViralCheck | null = null;
+      try {
+        check = await this.d.verifyViral(clip, sig.words, sig.frames, { summary: j.summary, viral: criteria.viral });
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (/límite gratuito|rechaz|Falta la clave/i.test(msg)) throw new ModelBlocked(msg);
+        this.d.log?.warn(`La comprobación de viralidad del clip ${clip.id} falló: ${msg}`);
+      }
+      if (check) {
+        const both = combineViral(j.items, check);
+        items = { ...j.items, ...both.items };
+        criteria = withMeasuredViral({ ...j.criteria, viral: both.viral }, sig, both.cap);
+        viralCheck = { stay: check.stay, total: check.total, refutation: check.refutation };
+      }
+    }
     const ai = j.ai ?? { provider: 'desconocida', model: 'desconocido' };
-    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}`, items: j.items, evidence: j.evidence, summary: j.summary, v: SCORE_VERSION, at: this.now(), by: 'model', text: sig.words.map((w) => w.text).join(' ').slice(0, 500), ai };
+    const note = viralCheck ? ` Viralidad comprobada con ${viralCheck.total} espectadores simulados: ${viralCheck.stay} lo verían entero y lo compartirían.${viralCheck.refutation && viralCheck.stay < viralCheck.total ? ` Pega: ${viralCheck.refutation}` : ''}` : '';
+    return { score: overall(criteria), crit: criteria, reason: `${j.reason || reasonFromCriteria(criteria, 'model')}${sig.frames?.length ? ' (visto y oído)' : ''}${note}`, items, evidence: j.evidence, summary: j.summary, v: SCORE_VERSION, at: this.now(), by: 'model', vc: VIRAL_CHECK_VERSION, ...(viralCheck ? { viralCheck } : {}), text: sig.words.map((w) => w.text).join(' ').slice(0, 500), ai };
   }
 }

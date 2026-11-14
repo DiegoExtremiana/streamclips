@@ -25,7 +25,6 @@ describe('puntuación interna de clips', () => {
     const great = heuristicScore({ durationSec: 30, words: speech('no puede ser madre mía jajaja increíble vamos ostia no me lo creo', 30), energyDb: loud });
     assert.ok(boring < 2, String(boring));
     assert.ok(great >= GOLD_MIN, String(great));
-    assert.equal(isGold(great), true);
   });
 
   it('la nota no depende de las visualizaciones: la función ni las recibe', () => {
@@ -45,8 +44,8 @@ describe('puntuación interna de clips', () => {
     assert.equal(modelScore(9.5), 9.5);
     assert.equal(modelScore(99), 10);
     assert.equal(modelScore(-3), 0);
-    assert.equal(isGold(7.9), false);
-    assert.equal(isGold(8), true);
+    assert.equal(isGold(9.4), false);
+    assert.equal(isGold(9.5), true);
     assert.equal(isGold(undefined), false);
   });
 });

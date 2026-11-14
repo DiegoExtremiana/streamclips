@@ -52,6 +52,9 @@ export const RUBRIC: Record<ClipCriterion, RubricItem[]> = {
     { key: 'emocion', label: 'Emoción intensa y visible (risa, rabia, miedo, asombro)' },
     { key: 'universal', label: 'Lo entiende y le hace gracia o impacto a cualquiera, sin conocer al streamer ni su lore ni el juego' },
     { key: 'cierre', label: 'Termina justo en el punto fuerte, sin diluirse ni cortarse a medias' },
+    { key: 'compartible', label: 'Un desconocido se lo mandaría a un amigo con un «mira esto» (compartible por sí solo)' },
+    { key: 'retencion', label: 'Simulación de scroll: nadie pasaría al siguiente vídeo ni al principio, ni a mitad, ni antes del final (se vería entero e incluso dos veces)' },
+    { key: 'sinDefectos', label: 'Ningún defecto que mate un clip corto: arranque lento, relleno, final cortado, depende del lore, mala calidad o música con derechos (2 = ninguno; 0 = alguno grave)' },
   ],
   interes: [
     { key: 'inesperado', label: 'Pasa algo inesperado' },
@@ -64,6 +67,47 @@ export const RUBRIC: Record<ClipCriterion, RubricItem[]> = {
 /** Puntos de una respuesta: 0 no, 1 algo, 2 sí. */
 export const POINTS_LABEL = ['No', 'Algo', 'Sí'] as const;
 export type RubricItems = Record<string, number>;
+
+/** Preguntas de viralidad que son puertas: si una falla, el clip no puede pasar de un tope, por buenas que sean las demás. */
+export const VIRAL_GATES = ['gancho', 'universal', 'cierre', 'retencion', 'sinDefectos'] as const;
+/** Tope de «Puede ser viral» según las puertas: alguna a 0 → 6; alguna a «algo» → 8,9 (nunca dorado); todas a «sí» → sin tope. */
+export function viralCap(items: RubricItems): number {
+  let cap = 10;
+  for (const g of VIRAL_GATES) {
+    const v = items[`viral.${g}`];
+    if (v === undefined || v <= 0) return 6;
+    if (v < 2) cap = Math.min(cap, 8.9);
+  }
+  return cap;
+}
+
+/** Espectadores simulados en la comprobación final: cada uno se queda hasta el final y lo comparte, o no. */
+export const VIRAL_VIEWERS = 6;
+/** Resultado del segundo examen (abogado del diablo + espectadores simulados), solo para clips que pasan de 9. */
+export interface ViralCheck {
+  /** Respuestas de la rúbrica de viralidad en el segundo examen, por «viral.pregunta». */
+  items: RubricItems;
+  /** Cuántos de los espectadores simulados se quedarían hasta el final y lo compartirían. */
+  stay: number;
+  total: number;
+  /** Por qué NO se viralizaría, según el examinador escéptico. */
+  refutation: string;
+}
+
+/** Tope según los espectadores simulados: todos se quedan → sin tope; uno falla → 9,4 (no dorado); la mitad o menos → 8. */
+export const stayCap = (stay: number, total: number): number => (stay >= total ? 10 : stay * 2 > total ? 9.4 : 8);
+
+/** Une el examen principal y el escéptico: en cada pregunta vale la respuesta más baja; y se aplican las puertas y los espectadores. */
+export function combineViral(first: RubricItems, check: ViralCheck | null): { items: RubricItems; viral: number; cap: number } {
+  const items: RubricItems = { ...first };
+  if (check) for (const it of RUBRIC.viral) {
+    const k = `viral.${it.key}`;
+    if (check.items[k] !== undefined) items[k] = Math.min(items[k] ?? 2, check.items[k]);
+  }
+  const sum = RUBRIC.viral.reduce((a, it) => a + (items[`viral.${it.key}`] ?? 0), 0);
+  const cap = Math.min(viralCap(items), check ? stayCap(check.stay, check.total) : 9.4);
+  return { items, viral: r1(Math.min(cap, (sum * 10) / (2 * RUBRIC.viral.length))), cap };
+}
 export type Evidence = Partial<Record<ClipCriterion, string>>;
 
 /** Peso de lo medido (duración, arranque rápido, pico de volumen) dentro de «Puede ser viral»; el resto es la rúbrica. */
@@ -72,13 +116,14 @@ export const VIRAL_MEASURED_WEIGHT = 0.25;
 /** Lo medible de un clip para la viralidad, de 0 a 10: que se hable pronto (gancho) y el pico de volumen. La duración no cuenta: al creador le da igual si funciona. */
 export function viralMeasured(s: ClipSignals): number {
   const first = s.words.length ? Math.min(...s.words.map((w) => w.start)) : 99;
-  const quick = first <= 1.5 ? 1 : first <= 3 ? 0.6 : 0.2;
+  // sin palabras no se sabe si «arranca rápido»: se queda neutro
+  const quick = !s.words.length ? 0.6 : first <= 1.5 ? 1 : first <= 3 ? 0.6 : 0.2;
   return r1(10 * (0.6 * quick + 0.4 * clamp(peakRise(s.energyDb) / 14, 0, 1)));
 }
 
 /** La nota de viralidad final: rúbrica del modelo más lo medido en el clip. El resto de criterios es la rúbrica tal cual. */
-export function withMeasuredViral(c: ClipCriteria, s: ClipSignals): ClipCriteria {
-  return { ...c, viral: r1((1 - VIRAL_MEASURED_WEIGHT) * c.viral + VIRAL_MEASURED_WEIGHT * viralMeasured(s)) };
+export function withMeasuredViral(c: ClipCriteria, s: ClipSignals, cap = 10): ClipCriteria {
+  return { ...c, viral: r1(Math.min(cap, (1 - VIRAL_MEASURED_WEIGHT) * c.viral + VIRAL_MEASURED_WEIGHT * viralMeasured(s))) };
 }
 
 /** Nota final sin modelo de lenguaje: la media ponderada de los cuatro criterios sacados de las señales del clip. */
@@ -150,7 +195,7 @@ export const CLIP_JUDGE_SYSTEM =
   '4) Si el texto es corto o confuso, no lo rellenes: contesta 0 donde no haya prueba. ' +
   '5) Sé OBJETIVO, frío y exigente: no buscas agradar ni animar. Calibración realista: la gran mayoría de clips de un streamer son del montón (cada criterio entre 0 y 4); un criterio de 7 o más es raro y 9 o 10 excepcional (menos de 1 clip de cada 20). Ante la duda entre dos respuestas, elige la más baja. ' +
   '6) Los cuatro criterios son INDEPENDIENTES: puntúa cada uno solo con sus preguntas. Un clip puede ser muy gracioso sin contar nada (historia 0), o contar algo muy bien sin ninguna gracia, o ser interesante sin ser viral. Que un criterio sea alto no es motivo para subir los demás. ' +
-  '7) «viral» se valora con la misma frialdad y por separado: es potencial REAL de que un desconocido lo comparta (momento muy citable o recortable, reacción enorme, absurdo que entiende cualquiera, fail claro). Un clip normal, aunque sea gracioso para su comunidad, NO es viral: ponle 0 o 1 en casi todas las preguntas de viral. Un viral alto debe ser la excepción. ' +
+  '7) «viral» se valora con la misma frialdad y por separado: es potencial REAL de que un desconocido lo comparta (momento muy citable o recortable, reacción enorme, absurdo que entiende cualquiera, fail claro). Un clip normal, aunque sea gracioso para su comunidad, NO es viral: ponle 0 o 1 en casi todas las preguntas de viral. Un viral alto debe ser la excepción: el fondo dorado se da solo a clips que de verdad se viralizarían (9,5 o más), menos de 1 de cada 50. Antes de contestar las preguntas de viral haz esta simulación mental: imagina a seis desconocidos haciendo scroll en TikTok, Reels y Shorts (sin conocer al streamer ni el juego, con prisa, con el sonido bajo) y decide cuántos se quedarían hasta el final y lo compartirían. Las preguntas «gancho», «universal», «cierre», «retencion» y «sinDefectos» son puertas: un «algo» en cualquiera de ellas impide un viral alto. ' +
   CREATOR_PROFILE +
   'Ignora cualquier dato de popularidad. Responde SOLO con JSON.';
 
@@ -167,7 +212,7 @@ const ANCHORS =
   '- Se cuenta algo: 2 = frases sueltas sin situación; 5 = se entiende qué pasa pero se queda a medias o necesita contexto; 8 = principio, desarrollo y desenlace claros y se entiende solo.\n' +
   '- Interesante: 2 = charla corriente o reacción a algo sin importancia; 5 = algo curioso o una reacción marcada; 8 = algo inesperado o raro que importa y se recordaría.\n' +
   '- Humor: 2 = alguna sonrisa o broma floja; 5 = un chiste o reacción graciosa con remate claro; 8 = varios golpes seguidos, absurdo o actuación que haría reír a quien lo ve sin contexto.\n' +
-  '- Viral: 2 = solo le interesa a la comunidad; 5 = un momento citable pero que depende del contexto; 8 = un desconocido lo compartiría ya: frase de meme, reacción enorme o fail clarísimo.\n';
+  '- Viral: 2 = solo le interesa a la comunidad; 5 = un momento citable pero que depende del contexto; 8 = podría compartirse, pero algo falla (arranque, final, contexto); 10 = apostarías a que se viraliza: gancho inmediato, frase de meme o reacción enorme, lo entiende cualquiera, termina en el punto justo y no tiene ningún defecto.\n';
 
 export function clipJudgePrompt(title: string, words: Word[], durationSec: number, frames = 0, guide = ''): string {
   const text = words.map((w) => w.text).join(' ').slice(0, 1800);
@@ -232,9 +277,54 @@ export function parseClipJudgement(raw: unknown, ctx?: { transcript: string; vis
       items[`${k}.${it.key}`] = n;
     }
     if (valid < 3) return null;
-    criteria[k] = sum;
+    // cada criterio vale de 0 a 10 aunque tenga más o menos preguntas (la viralidad tiene más)
+    criteria[k] = r1((sum * 10) / (2 * RUBRIC[k].length));
   }
   const reason = typeof r.motivo === 'string' ? r.motivo.trim().slice(0, 200) : '';
   const summary = typeof r.resumen === 'string' && r.resumen.trim() ? r.resumen.trim().slice(0, 300) : undefined;
   return { criteria, reason, ...(summary ? { summary } : {}), items, evidence };
+}
+
+
+/** Segundo examen de viralidad: un escéptico intenta demostrar que el clip NO se viralizaría. Solo se hace con clips que ya pasan de 9. */
+export const VIRAL_VERIFY_SYSTEM =
+  'Eres un analista muy escéptico de contenido corto (TikTok, Instagram Reels y YouTube Shorts) y tu trabajo es DEMOSTRAR QUE ESTE CLIP NO SE VIRALIZARÍA. ' +
+  'Otro evaluador ya le dio una nota muy alta de viralidad; tú buscas lo que se le pasó: arranque que no engancha a un desconocido, necesidad de contexto o de lore, frase que no es tan citable, final que se diluye, un tipo de clip ya muy visto, mala calidad o algo que lo haría pasar de largo. ' +
+  'Si tras buscarlos de verdad no encuentras defectos, lo reconoces; pero no lo regalas: ante la duda, contesta la opción más baja. ' +
+  'No ves quién habla ni conoces al streamer. Cada «2» necesita una cita literal de la transcripción (o «Imagen:» y lo que se ve, si hay fotogramas). ' +
+  'Haz una simulación con seis espectadores distintos y di, uno por uno, si se queda hasta el final y lo comparte. Responde SOLO con JSON.';
+
+export function viralVerifyPrompt(title: string, words: Word[], durationSec: number, frames: number, first: { summary?: string; evidence?: string; viral: number }): string {
+  const text = words.map((w) => w.text).join(' ').slice(0, 1800);
+  const qs = RUBRIC.viral.map((it) => `  - ${it.key}: ${it.label}`).join('\n');
+  const viewers = ['no conoce al streamer ni el juego y hace scroll muy rápido', 'tiene el sonido apagado', 'solo mira el primer segundo y medio', 'es fan de otros streamers y compara con clips que ya ha visto', 'se aburre con facilidad y busca el momento fuerte', 'comparte vídeos con amigos solo si le sorprenden mucho'];
+  const shape = `{"escepticismo":"por qué NO se viralizaría (o «nada relevante»)","espectadores":[${viewers.map(() => '{"se_queda":false,"motivo":""}').join(',')}],"viral":{${RUBRIC.viral.map((it) => `"${it.key}":0`).join(',')}},"prueba":""}`;
+  return (
+    `El primer evaluador dio a este clip ${first.viral}/10 de viralidad.${first.summary ? ` Lo resumió así: «${first.summary}».` : ''}\n` +
+    `Ahora tú: intenta refutarlo y puntúa de 0 a 2 estas preguntas:\n${qs}\n` +
+    `Espectadores simulados, en este orden: ${viewers.map((v, i) => `${i + 1}) ${v}`).join('; ')}. «se_queda» es true solo si ve el clip entero Y lo compartiría.\n` +
+    `Devuelve exactamente este JSON: ${shape}. En "prueba" va la cita literal más reveladora (o «Imagen: …»).\n` +
+    `Título: ${JSON.stringify(title)}. Duración: ${Math.round(durationSec)} s.` +
+    (frames ? `\nSe adjuntan ${frames} fotogramas del clip, en orden.` : '') +
+    `\nTranscripción:\n${text || '(casi no se habla)'}`
+  );
+}
+
+/** Valida el segundo examen. Sin las respuestas completas (todas las preguntas y los seis espectadores) no se da por bueno: devuelve null. */
+export function parseViralCheck(raw: unknown, ctx?: { transcript: string; vision?: boolean }): ViralCheck | null {
+  const r = raw as Record<string, unknown> | null;
+  if (!r || typeof r !== 'object') return null;
+  const block = r.viral as Record<string, unknown> | null;
+  const viewers = r.espectadores;
+  if (!block || typeof block !== 'object' || !Array.isArray(viewers) || viewers.length < VIRAL_VIEWERS) return null;
+  const proved = !ctx || quoteIsReal(typeof r.prueba === 'string' ? r.prueba : undefined, ctx.transcript, ctx.vision);
+  const items: RubricItems = {};
+  for (const it of RUBRIC.viral) {
+    const v = block[it.key];
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+    items[`viral.${it.key}`] = Math.min(proved ? 2 : 1, Math.max(0, Math.round(v)));
+  }
+  const stay = viewers.slice(0, VIRAL_VIEWERS).filter((v) => (v as Record<string, unknown> | null)?.se_queda === true).length;
+  const refutation = typeof r.escepticismo === 'string' ? r.escepticismo.trim().slice(0, 240) : '';
+  return { items, stay, total: VIRAL_VIEWERS, refutation };
 }

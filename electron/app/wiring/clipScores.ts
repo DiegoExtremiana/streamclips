@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { AppContext, ContextOptions } from '../context';
 import { ClipScoreService } from '../../domain/clipScores';
 import { askJson, MIN_INTERVAL_MS, visionConfig, type LlmProvider } from '../../services/llm';
-import { CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM, clipJudgePrompt, parseClipJudgement } from '../../../shared/clipCriteria';
+import { CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM, VIRAL_VERIFY_SYSTEM, clipJudgePrompt, parseClipJudgement, parseViralCheck, viralVerifyPrompt } from '../../../shared/clipCriteria';
 import { feedbackGuide } from '../../../shared/clipFeedback';
 import { audioEnergy as measureEnergy } from '../../services/audioEnergy';
 import { run } from '../../services/tools';
@@ -105,6 +105,24 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
       const raw = await askJson(conf, CLIP_JUDGE_SYSTEM, clipJudgePrompt(clip.title, words, clip.durationSec, 0, feedbackGuide(app.clipFeedback.all())), { temperature: 0.2 });
       const j = parseClipJudgement(raw, { transcript: words.map((w) => w.text).join(' ') });
       return j ? { ...j, ai: { provider: conf.provider, model: conf.model } } : null;
+    },
+    // segundo examen, solo para clips que pasan de 9 de viralidad: un escéptico intenta refutarlo y seis espectadores simulados deciden
+    verifyViral: async (clip, words, frames, first) => {
+      const conf = app.autopilot.llmConf();
+      if (!conf) return null;
+      await clipJudgeGate(o.llmBaseUrl ? 0 : Math.round(MIN_INTERVAL_MS[conf.provider as LlmProvider] * 0.55));
+      const transcript = words.map((w) => w.text).join(' ');
+      if (frames?.length) {
+        try {
+          const raw = await askJson(visionConfig(conf), VIRAL_VERIFY_SYSTEM, viralVerifyPrompt(clip.title, words, clip.durationSec, frames.length, first), { temperature: 0.2, images: frames });
+          const c = parseViralCheck(raw, { transcript, vision: true });
+          if (c) return c;
+        } catch (e) {
+          if (/límite gratuito|rechazó la clave/.test((e as Error).message)) throw e;
+        }
+      }
+      const raw = await askJson(conf, VIRAL_VERIFY_SYSTEM, viralVerifyPrompt(clip.title, words, clip.durationSec, 0, first), { temperature: 0.2 });
+      return parseViralCheck(raw, { transcript });
     },
   });
 }

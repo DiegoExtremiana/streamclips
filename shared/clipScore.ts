@@ -8,7 +8,7 @@ import type { Word } from './subtitles';
  */
 export const GOLD_MIN = 8;
 /** Cambiar el método de puntuar invalida las puntuaciones guardadas. */
-export const SCORE_VERSION = 8;
+export const SCORE_VERSION = 9;
 
 export interface ClipSignals {
   durationSec: number;
@@ -36,5 +36,9 @@ export function modelScore(judged: number): number {
   return Math.round(clamp(judged, 0, 10) * 10) / 10;
 }
 
-/** Dorado: solo depende de la nota final (8 o más). Si la corriges tú, vale tu nota hasta que la vuelvas a cambiar. */
-export const isGold = (score: number | undefined): boolean => typeof score === 'number' && score >= GOLD_MIN;
+/** Nota mínima de «Puede ser viral» para el fondo dorado: solo clips con los que se puede apostar a que se viralizan en TikTok, Reels y Shorts. */
+export const GOLD_VIRAL_MIN = 9.5;
+/** Versión del examen de viralidad (rúbrica estricta + simulación + contraste). Un clip solo es dorado si pasó este examen o si lo valoras tú. */
+export const VIRAL_CHECK_VERSION = 1;
+/** Dorado: solo depende de «Puede ser viral» (9,5 o más). Si tú corriges esa nota, vale la tuya hasta que la vuelvas a cambiar. */
+export const isGold = (viral: number | undefined): boolean => typeof viral === 'number' && viral >= GOLD_VIRAL_MIN;

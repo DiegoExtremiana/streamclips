@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM, CLIP_CRITERIA, CRITERION_WEIGHT, RUBRIC, clipJudgePrompt, criteriaFromSignals, heuristicScore, overall, parseClipJudgement, reasonFromCriteria, viralMeasured, withMeasuredViral } from '../shared/clipCriteria';
+import { CLIP_JUDGE_SYSTEM, CLIP_JUDGE_VISION_SYSTEM, CLIP_CRITERIA, CRITERION_WEIGHT, RUBRIC, clipJudgePrompt, criteriaFromSignals, heuristicScore, overall, parseClipJudgement, reasonFromCriteria, viralMeasured, withMeasuredViral, combineViral, parseViralCheck, viralVerifyPrompt, VIRAL_VERIFY_SYSTEM, VIRAL_VIEWERS } from '../shared/clipCriteria';
 
 const speech = (phrase: string, dur: number, perSec = 2.5) => {
   const base = phrase.split(' ');
@@ -42,8 +42,8 @@ describe('criterios de la nota de un clip', () => {
 
   const answer = (n: number) => Object.fromEntries(CLIP_CRITERIA.map((k) => [k, Object.fromEntries(RUBRIC[k].map((it) => [it.key, n]))]));
 
-  it('la rúbrica tiene cinco preguntas por criterio y la nota del criterio es la suma de sus respuestas (0 a 10)', () => {
-    for (const k of CLIP_CRITERIA) assert.equal(RUBRIC[k].length, 5);
+  it('la rúbrica tiene cinco preguntas por criterio (ocho en viralidad) y la nota del criterio va de 0 a 10 según sus respuestas', () => {
+    for (const k of CLIP_CRITERIA) assert.equal(RUBRIC[k].length, k === 'viral' ? 8 : 5);
     const all2 = parseClipJudgement({ ...answer(2), motivo: 'Muy bueno' })!;
     assert.deepEqual(all2.criteria, { humor: 10, historia: 10, viral: 10, interes: 10 });
     const all1 = parseClipJudgement(answer(1))!;
@@ -90,7 +90,7 @@ describe('criterios de la nota de un clip', () => {
   });
 
   it('un «sí» sin cita real en la transcripción baja a «algo»; con cita real se respeta', () => {
-    const all2 = { humor: { remate: 2, contraste: 2, locura: 2, actuacion: 2, sorpresa: 2 }, historia: { planteamiento: 2, desarrollo: 2, desenlace: 2, solo: 2, hilo: 2 }, viral: { gancho: 2, citable: 2, emocion: 2, universal: 2, cierre: 2 }, interes: { inesperado: 2, reaccion: 2, novedad: 2, protagonismo: 2, memorable: 2 } };
+    const all2 = { humor: { remate: 2, contraste: 2, locura: 2, actuacion: 2, sorpresa: 2 }, historia: { planteamiento: 2, desarrollo: 2, desenlace: 2, solo: 2, hilo: 2 }, viral: { gancho: 2, citable: 2, emocion: 2, universal: 2, cierre: 2, compartible: 2, retencion: 2, sinDefectos: 2 }, interes: { inesperado: 2, reaccion: 2, novedad: 2, protagonismo: 2, memorable: 2 } };
     const transcript = 'me cago en la leche otra vez se me ha caído el cubo de agua encima';
     const sinPrueba = parseClipJudgement({ ...all2, pruebas: { humor: 'una frase que nadie dijo jamás en el clip', viral: '' } }, { transcript })!;
     assert.equal(sinPrueba.criteria.humor, 5);
@@ -120,5 +120,26 @@ describe('criterios de la nota de un clip', () => {
       assert.match(sys, /NO suman ni restan/);
     }
     assert.equal(viralMeasured({ durationSec: 5, words: speech('hola', 5), energyDb: loud }), viralMeasured({ durationSec: 90, words: speech('hola', 5), energyDb: loud }), 'la duración no cambia lo medido');
+  });
+
+  it('viralidad estricta: puertas, tope sin comprobar y segundo examen escéptico', () => {
+    const keys = ['gancho', 'citable', 'emocion', 'universal', 'cierre', 'compartible', 'retencion', 'sinDefectos'];
+    const all = (v: number) => Object.fromEntries(keys.map((k) => [`viral.${k}`, v]));
+    assert.equal(combineViral(all(2), null).viral, 9.4, 'sin comprobación nunca llega a 9,5');
+    const check = (stay: number, items = all(2)) => ({ items, stay, total: VIRAL_VIEWERS, refutation: '' });
+    assert.equal(combineViral(all(2), check(6)).viral, 10);
+    assert.equal(combineViral(all(2), check(5)).viral, 9.4);
+    assert.equal(combineViral(all(2), check(3)).viral, 8);
+    assert.equal(combineViral({ ...all(2), 'viral.cierre': 1 }, check(6)).viral, 8.9);
+    assert.equal(combineViral({ ...all(2), 'viral.gancho': 0 }, check(6)).viral, 6);
+    assert.equal(combineViral(all(2), check(6, { ...all(2), 'viral.citable': 0 })).viral, 8.8, 'en cada pregunta vale la respuesta más baja');
+    const raw = { escepticismo: 'depende del lore', espectadores: Array.from({ length: 6 }, (_, i) => ({ se_queda: i < 4, motivo: '' })), viral: Object.fromEntries(keys.map((k) => [k, 2])), prueba: 'no puede ser madre mía' };
+    const c = parseViralCheck(raw, { transcript: 'uf no puede ser madre mía qué locura' })!;
+    assert.equal(c.stay, 4);
+    assert.equal(c.refutation, 'depende del lore');
+    assert.equal(parseViralCheck({ ...raw, espectadores: raw.espectadores.slice(0, 3) }), null, 'sin los seis espectadores no vale');
+    assert.equal(parseViralCheck({ ...raw, prueba: 'algo inventado que no se dijo' }, { transcript: 'uf qué locura' })!.items['viral.citable'], 1, 'sin cita real no hay «sí»');
+    assert.match(viralVerifyPrompt('t', [], 10, 0, { viral: 9.6 }), /espectadores/);
+    assert.match(VIRAL_VERIFY_SYSTEM, /DEMOSTRAR QUE ESTE CLIP NO SE VIRALIZARÍA/);
   });
 });

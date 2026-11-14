@@ -21,7 +21,11 @@ const loud = [...Array.from({ length: 24 }, () => -40), ...Array.from({ length: 
 const phrase = 'no puede ser madre mía jajaja increíble vamos ostia no me lo creo'.split(' ');
 const hype = Array.from({ length: 75 }, (_, i) => ({ text: phrase[i % phrase.length], start: i * 0.4, end: i * 0.4 + 0.3 }));
 
-const judged = (n: number, reason = 'Motivo'): ClipJudgement => ({ criteria: { humor: n, historia: n, viral: n, interes: n }, reason, items: { 'humor.remate': n >= 8 ? 2 : 0 }, evidence: { humor: 'cita' } });
+const VIRAL_KEYS = ['gancho', 'citable', 'emocion', 'universal', 'cierre', 'compartible', 'retencion', 'sinDefectos'];
+const viralItems = (v: number) => Object.fromEntries(VIRAL_KEYS.map((k) => [`viral.${k}`, v]));
+const judged = (n: number, reason = 'Motivo'): ClipJudgement => ({ criteria: { humor: n, historia: n, viral: n, interes: n }, reason, items: { 'humor.remate': n >= 8 ? 2 : 0, ...viralItems(n >= 9 ? 2 : 0) }, evidence: { humor: 'cita' } });
+/** Segundo examen en el que todos los espectadores simulados se quedan. */
+const passes = async () => ({ items: viralItems(2), stay: 6, total: 6, refutation: '' });
 
 function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
   const analyzed: string[] = [];
@@ -30,6 +34,7 @@ function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
     canRun: () => true,
     sleep: async () => undefined,
     judge: async (c) => ({ ...judged(c.id.startsWith('good') ? 9.5 : 2), ai: { provider: 'test', model: 'modelo-1' } }),
+    verifyViral: passes,
     analyze: async (c) => {
       analyzed.push(c.id);
       return c.id.startsWith('good') ? { durationSec: 30, words: hype, energyDb: loud } : { durationSec: 30, words: [{ text: 'vale', start: 0, end: 1 }], energyDb: Array.from({ length: 30 }, () => -40) };
@@ -139,7 +144,7 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(svc.gold('good2'), false, 'el modelo lo rebaja');
     const d = svc.detailOf('good1')!;
     assert.equal(d.by, 'model');
-    assert.equal(d.reason, 'Remate con sorpresa');
+    assert.ok(d.reason.startsWith('Remate con sorpresa'));
     assert.equal(d.criteria.humor, 9.5);
     assert.ok((svc.scoreOf('good2') ?? 99) < 4, 'la nota del modelo manda (la viralidad suma un poco de lo medido)');
   });
@@ -220,16 +225,42 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(typeof d?.at, 'number');
   });
 
-  it('dorado depende solo de la nota final: con potencial viral pero nota baja no es dorado', async () => {
-    const viral = make({ judge: async () => ({ ...judged(1), criteria: { humor: 1, historia: 1, viral: 10, interes: 1 }, ai: { provider: 'test', model: 'm' } }) });
-    viral.svc.enqueue([clip('good1')]);
-    await viral.svc.idle();
-    assert.ok((viral.svc.scoreOf('good1') ?? 99) < 8);
-    assert.equal(viral.svc.gold('good1'), false, 'la nota final manda, no la viralidad suelta');
-    const flat = make({ judge: async () => ({ ...judged(1), ai: { provider: 'test', model: 'm' } }) });
-    flat.svc.enqueue([clip('good1')]);
-    await flat.svc.idle();
-    assert.equal(flat.svc.gold('good1'), false);
+  it('dorado es solo «Puede ser viral» de 9,5 o más y exige pasar el examen estricto', async () => {
+    const run = async (over: Partial<ClipScoreDeps>) => {
+      const m = make({ judge: async () => ({ ...judged(9.5), ai: { provider: 'test', model: 'm' } }), ...over });
+      m.svc.enqueue([clip('good1')]);
+      await m.svc.idle();
+      return m.svc;
+    };
+    const ok = await run({});
+    assert.equal(ok.gold('good1'), true, 'todas las puertas, los seis espectadores y lo medido');
+    assert.ok((ok.detailOf('good1')!.criteria.viral) >= 9.5);
+    assert.match(ok.detailOf('good1')!.reason, /6 espectadores simulados: 6/);
+    const one = await run({ verifyViral: async () => ({ items: viralItems(2), stay: 5, total: 6, refutation: 'arranca lento' }) });
+    assert.equal(one.gold('good1'), false, 'si un espectador simulado no lo comparte, no se apuesta por él');
+    assert.ok(one.detailOf('good1')!.criteria.viral <= 9.4);
+    assert.match(one.detailOf('good1')!.reason, /Pega: arranca lento/);
+    const gate = await run({ verifyViral: async () => ({ items: { ...viralItems(2), 'viral.gancho': 1 }, stay: 6, total: 6, refutation: '' }) });
+    assert.equal(gate.gold('good1'), false, 'una puerta a «algo» impide el dorado');
+    assert.ok(gate.detailOf('good1')!.criteria.viral <= 8.9);
+    const noCheck = await run({ verifyViral: undefined });
+    assert.equal(noCheck.gold('good1'), false, 'sin la segunda comprobación no hay dorado');
+    const failed = await run({ verifyViral: async () => null });
+    assert.equal(failed.gold('good1'), false);
+    const weak = await run({ judge: async () => ({ ...judged(9.5), items: { ...viralItems(2), 'viral.cierre': 0 }, ai: { provider: 'test', model: 'm' } }) });
+    assert.equal(weak.gold('good1'), false, 'una puerta a 0 limita la viralidad a 6');
+    assert.ok(weak.detailOf('good1')!.criteria.viral <= 6);
+    const flat = await run({ judge: async () => ({ ...judged(1), ai: { provider: 'test', model: 'm' } }) });
+    assert.equal(flat.gold('good1'), false);
+  });
+
+  it('los clips puntuados antes del examen estricto no son dorados hasta que se vuelvan a examinar', async () => {
+    const file = tmp();
+    const old = { good1: { v: 8, at: 1, score: 9.9, crit: { humor: 9, historia: 9, viral: 9.9, interes: 9 }, by: 'model', reason: 'x', ai: { provider: 'test', model: 'm' } } };
+    fs.writeFileSync(file, JSON.stringify(old));
+    const { svc } = make({}, file);
+    assert.equal(svc.scoreOf('good1'), 9.9, 'la nota anterior se conserva');
+    assert.equal(svc.gold('good1'), false);
   });
 
   it('un clip sin palabras no se puntúa con ceros: queda sin nota con su motivo y no se repite', async () => {

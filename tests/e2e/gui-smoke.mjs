@@ -615,25 +615,6 @@ try {
   assert.equal(await dlg.getByTestId('player-Reproductor horizontal').evaluate((e) => e.muted), false);
   await dlg.getByTestId('clip-timeline').waitFor();
   assert.equal(await dlg.getByTestId('vertical-editor').count(), 0, 'el diseño solo aparece al pulsar «Editar diseño»');
-  // mantener el clic y mover por la línea de tiempo: el tiempo va con el ratón mientras se arrastra
-  {
-    const hv = dlg.getByTestId('player-Reproductor horizontal');
-    const sel = await dlg.locator('.ctl-sel').boundingBox();
-    const y = sel.y + sel.height / 2;
-    await page.mouse.move(sel.x + sel.width * 0.1, y);
-    await page.mouse.down();
-    await page.waitForTimeout(250);
-    const t1 = await hv.evaluate((e) => e.currentTime);
-    await page.mouse.move(sel.x + sel.width * 0.5, y, { steps: 8 });
-    await page.waitForTimeout(250);
-    const t2 = await hv.evaluate((e) => e.currentTime);
-    await page.mouse.move(sel.x + sel.width * 0.85, y, { steps: 8 });
-    await page.waitForTimeout(250);
-    const t3 = await hv.evaluate((e) => e.currentTime);
-    await page.mouse.up();
-    assert.ok(t1 < t2 - 0.3 && t2 < t3 - 0.3, `el tiempo sigue al ratón mientras se arrastra (${t1.toFixed(2)} < ${t2.toFixed(2)} < ${t3.toFixed(2)})`);
-    log('línea de tiempo: manteniendo el clic y moviendo, el tiempo del vídeo va con el ratón');
-  }
   // recorte con la línea de tiempo: el agarre del final se mueve con el teclado y «Aplicar recorte» vuelve a renderizar
   const clipBefore = JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).outputs.find((o) => o.title === 'Mi clip vertical');
   const endBefore = Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow'));

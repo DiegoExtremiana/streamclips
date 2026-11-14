@@ -2,6 +2,17 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.31.0
+
+**Portadas pasa a ser un editor de verdad** (una especie de Photopea pequeño):
+
+- **Capas**: fondo (png, jpg, jpeg, webp…), tus PNG sin fondo con distintas expresiones, textos y formas; se mueven, escalan, giran, se ordenan, se ocultan y se duplican.
+- **Ajustes de imagen** por capa (brillo, contraste, saturación, desenfoque…) y **texto con tipografía**, incluidas tus propias fuentes.
+- **Proyectos guardados**: cada diseño se guarda y se puede reabrir y seguir editando; se exporta a PNG 1280×720.
+- **Asignar a vídeos**: en la ventana de un vídeo, «Usar una de mis portadas…».
+- Menú propio con las secciones Diseñar, Piezas y Rápida.
+- Las tarjetas de clips de Twitch ya no dicen «No está en la Biblioteca».
+
 ## Novedades de la v0.30.0
 
 Primera tanda de la reorganización de menús («poco a poco, intuitiva y fácil de usar»):

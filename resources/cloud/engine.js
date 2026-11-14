@@ -211,9 +211,9 @@ var init_twitch = __esm({
   }
 });
 
-// ../streamclips/node_modules/libsodium/dist/modules/libsodium.js
+// node_modules/libsodium/dist/modules/libsodium.js
 var require_libsodium = __commonJS({
-  "../streamclips/node_modules/libsodium/dist/modules/libsodium.js"(exports2, module2) {
+  "node_modules/libsodium/dist/modules/libsodium.js"(exports2, module2) {
     (function(root) {
       function expose_libsodium(exports3) {
         "use strict";
@@ -28082,9 +28082,9 @@ var require_libsodium = __commonJS({
   }
 });
 
-// ../streamclips/node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js
+// node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js
 var require_libsodium_wrappers = __commonJS({
-  "../streamclips/node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js"(exports2) {
+  "node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js"(exports2) {
     !function(e) {
       function a(e2, a2) {
         "use strict";
@@ -36598,7 +36598,7 @@ Devuelve exactamente este JSON: ${shape}. "resumen" va PRIMERO: en una o dos fra
 T\xEDtulo que le puso quien lo cre\xF3: ${JSON.stringify(title)}. Duraci\xF3n: ${Math.round(durationSec)} s.` + guide + (frames ? `
 Se adjuntan ${frames} fotogramas del clip, en orden, repartidos de principio a fin.` : "") + `
 Transcripci\xF3n:
-${text || "(casi no se habla: valora por la imagen)"}`;
+${text || (frames ? "(no se oye hablar: valora por lo que se ve y se oye: muecas, gestos y caras, lo que pasa en pantalla, gritos o ruidos; en las pruebas empieza por \xABImagen:\xBB)" : "(casi no se habla)")}`;
 }
 var norm2 = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9ñ ]+/g, " ").split(/\s+/).filter(Boolean);
 function quoteIsReal(quote, transcript, vision = false) {
@@ -36664,6 +36664,7 @@ var ClipScoreService = class {
       for (const [id, v] of Object.entries(j)) {
         if (!v || typeof v !== "object" || v.v < MIN_COMPATIBLE_VERSION || v.v > SCORE_VERSION) continue;
         if (v.score === void 0 && !v.noText) continue;
+        if (v.score === void 0 && v.noText && !/imagen/.test(v.reason ?? "")) continue;
         if (v.score !== void 0 && !v.ai && v.by !== "user") continue;
         if (v.score !== void 0 && v.v < CALIBRATED_VERSION && v.by !== "user") continue;
         this.scores.set(id, v);
@@ -36940,7 +36941,7 @@ var ClipScoreService = class {
   async scoreInner(clip, mark) {
     const sig = await this.d.analyze(clip, mark);
     if (sig.words.length < MIN_WORDS_TO_JUDGE && !(sig.frames?.length && this.d.judge)) {
-      return { v: SCORE_VERSION, at: this.now(), noText: true, reason: "Sin nota: casi no se oye hablar en este clip, as\xED que no hay nada que valorar." };
+      return { v: SCORE_VERSION, at: this.now(), noText: true, reason: "Sin nota: casi no se oye hablar en este clip y no hay imagen con la que valorarlo (activa la IA con visi\xF3n en Ajustes)." };
     }
     if (!this.d.judge) throw new ModelBlocked(NO_AI);
     mark("modelo");
@@ -37148,7 +37149,10 @@ function createClipScoreService(app, o) {
         onPhase?.("volumen");
         const energyDb = await (o.energy ?? audioEnergy)(t, wav).catch(() => void 0);
         onPhase?.("transcripcion");
-        const words = await app.transcripts.transcribeAudio(wav, [clip.title]);
+        const words = await app.transcripts.transcribeAudio(wav, [clip.title]).catch((e) => {
+          if (/ninguna palabra/.test(e.message)) return [];
+          throw e;
+        });
         return { durationSec: clip.durationSec, words, energyDb, frames };
       } finally {
         import_node_fs23.default.rmSync(wav, { force: true });

@@ -87,6 +87,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
   const [busy, setBusy] = useState<string | null>(null);
   const [momentsFor, setMomentsFor] = useState<{ id: string; title: string } | null>(null);
   const [url, setUrl] = useState('');
+  const [addErr, setAddErr] = useState('');
 
   async function act(key: string, fn: () => Promise<unknown>) {
     setBusy(key);
@@ -97,6 +98,17 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
       notify(errMsg(e), 'bad');
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function addVod() {
+    setAddErr('');
+    try {
+      await window.api.addVod(url.trim());
+      setUrl('');
+      await onChanged();
+    } catch (e) {
+      setAddErr(errMsg(e));
     }
   }
 
@@ -244,9 +256,10 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
       <details className="bmore">
         <summary className="muted">Añadir un VOD a mano</summary>
         <div className="row" style={{ marginTop: 8 }}>
-          <input type="text" aria-label="URL del VOD" placeholder="https://www.twitch.tv/videos/123456789" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && void act('add', async () => { await window.api.addVod(url.trim()); setUrl(''); })} />
-          <button className="btn" disabled={!url.trim()} onClick={() => void act('add', async () => { await window.api.addVod(url.trim()); setUrl(''); })}>Descargar</button>
+          <input type="text" aria-label="URL del VOD" placeholder="https://www.twitch.tv/videos/123456789" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && void addVod()} />
+          <button className="btn" disabled={!url.trim()} onClick={() => void addVod()}>Descargar</button>
         </div>
+        {addErr && <div className="msg bad" role="alert">{addErr}</div>}
       </details>
       {momentsFor && (
         <MomentsDialog vodId={momentsFor.id} title={momentsFor.title} onClose={() => setMomentsFor(null)} onRegenerate={async () => { await window.api.runAutopilot(momentsFor.id); }} />

@@ -17,7 +17,7 @@ export default function DatabaseCard() {
       <h2>Base de datos</h2>
       <div className="muted small">
         Todo lo que maneja el programa, ordenado en tablas que se abren con Excel o cualquier hoja de cálculo. Se actualizan solas cada minuto y se conectan entre sí
-        por identificadores (un directo → sus vídeos → sus publicaciones). Son una copia: para trabajar con ellas, cópialas a otro sitio.
+        por identificadores (de un directo a sus vídeos y de cada vídeo a sus publicaciones). Son una copia: para trabajar con ellas, cópialas a otro sitio.
       </div>
       {error && <div className="msg bad" role="alert">{error}</div>}
       {info && (

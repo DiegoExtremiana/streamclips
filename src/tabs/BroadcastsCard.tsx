@@ -11,7 +11,7 @@ const REFRESH_MS = 60_000;
 const LIVE_SLACK_MS = 5 * 60_000;
 const WORKING = ['waiting', 'transcribing', 'analyzing', 'rendering'];
 
-type Phase = 'live' | 'paused' | 'new' | 'queued' | 'downloading' | 'ready' | 'working' | 'done' | 'skipped' | 'failed';
+type Phase = 'live' | 'interrupted' | 'paused' | 'new' | 'queued' | 'downloading' | 'ready' | 'working' | 'done' | 'skipped' | 'failed';
 
 /** En qué punto está un directo de Twitch dentro del programa, a partir de su VOD descargado (si lo hay). */
 export function broadcastPhase(v: TwitchVod, job: VodJob | undefined, live: ChannelStatus['stream'] | undefined, now = Date.now()): { phase: Phase; label: string; cls: string } {
@@ -21,7 +21,8 @@ export function broadcastPhase(v: TwitchVod, job: VodJob | undefined, live: Chan
   if (!job) return { phase: 'new', label: 'Sin analizar', cls: '' };
   if (job.status === 'queued') return { phase: 'queued', label: 'En cola de descarga', cls: 'warn' };
   if (job.status === 'downloading') return { phase: 'downloading', label: `Descargando ${Math.round(job.progress)}%`, cls: 'warn' };
-  if (job.status === 'error') return { phase: 'failed', label: 'Error de descarga', cls: 'bad' };
+  // un cierre del programa a mitad de la descarga no es un fallo: queda pendiente y se retoma con un botón
+  if (job.status === 'error') return /interrumpi/i.test(job.error ?? '') ? { phase: 'interrupted', label: 'Pendiente', cls: 'warn' } : { phase: 'failed', label: 'Error de descarga', cls: 'bad' };
   const a = job.autopilot;
   if (!a) return { phase: 'ready', label: 'Descargado', cls: 'ok' };
   if (WORKING.includes(a.status)) return { phase: 'working', label: a.status === 'transcribing' ? 'Transcribiendo' : a.status === 'analyzing' ? 'Analizando' : a.status === 'rendering' ? 'Montando' : 'En cola', cls: 'warn' };
@@ -37,8 +38,18 @@ export function jobFor(v: TwitchVod, vods: VodJob[]): VodJob | undefined {
   return mine.find((j) => j.status !== 'error') ?? mine[0];
 }
 
+type Filter = 'todos' | 'porhacer' | 'hechos';
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'porhacer', label: 'Por hacer' },
+  { id: 'hechos', label: 'Analizados' },
+];
+/** Orden de la lista: primero lo que pasa ahora (directo, en curso), luego lo pendiente y al final lo ya hecho. */
+const RANK: Record<Phase, number> = { live: 0, working: 1, downloading: 1, queued: 1, paused: 2, interrupted: 2, failed: 2, new: 3, ready: 3, done: 4, skipped: 4 };
+const isDone = (ph: Phase) => ph === 'done' || ph === 'skipped';
+
 /**
- * Comprobador de directos: tus directos de Twitch leídos en directo (cada minuto) en una cuadrícula, con el estado de
+ * Directos de tu canal: tus directos de Twitch leídos en directo (cada minuto) en una cuadrícula, con el estado de
  * cada uno en el programa y un botón para analizarlos cuando quieras.
  */
 export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () => Promise<void> }) {
@@ -77,10 +88,19 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
     };
   }, [load]);
 
-  const rows = useMemo(
-    () => (list ?? []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((v) => ({ v, job: jobFor(v, vods) })),
-    [list, vods],
+  const [filter, setFilter] = useState<Filter>('todos');
+  const all = useMemo(
+    () =>
+      (list ?? [])
+        .map((v) => {
+          const job = jobFor(v, vods);
+          return { v, job, p: broadcastPhase(v, job, channel?.stream) };
+        })
+        .sort((a, b) => RANK[a.p.phase] - RANK[b.p.phase] || b.v.createdAt.localeCompare(a.v.createdAt)),
+    [list, vods, channel],
   );
+  const counts: Record<Filter, number> = { todos: all.length, porhacer: all.filter((r) => !isDone(r.p.phase)).length, hechos: all.filter((r) => isDone(r.p.phase)).length };
+  const rows = all.filter((r) => filter === 'todos' || (filter === 'hechos') === isDone(r.p.phase));
 
   async function analyze(v: TwitchVod) {
     setBusy(v.id);
@@ -97,10 +117,10 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
 
   const live = channel?.stream;
   return (
-    <section className="card" aria-label="Comprobador de directos">
+    <section className="card" aria-label="Directos de tu canal">
       <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
         <div className="row" style={{ gap: 10 }}>
-          <h2>Comprobador de directos</h2>
+          <h2>Directos de tu canal</h2>
           {channel?.configured && (live?.live ? <span className="badge bad">En directo</span> : <span className="badge">Sin directo</span>)}
         </div>
         <div className="row" style={{ gap: 10 }}>
@@ -109,14 +129,27 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
         </div>
       </div>
       {live?.live && (
-        <div className="muted small title-ellipsis">Ahora mismo: {live.title} · {live.game} · {live.viewers} espectadores. Podrás analizarlo en cuanto termine.</div>
+        <div className="livebar" role="status">
+          <span className="badge bad">En directo</span>
+          <span className="title-ellipsis"><b>{live.title}</b> · {live.game} · {live.viewers} espectadores</span>
+          <span className="muted small">Podrás analizarlo en cuanto termine.</span>
+        </div>
+      )}
+      {list && list.length > 0 && (
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap' }} role="group" aria-label="Filtrar directos">
+          {FILTERS.map((f) => (
+            <button key={f.id} className={`chip ${filter === f.id ? 'on' : ''}`} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+              {f.label} {counts[f.id]}
+            </button>
+          ))}
+        </div>
       )}
       {error && <div className="msg bad" role="alert">{error}</div>}
       {!error && list && rows.length === 0 && <div className="muted">Twitch no devuelve directos guardados de tu canal (comprueba que tengas activada la opción de guardar emisiones anteriores).</div>}
       {!list && !error && <div className="muted">Leyendo tus directos de Twitch…</div>}
+      {list && list.length > 0 && rows.length === 0 && <div className="muted">No hay directos en este filtro.</div>}
       <div className="bgrid">
-        {rows.map(({ v, job }) => {
-          const p = broadcastPhase(v, job, live);
+        {rows.map(({ v, job, p }) => {
           const working = p.phase === 'queued' || p.phase === 'downloading' || p.phase === 'working';
           const again = p.phase === 'done' || p.phase === 'skipped' || p.phase === 'failed' || p.phase === 'ready';
           return (
@@ -132,7 +165,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
                 {job?.chapters && job.chapters.length > 1 && <span className="muted small">{new Set(job.chapters.map((c) => c.title)).size} categorías</span>}
               </div>
               {p.phase === 'working' && job && analysisTask(tasks, job.id) && <AnalysisProgress task={analysisTask(tasks, job.id)!} now={now} />}
-              {(p.phase === 'failed') && (job?.error || job?.autopilot?.note) && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{(job.error ?? job.autopilot?.note ?? '').slice(0, 160)}</div>}
+              {p.phase === 'failed' && (job?.error || job?.autopilot?.note) && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{(job.error ?? job.autopilot?.note ?? '').slice(0, 160)}</div>}
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
                 <button
                   className={`btn small ${again ? 'ghost' : ''}`}
@@ -140,7 +173,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
                   title={p.phase === 'live' ? 'Todavía está en directo' : working ? 'Cancela el análisis en marcha y empieza de nuevo' : again ? 'Vuelve a analizarlo; sustituye los vídeos pendientes de revisión que sacó antes' : undefined}
                   onClick={() => void analyze(v)}
                 >
-                  {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' ? 'Reanudar' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
+                  {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' || p.phase === 'interrupted' ? 'Reanudar' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
                 </button>
                 {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.pauseAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Pausar</button>}
                 {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.cancelAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Cancelar</button>}

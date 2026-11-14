@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.29.4
+
+- **«Directos y actividad» renovada** (primer paso de la reorganización de menús): ahora se titula «Directos de tu canal» y ordena la lista por lo que importa: el directo en curso arriba (con aviso propio), luego lo que se está analizando, lo pendiente, lo nuevo y al final lo ya analizado. Filtros «Todos / Por hacer / Analizados» con su contador.
+- **Los cierres ya no son «errores»**: una descarga cortada porque cerraste el programa aparece como «Pendiente» (sin rojo ni mensaje) con el botón «Reanudar». Los fallos reales siguen marcándose como error.
+- Notas de la siguiente versión en `docs/NOTAS-0.30.md`.
+
 ## Novedades de la v0.29.3
 
 - **El criterio es el tuyo**: la IA recibe tu perfil (humor de absurdo y estupidez fingida, gritos solo con motivo, historia e interés independientes del humor, lo raro o nuevo pesa más en «interesante», risas del chat como pista, imagen que cuenta como humor, el lore del canal ni suma ni resta, tacos sin efecto, penalizar arranque lento, final cortado, chiste repetido y charla sin interés, severidad muy alta). «Puede ser viral» lo decide la IA con criterio general de contenido corto para TikTok/Reels/Shorts.

@@ -304,12 +304,16 @@ try {
 
   // comprobador de directos: cuadrícula leída de Twitch y «Analizar» cuando quieras
   await sub(page, 'Directos y actividad');
-  const bro = page.getByRole('region', { name: 'Comprobador de directos' });
+  const bro = page.getByRole('region', { name: 'Directos de tu canal' });
   await bro.getByTestId('bc-777').waitFor({ timeout: 20000 });
   assert.equal(await bro.locator('[data-testid^=bc-]').count(), 2, 'un recuadro por directo de Twitch');
   assert.deepEqual(await bro.locator('[data-testid^=bc-] .tiletitle').allInnerTexts(), ['Directo de prueba A', 'Directo de prueba B'], 'más reciente primero');
   assert.equal(await bro.locator('img').count(), 2, 'cada directo enseña su miniatura (la política de seguridad la permite)');
   await bro.getByTestId('bc-777').getByText('Sin analizar').waitFor();
+  await bro.getByRole('button', { name: /Por hacer 2/ }).waitFor();
+  await bro.getByRole('button', { name: /Analizados 0/ }).click();
+  await bro.getByText('No hay directos en este filtro.').waitFor();
+  await bro.getByRole('button', { name: /Todos 2/ }).click();
   await shot(page, '3c-comprobador-directos');
   log('comprobador de directos: cuadrícula leída de Twitch con miniaturas y estado de cada directo');
   await sub(page, 'Crear desde un VOD');
@@ -1217,7 +1221,7 @@ try {
   });
   await tab(page, 'Clips y publicación');
   await sub(page, 'Directos y actividad');
-  const bro2 = page.getByRole('region', { name: 'Comprobador de directos' });
+  const bro2 = page.getByRole('region', { name: 'Directos de tu canal' });
   await bro2.getByTestId('bc-777').waitFor({ timeout: 20000 });
   await bro2.getByTestId('bc-777').getByRole('button', { name: 'Analizar', exact: true }).click();
   await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).vods.some((v) => v.twitchId === '777'));

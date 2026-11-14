@@ -91,7 +91,7 @@ export default function ClipsTab(props: {
         tabs={[
           { id: 'canal', label: 'Clips de tu canal', hint: 'Los clips que la gente (o tú) ha creado en Twitch: míralos y elige cuáles llevar a la Biblioteca.' },
           { id: 'crear', label: 'Crear desde un VOD', hint: 'Corta tus propios clips y vídeos de un directo ya descargado. Los que se creen aparecen en la Biblioteca.' },
-          { id: 'directos', label: 'Directos y actividad', hint: 'Comprobador de directos: tus emisiones de Twitch en directo, para analizarlas cuando quieras; además, lo que el programa ha recogido, lo que está haciendo ahora y cómo añadir un VOD a mano.' },
+          { id: 'directos', label: 'Directos y actividad', hint: 'Tus directos de Twitch al momento: el que está en curso arriba, luego lo pendiente y lo ya analizado. Reanuda o analiza cualquiera cuando quieras.' },
         ]}
       >
       {sub === 'directos' && <BroadcastsCard vods={props.vods} onChanged={props.onChanged} />}

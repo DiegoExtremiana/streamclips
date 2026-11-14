@@ -15,7 +15,7 @@ const SCORING_MS = 15_000; // mientras se valoran clips se vuelve a preguntar pa
 const LOADING_MS = 3_000; // mientras se lee el historial se vuelve a preguntar enseguida
 
 
-const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'No está en la Biblioteca' };
+const STATE_LABEL: Record<ClipLibraryState, string> = { library: 'En la Biblioteca', preparing: 'Preparando…', none: 'Añadir a la Biblioteca' };
 
 /** Vista previa de un clip de Twitch sin descargarlo: se pide la dirección directa del vídeo y se reproduce aquí. */
 function ClipPreview({ clip, state, busy, onAdd, onClose, onCorrected }: { clip: TwitchClip; state: ClipLibraryState; busy: boolean; onAdd: () => void; onClose: () => void; onCorrected: () => void }) {
@@ -257,8 +257,8 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
               </div>
               <div className="tile-title title-ellipsis" title={c.gold ? `${c.title} · clip destacado` : c.title}>{c.title}</div>
               <div className="muted small" style={{ padding: '0 3px' }}>{fmtDate(c.createdAt)} · {c.views} vis.</div>
-              <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
-                <span className={`badge twstate ${st}`} data-testid={`twstate-${c.id}`}>{STATE_LABEL[st]}</span>
+              <div className="row" style={{ gap: 6, minHeight: 30 }}>
+                {st !== 'none' && <span className={`badge twstate ${st}`} data-testid={`twstate-${c.id}`}>{STATE_LABEL[st]}</span>}
                 {st === 'none' && (
                   <button className="btn small" disabled={busy === c.id} aria-label={`Añadir ${c.title} a la Biblioteca`} title="Añadir a la Biblioteca"
                     onClick={(e) => { e.stopPropagation(); void importClip(c.id); }}><IconPlus size={14} /> {busy === c.id ? '…' : 'Añadir'}</button>

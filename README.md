@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.32.0
+
+Segunda tanda de menús, con lo que pediste tras probar la 0.30:
+
+- **Cortar un clip** ahora enseña el **directo completo**: lo reproduces, vas a cualquier momento, pulsas «Empezar aquí» y «Acabar aquí», ajustas el tramo en la línea de tiempo morada y lo previsualizas con «Ver el clip» antes de crearlo. A la derecha ves el **chat del directo en ese momento** (el que Twitch guarda del VOD; si ya no está, la ventana lo avisa). Si el directo completo ya se borró del disco, sigue funcionando escribiendo los tiempos.
+- **Directos y actividad** pierde las listas «Actividad» y «Directos recogidos»: cada directo muestra su estado con un **anillo de progreso y el porcentaje sobre la miniatura** (descargando o analizando), el tiempo que queda, y sus botones (Analizar/Reanudar, Cortar clip, Revisar momentos, Pausar, Cancelar; en «Más»: Mostrar en carpeta y Liberar espacio). «Añadir un VOD a mano» queda al final de la lista.
+- **Ajustes**: cada sección enseña **un bloque cada vez** con pestañas arriba (General: Carpeta, Herramientas, Espacio, Actualizaciones · Piloto automático: Qué hace solo, Qué publica y cuándo, Portadas automáticas · Voz: Transcripción, Subtítulos, Quién habla, Vocabulario…). Dentro de «Qué hace solo» los bloques (Antes de publicar, Cómo edita, Cómo busca los momentos, Limpieza, Cuánto prepara, Serie) también son pestañas.
+- **Ventana de clip y de vídeo**: pestañas «Cuándo y dónde», «Datos», «Subtítulos» y «Miniatura» (en vez de bloques apilados).
+
 ## Novedades de la v0.31.0
 
 **Portadas pasa a ser un editor de verdad** (una especie de Photopea pequeño):

@@ -646,3 +646,6 @@ button.btn.danger-text { color: var(--bad); }
 .statusstrip { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 4px; }
 .modalfoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
 .apsummary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); }
+.ctl-sel.movable { pointer-events: auto; cursor: grab; touch-action: none; }
+.ctl-sel.movable:active { cursor: grabbing; }
+.ctl-sel:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

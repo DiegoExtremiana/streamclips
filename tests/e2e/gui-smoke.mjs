@@ -597,6 +597,28 @@ try {
   const endBefore = Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow'));
   assert.equal(endBefore, clipBefore.end);
   assert.equal(await dlg.getByRole('button', { name: 'Aplicar recorte' }).isDisabled(), true, 'sin cambios no hay nada que aplicar');
+  // mover el clip entero: arrastrando la parte morada (o con el teclado) cambian inicio y fin a la vez y la duración se conserva
+  const startBefore = Number(await dlg.getByTestId('grip-start').getAttribute('aria-valuenow'));
+  const lenBefore = endBefore - startBefore;
+  await dlg.getByTestId('grip-move').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(Number(await dlg.getByTestId('grip-start').getAttribute('aria-valuenow')), startBefore + 0.5, 'mover con el teclado desplaza el inicio');
+  assert.equal(Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow')), endBefore + 0.5, 'y el fin');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(Number(await dlg.getByTestId('grip-start').getAttribute('aria-valuenow')), startBefore);
+  const mb = await dlg.getByTestId('grip-move').boundingBox();
+  await page.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(mb.x + mb.width / 2 + 60, mb.y + mb.height / 2, { steps: 6 });
+  await page.mouse.up();
+  const s2 = Number(await dlg.getByTestId('grip-start').getAttribute('aria-valuenow'));
+  const e2 = Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow'));
+  assert.ok(s2 !== startBefore, 'arrastrar la parte morada mueve el clip');
+  assert.ok(Math.abs(e2 - s2 - lenBefore) < 0.11, `la duración se conserva (${lenBefore} -> ${(e2 - s2).toFixed(1)})`);
+  await dlg.locator('#ed-start').fill('0:01');
+  await dlg.locator('#ed-end').fill('0:04');
+  assert.equal(await dlg.getByRole('button', { name: 'Aplicar recorte' }).isDisabled(), true, 'volver a los valores originales deja el recorte sin cambios');
+  log('línea de tiempo: arrastrar la parte morada (o usar las flechas) mueve el clip entero conservando su duración');
   await dlg.getByTestId('grip-end').focus();
   await page.keyboard.press('ArrowLeft');
   assert.equal(Number(await dlg.getByTestId('grip-end').getAttribute('aria-valuenow')), Math.max(endBefore - 0.5, clipBefore.start + 1));

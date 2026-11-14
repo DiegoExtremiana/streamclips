@@ -31,6 +31,15 @@ export function moveHandle(which: 'start' | 'end', t: number, r: TrimRange, vodD
   return { start: r.start, end: round1(end) };
 }
 
+/** Desplaza el clip entero (mismo largo) `delta` segundos, sin salirse del directo ni de `bounds` si se dan. */
+export function moveRange(r: TrimRange, delta: number, vodDuration: number | null, bounds?: TrimRange): TrimRange {
+  const len = r.end - r.start;
+  const lo = Math.max(0, bounds?.start ?? 0);
+  const hiEnd = Math.min(vodDuration && vodDuration > 0 ? vodDuration : Infinity, bounds?.end ?? Infinity);
+  const start = Math.min(Math.max(r.start + delta, lo), Math.max(lo, hiEnd - len));
+  return { start: round1(start), end: round1(start + len) };
+}
+
 /** Posición (0..1) de un instante dentro de la ventana, y el camino inverso. */
 export const toFraction = (t: number, w: TrimRange): number => (w.end > w.start ? Math.min(1, Math.max(0, (t - w.start) / (w.end - w.start))) : 0);
 export const fromFraction = (f: number, w: TrimRange): number => w.start + Math.min(1, Math.max(0, f)) * (w.end - w.start);

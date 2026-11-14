@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { fmtTenths, fromFraction, moveHandle, timelineWindow, toFraction } from '../shared/trim';
+import { fmtTenths, fromFraction, moveHandle, moveRange, timelineWindow, toFraction } from '../shared/trim';
 import { parseTime } from '../shared/time';
 
 describe('recorte de clips', () => {
@@ -21,6 +21,14 @@ describe('recorte de clips', () => {
     assert.deepEqual(moveHandle('end', 5000, r, 1000), { start: 100, end: 280 }, 'máximo 180 s');
     assert.deepEqual(moveHandle('end', 5000, { start: 900, end: 950 }, 1000), { start: 900, end: 1000 }, 'ni más allá del final del directo');
     assert.deepEqual(moveHandle('end', 133.33, r, 1000), { start: 100, end: 133.3 }, 'décimas de segundo');
+  });
+  it('mover el clip entero conserva su duración y respeta los límites', () => {
+    const r = { start: 100, end: 130 };
+    assert.deepEqual(moveRange(r, 20, 1000), { start: 120, end: 150 });
+    assert.deepEqual(moveRange(r, -500, 1000), { start: 0, end: 30 }, 'no antes del inicio del directo');
+    assert.deepEqual(moveRange(r, 5000, 1000), { start: 970, end: 1000 }, 'ni más allá del final');
+    assert.deepEqual(moveRange(r, 5000, null, { start: 55, end: 175 }), { start: 145, end: 175 }, 'ni fuera de la ventana de la línea');
+    assert.deepEqual(moveRange(r, 3.33, 1000), { start: 103.3, end: 133.3 }, 'décimas de segundo');
   });
   it('posiciones y tiempos en la línea', () => {
     const w = { start: 50, end: 150 };

@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
-import { fmtTenths, fromFraction, moveHandle, timelineWindow, toFraction, type TrimRange } from '../../shared/trim';
+import { fmtTenths, fromFraction, moveHandle, moveRange, timelineWindow, toFraction, type TrimRange } from '../../shared/trim';
 
 /**
  * Línea de tiempo del recorte, al estilo del editor de clips de Twitch: el clip va marcado en morado con dos agarres
@@ -21,6 +21,8 @@ export default function ClipTimeline(props: {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<'start' | 'end' | null>(null);
   const scrubbing = useRef(false);
+  /** Arrastre del clip entero: dónde estaba el ratón y el recorte al empezar. */
+  const moving = useRef<{ t0: number; x0: number; from: TrimRange; moved: boolean } | null>(null);
   // la ventana se calcula al abrir (y no se mueve mientras se arrastra, para que los agarres no «huyan»)
   const win = useRef<TrimRange>(timelineWindow(range, vodDuration));
   if (range.start < win.current.start || range.end > win.current.end) win.current = timelineWindow(range, vodDuration);
@@ -51,6 +53,42 @@ export default function ClipTimeline(props: {
     } catch {
       /* ya soltado */
     }
+  };
+  const bodyDown = (e: PointerEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    moving.current = { t0: timeAt(e.clientX), x0: e.clientX, from: range, moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const bodyMove = (e: PointerEvent) => {
+    const m = moving.current;
+    if (!m) return;
+    if (!m.moved && Math.abs(e.clientX - m.x0) < 3) return; // un clic sin mover sigue siendo un clic
+    m.moved = true;
+    const next = moveRange(m.from, timeAt(e.clientX) - m.t0, vodDuration, w);
+    props.onChange(next);
+    props.onScrub?.(next.start);
+  };
+  const bodyUp = (e: PointerEvent) => {
+    const m = moving.current;
+    moving.current = null;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* ya soltado */
+    }
+    if (!m) return;
+    if (!m.moved) props.onSeek(Math.min(range.end, Math.max(range.start, timeAt(e.clientX))));
+    else if (range.start - w.start < 0.2 || w.end - range.end < 0.2) win.current = timelineWindow(range, vodDuration); // al tocar el borde, la línea se recentra para poder seguir
+  };
+  const bodyKey = (e: KeyboardEvent) => {
+    if (disabled) return;
+    const step = e.shiftKey ? 5 : 0.5;
+    const dir = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    props.onChange(moveRange(range, dir * step, vodDuration));
   };
   const key = (which: 'start' | 'end') => (e: KeyboardEvent) => {
     if (disabled) return;
@@ -88,7 +126,20 @@ export default function ClipTimeline(props: {
         onPointerCancel={() => { scrubbing.current = false; }}
       >
         <div className="ctl-dim" style={{ left: 0, width: `${a}%` }} />
-        <div className="ctl-sel" style={{ left: `${a}%`, width: `${Math.max(0, b - a)}%` }} />
+        <div
+          className={`ctl-sel ${disabled ? '' : 'movable'}`}
+          style={{ left: `${a}%`, width: `${Math.max(0, b - a)}%` }}
+          role="group"
+          tabIndex={disabled ? -1 : 0}
+          aria-label="Mover el clip entero"
+          title="Arrastra para mover todo el clip por el directo"
+          data-testid="grip-move"
+          onPointerDown={bodyDown}
+          onPointerMove={bodyMove}
+          onPointerUp={bodyUp}
+          onPointerCancel={bodyUp}
+          onKeyDown={bodyKey}
+        />
         <div className="ctl-dim" style={{ left: `${b}%`, right: 0 }} />
         {ph !== null && ph >= a && ph <= b && <div className="ctl-head" style={{ left: `${ph}%` }} data-testid="clip-playhead" />}
         {(['start', 'end'] as const).map((which) => (

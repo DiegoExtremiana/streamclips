@@ -687,3 +687,14 @@ button.btn.danger-text { color: var(--bad); }
 .cve-layer-main { flex: 1 0 100%; }
 .cve-layer .btn { flex: 1; }
 .cve-props textarea { min-height: 0; height: 64px; resize: vertical; }
+
+/* Anillo de progreso sobre la miniatura de un directo */
+.ringwrap { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(8, 10, 16, 0.62); }
+.ring { position: relative; width: 64px; height: 64px; display: grid; place-items: center; }
+.ring svg { position: absolute; inset: 0; }
+.ring-bg { fill: none; stroke: rgba(255, 255, 255, 0.18); stroke-width: 6; }
+.ring-fg { fill: none; stroke: #9b8cff; stroke-width: 6; stroke-linecap: round; transition: stroke-dasharray 0.4s ease; }
+.ring-fg.spin { transform-origin: 32px 32px; animation: ringspin 1.1s linear infinite; }
+@keyframes ringspin { to { transform: rotate(270deg); } }
+.ring-pct { position: relative; font-weight: 700; font-size: 14px; color: #fff; }
+.bmore > summary { cursor: pointer; }

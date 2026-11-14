@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChannelStatus, TwitchVod, VodJob } from '../../shared/types';
 import { fmtDate, fmtTime } from '../../shared/time';
 import { errMsg, notify } from '../lib';
-import { analysisTask, useNow, useTasks } from '../useTasks';
-import AnalysisProgress from '../AnalysisProgress';
+import { analysisTask, fmtEta, remainingSec, useNow, useTasks } from '../useTasks';
+import MomentsDialog from './MomentsDialog';
 import { IconFilm } from '../icons';
 
 const REFRESH_MS = 60_000;
@@ -32,10 +32,33 @@ export function broadcastPhase(v: TwitchVod, job: VodJob | undefined, live: Chan
   return { phase: 'failed', label: 'Error al analizar', cls: 'bad' };
 }
 
+/** Directos añadidos a mano (o que Twitch ya no lista): se enseñan igual que los demás. */
+function extraVods(list: TwitchVod[], vods: VodJob[]): TwitchVod[] {
+  return vods
+    .filter((j) => j.origin !== 'clip' && !list.some((v) => j.twitchId === v.id || j.url === v.url))
+    .map((j) => ({ id: j.twitchId ?? j.id, title: j.title, url: j.url, createdAt: j.streamStartedAt ?? j.createdAt, durationSec: j.durationSec ?? 0, thumbnail: '' }) as TwitchVod);
+}
+
 /** El VOD descargado que corresponde a un directo de Twitch (por id o por dirección). */
 export function jobFor(v: TwitchVod, vods: VodJob[]): VodJob | undefined {
   const mine = vods.filter((j) => j.twitchId === v.id || j.url === v.url);
   return mine.find((j) => j.status !== 'error') ?? mine[0];
+}
+
+/** Anillo de progreso con el porcentaje en medio, sobre la miniatura del directo. */
+function ProgressRing({ pct, label }: { pct: number | null; label: string }) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const v = pct === null ? 0 : Math.max(0, Math.min(100, pct));
+  return (
+    <div className="ring" role="progressbar" aria-label={label} aria-valuenow={pct === null ? undefined : Math.round(v)} aria-valuemin={0} aria-valuemax={100} data-testid="bc-ring">
+      <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="32" r={r} className="ring-bg" />
+        <circle cx="32" cy="32" r={r} className={`ring-fg ${pct === null ? 'spin' : ''}`} strokeDasharray={pct === null ? `${c * 0.25} ${c}` : `${(c * v) / 100} ${c}`} transform="rotate(-90 32 32)" />
+      </svg>
+      <span className="ring-pct">{pct === null ? '…' : `${Math.round(v)}%`}</span>
+    </div>
+  );
 }
 
 type Filter = 'todos' | 'porhacer' | 'hechos';
@@ -62,6 +85,20 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
   const [loading, setLoading] = useState(false);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [momentsFor, setMomentsFor] = useState<{ id: string; title: string } | null>(null);
+  const [url, setUrl] = useState('');
+
+  async function act(key: string, fn: () => Promise<unknown>) {
+    setBusy(key);
+    try {
+      await fn();
+      await onChanged();
+    } catch (e) {
+      notify(errMsg(e), 'bad');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,7 +128,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
   const [filter, setFilter] = useState<Filter>('todos');
   const all = useMemo(
     () =>
-      (list ?? [])
+      [...(list ?? []), ...extraVods(list ?? [], vods)]
         .map((v) => {
           const job = jobFor(v, vods);
           return { v, job, p: broadcastPhase(v, job, channel?.stream) };
@@ -102,10 +139,12 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
   const counts: Record<Filter, number> = { todos: all.length, porhacer: all.filter((r) => !isDone(r.p.phase)).length, hechos: all.filter((r) => isDone(r.p.phase)).length };
   const rows = all.filter((r) => filter === 'todos' || (filter === 'hechos') === isDone(r.p.phase));
 
-  async function analyze(v: TwitchVod) {
+  async function analyze(v: TwitchVod, job?: VodJob) {
     setBusy(v.id);
     try {
-      await window.api.channelAnalyze(v.id);
+      // un directo añadido a mano (que Twitch ya no lista) se analiza directamente desde su descarga
+      if (job && job.status === 'downloaded' && !(list ?? []).some((x) => x.id === v.id)) await window.api.runAutopilot(job.id);
+      else await window.api.channelAnalyze(v.id);
       await onChanged();
       notify(`«${v.title}»: se descarga y el piloto automático lo analiza en cuanto esté listo.`);
     } catch (e) {
@@ -153,37 +192,65 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
         {rows.map(({ v, job, p }) => {
           const working = p.phase === 'queued' || p.phase === 'downloading' || p.phase === 'working';
           const again = p.phase === 'done' || p.phase === 'skipped' || p.phase === 'failed' || p.phase === 'ready';
+          const task = job ? analysisTask(tasks, job.id) : undefined;
+          const eta = task ? remainingSec(task, now) : null;
+          const ring = p.phase === 'downloading' && job ? job.progress : p.phase === 'working' ? (task ? task.progress : null) : undefined;
+          const error = p.phase === 'failed' || p.phase === 'interrupted' ? (job?.error || job?.autopilot?.note) : undefined;
           return (
             <div key={v.id} className="bcard" data-testid={`bc-${v.id}`}>
               <div className="tilethumb">
                 {v.thumbnail ? <img src={v.thumbnail} alt="" draggable={false} /> : <IconFilm size={22} />}
                 <span className="tiledur">{fmtTime(v.durationSec)}</span>
+                {ring !== undefined && <div className="ringwrap"><ProgressRing pct={ring} label={p.label} /></div>}
               </div>
               <div className="tiletitle" title={v.title}>{v.title || 'Directo sin título'}</div>
               <div className="muted small">{fmtDate(v.createdAt)}{typeof v.views === 'number' ? ` · ${v.views} visualizaciones` : ''}</div>
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
                 <span className={`badge ${p.cls}`} title={job?.error ?? job?.autopilot?.note}>{p.label}</span>
+                {job?.cleaned && <span className="badge ok" title="Se vuelve a descargar solo si hace falta (por ejemplo, para recortar un clip).">Directo borrado · {(job.cleaned.freedBytes / 1024 ** 3).toFixed(1)} GB</span>}
                 {job?.chapters && job.chapters.length > 1 && <span className="muted small">{new Set(job.chapters.map((c) => c.title)).size} categorías</span>}
               </div>
-              {p.phase === 'working' && job && analysisTask(tasks, job.id) && <AnalysisProgress task={analysisTask(tasks, job.id)!} now={now} />}
-              {p.phase === 'failed' && (job?.error || job?.autopilot?.note) && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{(job.error ?? job.autopilot?.note ?? '').slice(0, 160)}</div>}
+              {p.phase === 'working' && <div className="muted small">{eta !== null ? `Quedan ${fmtEta(eta)}` : 'Calculando el tiempo…'}{task?.detail ? ` · ${task.detail}` : ''}</div>}
+              {error && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{error.slice(0, 160)}</div>}
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
                 <button
                   className={`btn small ${again ? 'ghost' : ''}`}
                   disabled={p.phase === 'live' || busy === v.id || p.phase === 'queued' || p.phase === 'downloading'}
                   title={p.phase === 'live' ? 'Todavía está en directo' : working ? 'Cancela el análisis en marcha y empieza de nuevo' : again ? 'Vuelve a analizarlo; sustituye los vídeos pendientes de revisión que sacó antes' : undefined}
-                  onClick={() => void analyze(v)}
+                  onClick={() => void analyze(v, job)}
                 >
                   {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' || p.phase === 'interrupted' ? 'Reanudar' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
                 </button>
-                {job?.status === 'downloaded' && <button className="btn ghost small" title="Corta a mano un clip de este directo" onClick={() => onCut(job.id)}>Cortar clip</button>}
-                {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.pauseAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Pausar</button>}
-                {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.cancelAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Cancelar</button>}
+                {job?.status === 'downloaded' && <button className="btn ghost small" title="Mira el directo, elige el momento y corta un clip" onClick={() => onCut(job.id)}>Cortar clip</button>}
+                {(p.phase === 'done' || p.phase === 'skipped') && job && (
+                  <button className="btn ghost small" title="Mira la nota y el motivo de cada momento, descarta, incluye o recorta, y regenera sin volver a analizar." onClick={() => setMomentsFor({ id: job.id, title: job.title || 'Directo' })}>Revisar momentos</button>
+                )}
+                {p.phase === 'working' && job && <button className="btn ghost small" title="Detiene el análisis conservando lo ya transcrito; se retoma con «Reanudar», aunque cierres el programa." onClick={() => void act(`ps${job.id}`, () => window.api.pauseAutopilot(job.id))}>Pausar</button>}
+                {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void act(`cx${job.id}`, () => window.api.cancelAutopilot(job.id))}>Cancelar</button>}
               </div>
+              {job && job.status === 'downloaded' && (job.filePath || (job.filePath && p.phase === 'done')) && (
+                <details className="bmore">
+                  <summary className="muted small">Más</summary>
+                  <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {job.filePath && <button className="btn ghost small" onClick={() => void window.api.openPath(job.filePath!).catch(() => undefined)}>Mostrar en carpeta</button>}
+                    {job.filePath && p.phase === 'done' && <button className="btn ghost small" title="Borra el directo completo del disco; se conservan los vídeos, los clips y sus transcripciones." disabled={busy === `dc${job.id}`} onClick={() => void act(`dc${job.id}`, () => window.api.discardVod(job.id))}>Liberar espacio</button>}
+                  </div>
+                </details>
+              )}
             </div>
           );
         })}
       </div>
+      <details className="bmore">
+        <summary className="muted">Añadir un VOD a mano</summary>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input type="text" aria-label="URL del VOD" placeholder="https://www.twitch.tv/videos/123456789" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && void act('add', async () => { await window.api.addVod(url.trim()); setUrl(''); })} />
+          <button className="btn" disabled={!url.trim()} onClick={() => void act('add', async () => { await window.api.addVod(url.trim()); setUrl(''); })}>Descargar</button>
+        </div>
+      </details>
+      {momentsFor && (
+        <MomentsDialog vodId={momentsFor.id} title={momentsFor.title} onClose={() => setMomentsFor(null)} onRegenerate={async () => { await window.api.runAutopilot(momentsFor.id); }} />
+      )}
     </section>
   );
 }

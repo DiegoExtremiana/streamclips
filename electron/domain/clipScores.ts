@@ -224,7 +224,8 @@ export class ClipScoreService {
   /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
     const s = this.scores.get(id);
-    return isGold(s?.score, s?.crit?.viral);
+    // si lo has corregido tú, manda tu nota: el potencial viral que vio la IA ya no lo mantiene dorado
+    return isGold(s?.score, s?.by === 'user' ? undefined : s?.crit?.viral);
   }
 
   /** El análisis en segundo plano está activado (Ajustes). */

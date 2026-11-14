@@ -10,6 +10,7 @@ import type { audioEnergy } from '../services/audioEnergy';
 import type { downloadVod } from '../services/downloader';
 import { SettingsService } from '../domain/settings';
 import { VodService } from '../domain/vods';
+import { VodChatService } from '../services/vodChat';
 import { ClipService } from '../domain/clips';
 import { CategoryService } from '../domain/categories';
 import type { Chapter } from '../../shared/categories';
@@ -121,6 +122,7 @@ export class AppContext {
   readonly style: StyleService;
   readonly covers: CoverService;
   readonly coverDesigns: CoverDesignService;
+  readonly vodChat = new VodChatService();
   readonly tasks: TaskTracker;
   readonly groups: GroupService;
   readonly pubs: PublicationService;

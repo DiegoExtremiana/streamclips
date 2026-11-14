@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { parseMediaUrl } from '../../shared/media';
+import { parseMediaUrl, parseVodMediaUrl } from '../../shared/media';
 import type { AppContext } from './context';
 
 /**
@@ -7,6 +7,11 @@ import type { AppContext } from './context';
  * Solo existen los archivos que la aplicación tiene registrados: no hay forma de pedir una ruta cualquiera.
  */
 export function resolveMedia(ctx: AppContext, rawUrl: string): string | null {
+  const vodId = parseVodMediaUrl(rawUrl);
+  if (vodId) {
+    const f = ctx.store.data.vods.find((x) => x.id === vodId)?.filePath;
+    return f && fs.existsSync(f) ? f : null;
+  }
   const parsed = parseMediaUrl(rawUrl);
   if (!parsed) return null;
   const o = ctx.store.data.outputs.find((x) => x.id === parsed.outputId);
@@ -16,7 +21,7 @@ export function resolveMedia(ctx: AppContext, rawUrl: string): string | null {
   return file;
 }
 
-const MIME: Record<string, string> = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' };
+const MIME: Record<string, string> = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.mov': 'video/quicktime', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' };
 
 export interface MediaPlan {
   status: 200 | 206 | 416;

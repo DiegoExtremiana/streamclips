@@ -114,6 +114,7 @@ export const CHANNELS = {
   speakersMerge: 'speakers:merge',
   vocabSet: 'vocab:set',
   suggestTitle: 'title:suggest',
+  vodChat: 'vod:chat',
   autoName: 'title:auto',
   clipContext: 'outputs:clipContext',
   transcriptPrompt: 'transcript:prompt',

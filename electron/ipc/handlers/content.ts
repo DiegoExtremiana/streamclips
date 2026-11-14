@@ -1,6 +1,7 @@
 import { CHANNELS } from '../../../shared/types';
 import type { IpcContext } from '../helpers';
 import { num, str, obj } from '../helpers';
+import { twitchVideoId } from '../../../shared/vodChat';
 
 /** Tareas, Whisper y transcripciones, momentos, portadas, estilo, preferencias y hablantes. */
 export function registerContent({ handle, ctx, platform }: IpcContext): void {
@@ -16,6 +17,12 @@ export function registerContent({ handle, ctx, platform }: IpcContext): void {
   handle(CHANNELS.clipContext, (id) => ctx.library.clipContext(str(id, 'id')));
   handle(CHANNELS.autoName, async () => (await ctx.autopilot.refreshLibraryAtStart({ generic: false })) ?? { renamed: 0, described: 0, noTranscript: 0, kept: 0 });
   handle(CHANNELS.suggestTitle, (vodId, start, end) => ctx.autopilot.suggestTitle(str(vodId, 'vodId'), num(start, 'start'), num(end, 'end')));
+  handle(CHANNELS.vodChat, async (vodId, from) => {
+    const job = ctx.store.data.vods.find((v) => v.id === str(vodId, 'vodId'));
+    const vid = job ? twitchVideoId(job) : null;
+    if (!vid) return { ok: false, messages: [], to: 0, error: 'Este directo no viene de Twitch, no hay chat que mostrar.' };
+    return ctx.vodChat.page(vid, num(from, 'fromSec'));
+  });
   handle(CHANNELS.transcriptRun, (vodId) => ctx.transcripts.transcribe(str(vodId, 'vodId')));
   handle(CHANNELS.transcriptEdit, (vodId, changes) => ctx.transcripts.editLines(str(vodId, 'vodId'), changes as never));
   handle(CHANNELS.vocabGet, () => ctx.transcripts.vocabulary());

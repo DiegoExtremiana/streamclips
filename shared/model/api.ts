@@ -163,6 +163,8 @@ export interface Api {
   /** Título provisional de un tramo a partir de lo que se dice en él (null si no hay transcripción de ese tramo). */
   /** Duración del directo de origen de un clip (null si el archivo ya no está), para la línea de tiempo del recorte. */
   clipContext(id: string): Promise<{ vodDurationSec: number | null; /** Sin VOD: se trabaja con el propio vídeo del clip (solo acortar y reencuadrar). */ clipOnly?: boolean }>;
+  /** Chat guardado del directo a partir de un segundo (para verlo junto al vídeo). */
+  vodChat(vodId: string, fromSec: number): Promise<import('../vodChat').VodChatPage>;
   suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null>;
   /** Pone un nombre corto, según lo que se dice, a los clips y vídeos de la Biblioteca que no tienen uno escrito por ti. */
   autoNameLibrary(): Promise<AutoNameResult>;

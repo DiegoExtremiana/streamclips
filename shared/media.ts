@@ -26,3 +26,25 @@ export function parseMediaUrl(raw: string): { outputId: string; part: MediaPart 
     return null;
   }
 }
+
+/** Directo completo (el VOD descargado) para verlo en la ventana de cortar clips. */
+export function vodMediaUrl(vodId: string, rev = ''): string {
+  const q = rev ? `?v=${encodeURIComponent(rev)}` : '';
+  return `${MEDIA_SCHEME}://v/${encodeURIComponent(vodId)}${q}`;
+}
+
+export function parseVodMediaUrl(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== `${MEDIA_SCHEME}:` || u.hostname !== 'v') return null;
+  try {
+    const id = decodeURIComponent(u.pathname.replace(/^\//, ''));
+    return id && !id.includes('/') ? id : null;
+  } catch {
+    return null;
+  }
+}

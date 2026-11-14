@@ -42,6 +42,26 @@ function make(over: Partial<ClipScoreDeps> = {}, file = tmp()) {
 // la nota no mira las visualizaciones: se dan valores distintos para comprobarlo
 const many = (n: number) => Array.from({ length: n }, (_, i) => clip(`c${i + 1}`, { views: i + 1 }));
 
+describe('clips sin palabras', () => {
+  it('un clip mudo con imagen se valora por lo que se ve y se oye, y el aviso de «sin palabras» ya no cuenta como fallo', async () => {
+    let calls = 0;
+    const { svc } = make({
+      analyze: async () => ({ durationSec: 20, words: [], energyDb: Array.from({ length: 20 }, () => -30), frames: ['f1.jpg', 'f2.jpg'] }),
+      judge: async (_c, words, frames) => {
+        calls++;
+        assert.equal(words.length, 0);
+        assert.equal(frames?.length, 2);
+        return { ...judged(8), ai: { provider: 'test', model: 'vision', vision: true } };
+      },
+    });
+    svc.enqueue([clip('mudo1')]);
+    await svc.idle();
+    assert.equal(calls, 1);
+    assert.ok(svc.scoreOf('mudo1') !== undefined, 'tiene nota');
+    assert.equal(svc.diagnostics().failed, 0);
+  });
+});
+
 describe('puntuación de clips en segundo plano', () => {
   it('puntúa solo lo que falta, lo recuerda en disco y solo dice si es dorado', async () => {
     const { svc, analyzed, file } = make();
@@ -218,7 +238,7 @@ describe('puntuación de clips en segundo plano', () => {
     await svc.idle();
     assert.equal(svc.scoreOf('c1'), undefined);
     assert.equal(svc.detailOf('c1'), undefined);
-    assert.match(svc.skipReason('c1') ?? '', /no hay nada que valorar/);
+    assert.match(svc.skipReason('c1') ?? '', /no hay imagen con la que valorarlo/);
     assert.equal(analyzed.length, 0);
     svc.enqueue([clip('c1')]);
     await svc.idle();

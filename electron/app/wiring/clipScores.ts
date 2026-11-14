@@ -74,7 +74,11 @@ export function createClipScoreService(app: AppContext, o: ContextOptions): Clip
         onPhase?.('volumen');
         const energyDb = await (o.energy ?? measureEnergy)(t, wav).catch(() => undefined);
         onPhase?.('transcripcion');
-        const words = await app.transcripts.transcribeAudio(wav, [clip.title]);
+        // un clip mudo, con música o solo gritos no tiene palabras: no es un fallo, se valora por lo que se ve y se oye (muecas, gestos, gritos)
+        const words = await app.transcripts.transcribeAudio(wav, [clip.title]).catch((e) => {
+          if (/ninguna palabra/.test((e as Error).message)) return [];
+          throw e;
+        });
         return { durationSec: clip.durationSec, words, energyDb, frames };
       } finally {
         fs.rmSync(wav, { force: true });

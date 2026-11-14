@@ -120,6 +120,8 @@ export class ClipScoreService {
         if (!v || typeof v !== 'object' || v.v < MIN_COMPATIBLE_VERSION || v.v > SCORE_VERSION) continue;
         // un intento fallido de una sesión anterior no se arrastra: tras actualizar el programa (o arreglar la causa) se vuelve a intentar
         if (v.score === undefined && !v.noText) continue;
+        // los clips sin nota «por no oírse nada» de antes de mirar la imagen se vuelven a examinar: ahora se valoran por muecas, gestos y gritos
+        if (v.score === undefined && v.noText && !/imagen/.test(v.reason ?? '')) continue;
         // una nota sin IA anotada (cálculo con el audio, o de una versión que no guardaba el modelo) no es fiable: se vuelve a examinar
         if (v.score !== undefined && !v.ai && v.by !== 'user') continue;
         // las notas de la IA anteriores a la calibración y el criterio del creador (v8) se vuelven a examinar; tus correcciones se conservan
@@ -402,7 +404,7 @@ export class ClipScoreService {
     const sig = await this.d.analyze(clip, mark);
     // sin palabras no hay nada que valorar: no se inventa una nota (un clip mudo no es «aburrido», es que no se puede leer)
     if (sig.words.length < MIN_WORDS_TO_JUDGE && !(sig.frames?.length && this.d.judge)) {
-      return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip, así que no hay nada que valorar.' };
+      return { v: SCORE_VERSION, at: this.now(), noText: true, reason: 'Sin nota: casi no se oye hablar en este clip y no hay imagen con la que valorarlo (activa la IA con visión en Ajustes).' };
     }
     if (!this.d.judge) throw new ModelBlocked(NO_AI);
     mark('modelo');

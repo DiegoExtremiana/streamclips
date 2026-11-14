@@ -180,7 +180,7 @@ export function clipJudgePrompt(title: string, words: Word[], durationSec: numbe
     `Título que le puso quien lo creó: ${JSON.stringify(title)}. Duración: ${Math.round(durationSec)} s.` +
     guide +
     (frames ? `\nSe adjuntan ${frames} fotogramas del clip, en orden, repartidos de principio a fin.` : '') +
-    `\nTranscripción:\n${text || '(casi no se habla: valora por la imagen)'}`
+    `\nTranscripción:\n${text || (frames ? '(no se oye hablar: valora por lo que se ve y se oye: muecas, gestos y caras, lo que pasa en pantalla, gritos o ruidos; en las pruebas empieza por «Imagen:»)' : '(casi no se habla)')}`
   );
 }
 

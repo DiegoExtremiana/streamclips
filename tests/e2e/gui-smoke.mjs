@@ -590,7 +590,7 @@ try {
   await page.getByTestId('item-Mi clip vertical').click();
   await dlg.waitFor();
   await dlg.getByTestId('clip-studio').waitFor();
-  assert.equal(await dlg.getByRole('tab').count(), 0, 'ya no hay pestañas: las dos versiones se ven a la vez');
+  assert.equal(await dlg.getByRole('tab', { name: /^(Vertical|Horizontal)$/ }).count(), 0, 'las dos versiones se ven a la vez, sin pestañas de formato');
   for (const v of ['horizontal', 'vertical']) {
     await dlg.getByTestId(`version-${v}`).waitFor();
     await page.waitForFunction((n) => document.querySelector(`[data-testid="player-Reproductor ${n}"]`)?.readyState >= 1, v);

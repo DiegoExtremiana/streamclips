@@ -83,14 +83,14 @@ describe('corregir la nota de un clip', () => {
     return { svc, feedback, asked: () => asked };
   }
 
-  it('corregir la nota cambia lo dorado: sube a dorado con 8 o más y lo pierde al bajar, aunque la IA viera potencial viral', async () => {
+  it('corregir la nota cambia lo dorado: sube a dorado con 8 o más y lo pierde al bajar; manda la nota final', async () => {
     const { svc } = await scored();
     assert.equal(svc.gold('k1'), false);
     svc.correct('k1', { humor: 10, historia: 10, interes: 10 });
     assert.equal(svc.gold('k1'), true, 'con todo a 10 la nota pasa de 8');
     svc.undoCorrection('k1');
     assert.equal(svc.gold('k1'), false);
-    // la IA vio potencial viral (≥ 8) pero tú lo bajas: la nota manda
+    // la nota final (la tuya tras corregir) manda, nunca la viralidad suelta
     const f = new ClipFeedbackStore(path.join(tmp(), 'f2.json'));
     const s2 = new ClipScoreService({
       file: path.join(tmp(), 's2.json'), canRun: () => true, sleep: async () => undefined, feedback: f,
@@ -99,11 +99,11 @@ describe('corregir la nota de un clip', () => {
     });
     s2.enqueue([clip]);
     await s2.idle();
-    assert.equal(s2.gold('k1'), true, 'la IA lo ve viral');
+    assert.equal(s2.gold('k1'), false, 'nota media aunque sea viral: no es dorado');
+    s2.correct('k1', { humor: 10, historia: 10, interes: 10 });
+    assert.equal(s2.gold('k1'), true, 'tu nota alta lo vuelve dorado');
     s2.correct('k1', { humor: 3, historia: 3, interes: 3 });
-    assert.equal(s2.gold('k1'), false, 'tu corrección quita lo dorado');
-    s2.undoCorrection('k1');
-    assert.equal(s2.gold('k1'), true, 'volver a la nota de la IA lo devuelve');
+    assert.equal(s2.gold('k1'), false, 'al bajarla de nuevo deja de serlo');
   });
 
   it('recalcula la nota con lo que dices, conserva la viralidad de la IA y guarda la corrección con lo que se decía', async () => {

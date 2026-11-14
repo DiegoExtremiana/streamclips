@@ -220,12 +220,12 @@ describe('puntuación de clips en segundo plano', () => {
     assert.equal(typeof d?.at, 'number');
   });
 
-  it('un clip flojo en todo pero con potencial viral claro sale dorado; uno flojo sin viralidad no', async () => {
+  it('dorado depende solo de la nota final: con potencial viral pero nota baja no es dorado', async () => {
     const viral = make({ judge: async () => ({ ...judged(1), criteria: { humor: 1, historia: 1, viral: 10, interes: 1 }, ai: { provider: 'test', model: 'm' } }) });
     viral.svc.enqueue([clip('good1')]);
     await viral.svc.idle();
     assert.ok((viral.svc.scoreOf('good1') ?? 99) < 8);
-    assert.equal(viral.svc.gold('good1'), true);
+    assert.equal(viral.svc.gold('good1'), false, 'la nota final manda, no la viralidad suelta');
     const flat = make({ judge: async () => ({ ...judged(1), ai: { provider: 'test', model: 'm' } }) });
     flat.svc.enqueue([clip('good1')]);
     await flat.svc.idle();

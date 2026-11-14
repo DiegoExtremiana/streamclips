@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.32.1
+
+- **Clips dorados según la nota final**: un clip es dorado solo si su nota final llega a 8/10. Si tú corriges la nota, vale la tuya hasta que la vuelvas a cambiar; ya no lo mantiene dorado el potencial viral que vio la IA.
+
 ## Novedades de la v0.32.0
 
 Segunda tanda de menús, con lo que pediste tras probar la 0.30:

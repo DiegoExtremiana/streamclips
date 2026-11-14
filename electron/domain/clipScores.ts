@@ -226,8 +226,8 @@ export class ClipScoreService {
   /** ¿Pasa de 8/10? */
   gold(id: string): boolean {
     const s = this.scores.get(id);
-    // si lo has corregido tú, manda tu nota: el potencial viral que vio la IA ya no lo mantiene dorado
-    return isGold(s?.score, s?.by === 'user' ? undefined : s?.crit?.viral);
+    // solo manda la nota final (la tuya si la has corregido, hasta que la vuelvas a corregir)
+    return isGold(s?.score);
   }
 
   /** El análisis en segundo plano está activado (Ajustes). */
@@ -331,7 +331,7 @@ export class ClipScoreService {
         '# Notas de tus clips de Twitch',
         '',
         'Lo escribe StreamClips solo. Cada clip lo examina la IA una vez y la nota queda aquí con la IA, el modelo y la fecha del examen; si no hay IA disponible (o el modelo está retirado) no se guarda ninguna nota y se examina cuando la haya.',
-        'Nota de 0 a 10. Dorado: nota de 8 o más, o «Viral» de 8 o más. Se mide el contenido, nunca las visualizaciones.',
+        'Nota de 0 a 10. Dorado: nota final de 8 o más. Se mide el contenido, nunca las visualizaciones.',
         '',
         '| Nota | Humor | Se cuenta algo | Viral | Interesante | Modificado | Clip | Fecha del clip | IA | Modelo | Examinado | Motivo |',
         '|---|---|---|---|---|---|---|---|---|---|---|---|',
@@ -373,7 +373,7 @@ export class ClipScoreService {
     const head = ['Id del clip', 'Clip', 'Enlace', 'Fecha del clip', 'Nota', 'Humor', 'Se cuenta algo', 'Interesante', 'Viral', 'Dorado', 'Modificado', 'Nota de la IA', 'IA', 'Modelo', 'Con imagen', 'Examinado', 'Motivo', 'Resumen'];
     const body = rows.map(([id, v]) => [
       id, v.title ?? '', `https://clips.twitch.tv/${id}`, (v.createdAt ?? '').slice(0, 10), n(v.score), n(v.crit?.humor), n(v.crit?.historia), n(v.crit?.interes), n(v.crit?.viral),
-      isGold(v.score, v.by === 'user' ? undefined : v.crit?.viral) ? 'Sí' : 'No', v.by === 'user' ? 'Sí' : 'No', v.by === 'user' && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
+      isGold(v.score) ? 'Sí' : 'No', v.by === 'user' ? 'Sí' : 'No', v.by === 'user' && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
       v.ai?.provider ?? '', v.ai?.model ?? '', v.ai?.vision ? 'Sí' : 'No', new Date(v.at).toISOString().slice(0, 16).replace('T', ' '), v.reason ?? '', v.summary ?? '',
     ]);
     fs.mkdirSync(path.dirname(file), { recursive: true });

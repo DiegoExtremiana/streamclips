@@ -36489,7 +36489,7 @@ function peakRise(energyDb) {
   const peak = sorted[Math.floor(sorted.length * 0.95)];
   return Math.max(0, peak - median2);
 }
-var isGold = (score, viral) => typeof score === "number" && score >= GOLD_MIN || typeof viral === "number" && viral >= GOLD_MIN;
+var isGold = (score) => typeof score === "number" && score >= GOLD_MIN;
 
 // shared/clipFeedback.ts
 var EDITABLE = ["historia", "interes", "humor"];
@@ -36767,7 +36767,7 @@ var ClipScoreService = class {
   /** ¿Pasa de 8/10? */
   gold(id) {
     const s = this.scores.get(id);
-    return isGold(s?.score, s?.by === "user" ? void 0 : s?.crit?.viral);
+    return isGold(s?.score);
   }
   /** El análisis en segundo plano está activado (Ajustes). */
   enabled() {
@@ -36860,7 +36860,7 @@ var ClipScoreService = class {
         "# Notas de tus clips de Twitch",
         "",
         "Lo escribe StreamClips solo. Cada clip lo examina la IA una vez y la nota queda aqu\xED con la IA, el modelo y la fecha del examen; si no hay IA disponible (o el modelo est\xE1 retirado) no se guarda ninguna nota y se examina cuando la haya.",
-        "Nota de 0 a 10. Dorado: nota de 8 o m\xE1s, o \xABViral\xBB de 8 o m\xE1s. Se mide el contenido, nunca las visualizaciones.",
+        "Nota de 0 a 10. Dorado: nota final de 8 o m\xE1s. Se mide el contenido, nunca las visualizaciones.",
         "",
         "| Nota | Humor | Se cuenta algo | Viral | Interesante | Modificado | Clip | Fecha del clip | IA | Modelo | Examinado | Motivo |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
@@ -36906,7 +36906,7 @@ var ClipScoreService = class {
       n(v.crit?.historia),
       n(v.crit?.interes),
       n(v.crit?.viral),
-      isGold(v.score, v.by === "user" ? void 0 : v.crit?.viral) ? "S\xED" : "No",
+      isGold(v.score) ? "S\xED" : "No",
       v.by === "user" ? "S\xED" : "No",
       v.by === "user" && v.aiCrit ? n(overall(v.aiCrit)) : n(v.score),
       v.ai?.provider ?? "",

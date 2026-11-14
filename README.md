@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.32.3
+
+- **Clip anterior y siguiente**: en la ventana de un clip hay dos flechas (también con las flechas izquierda y derecha del teclado) que pasan al clip anterior o siguiente de la lista que estás viendo, con un deslizamiento hacia el lado correspondiente.
+- **La viralidad ya no se puede corregir a mano**: la valora solo la IA con su examen estricto; tus correcciones de humor, historia e interés siguen enseñándole.
+
 ## Novedades de la v0.32.2
 
 - **«Puede ser viral» mucho más exigente**: ocho preguntas (gancho, frase citable, emoción, que lo entienda cualquiera, cierre, compartible, simulación de scroll y ausencia de defectos). Cinco de ellas son puertas: si una falla, la nota tiene tope (6 si es un «no», 8,9 si es un «algo»). Cada «sí» exige una cita real o una imagen concreta.

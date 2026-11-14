@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { AutopilotSettings, Platform } from '../../shared/types';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS } from '../../shared/subtitles';
 import { errMsg } from '../lib';
+import { Fold } from '../library/ui';
 
 const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
@@ -75,19 +76,35 @@ export function AutopilotCard() {
         Al terminar un directo, el programa recoge el VOD, lo transcribe (en castellano), busca los mejores momentos (volumen, voz y chat) y prepara
         un resumen, varios vídeos y clips. Todo lo programado se puede cambiar en la pestaña Inicio.
       </div>
+      <div className="apsummary" data-testid="ap-summary">
+        <span className={`badge ${a.enabled ? 'ok' : 'warn'}`}>{a.enabled ? 'Activado' : 'Desactivado'}</span>
+        <span className="muted small">
+          {a.enabled
+            ? `Prepara hasta ${a.maxVideos} vídeo(s) y ${a.maxClips} clip(s) por directo${a.requireApproval ? ' y te pide el visto bueno antes de programar' : ' y lo programa solo'}.`
+            : 'No hace nada solo: puedes analizar los directos a mano desde Clips y publicación.'}
+        </span>
+      </div>
       <Check checked={a.enabled} onChange={(v) => up({ enabled: v })} title="Activar el piloto automático" />
+
+      <Fold label="Antes de publicar" title="Antes de publicar">
       <Check checked={a.requireApproval} onChange={(v) => up({ requireApproval: v })} title="Pedir mi visto bueno antes de programar">Si lo desactivas, se programa solo.</Check>
+      </Fold>
+      <Fold label="Edición automática" title="Cómo edita">
       <Check checked={a.proEdit !== false} onChange={(v) => up({ proEdit: v })} title="Edición profesional">Quita silencios y tiempos muertos, acerca la imagen en los momentos fuertes, añade efectos de sonido y fundidos e iguala el volumen.</Check>
       <Check checked={a.soundCues !== false} onChange={(v) => up({ soundCues: v })} title="Efectos de sonido según lo que digo">Pone un sonido cuando dices «ganamos», «dinero», «he muerto»… (sonidos propios, sin derechos de autor; puedes sustituir cualquiera dejando un archivo con su nombre, por ejemplo tada.mp3, en %APPDATA%\\StreamClips\\Sonidos).</Check>
       <Check checked={a.music !== false} onChange={(v) => up({ music: v })} title="Música lofi de fondo">Si el vídeo no tiene ya música o sonido de fondo, añade una lofi sin letra, siempre por debajo de las voces, según el tema (café, viaje, noche, charla, juego). Puedes poner tu propia música con ese nombre (cafe.mp3…) en %APPDATA%\\StreamClips\\Música.</Check>
+      </Fold>
+      <Fold label="Análisis del directo" title="Cómo busca los momentos">
+      <Check checked={a.fastAnalysis !== false} onChange={(v) => up({ fastAnalysis: v })} title="Análisis rápido">Elige los momentos por volumen y chat y solo transcribe lo elegido (mucho más rápido). Si lo desactivas, se transcribe todo antes de elegir y los momentos también cuentan por lo que se dice.</Check>
       <Check checked={a.vodVision !== false} onChange={(v) => up({ vodVision: v })} title="Mirar el directo, no solo oírlo">De los mejores momentos saca fotogramas y el modelo puntúa lo que se ve (gestos, pantalla, gags visuales) y descarta los momentos con la imagen muerta (pantalla de espera, menú). Es un factor más de la nota.</Check>
       <Check checked={a.topics !== false} onChange={(v) => up({ topics: v })} title="Vídeos por tema">Busca temas e historias que se retoman a lo largo del directo y, si hay material, hace un vídeo con sentido o te pregunta si prefieres uno largo o varios cortos.</Check>
-      <Check checked={a.fastAnalysis !== false} onChange={(v) => up({ fastAnalysis: v })} title="Análisis rápido">Elige los momentos por volumen y chat y solo transcribe lo elegido (mucho más rápido). Si lo desactivas, se transcribe todo antes de elegir y los momentos también cuentan por lo que se dice.</Check>
       <Check checked={a.chatCapture} onChange={(v) => up({ chatCapture: v })} title="Guardar la actividad del chat durante el directo">Es anónimo: solo cuenta mensajes.</Check>
+      </Fold>
+      <Fold label="Limpieza" title="Limpieza de archivos">
       <Check checked={a.cleanup !== false} onChange={(v) => up({ cleanup: v })} title="Borrar el directo completo al terminar">Se conservan los vídeos, los clips y sus transcripciones; si hace falta el directo más adelante, se vuelve a descargar solo.</Check>
       <Check checked={a.purgePublished !== false} onChange={(v) => up({ purgePublished: v })} title="Borrar cada vídeo o clip cuando ya está publicado en todas sus redes">En Inicio queda el registro de lo publicado.</Check>
-
-      <h3>Cuánto prepara</h3>
+      </Fold>
+      <Fold label="Cuánto prepara" title="Cuánto prepara">
       <div className="row">
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="ap-videos">Vídeos por directo (resumen incluido)</label>
@@ -118,7 +135,8 @@ export function AutopilotCard() {
         <div className="muted small">Se reparten los núcleos del procesador: el total no acaba antes, pero ninguno espera a que termine otro. Con 1 se hacen de uno en uno.</div>
       </div>
 
-      <h3>Serie en curso</h3>
+      </Fold>
+      <Fold label="Serie en curso" title="Serie en curso" open={false}>
       <div className="row">
         <div className="field" style={{ flex: 2 }}>
           <label htmlFor="ap-series">Nombre de la serie (opcional)</label>
@@ -133,6 +151,7 @@ export function AutopilotCard() {
         Con una serie, los vídeos de cada directo se llaman «{a.series.name.trim() || 'Minecraft extremo'} Día {a.series.nextDay}» (y «- Resumen» o «- Parte 2» si hay varios),
         y el tema concreto va a la descripción. El día sube solo con cada directo. Si el título del directo ya dice «… día 3», se usa ese.
       </div>
+      </Fold>
       <button
         className="btn"
         onClick={() => {

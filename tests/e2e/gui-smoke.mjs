@@ -63,6 +63,12 @@ async function poll(fn, ms = 10000) {
 
 const tab = (page, name) => page.getByRole('tab', { name }).click();
 const sub = (page, name) => page.getByRole('tab', { name, exact: true }).click();
+/** «Cortar un clip…» (en Directos y actividad) abre la ventana para cortar un clip a mano de un directo descargado. */
+const openCut = async (page) => {
+  await sub(page, 'Directos y actividad');
+  await page.getByRole('button', { name: 'Cortar un clip…' }).click();
+  await page.getByRole('dialog', { name: 'Cortar un clip' }).waitFor();
+};
 const alertText = async (page) => (await page.getByRole('alert').first().innerText()).trim();
 const shot = (page, name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
 
@@ -92,7 +98,7 @@ try {
   await tab(page, 'Conexiones');
   for (const name of ['Twitch', 'Redes sociales', 'Estado y primeros pasos']) await sub(page, name);
   await tab(page, 'Clips y publicación');
-  for (const name of ['Crear desde un VOD', 'Directos y actividad', 'Clips de tu canal']) await sub(page, name);
+  for (const name of ['Directos y actividad', 'Clips de tu canal']) await sub(page, name);
   assert.ok((await page.locator('.navblurb').count()) === 6, 'cada botón del menú lleva su explicación');
   log('los menús de Clips y de Conexiones son laterales, como Ajustes, y el menú principal explica cada sección');
 
@@ -140,6 +146,7 @@ try {
   assert.ok(fs.statSync(outDir).isDirectory());
   log('la carpeta de salida válida se guarda y se crea en disco');
 
+  await page.getByText('Rutas de las herramientas (solo si no las encuentra)').click();
   await page.locator('#ytdlp-path').fill(`"${fakeYtdlp}"`); // con comillas, como "Copiar como ruta"
   await page.getByRole('button', { name: 'Guardar y comprobar' }).click();
   await page.getByText('2026.01.01-fake').waitFor();
@@ -148,6 +155,7 @@ try {
   log('comprobación de herramientas: ffmpeg, ffprobe y yt-dlp detectados');
 
   await sub(page, 'Voz y subtítulos');
+  await page.getByText('Avanzado: ruta de whisper-cli').click();
   await page.locator('#whisper-path').fill('whisper.exe');
   await page.getByRole('button', { name: 'Guardar transcripción' }).click();
   assert.match(await alertText(page), /ruta de whisper debe ser absoluta/);
@@ -316,7 +324,7 @@ try {
   await bro.getByRole('button', { name: /Todos 2/ }).click();
   await shot(page, '3c-comprobador-directos');
   log('comprobador de directos: cuadrícula leída de Twitch con miniaturas y estado de cada directo');
-  await sub(page, 'Crear desde un VOD');
+  await openCut(page);
   await page.getByLabel('Inicio', { exact: true }).fill('abc');
   await page.getByLabel('Fin', { exact: true }).fill('4');
   await page.getByRole('button', { name: 'Crear clip' }).click();
@@ -331,7 +339,6 @@ try {
   await page.locator('#clip-title').fill('Mi clip vertical');
   await page.getByRole('button', { name: 'Crear clip' }).click();
   await page.getByText('Clip creado y validado.').first().waitFor({ timeout: 60000 });
-  await page.getByText('Mi clip vertical', { exact: true }).waitFor();
   const verticalDir = path.join(outDir, 'vertical');
   const made = fs.readdirSync(verticalDir);
   assert.equal(made.length, 1);
@@ -352,7 +359,6 @@ try {
   await page.getByRole('button', { name: 'Aplicar plan' }).click();
   await page.getByText(/2 vídeo\(s\) creados y validados/).first().waitFor({ timeout: 90000 });
   await page.getByText(/clip 2: acaba después del final del VOD/).waitFor();
-  await page.getByText('Resumen largo', { exact: true }).waitFor();
   const dimsOf = (f) => execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f]).toString().trim();
   assert.equal(dimsOf(path.join(outDir, 'horizontal', fs.readdirSync(path.join(outDir, 'horizontal'))[0])), '1920,1080');
   assert.equal(dimsOf(path.join(outDir, 'long', fs.readdirSync(path.join(outDir, 'long'))[0])), '1920,1080');
@@ -393,6 +399,8 @@ try {
   await page.getByLabel('Plan de edición').fill('');
   log('un plan con un estilo de subtítulos inventado se rechaza con un aviso');
 
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog', { name: 'Cortar un clip' }).waitFor({ state: 'detached' });
   // ── Programación (ventana «Añadir subida») ──
   const localDayKeyOf = (iso) => toLocal(new Date(iso)).slice(0, 10);
   const dataNow = () => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8'));
@@ -894,14 +902,18 @@ try {
 
   // ── Eliminar clips y vídeos desde la Biblioteca ──
   await tab(page, 'Clips y publicación');
-  await sub(page, 'Crear desde un VOD');
+  await openCut(page);
+  let madeSoFar = fs.readdirSync(path.join(outDir, 'vertical')).length;
   for (const t of ['Borrar A', 'Borrar B', 'Borrar C', 'Borrar D', 'Borrar E']) {
     await page.getByLabel('Inicio', { exact: true }).fill('1');
     await page.getByLabel('Fin', { exact: true }).fill('3');
     await page.locator('#clip-title').fill(t);
     await page.getByRole('button', { name: 'Crear clip' }).click();
-    await page.getByLabel(`Programar subida de ${t}`).waitFor({ timeout: 60000 });
+    madeSoFar += 1;
+    for (let i = 0; i < 200 && fs.readdirSync(path.join(outDir, 'vertical')).length < madeSoFar; i++) await page.waitForTimeout(300);
+    await page.getByText('Clip creado y validado.').first().waitFor({ timeout: 60000 });
   }
+  await page.keyboard.press('Escape');
   assert.equal(fs.readdirSync(path.join(outDir, 'vertical')).length, 7);
   const vodFile = path.join(outDir, 'vods', 'e2e1.mp4');
 
@@ -1005,10 +1017,6 @@ try {
   await page.getByText(/Nombres cortos: \d+ renombrado/).waitFor();
   assert.ok(await page.getByTestId('item-Mi clip vertical').count(), 'un nombre escrito por el usuario no se toca');
   log('Biblioteca: «Nombres cortos» responde y no toca los nombres escritos por el usuario');
-  await tab(page, 'Clips y publicación');
-  await sub(page, 'Crear desde un VOD');
-  await page.getByText('Mi clip vertical', { exact: true }).waitFor();
-  await page.getByText('Resumen renombrado', { exact: true }).waitFor();
   await tab(page, 'Inicio');
   const progr = page.getByRole('region', { name: 'Próximas subidas' });
   const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return toLocal(d).slice(0, 10); };

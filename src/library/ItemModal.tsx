@@ -443,6 +443,14 @@ export default function ItemModal(props: {
         </div>
 
         <div className="formcol">
+          <div className="statusstrip" data-testid="item-status">
+            {ownPlatforms.filter(({ id }) => pubOf(id)).map(({ id, label }) => {
+              const pb = pubOf(id)!;
+              return <span key={id} className={`badge ${PUB_STATUS[pb.status].cls}`}>{label}: {PUB_STATUS[pb.status].label}</span>;
+            })}
+            {!ownPlatforms.some(({ id }) => pubOf(id)) && <span className="badge">Sin programar</span>}
+            {!o.remote && <span className={`badge ${burned ? 'ok' : ''}`}>{burned ? 'Con subtítulos' : 'Sin subtítulos'}</span>}
+          </div>
           {(
             <Fold label="Datos de la publicación" title={o.kind === 'long' ? 'Datos de YouTube' : 'Datos de la publicación'}>
               <form
@@ -489,6 +497,27 @@ export default function ItemModal(props: {
               <Notice msg={ytMsg} />
             </Fold>
           )}
+
+          <Fold label="Publicación" title="Cuándo se sube y dónde">
+            {o.kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}
+            {ownPlatforms.map(({ id, label }) => {
+              const r = rowState(id);
+              return (
+                <div key={id} className="row pubrow" data-testid={`pub-${id}`}>
+                  <span style={{ width: 150 }}><PlatformSwitch id={id} label={label} checked={r.on} disabled={r.locked} onChange={(on) => patchRow(id, { on })} /></span>
+                  <input type="datetime-local" aria-label={`Fecha y hora en ${label}`} value={r.when} disabled={r.locked || !r.on} onChange={(e) => patchRow(id, { when: e.target.value })} style={{ width: 200 }} />
+                  {r.pub && <span className={`badge ${PUB_STATUS[r.pub.status].cls}`}>{PUB_STATUS[r.pub.status].label}</span>}
+                  {r.pub?.note && <span className="muted small">{r.pub.note}</span>}
+                </div>
+              );
+            })}
+            <div className="row">
+              <button className="btn small" onClick={() => void saveSchedule()}>Guardar programación</button>
+            </div>
+            <div className="muted small">Desmarcar una red quita su programación pendiente. Lo ya publicado no se puede cambiar.</div>
+            <Notice msg={schedMsg} />
+          </Fold>
+
 
           {!o.remote && (
           <Fold label="Subtítulos" title="Subtítulos">
@@ -576,31 +605,11 @@ export default function ItemModal(props: {
           </Fold>
           )}
 
-          <Fold label="Publicación" title="Cuándo se sube y dónde">
-            {o.kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}
-            {ownPlatforms.map(({ id, label }) => {
-              const r = rowState(id);
-              return (
-                <div key={id} className="row pubrow" data-testid={`pub-${id}`}>
-                  <span style={{ width: 150 }}><PlatformSwitch id={id} label={label} checked={r.on} disabled={r.locked} onChange={(on) => patchRow(id, { on })} /></span>
-                  <input type="datetime-local" aria-label={`Fecha y hora en ${label}`} value={r.when} disabled={r.locked || !r.on} onChange={(e) => patchRow(id, { when: e.target.value })} style={{ width: 200 }} />
-                  {r.pub && <span className={`badge ${PUB_STATUS[r.pub.status].cls}`}>{PUB_STATUS[r.pub.status].label}</span>}
-                  {r.pub?.note && <span className="muted small">{r.pub.note}</span>}
-                </div>
-              );
-            })}
-            <div className="row">
-              <button className="btn small" onClick={() => void saveSchedule()}>Guardar programación</button>
-            </div>
-            <div className="muted small">Desmarcar una red quita su programación pendiente. Lo ya publicado no se puede cambiar.</div>
-            <Notice msg={schedMsg} />
-          </Fold>
-
-          <Fold label="Eliminar" title="Eliminar">
-            <div className="muted small">Borra este vídeo del disco con todas sus versiones. El VOD de origen no se toca. Te pediremos confirmación.</div>
-            <div className="row"><button className="btn danger small" onClick={props.onDelete}><IconTrash /> Eliminar este vídeo…</button></div>
-          </Fold>
         </div>
+      </div>
+      <div className="modalfoot">
+        <span className="muted small">Borra este vídeo del disco con todas sus versiones; el directo de origen no se toca. Te pediremos confirmación.</span>
+        <button className="btn danger small" onClick={props.onDelete}><IconTrash /> Eliminar este vídeo…</button>
       </div>
     </Modal>
   );

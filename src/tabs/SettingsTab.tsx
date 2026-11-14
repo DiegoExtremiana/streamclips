@@ -139,7 +139,11 @@ export default function SettingsTab() {
 
       <section className="card">
         <h2>Herramientas</h2>
-        <div className="muted small">Si están en el PATH de Windows, deja los campos vacíos.</div>
+        <div className="muted small">ffmpeg y yt-dlp son las herramientas que cortan y descargan los vídeos. Si el programa las encuentra solo, no hay nada que tocar.</div>
+        <details className="adv">
+          <summary>Rutas de las herramientas (solo si no las encuentra)</summary>
+          <div className="adv-body">
+            <div className="muted small">Si están en el PATH de Windows, deja los campos vacíos.</div>
         <div className="field">
           <label htmlFor="ffmpeg-path">Ruta de ffmpeg.exe (opcional; ffprobe debe estar en la misma carpeta)</label>
           <input id="ffmpeg-path" type="text" value={ffmpegPath} onChange={(e) => setFfmpegPath(e.target.value)} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
@@ -148,6 +152,8 @@ export default function SettingsTab() {
           <label htmlFor="ytdlp-path">Ruta de yt-dlp.exe (opcional)</label>
           <input id="ytdlp-path" type="text" value={ytdlpPath} onChange={(e) => setYtdlpPath(e.target.value)} placeholder="C:\tools\yt-dlp.exe" />
         </div>
+          </div>
+        </details>
         <button className="btn" onClick={() => void check()}>Guardar y comprobar</button>
         {tools && (
           <div className="list">
@@ -193,10 +199,6 @@ export default function SettingsTab() {
             )}
           </div>
         )}
-        <div className="field">
-          <label htmlFor="whisper-path">Ruta de whisper-cli (opcional)</label>
-          <input id="whisper-path" type="text" value={whisperPath} onChange={(e) => setWhisperPath(e.target.value)} placeholder="Vacío = el incluido con el programa" />
-        </div>
         <div className="row">
           <div className="field" style={{ flex: 1 }}>
             <label htmlFor="whisper-model">Modelo</label>
@@ -212,6 +214,15 @@ export default function SettingsTab() {
             <input id="whisper-lang" type="text" value={whisperLanguage} onChange={(e) => setWhisperLanguage(e.target.value)} placeholder="es" maxLength={3} />
           </div>
         </div>
+        <details className="adv">
+          <summary>Avanzado: ruta de whisper-cli</summary>
+          <div className="adv-body">
+        <div className="field">
+          <label htmlFor="whisper-path">Ruta de whisper-cli (opcional)</label>
+          <input id="whisper-path" type="text" value={whisperPath} onChange={(e) => setWhisperPath(e.target.value)} placeholder="Vacío = el incluido con el programa" />
+        </div>
+          </div>
+        </details>
         <button className="btn" onClick={() => void save()}>Guardar transcripción</button>
         {msg && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`} role="alert">{msg.text}</div>}
       </section>

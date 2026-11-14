@@ -2,6 +2,15 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.30.0
+
+Primera tanda de la reorganización de menús («poco a poco, intuitiva y fácil de usar»):
+
+- **Clips y publicación** tiene ahora dos secciones, en este orden: «Clips de tu canal» y «Directos y actividad». «Crear desde un VOD» desaparece como sección: cada directo descargado tiene un botón **Cortar clip** y arriba hay **Cortar un clip…** (eligiendo el directo). Se abre una ventana en tres pasos (qué momento, cómo quiere que salga, título). Lo avanzado (transcripción y plan de Claude) sigue dentro, plegado.
+- **Ventanas de clip y vídeo** (Biblioteca): tira de estado arriba con lo programado/publicado por red y si tiene subtítulos; «Cuándo se sube y dónde» pasa antes que los subtítulos; «Eliminar» deja de ser un bloque más y queda como pie discreto de la ventana.
+- **Ajustes**: «Piloto automático» se agrupa en bloques con nombre (Antes de publicar, Cómo edita, Cómo busca los momentos, Limpieza, Cuánto prepara, Serie en curso) y un resumen de una línea de lo que hace ahora; las rutas de ffmpeg/yt-dlp y de whisper-cli quedan plegadas como avanzado.
+- **Portadas** sigue igual: se rediseñará como editor propio (capas, texto con tipografía, ajustes de imagen y proyectos guardados) en la 0.31.
+
 ## Novedades de la v0.29.4
 
 - **«Directos y actividad» renovada** (primer paso de la reorganización de menús): ahora se titula «Directos de tu canal» y ordena la lista por lo que importa: el directo en curso arriba (con aviso propio), luego lo que se está analizando, lo pendiente, lo nuevo y al final lo ya analizado. Filtros «Todos / Por hacer / Analizados» con su contador.

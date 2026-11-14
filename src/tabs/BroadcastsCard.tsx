@@ -52,8 +52,8 @@ const isDone = (ph: Phase) => ph === 'done' || ph === 'skipped';
  * Directos de tu canal: tus directos de Twitch leídos en directo (cada minuto) en una cuadrícula, con el estado de
  * cada uno en el programa y un botón para analizarlos cuando quieras.
  */
-export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () => Promise<void> }) {
-  const { vods, onChanged } = props;
+export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () => Promise<void>; onCut: (vodId: string) => void }) {
+  const { vods, onChanged, onCut } = props;
   const tasks = useTasks();
   const now = useNow(tasks.some((t) => t.kind === 'analyze' && t.status === 'running'));
   const [list, setList] = useState<TwitchVod[] | null>(null);
@@ -126,6 +126,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
         <div className="row" style={{ gap: 10 }}>
           {checkedAt && <span className="muted small">Leído de Twitch a las {new Date(checkedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}; se actualiza solo cada minuto.</span>}
           <button className="btn ghost small" onClick={() => void load()} disabled={loading}>{loading ? 'Comprobando…' : 'Comprobar ahora'}</button>
+          <button className="btn small" onClick={() => onCut('')}>Cortar un clip…</button>
         </div>
       </div>
       {live?.live && (
@@ -175,6 +176,7 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
                 >
                   {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' || p.phase === 'interrupted' ? 'Reanudar' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
                 </button>
+                {job?.status === 'downloaded' && <button className="btn ghost small" title="Corta a mano un clip de este directo" onClick={() => onCut(job.id)}>Cortar clip</button>}
                 {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.pauseAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Pausar</button>}
                 {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void window.api.cancelAutopilot(job.id).then(onChanged).catch((e) => notify(errMsg(e), 'bad'))}>Cancelar</button>}
               </div>

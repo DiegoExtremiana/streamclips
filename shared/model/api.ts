@@ -1,3 +1,4 @@
+import type { VodChatPage } from '../vodChat';
 import type { StorageFreed, StorageReport } from '../storage';
 import type { AssetKind, ComposeOpts, CoverAsset } from '../covers';
 import type { CoverFont, Design, DesignRecord } from '../coverDesign';
@@ -166,7 +167,7 @@ export interface Api {
   /** Base de datos (carpeta de tablas CSV): se actualiza y dice qué hay en cada una. */
   databaseInfo(): Promise<{ dir: string; tables: { name: string; file: string; rows: number; about: string }[] }>;
   /** Chat guardado del directo a partir de un segundo (para verlo junto al vídeo). */
-  vodChat(vodId: string, fromSec: number): Promise<import('../vodChat').VodChatPage>;
+  vodChat(vodId: string, fromSec: number): Promise<VodChatPage>;
   suggestTitle(vodId: string, start: number, end: number): Promise<{ title: string; source: 'llm' | 'transcript' } | null>;
   /** Pone un nombre corto, según lo que se dice, a los clips y vídeos de la Biblioteca que no tienen uno escrito por ti. */
   autoNameLibrary(): Promise<AutoNameResult>;

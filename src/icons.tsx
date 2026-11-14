@@ -37,3 +37,13 @@ export const IconSearch = (p: P) => <Svg {...p}><circle cx="11" cy="11" r="7" />
 export const IconSortAsc = (p: P) => <Svg {...p}><path d="M12 19V6" /><polyline points="7 11 12 6 17 11" /><line x1="5" y1="21" x2="19" y2="21" /></Svg>;
 export const IconSortDesc = (p: P) => <Svg {...p}><path d="M12 5v13" /><polyline points="7 13 12 18 17 13" /><line x1="5" y1="3" x2="19" y2="3" /></Svg>;
 export const IconImage = (p: P) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.8" /><path d="M21 16l-5-5-8 9" /></Svg>;
+export const IconUp = (p: P) => <Svg {...p}><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></Svg>;
+export const IconDown = (p: P) => <Svg {...p}><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></Svg>;
+export const IconBack = (p: P) => <Svg {...p}><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></Svg>;
+export const IconEye = (p: P) => <Svg {...p}><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Svg>;
+export const IconEyeOff = (p: P) => <Svg {...p}><path d="M3 3l18 18" /><path d="M10.6 6.1A9.7 9.7 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.6 9.6 0 0 0 4-.9" /></Svg>;
+export const IconLock = (p: P) => <Svg {...p}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></Svg>;
+export const IconUnlock = (p: P) => <Svg {...p}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 7.5-2" /></Svg>;
+export const IconCopy = (p: P) => <Svg {...p}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></Svg>;
+export const IconText = (p: P) => <Svg {...p}><polyline points="5 7 5 4 19 4 19 7" /><line x1="12" y1="4" x2="12" y2="20" /><line x1="9" y1="20" x2="15" y2="20" /></Svg>;
+export const IconSquare = (p: P) => <Svg {...p}><rect x="4" y="6" width="16" height="12" rx="1.5" /></Svg>;

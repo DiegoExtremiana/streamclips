@@ -1,7 +1,7 @@
 import type { Layer } from '../../shared/coverDesign';
-import { IconTrash } from '../icons';
+import { IconCopy, IconDown, IconEye, IconEyeOff, IconImage, IconLock, IconSquare, IconText, IconTrash, IconUnlock, IconUp } from '../icons';
 
-const ICON: Record<Layer['type'], string> = { image: '🖼', text: 'T', rect: '▭' };
+const ICON: Record<Layer['type'], JSX.Element> = { image: <IconImage size={14} />, text: <IconText size={14} />, rect: <IconSquare size={14} /> };
 
 /** Lista de capas, la de arriba del todo es la que se ve delante. */
 export default function LayersPanel(props: {
@@ -22,11 +22,11 @@ export default function LayersPanel(props: {
             <span className="cve-layer-ic" aria-hidden="true">{ICON[l.type]}</span>
             <span className="title-ellipsis">{l.type === 'text' ? l.text.split('\n')[0] || l.name : l.name}</span>
           </button>
-          <button className="btn ghost small" aria-label={`${l.visible ? 'Ocultar' : 'Mostrar'} ${l.name}`} aria-pressed={!l.visible} onClick={() => props.onToggle(l.id, 'visible')}>{l.visible ? '👁' : '—'}</button>
-          <button className="btn ghost small" aria-label={`${l.locked ? 'Desbloquear' : 'Bloquear'} ${l.name}`} aria-pressed={l.locked} onClick={() => props.onToggle(l.id, 'locked')}>{l.locked ? '🔒' : '🔓'}</button>
-          <button className="btn ghost small" aria-label={`Subir ${l.name}`} onClick={() => props.onMove(l.id, 1)}>↑</button>
-          <button className="btn ghost small" aria-label={`Bajar ${l.name}`} onClick={() => props.onMove(l.id, -1)}>↓</button>
-          <button className="btn ghost small" aria-label={`Duplicar ${l.name}`} onClick={() => props.onDuplicate(l.id)}>⧉</button>
+          <button className="btn ghost small" aria-label={`${l.visible ? 'Ocultar' : 'Mostrar'} ${l.name}`} aria-pressed={!l.visible} onClick={() => props.onToggle(l.id, 'visible')}>{l.visible ? <IconEye size={14} /> : <IconEyeOff size={14} />}</button>
+          <button className="btn ghost small" aria-label={`${l.locked ? 'Desbloquear' : 'Bloquear'} ${l.name}`} aria-pressed={l.locked} onClick={() => props.onToggle(l.id, 'locked')}>{l.locked ? <IconLock size={14} /> : <IconUnlock size={14} />}</button>
+          <button className="btn ghost small" aria-label={`Subir ${l.name}`} onClick={() => props.onMove(l.id, 1)}><IconUp size={14} /></button>
+          <button className="btn ghost small" aria-label={`Bajar ${l.name}`} onClick={() => props.onMove(l.id, -1)}><IconDown size={14} /></button>
+          <button className="btn ghost small" aria-label={`Duplicar ${l.name}`} onClick={() => props.onDuplicate(l.id)}><IconCopy size={14} /></button>
           <button className="btn ghost small" aria-label={`Borrar ${l.name}`} onClick={() => props.onDelete(l.id)}><IconTrash size={14} /></button>
         </li>
       ))}

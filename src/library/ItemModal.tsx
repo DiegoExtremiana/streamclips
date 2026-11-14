@@ -16,7 +16,8 @@ import ClipStudio from './ClipStudio';
 import { PlatformSwitch } from './PlatformSwitch';
 import VerticalEditor from './VerticalEditor';
 import { layoutFromCropX, normalizeLayout, type VerticalLayout } from '../../shared/layout';
-import { Fold, Modal } from './ui';
+import { Modal } from './ui';
+import { SubTabs } from '../SubTabs';
 import type { CoverAsset } from '../../shared/covers';
 
 export const PLATFORMS: { id: Platform; label: string }[] = [
@@ -339,6 +340,15 @@ export default function ItemModal(props: {
   const captionsFor = (ref: typeof videoRef, size: { w: number; h: number }) =>
     liveOverlay ? <Captions videoRef={ref} words={outWords} style={SUBTITLE_STYLES[subsStyle]} renderSize={size} /> : undefined;
 
+  // ---- pestañas de la ventana: una sola cosa a la vez
+  const [itemTab, setItemTab] = useState<string>('subir');
+  const itemTabs = [
+    { id: 'subir', label: 'Cuándo y dónde' },
+    { id: 'datos', label: o.kind === 'long' ? 'Datos de YouTube' : 'Datos' },
+    ...(o.remote ? [] : [{ id: 'subs', label: 'Subtítulos' }]),
+    ...(o.remote || o.kind !== 'long' ? [] : [{ id: 'miniatura', label: 'Miniatura' }]),
+  ];
+
   // ---- programación
   const pubOf = (p: Platform) => props.pubs.find((x) => x.platform === p);
   const [edits, setEdits] = useState<Partial<Record<Platform, { on: boolean; when: string }>>>({});
@@ -465,23 +475,6 @@ export default function ItemModal(props: {
             <span className="badge">{isClip ? 'Clip' : 'Vídeo largo'}</span> {fmtTime(o.durationSec)} · {fmtDate(o.createdAt)}{o.category ? ` · Categoría: ${o.category}` : ''}
           </div>
           <Notice msg={dlMsg} />
-          {o.kind === 'long' && (
-            <Fold label="Miniatura" title="Miniatura">
-              {o.thumbnail && <img className="thumbpreview" alt="Miniatura actual" src={mediaUrl(o.id, 'thumb', o.thumbnail)} />}
-              <div className="row">
-                <button className="btn small" onClick={() => void thumbFromFrame()}>Usar el fotograma actual del vídeo</button>
-                <button className="btn ghost small" onClick={() => void openCoverPick()}>Usar una de mis portadas…</button>
-                <button className="btn ghost small" onClick={() => void thumbFromImage()}>Elegir una imagen…</button>
-              </div>
-              {coverPick && (
-                <div className="cve-picker" role="listbox" aria-label="Tus portadas" data-testid="thumb-cover-picker">
-                  {coverPick.length === 0 && <div className="muted small">Aún no tienes portadas. Crea una en la pestaña Portadas.</div>}
-                  {coverPick.map((a) => <CoverChoice key={a.id} a={a} onPick={() => void thumbFromCover(a)} />)}
-                </div>
-              )}
-              <Notice msg={thumbMsg} />
-            </Fold>
-          )}
             </>
           )}
         </div>
@@ -495,8 +488,9 @@ export default function ItemModal(props: {
             {!ownPlatforms.some(({ id }) => pubOf(id)) && <span className="badge">Sin programar</span>}
             {!o.remote && <span className={`badge ${burned ? 'ok' : ''}`}>{burned ? 'Con subtítulos' : 'Sin subtítulos'}</span>}
           </div>
-          {(
-            <Fold label="Datos de la publicación" title={o.kind === 'long' ? 'Datos de YouTube' : 'Datos de la publicación'}>
+          <SubTabs label="Qué quieres hacer con este vídeo" tabs={itemTabs} value={itemTab} onChange={setItemTab} />
+          {itemTab === 'datos' && (
+            <div className="itemtab" role="tabpanel" aria-label={o.kind === 'long' ? 'Datos de YouTube' : 'Datos de la publicación'}>
               <form
                 className="ytform"
                 onSubmit={(e) => {
@@ -539,10 +533,11 @@ export default function ItemModal(props: {
                 </div>
               </form>
               <Notice msg={ytMsg} />
-            </Fold>
+            </div>
           )}
 
-          <Fold label="Publicación" title="Cuándo se sube y dónde">
+          {itemTab === 'subir' && (
+          <div className="itemtab" role="tabpanel" aria-label="Cuándo se sube y dónde">
             {o.kind === 'long' && <div className="muted small">{VIDEO_ONLY_YOUTUBE}</div>}
             {ownPlatforms.map(({ id, label }) => {
               const r = rowState(id);
@@ -560,11 +555,12 @@ export default function ItemModal(props: {
             </div>
             <div className="muted small">Desmarcar una red quita su programación pendiente. Lo ya publicado no se puede cambiar.</div>
             <Notice msg={schedMsg} />
-          </Fold>
+          </div>
+          )}
 
 
-          {!o.remote && (
-          <Fold label="Subtítulos" title="Subtítulos">
+          {!o.remote && itemTab === 'subs' && (
+          <div className="itemtab" role="tabpanel" aria-label="Subtítulos">
             {!canSubtitle ? (
               <div className="muted small">Este vídeo no guarda de qué parte del VOD sale, así que no se le pueden añadir subtítulos.</div>
             ) : (
@@ -646,7 +642,24 @@ export default function ItemModal(props: {
               </>
             )}
             <Notice msg={subsMsg} />
-          </Fold>
+          </div>
+          )}
+          {!o.remote && o.kind === 'long' && itemTab === 'miniatura' && (
+          <div className="itemtab" role="tabpanel" aria-label="Miniatura">
+              {o.thumbnail && <img className="thumbpreview" alt="Miniatura actual" src={mediaUrl(o.id, 'thumb', o.thumbnail)} />}
+              <div className="row">
+                <button className="btn small" onClick={() => void thumbFromFrame()}>Usar el fotograma actual del vídeo</button>
+                <button className="btn ghost small" onClick={() => void openCoverPick()}>Usar una de mis portadas…</button>
+                <button className="btn ghost small" onClick={() => void thumbFromImage()}>Elegir una imagen…</button>
+              </div>
+              {coverPick && (
+                <div className="cve-picker" role="listbox" aria-label="Tus portadas" data-testid="thumb-cover-picker">
+                  {coverPick.length === 0 && <div className="muted small">Aún no tienes portadas. Crea una en la pestaña Portadas.</div>}
+                  {coverPick.map((a) => <CoverChoice key={a.id} a={a} onPick={() => void thumbFromCover(a)} />)}
+                </div>
+              )}
+              <Notice msg={thumbMsg} />
+          </div>
           )}
 
         </div>

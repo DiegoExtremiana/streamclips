@@ -407,8 +407,15 @@ try {
   const toLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   const inDays = (n, h, m = 0) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(h, m, 0, 0); return toLocal(d); };
   const sched = page.getByRole('dialog', { name: 'Añadir subida' });
+  /** Abre «Añadir subida» desde la tarjeta del clip en la Biblioteca (aparece al pasar el ratón). */
+  const openSched = async (title) => {
+    await tab(page, 'Biblioteca');
+    await page.getByRole('tab', { name: 'Clips', exact: true }).click();
+    await page.getByTestId(`item-${title}`).hover();
+    await page.getByRole('button', { name: `Programar subida de ${title}` }).click();
+  };
 
-  await page.getByRole('button', { name: 'Programar subida de Mi clip vertical' }).click();
+  await openSched('Mi clip vertical');
   await sched.waitFor();
   await sched.getByLabel('YouTube').check();
   await sched.getByLabel('TikTok').check();
@@ -418,7 +425,7 @@ try {
   await poll(() => dataNow().publications.filter((p) => p.status === 'scheduled').length === 2);
   log('«Añadir subida»: programar un clip en dos redes crea dos publicaciones pendientes y avisa con un mensaje');
 
-  await page.getByRole('button', { name: 'Programar subida de Mi clip vertical' }).click();
+  await openSched('Mi clip vertical');
   await sched.waitFor();
   await sched.getByLabel('YouTube').check();
   await sched.getByLabel('Fecha y hora').fill(inDays(2, 18));
@@ -427,7 +434,7 @@ try {
   assert.equal(dataNow().publications.length, 2, 'reprogramar no duplica');
   log('reprogramar una subida no la duplica');
 
-  await page.getByRole('button', { name: 'Programar subida de Mi clip vertical' }).click();
+  await openSched('Mi clip vertical');
   await sched.waitFor();
   await sched.getByLabel('Instagram').check();
   await sched.getByLabel('Fecha y hora').fill('2020-01-01T10:00');
@@ -437,7 +444,7 @@ try {
   log('una hora pasada se rechaza dentro de la ventana, sin cerrarla');
 
   // varias subidas el mismo día: otro clip, mismo día y casi a la misma hora que TikTok (16:00) → se permite y avisa
-  await page.getByRole('button', { name: 'Programar subida de Clip horizontal' }).click();
+  await openSched('Clip horizontal');
   await sched.waitFor();
   await sched.getByLabel('TikTok').check();
   await sched.getByLabel('Fecha y hora').fill(inDays(2, 16, 10));

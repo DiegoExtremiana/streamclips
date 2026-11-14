@@ -1,3 +1,4 @@
+import { IconBack } from '../icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   COVER_H, COVER_W, DESIGN_NAME_MAX, MAX_LAYERS, emptyDesign, emptyHistory, newImageLayer, newLayerId, newRectLayer, newTextLayer, normalizeDesign, pushState, redo, reorder, undo,
@@ -151,12 +152,12 @@ export default function CoverEditor(props: {
       }}
     >
       <div className="cve-bar">
-        <button className="btn ghost small" onClick={close}>← Volver</button>
+        <button className="btn ghost small" onClick={close}><IconBack size={14} /> Volver</button>
         <input className="cve-name" type="text" aria-label="Nombre de la portada" value={name} maxLength={DESIGN_NAME_MAX} onChange={(e) => { setName(e.target.value); setDirty(true); }} />
         <div className="row" style={{ gap: 6 }}>
           <button className="btn ghost small" disabled={!history.past.length} onClick={doUndo} title="Deshacer (Ctrl+Z)">Deshacer</button>
           <button className="btn ghost small" disabled={!history.future.length} onClick={doRedo} title="Rehacer (Ctrl+Y)">Rehacer</button>
-          <button className="btn" disabled={saving} onClick={() => void save()}>{saving ? 'Guardando…' : dirty ? 'Guardar portada' : 'Guardada ✓'}</button>
+          <button className="btn" disabled={saving} onClick={() => void save()}>{saving ? 'Guardando…' : dirty ? 'Guardar portada' : 'Guardada'}</button>
         </div>
       </div>
 

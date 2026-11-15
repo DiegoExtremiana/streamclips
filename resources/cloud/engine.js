@@ -93,10 +93,10 @@ var init_twitch = __esm({
         this.token = { clientId: c.clientId, value: j.access_token, expiresAt: this.now() + (j.expires_in ?? 3600) * 1e3 };
         return j.access_token;
       }
-      async helix(path33, c) {
+      async helix(path35, c) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const token = await this.appToken(c, attempt > 0);
-          const res = await this.request(`https://api.twitch.tv/helix/${path33}`, {
+          const res = await this.request(`https://api.twitch.tv/helix/${path35}`, {
             headers: { "Client-Id": c.clientId, Authorization: `Bearer ${token}` }
           });
           if (res.status === 401) {
@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs41 = require("fs");
+                var fs43 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs41.readFileSync(filename);
+                  var ret = fs43.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs41.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs43.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs40 = require("fs");
+            var fs42 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs40.readFileSync(filename);
+              var ret = fs42.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs40.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs42.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -30686,13 +30686,13 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs39 = __toESM(require("node:fs"));
+var import_node_fs41 = __toESM(require("node:fs"));
 var import_node_os12 = __toESM(require("node:os"));
-var import_node_path32 = __toESM(require("node:path"));
+var import_node_path34 = __toESM(require("node:path"));
 
 // electron/app/context.ts
-var import_node_fs38 = __toESM(require("node:fs"));
-var import_node_path31 = __toESM(require("node:path"));
+var import_node_fs40 = __toESM(require("node:fs"));
+var import_node_path33 = __toESM(require("node:path"));
 
 // shared/speakers.ts
 function assignSpeakers(words, segs, o = {}) {
@@ -31530,6 +31530,8 @@ var VIDEO_ONLY_YOUTUBE = "Los v\xEDdeos solo se publican en YouTube; los clips p
 var sectionOf = (kind) => kind === "long" ? "videos" : "clips";
 var MAX_GROUP_DEPTH = 5;
 var MAX_GROUP_NAME_LEN = 60;
+var TITLE_KINDS = ["capitulo", "frase", "gancho"];
+var TITLE = { minDur: 1, maxDur: 8, defaultDur: 3, maxLen: 60 };
 
 // shared/model/ipc.ts
 var MASKED_SECRET = "********";
@@ -31843,6 +31845,7 @@ function validateAutopilot(cur, p, enc) {
   if (p.enabled !== void 0) n.enabled = bool2(p.enabled, "El interruptor del piloto autom\xE1tico");
   if (p.requireApproval !== void 0) n.requireApproval = bool2(p.requireApproval, "La aprobaci\xF3n previa");
   if (p.proEdit !== void 0) n.proEdit = bool2(p.proEdit, "La edici\xF3n profesional");
+  if (p.director !== void 0) n.director = bool2(p.director, "El director de edici\xF3n");
   if (p.soundCues !== void 0) n.soundCues = bool2(p.soundCues, "Los efectos de sonido");
   if (p.music !== void 0) n.music = bool2(p.music, "La m\xFAsica de fondo");
   if (p.vodVision !== void 0) n.vodVision = bool2(p.vodVision, "La vista del directo");
@@ -32090,8 +32093,8 @@ function parseVodUrl(input) {
   return u.toString();
 }
 function safeId(id) {
-  const clean3 = id.replace(/[^A-Za-z0-9._-]/g, "_");
-  return clean3 && clean3 !== "." && clean3 !== ".." ? clean3 : "video";
+  const clean5 = id.replace(/[^A-Za-z0-9._-]/g, "_");
+  return clean5 && clean5 !== "." && clean5 !== ".." ? clean5 : "video";
 }
 async function downloadSection(tools, url, start, end, dir) {
   if (!(end > start) || start < 0) throw new Error("El tramo pedido no es v\xE1lido.");
@@ -32819,6 +32822,49 @@ async function hasBackgroundSound(tools, file, gaps, thresholdDb = -42) {
   return levels[Math.floor(levels.length / 2)] > thresholdDb;
 }
 
+// shared/overlays.ts
+var assTime2 = (s) => {
+  const cs = Math.max(0, Math.round(s * 100));
+  const h = Math.floor(cs / 36e4);
+  const m = Math.floor(cs % 36e4 / 6e3);
+  const sec = Math.floor(cs % 6e3 / 100);
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(cs % 100).padStart(2, "0")}`;
+};
+function buildOverlayAss(items, w, h, fontFamily = "Inter") {
+  const base2 = Math.round(Math.min(w, h) * 0.05);
+  const marginH = Math.round(w * 0.05);
+  const style = (name, size, color2, outline, box, align, marginV) => `Style: ${name},${fontFamily},${size},${assColor(color2)},${assColor(color2)},${box ? assColor(outline, 0.75) : assColor(outline)},${assColor("#000000", 0.5)},-1,0,0,0,100,100,0,0,${box ? 3 : 1},${box ? Math.round(size * 0.35) : Math.max(2, Math.round(size * 0.09))},0,${align},${marginH},${marginH},${marginV},1`;
+  const lines = [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${w}`,
+    `PlayResY: ${h}`,
+    "WrapStyle: 0",
+    "ScaledBorderAndShadow: yes",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    style("Capitulo", Math.round(base2 * 1.1), "#FFFFFF", "#111111", true, 1, Math.round(h * 0.12)),
+    style("Frase", Math.round(base2 * 1.25), "#FFFFFF", "#000000", false, 8, Math.round(h * 0.08)),
+    style("Gancho", Math.round(base2 * 1.2), "#FFE14D", "#000000", false, 8, Math.round(h * 0.08)),
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+  ];
+  const sorted = [...items].filter((o) => o.text.trim() && o.end > o.start).sort((a, b) => a.start - b.start);
+  let lastEnd = -1;
+  for (const o of sorted) {
+    const start = Math.max(o.start, lastEnd);
+    const end = Math.max(start + 0.5, o.end);
+    lastEnd = end;
+    const styleName = o.kind === "capitulo" ? "Capitulo" : o.kind === "gancho" ? "Gancho" : "Frase";
+    const text = assEscape(o.kind === "gancho" ? o.text.toLocaleUpperCase("es") : o.text);
+    lines.push(`Dialogue: 1,${assTime2(start)},${assTime2(end)},${styleName},,0,0,0,,{\\fad(200,300)}${text}`);
+  }
+  return `${lines.join("\n")}
+`;
+}
+
 // shared/music.ts
 var MUSIC_MOODS = ["cafe", "viaje", "noche", "charla", "juego"];
 var isMusicMood = (x) => typeof x === "string" && MUSIC_MOODS.includes(x);
@@ -32870,7 +32916,7 @@ var MAX_TITLE_LEN = 120;
 var MAX_CLIPS_PER_PLAN = 50;
 var MAX_LONG_SEGMENTS = 200;
 var MAX_CUTS = 40;
-var MAX_EFFECTS = 30;
+var MAX_EFFECTS = 80;
 var PUNCH = { minDur: 0.3, maxDur: 3, defaultDur: 1, minZoom: 1.05, maxZoom: 1.5, defaultZoom: 1.2 };
 var FADE = { min: 0.1, max: 2, default: 0.5 };
 var END_TOLERANCE_SEC = 0.5;
@@ -32974,8 +33020,15 @@ function validateEffects(effects, ranges) {
     } else if (e.type === "polish") {
       if (polish) return "solo puede haber un polish";
       polish = true;
+    } else if (e.type === "title") {
+      const at = e.at;
+      if (!isNum2(at)) return `el efecto ${i + 1} (title) necesita "at" num\xE9rico`;
+      if (!ranges.some((r2) => at >= r2.start && at <= r2.end)) return `el efecto ${i + 1} (title) cae en una parte cortada o fuera del v\xEDdeo`;
+      if (typeof e.text !== "string" || !e.text.trim() || e.text.trim().length > TITLE.maxLen) return `el efecto ${i + 1} (title) necesita un texto de 1 a ${TITLE.maxLen} caracteres`;
+      if (e.duration !== void 0 && (!isNum2(e.duration) || e.duration < TITLE.minDur || e.duration > TITLE.maxDur)) return `el efecto ${i + 1}: la duraci\xF3n del r\xF3tulo debe estar entre ${TITLE.minDur} y ${TITLE.maxDur} s`;
+      if (e.kind !== void 0 && !TITLE_KINDS.includes(e.kind)) return `el efecto ${i + 1}: el tipo de r\xF3tulo debe ser ${TITLE_KINDS.join(", ")}`;
     } else {
-      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music, joints o polish)`;
+      return `el efecto ${i + 1} tiene un tipo desconocido (usa punch, fadeIn, fadeOut, sfx, music, joints, polish o title)`;
     }
   }
   return null;
@@ -33000,6 +33053,7 @@ function validateLongSpec(l, vodDurationSec) {
   const fx = validateEffects(l.effects, l.segments);
   if (fx) return fx;
   if (l.subtitles !== void 0 && !isSubtitleStyleId(l.subtitles)) return "el estilo de subt\xEDtulos no existe";
+  if (l.coverText !== void 0 && (typeof l.coverText !== "string" || l.coverText.trim().length > 40)) return "la frase de la portada debe ser texto de 40 caracteres como m\xE1ximo";
   return null;
 }
 function normalizeClip(c, fallbackTitle) {
@@ -33017,6 +33071,7 @@ function normalizeEffects(list) {
     if (e.type === "polish") return { type: "polish" };
     if (e.type === "joints") return { type: "joints", duration: e.duration ?? 0.25 };
     if (e.type === "music") return { type: "music", mood: e.mood, volume: e.volume ?? 0.16 };
+    if (e.type === "title") return { type: "title", at: e.at, text: e.text.replace(/\s+/g, " ").trim().slice(0, TITLE.maxLen), duration: e.duration ?? TITLE.defaultDur, kind: e.kind ?? "frase" };
     return { type: e.type, duration: e.duration ?? FADE.default };
   });
 }
@@ -33027,6 +33082,7 @@ function normalizeLong(l) {
   };
   if (l.effects?.length) out.effects = normalizeEffects(l.effects);
   if (l.subtitles) out.subtitles = l.subtitles;
+  if (l.coverText?.trim()) out.coverText = l.coverText.replace(/\s+/g, " ").trim().slice(0, 40);
   return out;
 }
 function parsePlan(json, vodDurationSec) {
@@ -33232,8 +33288,8 @@ async function renderTimeline(tools, input, t, out) {
         {
           vf,
           layout: t.layout,
-          fadeIn: i === 0 ? fadeIn ? clampFade(fadeIn.duration) : void 0 : joints && r2.start - t.ranges[i - 1].end > JOINT_MIN_GAP ? jointDur : void 0,
-          fadeOut: i === t.ranges.length - 1 ? fadeOut ? clampFade(fadeOut.duration) : void 0 : joints && t.ranges[i + 1].start - r2.end > JOINT_MIN_GAP ? jointDur : void 0,
+          fadeIn: i === 0 ? fadeIn ? clampFade(fadeIn.duration) : void 0 : joints && Math.abs(r2.start - t.ranges[i - 1].end) > JOINT_MIN_GAP ? jointDur : void 0,
+          fadeOut: i === t.ranges.length - 1 ? fadeOut ? clampFade(fadeOut.duration) : void 0 : joints && Math.abs(t.ranges[i + 1].start - r2.end) > JOINT_MIN_GAP ? jointDur : void 0,
           polish,
           sfx: hasAudio ? allSfx.filter((e) => e.at >= r2.start && e.at <= r2.end).map((e) => ({ at: e.at - r2.start, sound: e.sound ?? "pop" })) : void 0
         },
@@ -33243,7 +33299,7 @@ async function renderTimeline(tools, input, t, out) {
     }
     const musicFx = fx.find((e) => e.type === "music");
     const music = musicFx ? await musicFile(tools, musicFx.mood) : null;
-    if (parts.length === 1 && !t.subs && !music) {
+    if (parts.length === 1 && !t.subs && !music && !fx.some((e) => e.type === "title")) {
       import_node_fs10.default.copyFileSync(parts[0], out);
       return;
     }
@@ -33281,11 +33337,23 @@ async function renderTimeline(tools, input, t, out) {
       ]);
     }
     if (music && musicFx) {
-      const mixed = t.subs ? import_node_path9.default.join(tmp, "music.mp4") : out;
+      const mixed = t.subs || fx.some((e) => e.type === "title") ? import_node_path9.default.join(tmp, "music.mp4") : out;
       await mixMusic(tools, joined, music, musicFx.volume ?? 0.16, mixed);
       joined = mixed;
     }
-    if (t.subs) {
+    const titles = fx.filter((e) => e.type === "title");
+    const overlays = titles.flatMap((e) => {
+      const at = toOutputTime(e.at, t.ranges);
+      return at === null ? [] : [{ start: at, end: Math.min(total2, at + (e.duration ?? TITLE.defaultDur)), text: e.text, kind: e.kind ?? "frase" }];
+    });
+    const passes = [];
+    if (t.subs) passes.push(t.subs);
+    if (overlays.length) {
+      const f = import_node_path9.default.join(tmp, "overlays.ass");
+      import_node_fs10.default.writeFileSync(f, buildOverlayAss(overlays, t.size.w, t.size.h));
+      passes.push({ ass: f, fontsDir: t.subs?.fontsDir ?? t.fontsDir });
+    }
+    if (passes.length) {
       await run(tools.ffmpeg, [
         "-y",
         "-hide_banner",
@@ -33294,7 +33362,7 @@ async function renderTimeline(tools, input, t, out) {
         "-i",
         joined,
         "-vf",
-        assFilter(t.subs),
+        passes.map(assFilter).join(","),
         "-map",
         "0:v:0",
         "-map",
@@ -33331,7 +33399,8 @@ async function renderClip(tools, input, spec, out) {
       layout: vertical ? spec.layout : void 0,
       size: vertical ? { w: 1080, h: 1920 } : { w: 1920, h: 1080 },
       effects: spec.effects,
-      subs: spec.subs
+      subs: spec.subs,
+      fontsDir: spec.fontsDir
     },
     out
   );
@@ -33339,11 +33408,11 @@ async function renderClip(tools, input, spec, out) {
 function concatLine(file) {
   return `file '${file.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`;
 }
-async function renderLong(tools, input, spec, out, subs) {
+async function renderLong(tools, input, spec, out, subs, fontsDir) {
   await renderTimeline(
     tools,
     input,
-    { ranges: spec.segments, baseVf: VF_HORIZONTAL, size: { w: 1920, h: 1080 }, effects: spec.effects, subs },
+    { ranges: spec.segments, baseVf: VF_HORIZONTAL, size: { w: 1920, h: 1080 }, effects: spec.effects, subs, fontsDir },
     out
   );
 }
@@ -33636,7 +33705,7 @@ var ClipService = class {
    * Renderiza todas las versiones pedidas, las valida y solo entonces registra el elemento.
    * Si cualquiera falla se borran todos los archivos: lo que no ha pasado la validación nunca llega a la Biblioteca.
    */
-  async build(vodId, kind, title, expectedSec, tolerance, extra, renders) {
+  async build(vodId, kind, title, expectedSec, tolerance, extra, renders, coverText2) {
     const input = this.vodFile(vodId);
     const outDir = this.d.store.data.settings.outputDir;
     const written = [];
@@ -33664,7 +33733,7 @@ var ClipService = class {
       };
       const main2 = primaryRender(item);
       try {
-        if (main2) item.thumbnail = await autoThumbnail(this.d.tools(), outDir, item.id, main2, files[main2], durationSec, this.coverOpts(title));
+        if (main2) item.thumbnail = await autoThumbnail(this.d.tools(), outDir, item.id, main2, files[main2], durationSec, this.coverOpts(coverText2 || title));
       } catch (e) {
         this.d.log.warn(`Sin miniatura para "${title}": ${e.message}`);
       }
@@ -33730,7 +33799,7 @@ var ClipService = class {
             clip.subtitles,
             ranges,
             k,
-            (subs) => renderClip(this.d.tools(), input, { kind: k, start: clip.start, end: clip.end, cropX, layout: clip.layout, cuts: clip.cuts, effects: clip.effects, subs }, out)
+            (subs) => renderClip(this.d.tools(), input, { kind: k, start: clip.start, end: clip.end, cropX, layout: clip.layout, cuts: clip.cuts, effects: clip.effects, subs, fontsDir: this.d.subtitles.fontsDir }, out)
           )
         }))
       );
@@ -33755,6 +33824,7 @@ var ClipService = class {
       if (category) extra.category = category;
       if (long.effects) extra.effects = long.effects;
       if (long.subtitles) extra.subtitles = long.subtitles;
+      if (long.coverText) extra.coverText = long.coverText;
       return this.build(vodId, "long", long.title, expected, tolerance, extra, [
         {
           render: "long",
@@ -33764,10 +33834,10 @@ var ClipService = class {
             long.subtitles,
             long.segments,
             "long",
-            (subs) => renderLong(this.d.tools(), input, long, out, subs)
+            (subs) => renderLong(this.d.tools(), input, long, out, subs, this.d.subtitles.fontsDir)
           )
         }
-      ]);
+      ], long.coverText);
     });
   }
   /** Aplica un plan completo. Lo que falla no impide que se creen los demás vídeos. */
@@ -37623,8 +37693,8 @@ var CoverService = class {
   }
   rename(id, name) {
     const a = this.get(id);
-    const clean3 = cleanAssetName(name);
-    a.name = uniqueName(clean3, this.items.filter((x) => x.id !== id).map((x) => x.name));
+    const clean5 = cleanAssetName(name);
+    a.name = uniqueName(clean5, this.items.filter((x) => x.id !== id).map((x) => x.name));
     this.save();
     return a;
   }
@@ -38192,30 +38262,30 @@ var Github = class {
     const j = await r2.json();
     return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
   }
-  async getContent(path33) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path33)}`);
+  async getContent(path35) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path35)}`);
     if (r2.status === 404) return null;
-    if (!r2.ok) await this.fail(r2, `el archivo ${path33}`);
+    if (!r2.ok) await this.fail(r2, `el archivo ${path35}`);
     const j = await r2.json();
     return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
   }
   /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
-  async putContent(path33, text, message, sha) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path33)}`, {
+  async putContent(path35, text, message, sha) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path35)}`, {
       json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
     });
     if (r2.status === 409 || r2.status === 422) return null;
-    if (!r2.ok) await this.fail(r2, `guardar ${path33}`);
+    if (!r2.ok) await this.fail(r2, `guardar ${path35}`);
     return (await r2.json()).content.sha;
   }
-  async deleteContent(path33, sha, message) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path33)}`, { json: { message, sha } });
-    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path33}`);
+  async deleteContent(path35, sha, message) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path35)}`, { json: { message, sha } });
+    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path35}`);
   }
-  async listDir(path33) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path33)}`);
+  async listDir(path35) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path35)}`);
     if (r2.status === 404) return [];
-    if (!r2.ok) await this.fail(r2, `la carpeta ${path33}`);
+    if (!r2.ok) await this.fail(r2, `la carpeta ${path35}`);
     const j = await r2.json();
     return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
   }
@@ -38685,9 +38755,9 @@ function tiktokFile(o) {
   if (!f) throw new PublishError("El clip no tiene archivo.");
   return f;
 }
-async function call(d, path33, body) {
+async function call(d, path35, body) {
   const f = d.fetchFn ?? fetch;
-  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path33}`, {
+  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path35}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify(body)
@@ -39435,9 +39505,8 @@ function friendly(e) {
 }
 
 // electron/domain/autopilot.ts
-var import_node_fs36 = __toESM(require("node:fs"));
-var import_node_os11 = __toESM(require("node:os"));
-var import_node_path29 = __toESM(require("node:path"));
+var import_node_fs38 = __toESM(require("node:fs"));
+var import_node_path31 = __toESM(require("node:path"));
 
 // shared/autoEdit.ts
 var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
@@ -39495,9 +39564,9 @@ function planEdit(words, seg, o = {}) {
 function planLong(words, segs, o = {}) {
   const segments = [];
   const body = [];
-  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  const sorted = [...segs];
   for (const [i, s] of sorted.entries()) {
-    if (i > 0 && s.start - sorted[i - 1].end > 5 && s.end - s.start > 3) body.push({ type: "sfx", at: s.start + 0.05, sound: "whoosh" });
+    if (i > 0 && Math.abs(s.start - sorted[i - 1].end) > 5 && s.end - s.start > 3) body.push({ type: "sfx", at: s.start + 0.05, sound: "whoosh" });
     const p = planEdit(words, s, o);
     segments.push(...keptRanges(s.start, s.end, p.cuts));
     body.push(...p.effects.filter((e) => e.type === "punch" || e.type === "sfx"));
@@ -39516,6 +39585,18 @@ function withMusic(effects, mood, volume = 0.16) {
   const polish = rest.filter((e) => e.type === "polish");
   const others = rest.filter((e) => e.type !== "polish").slice(0, MAX_EFFECTS - polish.length - 1);
   return [...others, ...polish, { type: "music", mood, volume }];
+}
+function withTitles(effects, titles) {
+  if (!titles.length) return effects;
+  const keep = effects.filter((e) => e.type !== "title");
+  const room = MAX_EFFECTS - titles.length;
+  let out = keep;
+  if (out.length > room) {
+    const essential = out.filter((e) => e.type !== "sfx" && e.type !== "punch");
+    const optional = out.filter((e) => e.type === "sfx" || e.type === "punch");
+    out = [...optional.slice(0, Math.max(0, room - essential.length)), ...essential];
+  }
+  return [...out, ...titles];
 }
 
 // shared/themes.ts
@@ -39667,32 +39748,104 @@ function transcriptBlocks(words, taken, size = 150, minWords = 70) {
   return [...by.entries()].filter(([, n]) => n >= minWords).map(([k]) => ({ start: k * size, end: (k + 1) * size })).filter((b) => overlapRatio([b], taken) < 0.5).sort((a, b) => a.start - b.start);
 }
 
-// shared/chapters.ts
-var CHAPTER_MIN = 3;
-var CHAPTER_MIN_SEC = 10;
-var clock3 = (sec) => {
-  const s = Math.max(0, Math.floor(sec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor(s % 3600 / 60);
-  const r2 = s % 60;
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(r2).padStart(2, "0")}` : `${m}:${String(r2).padStart(2, "0")}`;
-};
-function outputStarts(segs, kept) {
-  return segs.map((s) => kept.filter((k) => k.end <= s.start + 0.01).reduce((a, k) => a + (k.end - k.start), 0));
-}
-function chapterBlock(items, totalSec, firstLabel = "Inicio") {
-  const sorted = [...items].filter((c) => Number.isFinite(c.at) && c.at >= 0 && c.label.trim()).sort((a, b) => a.at - b.at);
-  const out = [];
-  for (const c of sorted) {
-    const prev = out[out.length - 1];
-    if (prev && c.at - prev.at < CHAPTER_MIN_SEC) continue;
-    out.push({ at: out.length === 0 ? 0 : c.at, label: c.label.trim().replace(/\s+/g, " ").slice(0, 60) });
+// shared/slots.ts
+function nextSlot(after, hhmm2, taken = /* @__PURE__ */ new Set()) {
+  const [h, m] = hhmm2.split(":").map(Number);
+  const d = new Date(after);
+  d.setHours(h, m, 0, 0);
+  for (let i = 0; i < 800; i++) {
+    if (d.getTime() > after.getTime() && !taken.has(d.getTime())) return d;
+    d.setDate(d.getDate() + 1);
+    d.setHours(h, m, 0, 0);
   }
-  while (out.length > 1 && totalSec - out[out.length - 1].at < CHAPTER_MIN_SEC) out.pop();
-  if (out.length < CHAPTER_MIN) return "";
-  if (out[0].label === "") out[0].label = firstLabel;
-  return out.map((c) => `${clock3(c.at)} ${c.label}`).join("\n");
+  throw new Error("No se encontr\xF3 una hora libre.");
 }
+function nextFreeSlot(after, times2, taken = /* @__PURE__ */ new Set()) {
+  if (!times2.length) throw new Error("No hay horas de publicaci\xF3n configuradas.");
+  let best = null;
+  for (const t of times2) {
+    const d = nextSlot(after, t, taken);
+    if (!best || d.getTime() < best.getTime()) best = d;
+  }
+  return best;
+}
+
+// electron/services/chatlog.ts
+var import_node_net = __toESM(require("node:net"));
+var ChatLogger = class {
+  constructor(o) {
+    this.o = o;
+  }
+  sock = null;
+  stopped = true;
+  buf = "";
+  timer = null;
+  connected = false;
+  start() {
+    if (!this.stopped) return;
+    this.stopped = false;
+    this.connect();
+  }
+  stop() {
+    this.stopped = true;
+    this.connected = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.sock?.destroy();
+    this.sock = null;
+  }
+  connect() {
+    const s = import_node_net.default.connect({ host: this.o.host ?? "irc.chat.twitch.tv", port: this.o.port ?? 6667 });
+    this.sock = s;
+    s.setEncoding("utf8");
+    s.on("connect", () => {
+      s.write(`NICK justinfan${1e4 + Math.floor(Math.random() * 8e4)}\r
+JOIN #${this.o.channel.toLowerCase()}\r
+`);
+      this.connected = true;
+    });
+    s.on("data", (chunk) => {
+      this.buf += chunk;
+      let i;
+      while ((i = this.buf.indexOf("\r\n")) >= 0) {
+        const line = this.buf.slice(0, i);
+        this.buf = this.buf.slice(i + 2);
+        this.line(line, s);
+      }
+      if (this.buf.length > 2e4) this.buf = "";
+    });
+    const retry = () => {
+      this.connected = false;
+      if (this.stopped || this.sock !== s) return;
+      this.timer = setTimeout(() => this.stopped || this.connect(), this.o.reconnectMs ?? 1e4);
+      this.timer.unref?.();
+    };
+    s.on("error", () => void 0);
+    s.on("close", retry);
+  }
+  line(l, s) {
+    if (l.startsWith("PING")) s.write(`PONG${l.slice(4)}\r
+`);
+    else if (/^(?::[^ ]+ )?PRIVMSG /.test(l) || / PRIVMSG #/.test(l)) this.o.onMessage((this.o.now ?? Date.now)() / 1e3);
+  }
+};
+var ChatBins = class _ChatBins {
+  bins = /* @__PURE__ */ new Map();
+  add(atSec, startSec) {
+    const i = Math.floor(atSec - startSec);
+    if (i >= 0) this.bins.set(i, (this.bins.get(i) ?? 0) + 1);
+  }
+  toArray() {
+    const n = Math.max(-1, ...this.bins.keys()) + 1;
+    const out = new Array(n).fill(0);
+    for (const [i, c] of this.bins) out[i] = c;
+    return out;
+  }
+  static fromArray(a) {
+    const b = new _ChatBins();
+    a.forEach((c, i) => c && b.bins.set(i, c));
+    return b;
+  }
+};
 
 // shared/phaseClock.ts
 var PhaseClock = class {
@@ -39720,6 +39873,188 @@ var PhaseClock = class {
     return [...this.ms.entries()].filter(([, v]) => v >= 1e3).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v >= 9e4 ? `${Math.round(v / 6e4)} min` : `${Math.round(v / 1e3)} s`}`).join(", ");
   }
 };
+
+// electron/domain/pipeline/context.ts
+function newContext(host, vod, task, clock4, now, energyJob) {
+  const t0 = now();
+  return {
+    host,
+    vod,
+    task,
+    notes: [],
+    clock: clock4,
+    t0,
+    lap: (since) => {
+      const s = Math.round((now() - since) / 1e3);
+      return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
+    },
+    energyJob,
+    words: [],
+    tTranscribe: "",
+    deferTranscribe: false,
+    duration: 0,
+    sig: { durationSec: 0 },
+    cats: [],
+    multiCat: false,
+    llmConf: null,
+    moments: [],
+    summary: [],
+    mains: [],
+    pool: [],
+    legacy: { moments: [], summary: [], mains: [] },
+    judged: null,
+    chapterLabels: /* @__PURE__ */ new Map(),
+    meta: /* @__PURE__ */ new Map(),
+    topicLongs: [],
+    topicShorts: [],
+    askProposals: [],
+    titles: { summary: { title: "", description: "" }, mains: [], clips: [] },
+    created: [],
+    errors: [],
+    scheduled: 0
+  };
+}
+
+// electron/domain/pipeline/transcribe.ts
+var transcribePhase = async (ctx) => {
+  const { host, vod, task, notes } = ctx;
+  const d = host.d;
+  ctx.words = d.transcripts.words(vod.id);
+  if (d.transcripts.isFull(vod.id)) return "continue";
+  const st = d.transcripts.status();
+  const skip = st.engine && d.canTranscribe ? d.canTranscribe(vod.durationSec ?? await d.clips.vodDuration(vod.id)) : null;
+  if (skip) {
+    notes.push(`Sin transcripci\xF3n: ${skip}.`);
+    return "continue";
+  }
+  if (st.engine && host.cfg.fastAnalysis !== false && !d.transcripts.hasCheckpoint(vod.id)) {
+    ctx.deferTranscribe = true;
+    return "continue";
+  }
+  if (!st.engine) {
+    notes.push("Sin transcripci\xF3n: Whisper no est\xE1 disponible.");
+    return "continue";
+  }
+  host.mark(vod, "transcribing");
+  ctx.clock.mark("transcripci\xF3n completa");
+  task.update(2, "Transcribiendo el directo (puede tardar)\u2026");
+  try {
+    const ts = Date.now();
+    await d.transcripts.transcribe(vod.id, void 0, {
+      onProgress: (pct, detail) => task.update(2 + pct * 0.28, detail ? `Transcribiendo (${detail})\u2026` : void 0),
+      onEstimate: (sec) => task.estimate(sec / 0.28)
+    });
+    ctx.words = d.transcripts.words(vod.id);
+    ctx.tTranscribe = ctx.lap(ts);
+    const mins2 = (vod.durationSec ?? 0) / 60;
+    d.log.info(`Transcripci\xF3n de "${vod.title}": ${ctx.tTranscribe}${mins2 ? ` (${(mins2 / Math.max(0.05, (Date.now() - ts) / 6e4)).toFixed(1)}\xD7 tiempo real)` : ""}`);
+  } catch (e) {
+    if (isCancelled(e)) throw e;
+    notes.push(`Sin transcripci\xF3n: ${e.message}`);
+  }
+  return "continue";
+};
+var transcribeChosenPhase = async (ctx) => {
+  if (!ctx.deferTranscribe) return "continue";
+  const { host, vod, task, notes } = ctx;
+  const d = host.d;
+  const spans = [...ctx.moments, ...ctx.summary, ...ctx.mains, ...ctx.pool].map((g) => ({ start: g.start, end: g.end }));
+  host.mark(vod, "transcribing");
+  ctx.clock.mark("transcripci\xF3n de lo elegido");
+  task.update(40, "Transcribiendo solo lo elegido\u2026");
+  try {
+    const ts = Date.now();
+    const est = d.transcripts.estimate(vod.id, spans);
+    if (est.sec > 0) task.estimate(est.eta / 0.15);
+    await d.transcripts.ensure(vod.id, spans, {
+      onProgress: (doneSec, totalSec) => task.update(40 + (totalSec ? doneSec / totalSec * 15 : 15), `Transcribiendo lo elegido (${Math.round(doneSec / 60)} de ${Math.round(totalSec / 60)} min)\u2026`)
+    });
+    ctx.words = d.transcripts.words(vod.id);
+    ctx.tTranscribe = ctx.lap(ts);
+    d.log.info(`Transcripci\xF3n de lo elegido en "${vod.title}": ${ctx.tTranscribe} (${Math.round(est.sec / 60)} min de audio, de ${Math.round((vod.durationSec ?? ctx.duration) / 60)} del directo)`);
+    notes.push(`An\xE1lisis r\xE1pido: se transcribieron ${Math.round(est.sec / 60)} min de ${Math.round(ctx.duration / 60)}.`);
+  } catch (e) {
+    if (isCancelled(e)) throw e;
+    notes.push(`Sin transcripci\xF3n: ${e.message}`);
+  }
+  host.mark(vod, "analyzing");
+  return "continue";
+};
+
+// electron/domain/pipeline/signals.ts
+var signalsPhase = async (ctx) => {
+  const { host, vod, task, notes } = ctx;
+  const d = host.d;
+  const cfg = host.cfg;
+  host.mark(vod, "analyzing");
+  ctx.clock.mark("volumen y chat");
+  task.update(30, "Analizando audio y chat\u2026");
+  ctx.duration = await d.clips.vodDuration(vod.id);
+  let energyDb;
+  const er = await ctx.energyJob;
+  if ("v" in er) energyDb = er.v;
+  else {
+    if (isCancelled(er.e)) throw er.e;
+    notes.push(`Sin an\xE1lisis de volumen: ${er.e.message}`);
+  }
+  task.update(50);
+  throwIfCancelled();
+  const chat = host.chatFor(vod);
+  if (!chat && cfg.chatCapture) notes.push("Sin datos de chat de este directo.");
+  const words = ctx.words;
+  ctx.sig = { durationSec: ctx.duration, energyDb, chat, words: words.length ? words : void 0 };
+  if (!energyDb && !chat && !words.length) throw new Error("No hay ninguna se\xF1al para analizar (ni audio, ni chat, ni transcripci\xF3n).");
+  let moments = cfg.maxClips > 0 ? findMoments(ctx.sig, { count: cfg.maxClips }) : [];
+  let summary = buildSummary(ctx.sig, { minSec: cfg.summaryMinutes * 60 * 0.85, maxSec: cfg.summaryMinutes * 60 * 1.25 });
+  let mains = cfg.maxVideos > 1 ? bestStretches(ctx.sig, cfg.mainMinutes * 60, cfg.maxVideos - 1) : [];
+  if (!cfg.maxVideos) summary.length = 0;
+  ctx.cats = await d.categories.ensure(vod.id);
+  ctx.multiCat = new Set(ctx.cats.map((c) => c.title)).size > 1;
+  if (ctx.multiCat) {
+    const before = moments.length + mains.length;
+    moments = moments.flatMap((m) => {
+      const f = fitToCategory(m, ctx.cats, 15);
+      return f ? [{ ...m, start: f.start, end: f.end }] : [];
+    });
+    mains = mains.flatMap((m) => {
+      const f = fitToCategory(m, ctx.cats, 90);
+      return f ? [f] : [];
+    });
+    const dom = dominantCategory(summary, ctx.cats, 8);
+    if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
+    summary = dom.segs;
+    if (before !== moments.length + mains.length) notes.push("Algunos momentos se recortaron o descartaron para no mezclar categor\xEDas.");
+  }
+  ctx.llmConf = host.llmConf();
+  let pool = [];
+  if (ctx.llmConf && cfg.smartSelect !== false && (cfg.maxClips > 0 || cfg.maxVideos > 0)) {
+    const need = cfg.maxClips + (cfg.maxVideos ? Math.ceil(cfg.summaryMinutes * 60 / 40) : 0);
+    pool = findMoments(ctx.sig, { count: Math.min(60, Math.max(16, need * 2)), minLen: 25, maxLen: 75, gap: 45 }).flatMap((m, i) => {
+      const f = ctx.multiCat ? fitToCategory(m, ctx.cats, 15) : { start: m.start, end: m.end };
+      return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
+    });
+  }
+  ctx.legacy = { moments, summary, mains };
+  if (pool.length) {
+    moments = [];
+    summary = [];
+  }
+  ctx.moments = moments;
+  ctx.summary = summary;
+  ctx.mains = mains;
+  ctx.pool = pool;
+  if (!moments.length && !summary.length && !mains.length && !pool.length) {
+    host.mark(vod, "skipped", ["No se encontraron momentos que destaquen en este directo.", ...notes].join(" "));
+    task.done("Sin momentos destacados");
+    return "stop";
+  }
+  return "continue";
+};
+
+// electron/domain/pipeline/judge.ts
+var import_node_fs36 = __toESM(require("node:fs"));
+var import_node_os11 = __toESM(require("node:os"));
+var import_node_path29 = __toESM(require("node:path"));
 
 // electron/services/momentJudge.ts
 var import_node_crypto11 = __toESM(require("node:crypto"));
@@ -39822,7 +40157,7 @@ function applyVisual(judged, vis) {
     if (!v) return j;
     const total2 = Math.round(Math.min(10, Math.max(0, j.total + (v.visual - 5) * VISUAL_SWING)) * 100) / 100;
     const reason = `${j.judgement.reason}${v.note ? ` Imagen (${v.visual.toFixed(0)}/10): ${v.note}` : ""}`.trim().slice(0, 320);
-    return { ...j, total: total2, judgement: { ...j.judgement, reason, discard: j.judgement.discard || v.dead && v.visual <= 3 } };
+    return { ...j, total: total2, visual: { score: v.visual, note: v.note }, judgement: { ...j.judgement, reason, discard: j.judgement.discard || v.dead && v.visual <= 3 } };
   });
 }
 function frameTimes(seg, n) {
@@ -39901,26 +40236,435 @@ async function judgeVisual(conf, words, judged, o) {
   return { judged: applyVisual(judged, found), looked: found.length, cached, dead, failed: failed || !found.length && todo.length > 0, error };
 }
 
-// shared/slots.ts
-function nextSlot(after, hhmm2, taken = /* @__PURE__ */ new Set()) {
-  const [h, m] = hhmm2.split(":").map(Number);
-  const d = new Date(after);
-  d.setHours(h, m, 0, 0);
-  for (let i = 0; i < 800; i++) {
-    if (d.getTime() > after.getTime() && !taken.has(d.getTime())) return d;
-    d.setDate(d.getDate() + 1);
-    d.setHours(h, m, 0, 0);
+// electron/domain/pipeline/judge.ts
+var DEFAULT_QUALITY = 6.5;
+var MIN_SUMMARY_SEC = 150;
+async function judgeAll(ctx) {
+  const { host, vod, task, notes, words, pool } = ctx;
+  const d = host.d;
+  const llmConf = ctx.llmConf;
+  let judged = null;
+  try {
+    const r2 = await judgeCandidates(llmConf, words, pool, {
+      fetchFn: d.llmFetch,
+      cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.json`) : void 0,
+      onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
+      signal: () => throwIfCancelled()
+    });
+    judged = r2.judged;
+    notes.push(`Selecci\xF3n inteligente: ${r2.judged.length} candidatos valorados${r2.cached ? ` (${r2.cached} ya estaban guardados)` : ""}${r2.failedChunks ? `, ${r2.failedChunks} lote(s) sin respuesta` : ""}.`);
+    if (host.cfg.vodVision !== false && vod.filePath && import_node_fs36.default.existsSync(vod.filePath)) {
+      ctx.clock.mark("imagen del directo");
+      task.update(60, "Mirando los mejores momentos\u2026");
+      const tmpDir = import_node_path29.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`);
+      const vr = await judgeVisual(llmConf, words, judged, {
+        ffmpeg: d.tools().ffmpeg,
+        file: vod.filePath,
+        tmpDir,
+        cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.visual.json`) : void 0,
+        fetchFn: d.llmFetch,
+        signal: () => throwIfCancelled()
+      }).catch((e) => {
+        if (isCancelled(e)) throw e;
+        return null;
+      });
+      import_node_fs36.default.rmSync(tmpDir, { recursive: true, force: true });
+      if (vr && !vr.failed) {
+        judged = vr.judged;
+        notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ""}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ""}.`);
+      } else notes.push(`Sin vista del directo${vr?.error ? ` (${vr.error.split("\n")[0]})` : ""}: se eligi\xF3 por lo que se oye.`);
+    }
+  } catch (e) {
+    if (isCancelled(e)) throw e;
+    notes.push(`Selecci\xF3n inteligente no disponible (${e.message}); se us\xF3 el volumen y el chat.`);
   }
-  throw new Error("No se encontr\xF3 una hora libre.");
+  return judged;
 }
-function nextFreeSlot(after, times2, taken = /* @__PURE__ */ new Set()) {
-  if (!times2.length) throw new Error("No hay horas de publicaci\xF3n configuradas.");
-  let best = null;
-  for (const t of times2) {
-    const d = nextSlot(after, t, taken);
-    if (!best || d.getTime() < best.getTime()) best = d;
+function personalize(ctx, judged) {
+  const { host, vod, notes } = ctx;
+  const d = host.d;
+  if (d.prefsFile) {
+    const prefs = loadPrefs(d.prefsFile);
+    const act = describePrefs(prefs).filter((x) => x.active);
+    if (prefs.enabled && act.length) {
+      judged = applyPrefs(judged, prefs);
+      notes.push(`Preferencias aprendidas aplicadas: ${act.map((x) => `${x.kind} ${x.bias > 0 ? "+" : ""}${x.bias}`).join(", ")}.`);
+    }
   }
-  return best;
+  const raw = judged;
+  if (d.momentsDir) {
+    const edits = loadEdits(d.momentsDir, vod.id);
+    const n = edits.exclude.length + edits.pin.length + Object.keys(edits.trims).length + edits.extra.length;
+    if (n) {
+      judged = applyEdits(judged, edits);
+      notes.push(`Se aplicaron ${n} correcci\xF3n(es) tuyas a la selecci\xF3n de momentos.`);
+    }
+  }
+  return { judged, raw };
+}
+var judgePhase = async (ctx) => {
+  if (!ctx.pool.length) return "continue";
+  const { host, vod, task, notes, words } = ctx;
+  const d = host.d;
+  const cfg = host.cfg;
+  ctx.clock.mark("modelo de lenguaje");
+  task.update(56, "Valorando los momentos candidatos\u2026");
+  let judged = null;
+  if (!words.length) notes.push("Selecci\xF3n inteligente omitida: no hay transcripci\xF3n.");
+  else judged = await judgeAll(ctx);
+  if (judged) {
+    const quality = cfg.minQuality ?? DEFAULT_QUALITY;
+    const p = personalize(ctx, judged);
+    judged = p.judged;
+    ctx.judged = judged;
+    const textFor = textFn(words);
+    const clips = cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+    const sum = cfg.maxVideos > 0 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
+    if (clips) {
+      ctx.moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
+      clips.chosen.forEach((c, i) => ctx.meta.set(ctx.moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
+      if (clips.chosen.length < cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${cfg.maxClips} clips superan la nota m\xEDnima (${quality}/10); no se rellen\xF3 con momentos flojos.`);
+    }
+    if (d.momentsDir) saveSnapshot(d.momentsDir, vod.id, p.raw, [...clips?.chosen ?? [], ...sum?.chosen ?? []].map((c) => c.start), quality);
+    if (sum && sum.chosen.length) {
+      if (sum.totalSec >= MIN_SUMMARY_SEC) {
+        ctx.summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
+        const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
+        notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < cfg.summaryMinutes * 60 * 0.85 ? " M\xE1s corto de lo configurado: no hab\xEDa m\xE1s momentos buenos." : ""}`);
+        if (ctx.multiCat) {
+          const dom = dominantCategory(ctx.summary, ctx.cats, 8);
+          if (dom.category && dom.segs.length !== ctx.summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
+          ctx.summary = dom.segs;
+        }
+        for (const c of sum.chosen) if (c.judgement.title) ctx.chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
+        ctx.summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
+      } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
+    } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${quality}/10).`);
+    if (cfg.topics !== false && (cfg.maxVideos > 0 || cfg.maxClips > 0)) {
+      ctx.clock.mark("temas");
+      const found = await host.findThemes(vod, judged, words, ctx.llmConf, notes);
+      for (const pr of found) {
+        const how = decideFormat(pr);
+        if (how === "ask") ctx.askProposals.push(pr);
+        else if (how === "long") ctx.topicLongs.push(pr);
+        else if (how === "shorts") ctx.topicShorts.push(pr);
+      }
+    }
+  } else {
+    ctx.moments = ctx.legacy.moments;
+    ctx.summary = ctx.legacy.summary;
+    try {
+      await d.transcripts.ensure(vod.id, [...ctx.moments, ...ctx.summary].map((g) => ({ start: g.start, end: g.end })));
+      ctx.words = d.transcripts.words(vod.id);
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+    }
+  }
+  return "continue";
+};
+var qualityGatePhase = async (ctx) => {
+  if (!ctx.pool.length) return "continue";
+  if (ctx.moments.length || ctx.summary.length || ctx.mains.length || ctx.directed) return "continue";
+  ctx.host.mark(ctx.vod, "skipped", ["Ning\xFAn momento supera la nota m\xEDnima de calidad: no se genera nada para no publicar relleno.", ...ctx.notes].join(" "));
+  ctx.task.done("Sin momentos con la calidad m\xEDnima");
+  return "stop";
+};
+var speakersPhase = async (ctx) => {
+  const { host, vod, task, notes } = ctx;
+  const d = host.d;
+  if (host.cfg.speakers === false || !ctx.words.length) return "continue";
+  const avail = d.speakers.available();
+  if (!avail.ok) {
+    notes.push(`Hablantes sin identificar: ${avail.reason}`);
+    return "continue";
+  }
+  const spans = [...ctx.moments, ...ctx.summary, ...ctx.mains].map((g) => ({ start: g.start, end: g.end }));
+  const need = d.speakers.pendingSeconds(vod.id, spans);
+  if (need <= 0) return "continue";
+  ctx.clock.mark("hablantes");
+  task.update(60, "Identificando hablantes\u2026");
+  try {
+    const ts = Date.now();
+    const r2 = await d.speakers.diarize(vod.id, spans, (done, total2) => task.update(60 + (total2 ? done / total2 * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total2 / 60)} min)\u2026`));
+    ctx.words = d.transcripts.words(vod.id);
+    notes.push(`Hablantes: ${r2.voices} voz/voces en ${Math.round(r2.sec / 60)} min de audio (${ctx.lap(ts)}).`);
+  } catch (e) {
+    if (isCancelled(e)) throw e;
+    notes.push(`Hablantes sin identificar: ${e.message}`);
+  }
+  return "continue";
+};
+
+// electron/domain/pipeline/director.ts
+var import_node_fs37 = __toESM(require("node:fs"));
+var import_node_path30 = __toESM(require("node:path"));
+
+// shared/director.ts
+var HOOK = { minSec: 5, maxSec: 20 };
+var MAX_CHAPTERS = 8;
+var MAX_IDS_PER_CHAPTER = 6;
+var MAX_PHRASES = 8;
+var MAX_CANDIDATES = 40;
+var r13 = (x) => Math.round(x * 10) / 10;
+var clean2 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+function directorCandidates(judged, words, sig) {
+  const mean = sig.energyDb?.length ? sig.energyDb.reduce((a, b) => a + b, 0) / sig.energyDb.length : void 0;
+  return judged.filter((j) => !j.judgement.discard && j.total >= 4).sort((a, b) => b.total - a.total).slice(0, MAX_CANDIDATES).sort((a, b) => a.start - b.start).map((j) => {
+    const seg = j.judgement.trim ?? j;
+    const lo = Math.floor(seg.start);
+    const hi = Math.ceil(seg.end);
+    const peak = sig.energyDb && mean !== void 0 ? Math.max(...sig.energyDb.slice(lo, hi + 1), -200) - mean : void 0;
+    const chat = sig.chat ? sig.chat.slice(lo, hi + 1).reduce((a, b) => a + b, 0) : void 0;
+    const dur = Math.max(1, seg.end - seg.start);
+    const vm = /Imagen \((\d+)\/10\): ([^.]+)/.exec(j.judgement.reason);
+    return {
+      id: j.id,
+      start: r13(seg.start),
+      end: r13(seg.end),
+      total: r13(j.total),
+      kind: j.judgement.kind,
+      title: j.judgement.title,
+      reason: j.judgement.reason.replace(/\s*Imagen \(\d+\/10\):.*$/, "").slice(0, 160),
+      ...j.visual ? { visual: j.visual } : vm ? { visual: { score: Number(vm[1]), note: vm[2].trim() } } : {},
+      ...peak !== void 0 && Number.isFinite(peak) ? { energy: r13(peak) } : {},
+      ...chat !== void 0 ? { chatPerMin: r13(chat * 60 / dur) } : {},
+      text: judgeText(words, seg, 420)
+    };
+  });
+}
+var DIRECTOR_SYSTEM = "Eres el editor jefe del canal de YouTube de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Tu trabajo es convertir los mejores momentos de un directo en UN v\xEDdeo de YouTube de 10 a 15 minutos que la gente vea entero, con la estructura de los canales grandes (Ibai, Rubius, IlloJuan): 1) GANCHO: los primeros 5-20 segundos ense\xF1an lo m\xE1s fuerte del directo (una reacci\xF3n, un fail, una frase) sin explicar nada; despu\xE9s el v\xEDdeo empieza por el principio y ese momento vuelve a salir entero en su sitio. 2) CAP\xCDTULOS con sentido (3 a 8): cada uno cuenta una cosa (una partida, una historia, un tema, una racha) y tiene planteamiento y remate; dentro de un cap\xEDtulo el orden es cronol\xF3gico; entre cap\xEDtulos puedes reordenar si mejora la historia, pero sin que se note un salto raro. 3) RITMO: alterna cap\xEDtulos r\xE1pidos (acci\xF3n, fails, reacciones) y normales (historias, charla buena); no pongas dos tramos lentos seguidos; corta lo que sobre. 4) CIERRE: el \xFAltimo momento remata el v\xEDdeo (una victoria, una frase, una risa final), nunca termina en medio de nada. REGLAS: usa SOLO los momentos de la lista, por su id, cada uno como mucho una vez (el gancho puede repetir el principio de uno). Respeta la duraci\xF3n objetivo: si sobra, quita los momentos m\xE1s flojos. R\xF3tulos: \xABfrases\xBB son 0 a 8 frases literales muy cortas (m\xE1ximo 40 caracteres) que se dicen en el momento y merecen verse en pantalla. T\xEDtulo de YouTube: en castellano de Espa\xF1a, concreto y honesto, 30 a 70 caracteres, sin emojis ni may\xFAsculas gritando, sin clickbait falso. Descripci\xF3n: 2 a 4 frases que cuenten qu\xE9 pasa, sin hashtags ni enlaces. Miniatura: 2 a 4 palabras con gancho (no repitas el t\xEDtulo). Ten en cuenta lo que se ve (nota de imagen) tanto como lo que se dice: un fail visual o una cara vale aunque se hable poco; una pantalla muerta no vale aunque se hable. Responde SOLO con JSON.";
+function directorPrompt(input) {
+  const lore = input.style.lore.slice(0, 12).map((l) => `${l.name}: ${l.note}`.slice(0, 120));
+  const shape = '{"titulo":"","descripcion":"","miniatura":"","gancho":{"id":"","desde":0,"hasta":10,"rotulo":""},"capitulos":[{"titulo":"","ids":["c1"],"ritmo":"rapido"}],"frases":[{"id":"","en":0,"texto":""}],"motivo":""}';
+  return `Directo: ${JSON.stringify(input.vodTitle)} (${input.dateLabel}). Categor\xEDas: ${input.categories.join(", ") || "desconocida"}. Duraci\xF3n objetivo del v\xEDdeo: entre ${Math.round(input.minSec / 60)} y ${Math.round(input.maxSec / 60)} minutos (suma de los momentos que elijas).
+` + (lore.length ? `Lore y chistes del canal (para entender, no para explicar en el v\xEDdeo): ${lore.join(" | ")}
+` : "") + `Momentos valorados (id, segundos del directo, nota de 0 a 10, tipo, lo que se ve, subida de volumen en dB, chat por minuto, y la transcripci\xF3n con marcas [Ns] relativas al inicio del momento):
+${JSON.stringify(input.candidates.map((c) => ({ id: c.id, inicio: c.start, fin: c.end, dur: r13(c.end - c.start), nota: c.total, tipo: c.kind, titulo: c.title, motivo: c.reason, ...c.visual ? { imagen: `${c.visual.score}/10: ${c.visual.note}` } : {}, ...c.energy !== void 0 ? { volumen: c.energy } : {}, ...c.chatPerMin !== void 0 ? { chat: c.chatPerMin } : {}, texto: c.text })))}
+Devuelve exactamente este JSON: ${shape}. En "gancho", "desde" y "hasta" son segundos relativos al inicio de ese momento (${HOOK.minSec} a ${HOOK.maxSec} s en total) y "rotulo" es un aviso muy corto para pantalla (p. ej. \xABlo que pas\xF3 al final\xBB). Si ning\xFAn momento sirve de gancho, pon "gancho": null.`;
+}
+function parseDirectorPlan(raw, candidates2) {
+  const r2 = raw;
+  if (!r2 || typeof r2 !== "object") return null;
+  const byId = new Map(candidates2.map((c) => [c.id, c]));
+  const used = /* @__PURE__ */ new Set();
+  const chapters = [];
+  for (const ch of Array.isArray(r2.capitulos) ? r2.capitulos.slice(0, MAX_CHAPTERS) : []) {
+    if (!ch || typeof ch !== "object") continue;
+    const ids = [];
+    for (const id of Array.isArray(ch.ids) ? ch.ids.map(String) : []) {
+      if (byId.has(id) && !used.has(id) && ids.length < MAX_IDS_PER_CHAPTER) {
+        ids.push(id);
+        used.add(id);
+      }
+    }
+    if (!ids.length) continue;
+    ids.sort((a, b) => byId.get(a).start - byId.get(b).start);
+    chapters.push({ title: clean2(ch.titulo, 40) || `Cap\xEDtulo ${chapters.length + 1}`, ids, pace: ch.ritmo === "rapido" ? "rapido" : "normal" });
+  }
+  if (chapters.length < 2) return null;
+  let hook;
+  const g = r2.gancho;
+  if (g && typeof g === "object") {
+    const c = byId.get(String(g.id));
+    const from = Number(g.desde);
+    const to = Number(g.hasta);
+    if (c && Number.isFinite(from) && Number.isFinite(to)) {
+      const dur = c.end - c.start;
+      const f = Math.min(Math.max(0, from), Math.max(0, dur - HOOK.minSec));
+      const t = Math.min(dur, Math.max(f + HOOK.minSec, Math.min(to, f + HOOK.maxSec)));
+      if (t - f >= HOOK.minSec) hook = { id: c.id, from: r13(f), to: r13(t), caption: clean2(g.rotulo, 40) };
+    }
+  }
+  const phrases = [];
+  for (const p of Array.isArray(r2.frases) ? r2.frases.slice(0, MAX_PHRASES) : []) {
+    const c = p && byId.get(String(p.id));
+    const at = Number(p?.en);
+    const text = clean2(p?.texto, 40);
+    if (!c || !used.has(c.id) || !Number.isFinite(at) || !text) continue;
+    phrases.push({ id: c.id, at: Math.min(Math.max(0, at), Math.max(0, c.end - c.start - 1)), text });
+  }
+  return {
+    title: clean2(r2.titulo, 100),
+    description: clean2(r2.descripcion, 600),
+    coverText: clean2(r2.miniatura, 40),
+    ...hook ? { hook } : {},
+    chapters,
+    phrases,
+    reason: clean2(r2.motivo, 240)
+  };
+}
+function directedCut(plan, candidates2, o) {
+  const byId = new Map(candidates2.map((c) => [c.id, c]));
+  const chapters = plan.chapters.map((ch) => ({ ...ch, ids: [...ch.ids] }));
+  const dur = (id) => byId.get(id).end - byId.get(id).start;
+  const hookSec = plan.hook ? plan.hook.to - plan.hook.from : 0;
+  const total2 = () => hookSec + chapters.reduce((a, ch) => a + ch.ids.reduce((b, id) => b + dur(id), 0), 0);
+  while (total2() > o.maxSec * 1.1) {
+    let worst = null;
+    chapters.forEach((ch, ci) => {
+      if (ch.ids.length <= 1) return;
+      for (const id of ch.ids) {
+        const last = ci === chapters.length - 1 && id === ch.ids[ch.ids.length - 1];
+        if (last) continue;
+        const t = byId.get(id).total;
+        if (!worst || t < worst.total) worst = { ch: ci, id, total: t };
+      }
+    });
+    if (!worst) break;
+    const w = worst;
+    chapters[w.ch].ids = chapters[w.ch].ids.filter((id) => id !== w.id);
+  }
+  const segs = [];
+  const labels = [];
+  const captions = [];
+  let hookRepeats = false;
+  if (plan.hook) {
+    const c = byId.get(plan.hook.id);
+    const start = r13(c.start + plan.hook.from);
+    const end = r13(c.start + plan.hook.to);
+    segs.push({ start, end });
+    labels.push("");
+    if (plan.hook.caption) captions.push({ at: start + 0.3, text: plan.hook.caption, kind: "gancho", duration: Math.min(4, end - start) });
+    hookRepeats = chapters.some((ch) => ch.ids.includes(c.id));
+  }
+  const phraseBy = /* @__PURE__ */ new Map();
+  for (const p of plan.phrases) phraseBy.set(p.id, [...phraseBy.get(p.id) ?? [], p]);
+  for (const ch of chapters) {
+    ch.ids.forEach((id, i) => {
+      const c = byId.get(id);
+      segs.push({ start: c.start, end: c.end });
+      labels.push(i === 0 ? ch.title : "");
+      if (i === 0) captions.push({ at: c.start + 0.2, text: ch.title, kind: "capitulo", duration: 3.5 });
+      for (const p of phraseBy.get(id) ?? []) captions.push({ at: c.start + p.at, text: p.text, kind: "frase", duration: 3 });
+    });
+  }
+  const totalSec = total2();
+  if (totalSec < Math.max(o.floorSec, o.minSec * 0.6)) return null;
+  return { segs, labels, captions, totalSec, hookRepeats };
+}
+
+// electron/domain/pipeline/director.ts
+var CACHE_VERSION = 1;
+function singleCategory(cands, cats, multi) {
+  if (!multi) return { cands };
+  const by = /* @__PURE__ */ new Map();
+  const of = (c) => categoriesOf(cats, c)[0];
+  for (const c of cands) {
+    const k = of(c);
+    if (k) by.set(k, (by.get(k) ?? 0) + (c.end - c.start));
+  }
+  const best = [...by.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return best ? { cands: cands.filter((c) => of(c) === best), category: best } : { cands };
+}
+var directorPhase = async (ctx) => {
+  const { host, vod, task, notes, words } = ctx;
+  const cfg = host.cfg;
+  const d = host.d;
+  if (cfg.director === false || cfg.maxVideos <= 0 || !ctx.judged || !ctx.llmConf || !words.length) return "continue";
+  ctx.clock.mark("director de edici\xF3n");
+  task.update(64, "Decidiendo la estructura del v\xEDdeo\u2026");
+  const all = directorCandidates(ctx.judged, words, ctx.sig);
+  const { cands, category } = singleCategory(all, ctx.cats, ctx.multiCat);
+  if (cands.length < 4) {
+    notes.push(`Director de edici\xF3n: solo ${cands.length} momento(s) con nota suficiente; se monta el resumen de siempre.`);
+    return "continue";
+  }
+  const style = host.style();
+  const input = {
+    vodTitle: vod.title ?? "",
+    dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" }),
+    categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
+    minSec: style.longMinSec,
+    maxSec: style.longMaxSec,
+    candidates: cands,
+    style: { titleStyle: style.titleStyle, lore: style.lore }
+  };
+  const key = `${CACHE_VERSION}|${cands.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
+  const cacheFile = d.judgeDir ? import_node_path30.default.join(d.judgeDir, `${vod.id}.director.json`) : void 0;
+  let plan = null;
+  try {
+    const cached = cacheFile && import_node_fs37.default.existsSync(cacheFile) ? JSON.parse(import_node_fs37.default.readFileSync(cacheFile, "utf8")) : null;
+    if (cached?.key === key) plan = cached.plan;
+    else {
+      const raw = await askJson(ctx.llmConf, DIRECTOR_SYSTEM, directorPrompt(input), { fetchFn: d.llmFetch, temperature: 0.3 });
+      plan = parseDirectorPlan(raw, cands);
+      if (plan && cacheFile) {
+        import_node_fs37.default.mkdirSync(import_node_path30.default.dirname(cacheFile), { recursive: true });
+        import_node_fs37.default.writeFileSync(cacheFile, JSON.stringify({ key, plan }));
+      }
+    }
+  } catch (e) {
+    if (isCancelled(e)) throw e;
+    notes.push(`Director de edici\xF3n no disponible (${e.message.split("\n")[0]}); se monta el resumen de siempre.`);
+    return "continue";
+  }
+  if (!plan) {
+    notes.push("Director de edici\xF3n: el modelo no devolvi\xF3 una estructura v\xE1lida; se monta el resumen de siempre.");
+    return "continue";
+  }
+  const cut = directedCut(plan, cands, { minSec: style.longMinSec, maxSec: style.longMaxSec, floorSec: MIN_SUMMARY_SEC });
+  if (!cut) {
+    notes.push("Director de edici\xF3n: no hay material suficiente para un v\xEDdeo con estructura; se monta el resumen de siempre.");
+    return "continue";
+  }
+  const labels = /* @__PURE__ */ new Map();
+  cut.labels.forEach((l, i) => l && labels.set(Math.round(cut.segs[i].start), l));
+  const avg = cands.filter((c) => plan.chapters.some((ch) => ch.ids.includes(c.id))).reduce((a, c, _i, arr2) => a + c.total / arr2.length, 0);
+  ctx.directed = {
+    title: plan.title,
+    description: plan.description,
+    segs: cut.segs,
+    labelsByIndex: cut.labels,
+    chapterLabels: labels,
+    coverText: plan.coverText || void 0,
+    captions: cut.captions,
+    meta: { score: Math.round(avg * 10) / 10, kind: "dirigido", reason: (plan.reason || `Estructura de ${plan.chapters.length} cap\xEDtulos decidida por el director de edici\xF3n.`).slice(0, 200) }
+  };
+  notes.push(
+    `Director de edici\xF3n: \xAB${plan.title || "sin t\xEDtulo"}\xBB, ${Math.round(cut.totalSec / 60)} min en ${plan.chapters.length} cap\xEDtulos (${plan.chapters.map((c) => c.title).join(" \xB7 ")})${plan.hook ? `, con gancho${cut.hookRepeats ? " que se repite entero en su sitio" : ""}` : ", sin gancho"}${cut.captions.length ? `, ${cut.captions.length} r\xF3tulos` : ""}. Sustituye al resumen por mejores momentos.`
+  );
+  return "continue";
+};
+
+// shared/chapters.ts
+var CHAPTER_MIN = 3;
+var CHAPTER_MIN_SEC = 10;
+var clock3 = (sec) => {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s % 3600 / 60);
+  const r2 = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(r2).padStart(2, "0")}` : `${m}:${String(r2).padStart(2, "0")}`;
+};
+function outputStarts(segs, kept) {
+  const starts = segs.map(() => Infinity);
+  let j = 0;
+  let offset = 0;
+  const inside = (k, s) => k.start >= s.start - 0.01 && k.end <= s.end + 0.01;
+  for (const k of kept) {
+    let n = j;
+    while (n < segs.length && !inside(k, segs[n])) n++;
+    if (n < segs.length) {
+      j = n;
+      starts[j] = Math.min(starts[j], offset);
+    }
+    offset += k.end - k.start;
+  }
+  for (let i = segs.length - 1; i >= 0; i--) if (!Number.isFinite(starts[i])) starts[i] = i + 1 < segs.length ? starts[i + 1] : offset;
+  return starts;
+}
+function chapterBlock(items, totalSec, firstLabel = "Inicio") {
+  const sorted = [...items].filter((c) => Number.isFinite(c.at) && c.at >= 0 && c.label.trim()).sort((a, b) => a.at - b.at);
+  const out = [];
+  for (const c of sorted) {
+    const prev = out[out.length - 1];
+    if (prev && c.at - prev.at < CHAPTER_MIN_SEC) continue;
+    out.push({ at: out.length === 0 ? 0 : c.at, label: c.label.trim().replace(/\s+/g, " ").slice(0, 60) });
+  }
+  while (out.length > 1 && totalSec - out[out.length - 1].at < CHAPTER_MIN_SEC) out.pop();
+  if (out.length < CHAPTER_MIN) return "";
+  if (out[0].label === "") out[0].label = firstLabel;
+  return out.map((c) => `${clock3(c.at)} ${c.label}`).join("\n");
 }
 
 // shared/series.ts
@@ -39948,91 +40692,244 @@ function seriesTitles(s, mains) {
   };
 }
 
-// electron/services/chatlog.ts
-var import_node_net = __toESM(require("node:net"));
-var ChatLogger = class {
-  constructor(o) {
-    this.o = o;
-  }
-  sock = null;
-  stopped = true;
-  buf = "";
-  timer = null;
-  connected = false;
-  start() {
-    if (!this.stopped) return;
-    this.stopped = false;
-    this.connect();
-  }
-  stop() {
-    this.stopped = true;
-    this.connected = false;
-    if (this.timer) clearTimeout(this.timer);
-    this.sock?.destroy();
-    this.sock = null;
-  }
-  connect() {
-    const s = import_node_net.default.connect({ host: this.o.host ?? "irc.chat.twitch.tv", port: this.o.port ?? 6667 });
-    this.sock = s;
-    s.setEncoding("utf8");
-    s.on("connect", () => {
-      s.write(`NICK justinfan${1e4 + Math.floor(Math.random() * 8e4)}\r
-JOIN #${this.o.channel.toLowerCase()}\r
-`);
-      this.connected = true;
-    });
-    s.on("data", (chunk) => {
-      this.buf += chunk;
-      let i;
-      while ((i = this.buf.indexOf("\r\n")) >= 0) {
-        const line = this.buf.slice(0, i);
-        this.buf = this.buf.slice(i + 2);
-        this.line(line, s);
-      }
-      if (this.buf.length > 2e4) this.buf = "";
-    });
-    const retry = () => {
-      this.connected = false;
-      if (this.stopped || this.sock !== s) return;
-      this.timer = setTimeout(() => this.stopped || this.connect(), this.o.reconnectMs ?? 1e4);
-      this.timer.unref?.();
-    };
-    s.on("error", () => void 0);
-    s.on("close", retry);
-  }
-  line(l, s) {
-    if (l.startsWith("PING")) s.write(`PONG${l.slice(4)}\r
-`);
-    else if (/^(?::[^ ]+ )?PRIVMSG /.test(l) || / PRIVMSG #/.test(l)) this.o.onMessage((this.o.now ?? Date.now)() / 1e3);
-  }
-};
-var ChatBins = class _ChatBins {
-  bins = /* @__PURE__ */ new Map();
-  add(atSec, startSec) {
-    const i = Math.floor(atSec - startSec);
-    if (i >= 0) this.bins.set(i, (this.bins.get(i) ?? 0) + 1);
-  }
-  toArray() {
-    const n = Math.max(-1, ...this.bins.keys()) + 1;
-    const out = new Array(n).fill(0);
-    for (const [i, c] of this.bins) out[i] = c;
-    return out;
-  }
-  static fromArray(a) {
-    const b = new _ChatBins();
-    a.forEach((c, i) => c && b.bins.set(i, c));
-    return b;
-  }
-};
-
-// electron/domain/autopilot.ts
-var DEFAULT_QUALITY = 6.5;
-var MIN_SUMMARY_SEC = 150;
+// electron/domain/pipeline/render.ts
+var clean3 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 function themeDescription(p) {
   const parts = [p.context || `Todo lo que se habl\xF3 sobre \xAB${p.title}\xBB durante el directo.`];
   return parts.join("\n\n");
 }
-var clean2 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+var titlesPhase = async (ctx) => {
+  const { host, vod, task, notes, words } = ctx;
+  const cfg = host.cfg;
+  ctx.clock.mark("t\xEDtulos");
+  task.update(75, "Poniendo t\xEDtulos\u2026");
+  ctx.titles = await host.titles(vod, words, ctx.moments, ctx.mains, notes);
+  const ser = cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...cfg.series, nextDay: vod.seriesDay ?? cfg.series.nextDay }) : null;
+  if (ser) {
+    const st = seriesTitles(ser, ctx.mains.length);
+    ctx.titles.summary = { title: clean3(st.summary, 100), description: ctx.titles.summary.description };
+    ctx.titles.mains = ctx.titles.mains.map((t, i) => ({ title: clean3(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
+    notes.push(`Serie \xAB${ser.name}\xBB, d\xEDa ${ser.day}.`);
+    if (!ser.fromTitle) {
+      vod.seriesDay = ser.day;
+      cfg.series.nextDay = Math.max(cfg.series.nextDay, ser.day + 1);
+      host.d.store.save();
+    }
+  }
+  return "continue";
+};
+var renderPhase = async (ctx) => {
+  const { host, vod, task, notes, words } = ctx;
+  const d = host.d;
+  const cfg = host.cfg;
+  const tr = Date.now();
+  ctx.clock.mark("montaje");
+  host.mark(vod, "rendering");
+  const { moments, mains, topicLongs, topicShorts, titles } = ctx;
+  const summary = ctx.directed ? [] : ctx.summary;
+  const total2 = (summary.length ? 1 : 0) + (ctx.directed ? 1 : 0) + mains.length + topicLongs.length + topicShorts.reduce((n, p) => n + p.shorts.length, 0) + moments.length;
+  let doneCount = 0;
+  const chapterOf = /* @__PURE__ */ new Map();
+  const step = async (role, label, fn, t, m) => {
+    try {
+      const item = await fn();
+      item.auto = { role, review: "pending", ...m ? { score: Math.round(m.score * 10) / 10, kind: m.kind, reason: m.reason } : {} };
+      item.titleSource = "auto";
+      item.visibility = cfg.visibility;
+      const ch = chapterOf.get(item.id);
+      if (t.description || item.category || ch) {
+        const base2 = withCategoryLine(t.description, item.category);
+        d.library.setAutoDescription(item.id, ch ? `${base2}${base2 ? "\n\n" : ""}${ch}` : base2);
+      }
+      d.store.save();
+      ctx.created.push(item);
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      ctx.errors.push(`${label}: ${e.message}`);
+    }
+    task.update(76 + ++doneCount / total2 * 19, `Montando (${doneCount}/${total2})\u2026`);
+  };
+  const pro = cfg.proEdit !== false && words.length > 0;
+  if (cfg.proEdit !== false && !words.length) notes.push("Edici\xF3n profesional omitida: no hay transcripci\xF3n.");
+  const subs = cfg.subtitles ? { subtitles: cfg.subtitles } : {};
+  const safely = async (edited, withEdit, plain) => {
+    if (!edited) return plain();
+    try {
+      return await withEdit();
+    } catch (err) {
+      if (isCancelled(err)) throw err;
+      d.log.warn(`Edici\xF3n profesional fall\xF3, se monta sin ella: ${err.message.split("\n")[0]}`);
+      return plain();
+    }
+  };
+  const style = host.style();
+  const editOpts = { minGap: style.silenceMaxSec, cues: cfg.soundCues !== false };
+  const musicFor = (title, segs, smart) => host.musicFor(vod, words, title, segs, smart, ctx.llmConf);
+  const longMake = async (title, segs, o = {}) => {
+    let e = pro ? planLong(words, segs, editOpts) : null;
+    if (e && o.themed) e = { ...e, effects: withJoints(e.effects) };
+    const mood = e ? await musicFor(title, segs, true) : null;
+    if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+    if (e && o.captions?.length) {
+      const kept = e.segments;
+      const snap = (at) => {
+        if (kept.some((r2) => at >= r2.start && at <= r2.end)) return at;
+        const next = kept.filter((r2) => r2.start > at).sort((a, b) => a.start - b.start)[0];
+        return next && next.start - at < 30 ? next.start + 0.1 : null;
+      };
+      const titles2 = o.captions.flatMap((c) => {
+        const at = snap(c.at);
+        return at === null ? [] : [{ type: "title", at, text: c.text, kind: c.kind, ...c.duration ? { duration: Math.min(TITLE.maxDur, Math.max(TITLE.minDur, c.duration)) } : {} }];
+      });
+      e = { ...e, effects: withTitles(e.effects, titles2) };
+    }
+    const extra = o.coverText ? { coverText: o.coverText } : {};
+    const item = await safely(
+      Boolean(e),
+      () => d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs, ...extra }),
+      () => d.clips.createLong(vod.id, { title, segments: segs, ...subs, ...extra })
+    );
+    const labels = o.labels ?? ctx.chapterLabels;
+    if (o.chapters && segs.length >= 3) {
+      try {
+        const starts = outputStarts(segs, item.segments ?? segs);
+        const block = chapterBlock(
+          segs.map((g, i) => ({ at: starts[i], label: o.labelsByIndex ? o.labelsByIndex[i] ?? "" : labels.get(Math.round(g.start)) ?? (i === 0 ? "Inicio" : shortTitle(words, g, i) || `Momento ${i + 1}`) })),
+          item.durationSec
+        );
+        if (block) chapterOf.set(item.id, block);
+      } catch (err) {
+        d.log.warn(`Sin cap\xEDtulos en "${title}": ${err.message}`);
+      }
+    }
+    return item;
+  };
+  if (ctx.directed) {
+    const p = ctx.directed;
+    const title = p.title || titles.summary.title;
+    await step("summary", "v\xEDdeo dirigido", () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, captions: p.captions }), { title, description: p.description || titles.summary.description }, p.meta);
+  }
+  if (summary.length) await step("summary", "resumen", () => longMake(titles.summary.title, summary, { chapters: true }), titles.summary, ctx.summaryMeta);
+  for (const [i, m] of mains.entries()) {
+    const t = titles.mains[i];
+    await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
+  }
+  for (const p of topicLongs) {
+    const t = { title: clean3(p.title, 100), description: themeDescription(p) };
+    for (const piece of p.pieces) if (piece.title) ctx.chapterLabels.set(Math.round(piece.start), piece.title);
+    await step("main", `tema \xAB${p.title}\xBB`, () => longMake(t.title, p.long.segs, { chapters: true, themed: true }), t, { score: 8, kind: "tema", reason: `Tema recurrente: ${p.context || p.title}`.slice(0, 200) });
+  }
+  for (const p of topicShorts) {
+    for (const sh of p.shorts) {
+      const t = { title: clean3(sh.title, 100), description: p.context };
+      await step("clip", `corto \xAB${sh.title}\xBB`, () => host.makeShort(vod.id, words, ctx.llmConf, sh.title, sh.segs[0], subs), t, { score: 7.5, kind: "tema", reason: `Parte del tema \xAB${p.title}\xBB.` });
+    }
+  }
+  for (const [i, m] of moments.entries()) {
+    const t = titles.clips[i];
+    let e = pro ? planEdit(words, m, editOpts) : null;
+    const mood = e ? await musicFor(t.title, [m], false) : null;
+    if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+    await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, ctx.meta.get(m));
+  }
+  if (!ctx.created.length) throw new Error(`No se pudo montar ning\xFAn v\xEDdeo. ${ctx.errors.join(" ")}`);
+  ctx.renderStarted = tr;
+  return "continue";
+};
+
+// electron/domain/pipeline/finish.ts
+var finishPhase = async (ctx) => {
+  const { host, vod, task, notes, created } = ctx;
+  const d = host.d;
+  const cfg = host.cfg;
+  const prior = d.store.data.outputs.filter(
+    (x) => x.vodId === vod.id && x.auto?.review === "pending" && !created.includes(x) && x.titleSource !== "manual" && x.descSource !== "manual" && !d.store.data.publications.some((p) => p.outputId === x.id)
+  );
+  if (prior.length) {
+    const r2 = d.library.removeMany(prior.map((x) => x.id));
+    if (r2.removed) notes.push(`Se sustituyeron ${r2.removed} v\xEDdeo(s) pendientes de revisi\xF3n de un an\xE1lisis anterior.`);
+  }
+  if (!cfg.requireApproval) {
+    for (const o of created) {
+      try {
+        host.approve(o.id);
+        ctx.scheduled++;
+      } catch (e) {
+        ctx.errors.push(`${o.title}: ${e.message}`);
+      }
+    }
+  }
+  if (ctx.askProposals.length && d.themes) {
+    d.themes.put(vod.id, ctx.askProposals);
+    notes.push(`${ctx.askProposals.length} tema(s) esperan que elijas formato: ${ctx.askProposals.map((p) => `\xAB${p.title}\xBB`).join(", ")}.`);
+  }
+  if (cfg.cleanup !== false && d.discardSource && !d.themes?.hasPending(vod.id)) {
+    try {
+      const r2 = host.discard(vod.id, { fromRun: true });
+      notes.push(`Directo completo borrado del disco (${(r2.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r2.kept} v\xEDdeo(s) y clip(s) con sus transcripciones.`);
+    } catch (e) {
+      notes.push(`No se pudo borrar el directo completo: ${e.message}`);
+    }
+  }
+  ctx.clock.mark(null);
+  notes.push(`Tiempos: ${ctx.clock.describe() || `montaje ${ctx.lap(ctx.renderStarted ?? ctx.t0)}`}; total ${ctx.lap(ctx.t0)}.`);
+  host.recordTimes(vod, ctx.clock.seconds(), Math.round((Date.now() - ctx.t0) / 1e3));
+  d.log.info(`An\xE1lisis de "${vod.title}": ${notes[notes.length - 1]}`);
+  const msg = `${created.length} v\xEDdeo(s) listos${cfg.requireApproval ? " para revisar" : ` (${ctx.scheduled} programados)`}.`;
+  host.mark(vod, "done", [msg, ...ctx.errors, ...notes].join(" "));
+  task.done(msg);
+  return "continue";
+};
+
+// electron/domain/pipeline/index.ts
+var PHASES = [
+  { name: "transcripci\xF3n", run: transcribePhase },
+  { name: "se\xF1ales", run: signalsPhase },
+  { name: "transcripci\xF3n de lo elegido", run: transcribeChosenPhase },
+  { name: "valoraci\xF3n", run: judgePhase },
+  { name: "director", run: directorPhase },
+  { name: "nota m\xEDnima", run: qualityGatePhase },
+  { name: "hablantes", run: speakersPhase },
+  { name: "t\xEDtulos", run: titlesPhase },
+  { name: "montaje", run: renderPhase },
+  { name: "cierre", run: finishPhase }
+];
+async function runPipeline(host, vod, pauseRequested, phases = PHASES) {
+  const task = host.d.tasks.start("analyze", `Piloto autom\xE1tico: ${vod.title || "directo"}`, vod.id);
+  const clock4 = new PhaseClock();
+  clock4.mark("lectura de audio y chat");
+  const energyJob = (async () => {
+    try {
+      return { v: await (host.d.energy ?? audioEnergy)(host.d.tools(), vod.filePath, () => void 0) };
+    } catch (e) {
+      return { e };
+    }
+  })();
+  const ctx = newContext(host, vod, task, clock4, () => Date.now(), energyJob);
+  try {
+    for (const p of phases) {
+      const r2 = await p.run(ctx);
+      if (r2 === "stop") return vod;
+    }
+    return vod;
+  } catch (e) {
+    if (isCancelled(e)) {
+      const paused = pauseRequested.delete(vod.id);
+      if (paused) host.markPaused(vod);
+      else host.mark(vod, "error", "An\xE1lisis cancelado.");
+      task.fail(paused ? "En pausa" : "Cancelado");
+      host.d.log.info(`An\xE1lisis ${paused ? "en pausa" : "cancelado"}: "${vod.title}".`);
+      throw e;
+    }
+    host.mark(vod, "error", e.message);
+    task.fail(e.message);
+    host.d.log.error("Piloto autom\xE1tico fallido", e);
+    throw e;
+  }
+}
+
+// electron/domain/autopilot.ts
+var clean4 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var Autopilot = class {
   constructor(d) {
     this.d = d;
@@ -40069,7 +40966,7 @@ var Autopilot = class {
       await prev.done.catch(() => void 0);
     }
     if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    const missing = !vod.filePath || !import_node_fs36.default.existsSync(vod.filePath);
+    const missing = !vod.filePath || !import_node_fs38.default.existsSync(vod.filePath);
     if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const ctrl = new AbortController();
     this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
@@ -40145,18 +41042,18 @@ var Autopilot = class {
     }
     if (known) this.d.transcripts.prune(vodId, [...spans, ...this.d.themes?.pendingSpans(vodId) ?? []]);
     const chat = this.chatFileFor(vod);
-    if (chat) import_node_fs36.default.rmSync(chat, { force: true });
+    if (chat) import_node_fs38.default.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
     return { freedBytes, kept: outs.length };
   }
   /** Archivo con la actividad del chat de este directo, si se guardó. */
   chatFileFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs36.default.existsSync(this.d.chatDir)) return void 0;
+    if (!vod.streamStartedAt || !import_node_fs38.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs36.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs38.default.readdirSync(this.d.chatDir)) {
       try {
-        const full = import_node_path29.default.join(this.d.chatDir, f);
-        const j = JSON.parse(import_node_fs36.default.readFileSync(full, "utf8"));
+        const full = import_node_path31.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs38.default.readFileSync(full, "utf8"));
         if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
@@ -40167,7 +41064,7 @@ var Autopilot = class {
     const f = this.chatFileFor(vod);
     if (!f) return void 0;
     try {
-      return ChatBins.fromArray(JSON.parse(import_node_fs36.default.readFileSync(f, "utf8")).bins).toArray();
+      return ChatBins.fromArray(JSON.parse(import_node_fs38.default.readFileSync(f, "utf8")).bins).toArray();
     } catch {
       return void 0;
     }
@@ -40176,439 +41073,29 @@ var Autopilot = class {
   recordTimes(vod, phases, totalSec) {
     if (!this.d.momentsDir) return;
     try {
-      const file = import_node_path29.default.join(import_node_path29.default.dirname(this.d.momentsDir), "analysis-times.json");
+      const file = import_node_path31.default.join(import_node_path31.default.dirname(this.d.momentsDir), "analysis-times.json");
       let list = [];
       try {
-        list = JSON.parse(import_node_fs36.default.readFileSync(file, "utf8"));
+        list = JSON.parse(import_node_fs38.default.readFileSync(file, "utf8"));
       } catch {
       }
       list.push({ at: (/* @__PURE__ */ new Date()).toISOString(), vod: vod.title || vod.id, vodSec: vod.durationSec ?? null, totalSec, phases });
-      import_node_fs36.default.writeFileSync(file, JSON.stringify(list.slice(-40), null, 1));
+      import_node_fs38.default.writeFileSync(file, JSON.stringify(list.slice(-40), null, 1));
     } catch {
     }
   }
-  async process(vod) {
-    const task = this.d.tasks.start("analyze", `Piloto autom\xE1tico: ${vod.title || "directo"}`, vod.id);
-    const notes = [];
-    try {
-      const t0 = Date.now();
-      const clock4 = new PhaseClock();
-      clock4.mark("lectura de audio y chat");
-      const lap = (since) => {
-        const s = Math.round((Date.now() - since) / 1e3);
-        return s >= 90 ? `${Math.round(s / 60)} min` : `${s} s`;
-      };
-      const energyJob = (async () => {
-        try {
-          return { v: await (this.d.energy ?? audioEnergy)(this.d.tools(), vod.filePath, () => void 0) };
-        } catch (e) {
-          return { e };
-        }
-      })();
-      let words = this.d.transcripts.words(vod.id);
-      let tTranscribe = "";
-      let deferTranscribe = false;
-      if (!this.d.transcripts.isFull(vod.id)) {
-        const st = this.d.transcripts.status();
-        const skip = st.engine && this.d.canTranscribe ? this.d.canTranscribe(vod.durationSec ?? await this.d.clips.vodDuration(vod.id)) : null;
-        if (skip) notes.push(`Sin transcripci\xF3n: ${skip}.`);
-        else if (st.engine && this.cfg.fastAnalysis !== false && !this.d.transcripts.hasCheckpoint(vod.id)) {
-          deferTranscribe = true;
-        } else if (st.engine) {
-          this.mark(vod, "transcribing");
-          clock4.mark("transcripci\xF3n completa");
-          task.update(2, "Transcribiendo el directo (puede tardar)\u2026");
-          try {
-            const ts = Date.now();
-            await this.d.transcripts.transcribe(vod.id, void 0, {
-              onProgress: (pct, detail) => task.update(2 + pct * 0.28, detail ? `Transcribiendo (${detail})\u2026` : void 0),
-              onEstimate: (sec) => task.estimate(sec / 0.28)
-            });
-            words = this.d.transcripts.words(vod.id);
-            tTranscribe = lap(ts);
-            const mins2 = (vod.durationSec ?? 0) / 60;
-            this.d.log.info(`Transcripci\xF3n de "${vod.title}": ${tTranscribe}${mins2 ? ` (${(mins2 / Math.max(0.05, (Date.now() - ts) / 6e4)).toFixed(1)}\xD7 tiempo real)` : ""}`);
-          } catch (e) {
-            if (isCancelled(e)) throw e;
-            notes.push(`Sin transcripci\xF3n: ${e.message}`);
-          }
-        } else notes.push("Sin transcripci\xF3n: Whisper no est\xE1 disponible.");
-      }
-      this.mark(vod, "analyzing");
-      clock4.mark("volumen y chat");
-      task.update(30, "Analizando audio y chat\u2026");
-      const duration = await this.d.clips.vodDuration(vod.id);
-      let energyDb;
-      const er = await energyJob;
-      if ("v" in er) energyDb = er.v;
-      else {
-        if (isCancelled(er.e)) throw er.e;
-        notes.push(`Sin an\xE1lisis de volumen: ${er.e.message}`);
-      }
-      task.update(50);
-      throwIfCancelled();
-      const chat = this.chatFor(vod);
-      if (!chat && this.cfg.chatCapture) notes.push("Sin datos de chat de este directo.");
-      const sig = { durationSec: duration, energyDb, chat, words: words.length ? words : void 0 };
-      if (!energyDb && !chat && !words.length) throw new Error("No hay ninguna se\xF1al para analizar (ni audio, ni chat, ni transcripci\xF3n).");
-      let moments = this.cfg.maxClips > 0 ? findMoments(sig, { count: this.cfg.maxClips }) : [];
-      let summary = buildSummary(sig, { minSec: this.cfg.summaryMinutes * 60 * 0.85, maxSec: this.cfg.summaryMinutes * 60 * 1.25 });
-      let mains = this.cfg.maxVideos > 1 ? bestStretches(sig, this.cfg.mainMinutes * 60, this.cfg.maxVideos - 1) : [];
-      if (!this.cfg.maxVideos) summary.length = 0;
-      const cats = await this.d.categories.ensure(vod.id);
-      if (new Set(cats.map((c) => c.title)).size > 1) {
-        const before = moments.length + mains.length;
-        moments = moments.flatMap((m) => {
-          const f = fitToCategory(m, cats, 15);
-          return f ? [{ ...m, start: f.start, end: f.end }] : [];
-        });
-        mains = mains.flatMap((m) => {
-          const f = fitToCategory(m, cats, 90);
-          return f ? [f] : [];
-        });
-        const dom = dominantCategory(summary, cats, 8);
-        if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
-        summary = dom.segs;
-        if (before !== moments.length + mains.length) notes.push("Algunos momentos se recortaron o descartaron para no mezclar categor\xEDas.");
-      }
-      const llmConf = this.llmConf();
-      let pool = [];
-      if (llmConf && this.cfg.smartSelect !== false && (this.cfg.maxClips > 0 || this.cfg.maxVideos > 0)) {
-        const need = this.cfg.maxClips + (this.cfg.maxVideos ? Math.ceil(this.cfg.summaryMinutes * 60 / 40) : 0);
-        pool = findMoments(sig, { count: Math.min(60, Math.max(16, need * 2)), minLen: 25, maxLen: 75, gap: 45 }).flatMap((m, i) => {
-          const f = new Set(cats.map((c) => c.title)).size > 1 ? fitToCategory(m, cats, 15) : { start: m.start, end: m.end };
-          return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
-        });
-      }
-      const legacy = { moments, summary, mains };
-      if (pool.length) {
-        moments = [];
-        summary = [];
-      }
-      const chapterLabels = /* @__PURE__ */ new Map();
-      let summaryMeta;
-      const meta = /* @__PURE__ */ new Map();
-      const topicLongs = [];
-      const topicShorts = [];
-      const askProposals = [];
-      if (!moments.length && !summary.length && !mains.length && !pool.length) {
-        this.mark(vod, "skipped", ["No se encontraron momentos que destaquen en este directo.", ...notes].join(" "));
-        task.done("Sin momentos destacados");
-        return vod;
-      }
-      if (deferTranscribe) {
-        const spans = [...moments, ...summary, ...mains, ...pool].map((g) => ({ start: g.start, end: g.end }));
-        this.mark(vod, "transcribing");
-        clock4.mark("transcripci\xF3n de lo elegido");
-        task.update(40, "Transcribiendo solo lo elegido\u2026");
-        try {
-          const ts = Date.now();
-          const est = this.d.transcripts.estimate(vod.id, spans);
-          if (est.sec > 0) task.estimate(est.eta / 0.15);
-          await this.d.transcripts.ensure(vod.id, spans, {
-            onProgress: (doneSec, totalSec) => task.update(40 + (totalSec ? doneSec / totalSec * 15 : 15), `Transcribiendo lo elegido (${Math.round(doneSec / 60)} de ${Math.round(totalSec / 60)} min)\u2026`)
-          });
-          words = this.d.transcripts.words(vod.id);
-          tTranscribe = lap(ts);
-          this.d.log.info(`Transcripci\xF3n de lo elegido en "${vod.title}": ${tTranscribe} (${Math.round(est.sec / 60)} min de audio, de ${Math.round((vod.durationSec ?? duration) / 60)} del directo)`);
-          notes.push(`An\xE1lisis r\xE1pido: se transcribieron ${Math.round(est.sec / 60)} min de ${Math.round(duration / 60)}.`);
-        } catch (e) {
-          if (isCancelled(e)) throw e;
-          notes.push(`Sin transcripci\xF3n: ${e.message}`);
-        }
-        this.mark(vod, "analyzing");
-      }
-      if (pool.length) {
-        clock4.mark("modelo de lenguaje");
-        task.update(56, "Valorando los momentos candidatos\u2026");
-        let judged = null;
-        if (!words.length) notes.push("Selecci\xF3n inteligente omitida: no hay transcripci\xF3n.");
-        else {
-          try {
-            const r2 = await judgeCandidates(llmConf, words, pool, {
-              fetchFn: this.d.llmFetch,
-              cacheFile: this.d.judgeDir ? import_node_path29.default.join(this.d.judgeDir, `${vod.id}.json`) : void 0,
-              onProgress: (done, total3) => task.update(56 + (total3 ? done / total3 * 4 : 4), `Valorando candidatos (${done}/${total3})\u2026`),
-              signal: () => throwIfCancelled()
-            });
-            judged = r2.judged;
-            notes.push(`Selecci\xF3n inteligente: ${r2.judged.length} candidatos valorados${r2.cached ? ` (${r2.cached} ya estaban guardados)` : ""}${r2.failedChunks ? `, ${r2.failedChunks} lote(s) sin respuesta` : ""}.`);
-            if (this.cfg.vodVision !== false && vod.filePath && import_node_fs36.default.existsSync(vod.filePath)) {
-              clock4.mark("imagen del directo");
-              task.update(60, "Mirando los mejores momentos\u2026");
-              const vr = await judgeVisual(llmConf, words, judged, {
-                ffmpeg: this.d.tools().ffmpeg,
-                file: vod.filePath,
-                tmpDir: import_node_path29.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`),
-                cacheFile: this.d.judgeDir ? import_node_path29.default.join(this.d.judgeDir, `${vod.id}.visual.json`) : void 0,
-                fetchFn: this.d.llmFetch,
-                signal: () => throwIfCancelled()
-              }).catch((e) => {
-                if (isCancelled(e)) throw e;
-                return null;
-              });
-              import_node_fs36.default.rmSync(import_node_path29.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`), { recursive: true, force: true });
-              if (vr && !vr.failed) {
-                judged = vr.judged;
-                notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ""}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ""}.`);
-              } else notes.push(`Sin vista del directo${vr?.error ? ` (${vr.error.split("\n")[0]})` : ""}: se eligi\xF3 por lo que se oye.`);
-            }
-          } catch (e) {
-            if (isCancelled(e)) throw e;
-            notes.push(`Selecci\xF3n inteligente no disponible (${e.message}); se us\xF3 el volumen y el chat.`);
-          }
-        }
-        if (judged) {
-          const quality = this.cfg.minQuality ?? DEFAULT_QUALITY;
-          if (this.d.prefsFile) {
-            const prefs = loadPrefs(this.d.prefsFile);
-            const act = describePrefs(prefs).filter((x) => x.active);
-            if (prefs.enabled && act.length) {
-              judged = applyPrefs(judged, prefs);
-              notes.push(`Preferencias aprendidas aplicadas: ${act.map((x) => `${x.kind} ${x.bias > 0 ? "+" : ""}${x.bias}`).join(", ")}.`);
-            }
-          }
-          const raw = judged;
-          if (this.d.momentsDir) {
-            const edits = loadEdits(this.d.momentsDir, vod.id);
-            const n = edits.exclude.length + edits.pin.length + Object.keys(edits.trims).length + edits.extra.length;
-            if (n) {
-              judged = applyEdits(judged, edits);
-              notes.push(`Se aplicaron ${n} correcci\xF3n(es) tuyas a la selecci\xF3n de momentos.`);
-            }
-          }
-          const textFor = textFn(words);
-          const clips = this.cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: this.cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
-          const sum = this.cfg.maxVideos > 0 ? selectBest(judged, { maxSec: this.cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
-          if (clips) {
-            moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
-            clips.chosen.forEach((c, i) => meta.set(moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
-            if (clips.chosen.length < this.cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${this.cfg.maxClips} clips superan la nota m\xEDnima (${quality}/10); no se rellen\xF3 con momentos flojos.`);
-          }
-          if (this.d.momentsDir) saveSnapshot(this.d.momentsDir, vod.id, raw, [...clips?.chosen ?? [], ...sum?.chosen ?? []].map((c) => c.start), quality);
-          if (sum && sum.chosen.length) {
-            if (sum.totalSec >= MIN_SUMMARY_SEC) {
-              summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
-              const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
-              notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < this.cfg.summaryMinutes * 60 * 0.85 ? " M\xE1s corto de lo configurado: no hab\xEDa m\xE1s momentos buenos." : ""}`);
-              if (new Set(cats.map((c) => c.title)).size > 1) {
-                const dom = dominantCategory(summary, cats, 8);
-                if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
-                summary = dom.segs;
-              }
-              for (const c of sum.chosen) if (c.judgement.title) chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
-              summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
-            } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
-          } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${quality}/10).`);
-          if (this.cfg.topics !== false && (this.cfg.maxVideos > 0 || this.cfg.maxClips > 0)) {
-            clock4.mark("temas");
-            const found = await this.findThemes(vod, judged, words, llmConf, notes);
-            for (const p of found) {
-              const how = decideFormat(p);
-              if (how === "ask") askProposals.push(p);
-              else if (how === "long") topicLongs.push(p);
-              else if (how === "shorts") topicShorts.push(p);
-            }
-          }
-        } else {
-          ({ moments, summary } = legacy);
-          try {
-            await this.d.transcripts.ensure(vod.id, [...moments, ...summary].map((g) => ({ start: g.start, end: g.end })));
-            words = this.d.transcripts.words(vod.id);
-          } catch (e) {
-            if (isCancelled(e)) throw e;
-          }
-        }
-        if (!moments.length && !summary.length && !mains.length) {
-          this.mark(vod, "skipped", ["Ning\xFAn momento supera la nota m\xEDnima de calidad: no se genera nada para no publicar relleno.", ...notes].join(" "));
-          task.done("Sin momentos con la calidad m\xEDnima");
-          return vod;
-        }
-      }
-      if (this.cfg.speakers !== false && words.length) {
-        const avail = this.d.speakers.available();
-        if (!avail.ok) notes.push(`Hablantes sin identificar: ${avail.reason}`);
-        else {
-          const spans = [...moments, ...summary, ...mains].map((g) => ({ start: g.start, end: g.end }));
-          const need = this.d.speakers.pendingSeconds(vod.id, spans);
-          if (need > 0) {
-            clock4.mark("hablantes");
-            task.update(60, "Identificando hablantes\u2026");
-            try {
-              const ts = Date.now();
-              const r2 = await this.d.speakers.diarize(vod.id, spans, (done, total3) => task.update(60 + (total3 ? done / total3 * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total3 / 60)} min)\u2026`));
-              words = this.d.transcripts.words(vod.id);
-              notes.push(`Hablantes: ${r2.voices} voz/voces en ${Math.round(r2.sec / 60)} min de audio (${lap(ts)}).`);
-            } catch (e) {
-              if (isCancelled(e)) throw e;
-              notes.push(`Hablantes sin identificar: ${e.message}`);
-            }
-          }
-        }
-      }
-      clock4.mark("t\xEDtulos");
-      task.update(75, "Poniendo t\xEDtulos\u2026");
-      const titles = await this.titles(vod, words, moments, mains, notes);
-      const ser = this.cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...this.cfg.series, nextDay: vod.seriesDay ?? this.cfg.series.nextDay }) : null;
-      if (ser) {
-        const st = seriesTitles(ser, mains.length);
-        titles.summary = { title: clean2(st.summary, 100), description: titles.summary.description };
-        titles.mains = titles.mains.map((t, i) => ({ title: clean2(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
-        notes.push(`Serie \xAB${ser.name}\xBB, d\xEDa ${ser.day}.`);
-        if (!ser.fromTitle) {
-          vod.seriesDay = ser.day;
-          this.cfg.series.nextDay = Math.max(this.cfg.series.nextDay, ser.day + 1);
-          this.d.store.save();
-        }
-      }
-      const tr = Date.now();
-      clock4.mark("montaje");
-      this.mark(vod, "rendering");
-      const created = [];
-      const errors = [];
-      const total2 = (summary.length ? 1 : 0) + mains.length + topicLongs.length + topicShorts.reduce((n, p) => n + p.shorts.length, 0) + moments.length;
-      let doneCount = 0;
-      const step = async (role, label, fn, t, m) => {
-        try {
-          const item = await fn();
-          item.auto = { role, review: "pending", ...m ? { score: Math.round(m.score * 10) / 10, kind: m.kind, reason: m.reason } : {} };
-          item.titleSource = "auto";
-          item.visibility = this.cfg.visibility;
-          const ch = chapterOf.get(item.id);
-          if (t.description || item.category || ch) {
-            const base2 = withCategoryLine(t.description, item.category);
-            this.d.library.setAutoDescription(item.id, ch ? `${base2}${base2 ? "\n\n" : ""}${ch}` : base2);
-          }
-          this.d.store.save();
-          created.push(item);
-        } catch (e) {
-          if (isCancelled(e)) throw e;
-          errors.push(`${label}: ${e.message}`);
-        }
-        task.update(76 + ++doneCount / total2 * 19, `Montando (${doneCount}/${total2})\u2026`);
-      };
-      const pro = this.cfg.proEdit !== false && words.length > 0;
-      if (this.cfg.proEdit !== false && !words.length) notes.push("Edici\xF3n profesional omitida: no hay transcripci\xF3n.");
-      const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
-      const safely = async (edited, withEdit, plain) => {
-        if (!edited) return plain();
-        try {
-          return await withEdit();
-        } catch (err) {
-          if (isCancelled(err)) throw err;
-          this.d.log.warn(`Edici\xF3n profesional fall\xF3, se monta sin ella: ${err.message.split("\n")[0]}`);
-          return plain();
-        }
-      };
-      const style = this.d.style?.() ?? defaultStyle();
-      const editOpts = { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false };
-      const musicFor = (title, segs, smart) => this.musicFor(vod, words, title, segs, smart, llmConf);
-      const chapterOf = /* @__PURE__ */ new Map();
-      const longMake = async (title, segs, chapters = false, themed = false) => {
-        let e = pro ? planLong(words, segs, editOpts) : null;
-        if (e && themed) e = { ...e, effects: withJoints(e.effects) };
-        const mood = e ? await musicFor(title, segs, true) : null;
-        if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
-        const item = await safely(
-          Boolean(e),
-          () => this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }),
-          () => this.d.clips.createLong(vod.id, { title, segments: segs, ...subs })
-        );
-        if (chapters && segs.length >= 3) {
-          try {
-            const starts = outputStarts(segs, item.segments ?? segs);
-            const block = chapterBlock(
-              segs.map((g, i) => ({ at: starts[i], label: chapterLabels.get(Math.round(g.start)) ?? (i === 0 ? "Inicio" : shortTitle(words, g, i) || `Momento ${i + 1}`) })),
-              item.durationSec
-            );
-            if (block) chapterOf.set(item.id, block);
-          } catch (err) {
-            this.d.log.warn(`Sin cap\xEDtulos en "${title}": ${err.message}`);
-          }
-        }
-        return item;
-      };
-      if (summary.length) await step("summary", "resumen", () => longMake(titles.summary.title, summary, true), titles.summary, summaryMeta);
-      for (const [i, m] of mains.entries()) {
-        const t = titles.mains[i];
-        await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
-      }
-      for (const p of topicLongs) {
-        const t = { title: clean2(p.title, 100), description: themeDescription(p) };
-        for (const piece of p.pieces) if (piece.title) chapterLabels.set(Math.round(piece.start), piece.title);
-        await step("main", `tema \xAB${p.title}\xBB`, () => longMake(t.title, p.long.segs, true, true), t, { score: 8, kind: "tema", reason: `Tema recurrente: ${p.context || p.title}`.slice(0, 200) });
-      }
-      for (const p of topicShorts) {
-        for (const sh of p.shorts) {
-          const t = { title: clean2(sh.title, 100), description: p.context };
-          await step("clip", `corto \xAB${sh.title}\xBB`, () => this.makeShort(vod.id, words, llmConf, sh.title, sh.segs[0], subs), t, { score: 7.5, kind: "tema", reason: `Parte del tema \xAB${p.title}\xBB.` });
-        }
-      }
-      for (const [i, m] of moments.entries()) {
-        const t = titles.clips[i];
-        let e = pro ? planEdit(words, m, editOpts) : null;
-        const mood = e ? await musicFor(t.title, [m], false) : null;
-        if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
-        await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => this.d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, meta.get(m));
-      }
-      if (!created.length) throw new Error(`No se pudo montar ning\xFAn v\xEDdeo. ${errors.join(" ")}`);
-      const prior = this.d.store.data.outputs.filter(
-        (x) => x.vodId === vod.id && x.auto?.review === "pending" && !created.includes(x) && x.titleSource !== "manual" && x.descSource !== "manual" && !this.d.store.data.publications.some((p) => p.outputId === x.id)
-      );
-      if (prior.length) {
-        const r2 = this.d.library.removeMany(prior.map((x) => x.id));
-        if (r2.removed) notes.push(`Se sustituyeron ${r2.removed} v\xEDdeo(s) pendientes de revisi\xF3n de un an\xE1lisis anterior.`);
-      }
-      let scheduled = 0;
-      if (!this.cfg.requireApproval) {
-        for (const o of created) {
-          try {
-            this.approve(o.id);
-            scheduled++;
-          } catch (e) {
-            errors.push(`${o.title}: ${e.message}`);
-          }
-        }
-      }
-      if (askProposals.length && this.d.themes) {
-        this.d.themes.put(vod.id, askProposals);
-        notes.push(`${askProposals.length} tema(s) esperan que elijas formato: ${askProposals.map((p) => `\xAB${p.title}\xBB`).join(", ")}.`);
-      }
-      if (this.cfg.cleanup !== false && this.d.discardSource && !this.d.themes?.hasPending(vod.id)) {
-        try {
-          const r2 = this.discard(vod.id, { fromRun: true });
-          notes.push(`Directo completo borrado del disco (${(r2.freedBytes / 1024 ** 3).toFixed(1)} GB liberados); se conservan ${r2.kept} v\xEDdeo(s) y clip(s) con sus transcripciones.`);
-        } catch (e) {
-          notes.push(`No se pudo borrar el directo completo: ${e.message}`);
-        }
-      }
-      clock4.mark(null);
-      notes.push(`Tiempos: ${clock4.describe() || `montaje ${lap(tr)}`}; total ${lap(t0)}.`);
-      this.recordTimes(vod, clock4.seconds(), Math.round((Date.now() - t0) / 1e3));
-      this.d.log.info(`An\xE1lisis de "${vod.title}": ${notes[notes.length - 1]}`);
-      const msg = `${created.length} v\xEDdeo(s) listos${this.cfg.requireApproval ? " para revisar" : ` (${scheduled} programados)`}.`;
-      this.mark(vod, "done", [msg, ...errors, ...notes].join(" "));
-      task.done(msg);
-      return vod;
-    } catch (e) {
-      if (isCancelled(e)) {
-        const paused = this.pauseRequested.delete(vod.id);
-        if (paused) this.markPaused(vod);
-        else this.mark(vod, "error", "An\xE1lisis cancelado.");
-        task.fail(paused ? "En pausa" : "Cancelado");
-        this.d.log.info(`An\xE1lisis ${paused ? "en pausa" : "cancelado"}: "${vod.title}".`);
-        throw e;
-      }
-      this.mark(vod, "error", e.message);
-      task.fail(e.message);
-      this.d.log.error("Piloto autom\xE1tico fallido", e);
-      throw e;
-    }
+  /** El análisis entero, por fases (electron/domain/pipeline). */
+  process(vod) {
+    return runPipeline(this, vod, this.pauseRequested);
   }
   /** Configuración del modelo de lenguaje si hay uno elegido y con clave; si no, null. */
   /** ¿Está analizando algún directo? (El trabajo en segundo plano se aparta mientras tanto.) */
   isBusy() {
     return this.running.size > 0;
+  }
+  /** Perfil de estilo del creador (o los valores de la entrevista). */
+  style() {
+    return this.d.style?.() ?? defaultStyle();
   }
   /** Modelo de lenguaje configurado (clave incluida), o null si no hay. */
   llmConf() {
@@ -40620,8 +41107,8 @@ var Autopilot = class {
   async titles(vod, words, moments, mains, notes) {
     const base2 = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: "" },
-      mains: mains.map((m, i) => ({ title: clean2(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean2(shortDescription(words, m), 500) })),
-      clips: moments.map((m, i) => ({ title: clean2(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean2(shortDescription(words, m), 500) }))
+      mains: mains.map((m, i) => ({ title: clean4(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean4(shortDescription(words, m), 500) })),
+      clips: moments.map((m, i) => ({ title: clean4(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean4(shortDescription(words, m), 500) }))
     };
     const uniq = () => {
       const u = dedupeTitles([...base2.mains.map((t) => t.title), ...base2.clips.map((t) => t.title)]);
@@ -40649,7 +41136,7 @@ var Autopilot = class {
 ${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch }
       );
-      const pick = (o, fb) => ({ title: clean2(o?.titulo, 100) || fb.title, description: clean2(o?.descripcion, 500) || fb.description });
+      const pick = (o, fb) => ({ title: clean4(o?.titulo, 100) || fb.title, description: clean4(o?.descripcion, 500) || fb.description });
       base2.summary = pick(raw.resumen, base2.summary);
       const byVideo = new Map((Array.isArray(raw.videos) ? raw.videos : []).map((c) => [String(c.id), c]));
       base2.mains = base2.mains.map((fb, i) => pick(byVideo.get(`video${i + 1}`), fb));
@@ -40682,8 +41169,8 @@ ${JSON.stringify(items)}`,
   async nameFor(vodId, segs) {
     const words = this.d.transcripts.words(vodId);
     if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
-    const fbTitle = clean2(shortTitle(words, segs, 0), 100);
-    const fbDesc = clean2(shortDescription(words, segs), 500);
+    const fbTitle = clean4(shortTitle(words, segs, 0), 100);
+    const fbDesc = clean4(shortDescription(words, segs), 500);
     const local = { title: /^Momento \d+$/.test(fbTitle) ? "" : fbTitle, description: fbDesc, source: "transcript" };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
@@ -40698,8 +41185,8 @@ ${JSON.stringify(items)}`,
 ${text}`,
           { fetchFn: this.d.llmFetch }
         );
-        const t = clean2(raw.titulo, 100);
-        const d = clean2(raw.descripcion, 500);
+        const t = clean4(raw.titulo, 100);
+        const d = clean4(raw.descripcion, 500);
         if (t || d) return { title: t || local.title, description: d || local.description, source: "llm" };
       } catch {
       }
@@ -40781,7 +41268,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs36.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs38.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -40804,7 +41291,7 @@ ${text}`,
   }
   /** Música de fondo si el vídeo no tiene ya sonido de fondo; el ambiente sale del tema (con modelo si `smart`, si no por palabras). */
   async musicFor(vod, words, title, segs, smart, llmConf) {
-    if (this.cfg.music === false || !vod.filePath || !import_node_fs36.default.existsSync(vod.filePath)) return null;
+    if (this.cfg.music === false || !vod.filePath || !import_node_fs38.default.existsSync(vod.filePath)) return null;
     try {
       const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
       const gaps = [];
@@ -40875,7 +41362,7 @@ ${text}`,
     if (!vod) throw new Error("El directo de este tema ya no est\xE1 en el programa.");
     const spans = [...proposal.pieces.map((p) => ({ start: p.start, end: p.end }))];
     await this.d.transcripts.ensure(vod.id, spans).catch((e) => this.d.log.warn(`Transcripci\xF3n del tema: ${e.message}`));
-    if (!vod.filePath || !import_node_fs36.default.existsSync(vod.filePath)) await this.d.restore?.(vod.id);
+    if (!vod.filePath || !import_node_fs38.default.existsSync(vod.filePath)) await this.d.restore?.(vod.id);
     const words = this.d.transcripts.words(vod.id);
     const llmConf = this.llmConf();
     const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
@@ -40902,7 +41389,7 @@ ${text}`,
       if (e) e = { ...e, effects: withJoints(e.effects) };
       const mood = e ? await this.musicFor(vod, words, proposal.title, segs, true, llmConf) : null;
       if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
-      const title = clean2(proposal.title, 100);
+      const title = clean4(proposal.title, 100);
       let item;
       try {
         item = e ? await this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }) : await this.d.clips.createLong(vod.id, { title, segments: segs, ...subs });
@@ -40942,8 +41429,8 @@ ${text}`,
 
 // electron/domain/channel.ts
 init_twitch();
-var import_node_fs37 = __toESM(require("node:fs"));
-var import_node_path30 = __toESM(require("node:path"));
+var import_node_fs39 = __toESM(require("node:fs"));
+var import_node_path32 = __toESM(require("node:path"));
 var OTHER_CLIPS_MS = 10 * 6e4;
 var OTHER_CLIP_WINDOWS = 4;
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
@@ -41109,10 +41596,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs37.default.mkdirSync(c.dir, { recursive: true });
-      const file = import_node_path30.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs37.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs37.default.renameSync(`${file}.tmp`, file);
+      import_node_fs39.default.mkdirSync(c.dir, { recursive: true });
+      const file = import_node_path32.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
+      import_node_fs39.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs39.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -41803,11 +42290,11 @@ var EngineService = class {
   hash(payload, crons) {
     return import_node_crypto13.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
-  async put(gh, path33, text, msg) {
-    const cur = await gh.getContent(path33);
+  async put(gh, path35, text, msg) {
+    const cur = await gh.getContent(path35);
     if (cur?.text === text) return;
-    const sha = await gh.putContent(path33, text, msg, cur?.sha);
-    if (!sha) throw new Error(`No se pudo escribir ${path33} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    const sha = await gh.putContent(path35, text, msg, cur?.sha);
+    if (!sha) throw new Error(`No se pudo escribir ${path35} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
   }
   /** Sube el motor, el flujo y la configuración. */
   async push(gh, payload, crons) {
@@ -42164,8 +42651,8 @@ var AppContext = class {
     this.userDataDir = o.userDataDir;
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
-    setAssetFolders({ sounds: import_node_path31.default.join(o.userDataDir, "Sonidos"), music: import_node_path31.default.join(o.userDataDir, "M\xFAsica") });
-    this.log = new Logger(import_node_path31.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
+    setAssetFolders({ sounds: import_node_path33.default.join(o.userDataDir, "Sonidos"), music: import_node_path33.default.join(o.userDataDir, "M\xFAsica") });
+    this.log = new Logger(import_node_path33.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
       this.log.warn(`data.json estaba da\xF1ado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? " (se recuper\xF3 la \xFAltima copia buena)" : " (se empez\xF3 con datos vac\xEDos)"}`);
@@ -42203,15 +42690,15 @@ var AppContext = class {
       tools,
       source: (id) => this.vods.ensureFile(id),
       segmentationModel: o.diarizationModel ?? "",
-      modelsDir: import_node_path31.default.join(o.userDataDir, "models"),
+      modelsDir: import_node_path33.default.join(o.userDataDir, "models"),
       engine: o.diarizationEngine
     });
-    this.style = new StyleService(import_node_path31.default.join(o.userDataDir, "style-profile.json"));
-    this.covers = new CoverService({ dir: import_node_path31.default.join(o.userDataDir, "covers"), tools, fontsDir: o.fontsDir });
-    this.coverDesigns = new CoverDesignService(import_node_path31.default.join(o.userDataDir, "covers"), this.covers);
+    this.style = new StyleService(import_node_path33.default.join(o.userDataDir, "style-profile.json"));
+    this.covers = new CoverService({ dir: import_node_path33.default.join(o.userDataDir, "covers"), tools, fontsDir: o.fontsDir });
+    this.coverDesigns = new CoverDesignService(import_node_path33.default.join(o.userDataDir, "covers"), this.covers);
     this.moments = new MomentsService({
-      dir: import_node_path31.default.join(o.userDataDir, "moments"),
-      prefsFile: import_node_path31.default.join(o.userDataDir, "preferences.json"),
+      dir: import_node_path33.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path33.default.join(o.userDataDir, "preferences.json"),
       words: (id) => this.transcripts.words(id),
       duration: (id) => this.store.data.vods.find((v) => v.id === id)?.durationSec,
       exists: (id) => this.store.data.vods.some((v) => v.id === id)
@@ -42236,9 +42723,9 @@ var AppContext = class {
         const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
         return r2.stdout.trim().split("\n")[0] ?? "";
       },
-      chat: { dir: import_node_path31.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
+      chat: { dir: import_node_path33.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
-    this.themes = new ThemeStore(import_node_path31.default.join(o.userDataDir, "themes.json"), () => o.notifier.changed());
+    this.themes = new ThemeStore(import_node_path33.default.join(o.userDataDir, "themes.json"), () => o.notifier.changed());
     this.autopilot = new Autopilot({
       themes: this.themes,
       store: this.store,
@@ -42253,10 +42740,10 @@ var AppContext = class {
       categories: this.categories,
       library: this.library,
       pubs: this.pubs,
-      chatDir: import_node_path31.default.join(o.userDataDir, "chat"),
-      judgeDir: import_node_path31.default.join(o.userDataDir, "judgements"),
-      momentsDir: import_node_path31.default.join(o.userDataDir, "moments"),
-      prefsFile: import_node_path31.default.join(o.userDataDir, "preferences.json"),
+      chatDir: import_node_path33.default.join(o.userDataDir, "chat"),
+      judgeDir: import_node_path33.default.join(o.userDataDir, "judgements"),
+      momentsDir: import_node_path33.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path33.default.join(o.userDataDir, "preferences.json"),
       style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
       llmBaseUrl: o.llmBaseUrl,
@@ -42265,10 +42752,10 @@ var AppContext = class {
       restore: (id) => this.vods.ensureFile(id),
       discardSource: (id) => this.vods.discardSource(id)
     });
-    this.clipFeedback = new ClipFeedbackStore(import_node_path31.default.join(o.userDataDir, "clip-feedback.json"));
+    this.clipFeedback = new ClipFeedbackStore(import_node_path33.default.join(o.userDataDir, "clip-feedback.json"));
     this.clipScores = createClipScoreService(this, o);
     this.database = new DatabaseWriter(
-      import_node_path31.default.join(o.userDataDir, "Base de datos"),
+      import_node_path33.default.join(o.userDataDir, "Base de datos"),
       () => ({ vods: this.store.data.vods, outputs: this.store.data.outputs, pubs: this.store.data.publications, groups: this.store.data.groups, covers: this.covers.list(), designs: this.coverDesigns.list() }),
       () => [{ name: "Clips de Twitch", file: "Clips de Twitch.csv", about: "Los clips de tu canal con su nota, los cuatro criterios, si el dorado es suyo y si la nota est\xE1 Modificada por ti (S\xED/No).", rows: this.clipScores.scoredCount() }]
     );
@@ -42368,7 +42855,7 @@ var AppContext = class {
     this.storage.start();
     void this.database.refresh().catch(() => void 0);
     this.dbTimer = setInterval(() => void this.database.refresh().catch(() => void 0), 6e4);
-    for (const d of ["Sonidos", "M\xFAsica"]) import_node_fs38.default.mkdirSync(import_node_path31.default.join(this.userDataDir, d), { recursive: true });
+    for (const d of ["Sonidos", "M\xFAsica"]) import_node_fs40.default.mkdirSync(import_node_path33.default.join(this.userDataDir, d), { recursive: true });
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${e.message}`));
     void this.autopilot.refreshLibraryAtStart();
     this.log.info("Aplicaci\xF3n iniciada.");
@@ -42445,10 +42932,10 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs39.default.mkdtempSync(import_node_path32.default.join(import_node_os12.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs41.default.mkdtempSync(import_node_path34.default.join(import_node_os12.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
-    userDataDir: import_node_path32.default.join(work, "data"),
-    defaultOutputDir: import_node_path32.default.join(work, "out"),
+    userDataDir: import_node_path34.default.join(work, "data"),
+    defaultOutputDir: import_node_path34.default.join(work, "out"),
     cipher: plainCipher,
     notifier: silentNotifier,
     headless: true,
@@ -42514,7 +43001,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs39.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs41.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -42522,7 +43009,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs39.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs41.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -42556,7 +43043,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs39.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs41.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {

@@ -94,6 +94,8 @@ export interface RunContext {
   chapterLabels: Map<number, string>;
   summaryMeta?: MomentMeta;
   meta: Map<Seg, MomentMeta>;
+  /** Títulos que ya decidió el editor de humor para sus clips (mandan sobre los de la fase de títulos). */
+  clipTitles?: Map<Seg, string>;
   /** Vídeo largo decidido por el director de edición (sustituye al resumen por lista de mejores momentos). */
   directed?: LongPlan;
   topicLongs: ThemeProposal[];

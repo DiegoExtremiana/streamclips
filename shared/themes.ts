@@ -156,6 +156,9 @@ export interface BuildOpts {
   leadIn?: number;
 }
 
+/** Piezas de un tema a menos de esto (s) se montan como un solo tramo continuo. */
+export const THEME_JOIN_GAP = 12;
+
 const len = (s: Seg) => s.end - s.start;
 const total = (segs: Seg[]) => segs.reduce((a, s) => a + len(s), 0);
 
@@ -199,7 +202,8 @@ export function buildProposal(theme: RawTheme, units: ThemeUnit[], vodId: string
   // un posible gancho abre el vídeo (solo uno, y solo si el resto queda en orden cronológico)
   const hook = ranged.find((p) => p.role === 'gancho');
   const ordered = hook && ranged.length >= 3 && ranged[0] !== hook ? [hook, ...ranged.filter((p) => p !== hook)] : ranged;
-  const longSegs = mergeSegments(ordered.map((p) => ({ start: p.start, end: p.end })), 0);
+  // dos piezas del mismo tema separadas por unos segundos se dejan seguidas: un corte para quitar 10 s rompe la escena
+  const longSegs = mergeSegments(ordered.map((p) => ({ start: p.start, end: p.end })), THEME_JOIN_GAP);
   // si el gancho no es lo primero cronológico, no se une con vecinos: el orden de `ordered` manda
   const segs = hook && ordered[0] === hook && ranged[0] !== hook ? ordered.map((p) => ({ start: p.start, end: p.end })) : longSegs;
   const longSec = total(segs);

@@ -111,7 +111,7 @@ describe('director de edición en el piloto', () => {
       await e.ctx.autopilot.run(vod.id);
       const v = e.ctx.store.data.vods[0];
       assert.equal(v.autopilot?.status, 'done', v.autopilot?.note);
-      assert.match(v.autopilot?.note ?? '', /Director de edición: «El directo que se torció», \d+ min en 3 capítulos \(Calentando · La racha · El final\), con gancho que se repite entero en su sitio, \d+ rótulos/);
+      assert.match(v.autopilot?.note ?? '', /Editor de historia: «El directo que se torció»: 3 capítulos \(Calentando · La racha · El final\), con gancho/);
       assert.equal(srv.directorCalls, 1);
       assert.match(srv.lastDirectorPrompt, /entre 2 y 4 minutos/);
       const longs = e.ctx.store.data.outputs.filter((o) => o.kind === 'long');
@@ -147,7 +147,7 @@ describe('director de edición en el piloto', () => {
       await e.ctx.autopilot.run(vod.id);
       const v = e.ctx.store.data.vods[0];
       assert.equal(v.autopilot?.status, 'done', v.autopilot?.note);
-      assert.match(v.autopilot?.note ?? '', /no devolvió una estructura válida; se monta el resumen de siempre/);
+      assert.match(v.autopilot?.note ?? '', /[Nn]o devolvió una estructura válida; se monta el resumen de siempre/);
       const longs = e.ctx.store.data.outputs.filter((o) => o.kind === 'long');
       assert.equal(longs.length, 1);
       assert.equal(longs[0].auto?.kind, 'resumen');

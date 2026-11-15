@@ -24,6 +24,7 @@ export const titlesPhase: Phase = async (ctx) => {
   ctx.clock.mark('títulos');
   task.update(75, 'Poniendo títulos…');
   ctx.titles = await host.titles(vod, words, ctx.moments, ctx.mains, notes);
+  if (ctx.clipTitles?.size) ctx.titles.clips = ctx.titles.clips.map((t, i) => ({ ...t, title: clean(ctx.clipTitles!.get(ctx.moments[i]), 100) || t.title }));
   // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
   const ser = cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', { ...cfg.series, nextDay: vod.seriesDay ?? cfg.series.nextDay }) : null;
   if (ser) {

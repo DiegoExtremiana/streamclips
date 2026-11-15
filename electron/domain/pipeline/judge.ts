@@ -45,6 +45,14 @@ async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
         cacheFile: d.judgeDir ? path.join(d.judgeDir, `${vod.id}.visual.json`) : undefined,
         fetchFn: d.llmFetch,
         signal: () => throwIfCancelled(),
+        // los fotogramas se sacan alrededor del pico de volumen del momento: ahí están los gestos y las reacciones
+        peakAt: (seg) => {
+          const e = ctx.sig.energyDb;
+          if (!e?.length) return undefined;
+          let best = -1;
+          for (let t = Math.max(0, Math.floor(seg.start)); t <= Math.min(e.length - 1, Math.ceil(seg.end)); t++) if (best < 0 || e[t] > e[best]) best = t;
+          return best < 0 ? undefined : best + 0.5;
+        },
       }).catch((e) => {
         if (isCancelled(e)) throw e;
         return null;

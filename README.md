@@ -7,6 +7,9 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Vídeos con sentido, no momentos sueltos**: antes de montar el vídeo largo, los momentos cercanos se unen en escenas continuas del directo, cada una con su planteamiento (empieza unos segundos antes) y su reacción (acaba después), cortadas en frase completa. El editor de historia monta el vídeo con pocas escenas largas que se entienden solas, en vez de pegar muchos trozos cortos.
 - El editor de historia tiene instrucciones nuevas: que el vídeo lo entienda quien no vio el directo, que cada corte tenga lógica y que los títulos de capítulo digan qué pasa.
 - La vista del directo se fija más en gestos, muecas y reacciones de la cámara.
+- Para ver los gestos, los fotogramas se sacan justo alrededor del pico de volumen de cada momento (el grito, la risa), no repartidos al azar.
+- Los clips graciosos conservan el título que les pone el editor de humor.
+- En los vídeos por tema, dos piezas separadas por pocos segundos ya no se cortan: se dejan seguidas.
 - El editor de ritmo ya solo recorta los bordes de cada escena (como mucho un tercio).
 
 ## Novedades de la v0.36.0

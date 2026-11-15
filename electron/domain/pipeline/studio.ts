@@ -93,8 +93,11 @@ export const studioPhase: Phase = async (ctx) => {
       return { ...s, start, end };
     });
   }
-  const cands = spans.map((s, i) => sceneCandidate(s, i, judgeText(sceneWords, s, 1500)));
-  const wantLong = cfg.director !== false && cfg.maxVideos > 0 && cands.length >= 3;
+  const scenes = spans.map((s, i) => sceneCandidate(s, i, judgeText(sceneWords, s, 1500)));
+  // con muy pocas escenas (directo corto o todo seguido) no hay con qué estructurar: se trabaja con los momentos, como el director
+  const useScenes = scenes.length >= 4 && scenes.length < picks.length;
+  const cands = useScenes ? scenes : picks;
+  const wantLong = cfg.director !== false && cfg.maxVideos > 0 && cands.length >= 4;
   const wantClips = cfg.maxClips > 0 && all.length > 0;
   if (!wantLong && !wantClips) return 'continue';
   const style = host.style();
@@ -126,7 +129,7 @@ export const studioPhase: Phase = async (ctx) => {
     const [rPlan, rTrims, rClips] = await Promise.allSettled([
       wantLong
         ? ask(
-            DIRECTOR_SYSTEM + HISTORIA_EXTRA,
+            useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM,
             directorPrompt({
               vodTitle: vod.title ?? '',
               dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }),
@@ -204,6 +207,7 @@ export const studioPhase: Phase = async (ctx) => {
     const byNote = ctx.moments;
     const funny = clips.slice(0, cfg.maxClips).map((c) => {
       const seg = { start: c.start, end: c.end, peak: (c.start + c.end) / 2, score: c.fun, reasons: ['gracia'] };
+      if (c.title) (ctx.clipTitles ??= new Map()).set(seg, c.title);
       ctx.meta.set(seg, { score: c.fun, kind: 'gracia', reason: `Editor de humor: ${c.why || c.title || 'hace gracia sin contexto'}`.slice(0, 200) });
       return seg;
     });
@@ -216,7 +220,7 @@ export const studioPhase: Phase = async (ctx) => {
   // ── vídeos por tema (los encontró la fase de valoración): van al proyecto para verlos junto al resto ──
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: 'tema', title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
 
-  if (wantLong) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
+  if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
   notes.push(`Estudio de edición: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? '' : ' (sin respuesta)'}: ${a.note}`).join(' ')}`);
   if (file) {
     const project: StudioProject = { version: 1, vodId: vod.id, createdAt: new Date().toISOString(), outputs, agents };

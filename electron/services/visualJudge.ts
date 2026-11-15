@@ -18,6 +18,17 @@ export async function vodFrame(ffmpeg: string, file: string, at: number, tmpDir:
   return `data:image/jpeg;base64,${b64}`;
 }
 
+/**
+ * Instantes de los fotogramas de un momento. Si se sabe dónde está el pico de volumen, se mira justo antes, justo después y
+ * un poco más tarde (la reacción: la cara, la mueca, la risa); si no, repartidos por el tramo.
+ */
+export function gestureTimes(seg: { start: number; end: number }, n: number, peak?: number): number[] {
+  if (peak === undefined || !Number.isFinite(peak) || seg.end - seg.start < 8) return frameTimes(seg, n);
+  const offs = n >= 3 ? [-1.5, 0.8, 3] : [0.5, 2.5];
+  const ts = offs.map((o) => Math.round(Math.min(seg.end - 0.5, Math.max(seg.start + 0.5, peak + o)) * 10) / 10);
+  return new Set(ts).size === ts.length ? ts : frameTimes(seg, n);
+}
+
 export interface VisualOpts {
   ffmpeg: string;
   file: string;
@@ -29,6 +40,8 @@ export interface VisualOpts {
   sleep?: (ms: number) => Promise<void>;
   paceMs?: number;
   onProgress?: (done: number, total: number) => void;
+  /** Segundo del directo con el pico de volumen del tramo (grito, risa): los fotogramas se sacan alrededor, que es donde está el gesto. */
+  peakAt?: (seg: { start: number; end: number }) => number | undefined;
   signal?: () => void;
 }
 
@@ -81,7 +94,7 @@ export async function judgeVisual(conf: LlmConfig, words: Word[], judged: Judged
       const items: { c: Judged; frames: number }[] = [];
       for (const c of g) {
         const seg = c.judgement.trim ?? c;
-        const times = frameTimes(seg, perCand);
+        const times = gestureTimes(seg, perCand, o.peakAt?.(seg));
         for (const t of times) images.push(await vodFrame(o.ffmpeg, o.file, t, o.tmpDir));
         items.push({ c, frames: times.length });
       }

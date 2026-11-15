@@ -33,6 +33,8 @@ Diego: «no quiero momentos sueltos, quiero vídeos con sentido, no 4 escenas co
 
 Ahora `studioPhase` convierte los picos en **escenas** antes de llamar a los editores (`sceneSpans`/`sceneCandidate` en `shared/studio.ts`, constantes en `SCENE`): picos a menos de 100 s se unen en un tramo continuo; cada escena empieza 25 s antes y acaba 10 s después, ajustada a frase completa, sin pasar de 4,5 min ni salirse de su categoría. Se transcribe el contexto añadido (`transcripts.ensure`). El editor de historia recibe escenas (ids `e1…`) con `HISTORIA_EXTRA` en el sistema; el de humor sigue con los picos (`all`). El ritmo ya solo puede quitar un tercio. El prompt de visión pide gestos y muecas.
 
+También en la 0.37.0: los fotogramas de la visión se sacan alrededor del pico de volumen del momento (`gestureTimes` en `visualJudge.ts`, `peakAt` desde `judge.ts`) para pillar el gesto; los clips del editor de humor conservan su título (`ctx.clipTitles`, aplicado en `titlesPhase`); las piezas de un tema a menos de 12 s se montan seguidas (`THEME_JOIN_GAP`). Con menos de 4 escenas (directo corto) el estudio trabaja con los momentos sueltos, como el director.
+
 Tests: `tests/studio.test.ts` (funciones puras). Falta el test de la fase entera con modelo falso.
 
 Siguiente paso lógico para «vídeos con sentido»: que los vídeos por tema (`findThemes`) usen también escenas, y que el jefe de edición vea fotogramas del montaje final (hoy solo lee texto). La visión mira 2-3 fotogramas de los 14 mejores picos: para gestos haría falta sacar fotogramas alrededor del pico de volumen, no repartidos.

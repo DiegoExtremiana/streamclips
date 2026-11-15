@@ -33433,7 +33433,22 @@ async function validateRender(tools, file, kind, expectedSec, toleranceSec = 1.5
   if (Math.abs(info.durationSec - expectedSec) > toleranceSec) {
     throw new Error(`Duraci\xF3n incorrecta: ${info.durationSec.toFixed(1)}s (esperada ~${expectedSec.toFixed(1)}s)`);
   }
+  if (kind === "long" && info.hasAudio && info.durationSec >= 120) {
+    const share = await silentSeconds(tools, file) / info.durationSec;
+    if (share >= 0.3) throw new Error(`El v\xEDdeo ha salido sin sonido en el ${Math.round(share * 100)} % de su duraci\xF3n (\xBFtramos del directo silenciados por Twitch?)`);
+  }
   return info;
+}
+async function silentSeconds(tools, file) {
+  try {
+    const r2 = await run(tools.ffmpeg, ["-hide_banner", "-nostats", "-i", file, "-vn", "-af", "silencedetect=n=-45dB:d=8", "-f", "null", "-"], 3e5);
+    let sum = 0;
+    for (const m of String(r2.stderr).matchAll(/silence_duration: ([\d.]+)/g)) sum += Number(m[1]);
+    return sum;
+  } catch (e) {
+    if (e.name === "CancelledError") throw e;
+    return 0;
+  }
 }
 async function extractFrame(tools, input, atSec, out, o = {}, isImage = false) {
   import_node_fs10.default.mkdirSync(import_node_path9.default.dirname(out), { recursive: true });
@@ -35917,6 +35932,17 @@ function findMoments(sig, o) {
     taken.push({ start, end });
   }
   return out.sort((a, b) => a.start - b.start);
+}
+var MUTED_DB = -60;
+var MUTED_SHARE = 0.3;
+function silentShare(energyDb, seg) {
+  if (!energyDb?.length) return 0;
+  const lo = Math.max(0, Math.floor(seg.start));
+  const hi = Math.min(energyDb.length, Math.ceil(seg.end));
+  if (hi <= lo) return 0;
+  let n = 0;
+  for (let t = lo; t < hi; t++) if (!(energyDb[t] > MUTED_DB)) n++;
+  return n / (hi - lo);
 }
 function mergeSegments(segs, joinGap = 2) {
   const s = [...segs].sort((a, b) => a.start - b.start);
@@ -39613,7 +39639,7 @@ function withClipHook(effects, title, kept) {
 // shared/themes.ts
 var THEME_ROLES = ["gancho", "inicio", "desarrollo", "evolucion", "desenlace"];
 var ROLE_LABEL = { gancho: "Gancho", inicio: "Inicio", desarrollo: "Desarrollo", evolucion: "Evoluci\xF3n", desenlace: "Desenlace" };
-var THEME_SYSTEM = 'Eres editor de YouTube de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Recibes fragmentos de un mismo directo (id, hora, texto). Busca TEMAS e HISTORIAS: situaciones absurdas que se retoman, conversaciones que vuelven horas despu\xE9s, bromas recurrentes, un reto o partida con momentos relacionados, una an\xE9cdota que evoluciona. Agrupa por SIGNIFICADO, no por palabras repetidas: dos fragmentos pertenecen al mismo tema solo si hay una relaci\xF3n real (se refieren a lo mismo, uno explica o contin\xFAa al otro). Piensa como editor: \xBFqu\xE9 historia se cuenta?, \xBFpor qu\xE9 le interesar\xEDa a alguien que no vio el directo?, \xBFhay material para sostener un v\xEDdeo?, \xBFqu\xE9 fragmentos son imprescindibles y cu\xE1les repiten lo mismo? Descarta lo repetitivo. Mant\xE9n el ORDEN CRONOL\xD3GICO (no cambies la secuencia de modo que cambie el significado); como mucho puedes marcar UN fragmento como "gancho" para abrir el v\xEDdeo con lo m\xE1s fuerte si el resto sigue en orden. Roles de cada pieza: gancho, inicio (presenta el tema o situaci\xF3n), desarrollo, evolucion (c\xF3mo cambia la historia) o desenlace (remate o conclusi\xF3n); usa solo los que el material permita, sin forzar estructura. "contexto": true si esa pieza necesita unos segundos de lo anterior para entenderse. "cortos" son v\xEDdeos cortos independientes (cada uno una situaci\xF3n concreta, ids en orden). Si no hay material suficiente para un tema, pon "vale": false o no lo incluyas: prefiero ning\xFAn v\xEDdeo a uno de relleno. Cada id va como mucho en un tema. No inventes conexiones ni finales: si la historia queda abierta, "desenlace": false. "confianza" (0 a 1) = seguridad en que las piezas son de verdad el mismo tema; "potencial" 0 a 10 sobrio (un tema mencionado mucho puede ser aburrido). Responde SOLO con JSON: {"temas":[{"titulo":"2 a 7 palabras, sin emojis","contexto":"2 frases: qu\xE9 pasa y por qu\xE9 interesa","categoria":"humor|juego|an\xE9cdota|charla|reto|otro","participantes":["nombres si se oyen"],"motivo":"por qu\xE9 estas piezas son un mismo tema","confianza":0.8,"desenlace":true,"potencial":{"corto":5,"largo":6,"varios":4},"vale":true,"piezas":[{"id":"","rol":"","contexto":false}],"cortos":[{"titulo":"","ids":[""]}]}]}';
+var THEME_SYSTEM = 'Eres editor de YouTube de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Recibes fragmentos de un mismo directo (id, hora, texto). Busca TEMAS e HISTORIAS: situaciones absurdas que se retoman, conversaciones que vuelven horas despu\xE9s, bromas recurrentes, un reto o partida con momentos relacionados, una an\xE9cdota que evoluciona. Un tema NO tiene por qu\xE9 ser seguido: es normal que se hable de algo al principio, se deje y se retome una o dos horas despu\xE9s; junta esos tramos si de verdad son lo mismo y juntos se entienden mejor que por separado. Agrupa por SIGNIFICADO, no por palabras repetidas: dos fragmentos pertenecen al mismo tema solo si hay una relaci\xF3n real (se refieren a lo mismo, uno explica o contin\xFAa al otro). Piensa como editor: \xBFqu\xE9 historia se cuenta?, \xBFpor qu\xE9 le interesar\xEDa a alguien que no vio el directo?, \xBFhay material para sostener un v\xEDdeo?, \xBFqu\xE9 fragmentos son imprescindibles y cu\xE1les repiten lo mismo? Descarta lo repetitivo. Mant\xE9n el ORDEN CRONOL\xD3GICO (no cambies la secuencia de modo que cambie el significado); como mucho puedes marcar UN fragmento como "gancho" para abrir el v\xEDdeo con lo m\xE1s fuerte si el resto sigue en orden. Roles de cada pieza: gancho, inicio (presenta el tema o situaci\xF3n), desarrollo, evolucion (c\xF3mo cambia la historia) o desenlace (remate o conclusi\xF3n); usa solo los que el material permita, sin forzar estructura. "contexto": true si esa pieza necesita unos segundos de lo anterior para entenderse. "cortos" son v\xEDdeos cortos independientes (cada uno una situaci\xF3n concreta, ids en orden). Si no hay material suficiente para un tema, pon "vale": false o no lo incluyas: prefiero ning\xFAn v\xEDdeo a uno de relleno. Cada id va como mucho en un tema. No inventes conexiones ni finales: si la historia queda abierta, "desenlace": false. "confianza" (0 a 1) = seguridad en que las piezas son de verdad el mismo tema; "potencial" 0 a 10 sobrio (un tema mencionado mucho puede ser aburrido). Responde SOLO con JSON: {"temas":[{"titulo":"2 a 7 palabras, sin emojis","contexto":"2 frases: qu\xE9 pasa y por qu\xE9 interesa","categoria":"humor|juego|an\xE9cdota|charla|reto|otro","participantes":["nombres si se oyen"],"motivo":"por qu\xE9 estas piezas son un mismo tema","confianza":0.8,"desenlace":true,"potencial":{"corto":5,"largo":6,"varios":4},"vale":true,"piezas":[{"id":"","rol":"","contexto":false}],"cortos":[{"titulo":"","ids":[""]}]}]}';
 function themePrompt(units) {
   const list2 = units.map((u) => ({ id: u.id, hora: clock2(u.start), duracion: Math.round(u.end - u.start), ...u.title ? { titulo: u.title } : {}, texto: u.text }));
   return JSON.stringify({ fragmentos: list2 });
@@ -39671,6 +39697,7 @@ function parseThemes(raw, valid) {
   }
   return out;
 }
+var THEME_JOIN_GAP = 12;
 var len = (s) => s.end - s.start;
 var total = (segs) => segs.reduce((a, s) => a + len(s), 0);
 function overlapRatio(segs, others) {
@@ -39701,7 +39728,7 @@ function buildProposal(theme, units, vodId, o = {}) {
   });
   const hook = ranged.find((p) => p.role === "gancho");
   const ordered = hook && ranged.length >= 3 && ranged[0] !== hook ? [hook, ...ranged.filter((p) => p !== hook)] : ranged;
-  const longSegs = mergeSegments(ordered.map((p) => ({ start: p.start, end: p.end })), 0);
+  const longSegs = mergeSegments(ordered.map((p) => ({ start: p.start, end: p.end })), THEME_JOIN_GAP);
   const segs = hook && ordered[0] === hook && ranged[0] !== hook ? ordered.map((p) => ({ start: p.start, end: p.end })) : longSegs;
   const longSec = total(segs);
   const minLong = o.minLongSec ?? 180;
@@ -40045,6 +40072,15 @@ var signalsPhase = async (ctx) => {
       return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
     });
   }
+  const audible = (xs) => xs.filter((x) => silentShare(energyDb, x) < MUTED_SHARE);
+  const beforeMuted = moments.length + summary.length + mains.length + pool.length;
+  moments = audible(moments);
+  summary = audible(summary);
+  mains = audible(mains);
+  pool = audible(pool);
+  const mutedSec = energyDb ? energyDb.filter((v) => !(v > MUTED_DB)).length : 0;
+  if (beforeMuted !== moments.length + summary.length + mains.length + pool.length || mutedSec > 300)
+    notes.push(`Unos ${Math.round(mutedSec / 60)} min del directo no tienen sonido (Twitch silencia la m\xFAsica con derechos en el directo guardado); ${beforeMuted - (moments.length + summary.length + mains.length + pool.length)} tramo(s) mudos descartados.`);
   ctx.legacy = { moments, summary, mains };
   if (pool.length) {
     moments = [];
@@ -40138,7 +40174,7 @@ var import_node_fs35 = __toESM(require("node:fs"));
 var import_node_path28 = __toESM(require("node:path"));
 
 // shared/visual.ts
-var VISUAL_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch. Ves unos fotogramas de cada fragmento de un directo (en orden cronol\xF3gico) y, junto a ellos, un resumen de lo que se dice. Punt\xFAa SOLO lo que se ve, de 0 a 10: 5 es una imagen normal (juego o c\xE1mara sin nada especial), 7 es visualmente buena (gesto o cara llamativa, acci\xF3n clara, algo gracioso o espectacular en pantalla, texto o suceso relevante), 9-10 solo si la imagen por s\xED sola har\xEDa re\xEDr o enganchar. Pon "muerta": true si la imagen no tiene nada que ver (pantalla de espera o \xABvuelvo enseguida\xBB, men\xFA, carga, pantalla negra, c\xE1mara apagada o vac\xEDa, el mismo plano inm\xF3vil sin acci\xF3n). "nota" es una frase corta en castellano de lo que se ve. No inventes lo que no se vea. Responde SOLO con JSON.';
+var VISUAL_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch. Ves unos fotogramas de cada fragmento de un directo (en orden cronol\xF3gico) y, junto a ellos, un resumen de lo que se dice. Punt\xFAa SOLO lo que se ve, de 0 a 10: 5 es una imagen normal (juego o c\xE1mara sin nada especial), 7 es visualmente buena (gesto o cara llamativa, acci\xF3n clara, algo gracioso o espectacular en pantalla, texto o suceso relevante), 9-10 solo si la imagen por s\xED sola har\xEDa re\xEDr o enganchar. Pon "muerta": true si la imagen no tiene nada que ver (pantalla de espera o \xABvuelvo enseguida\xBB, men\xFA, carga, pantalla negra, c\xE1mara apagada o vac\xEDa, el mismo plano inm\xF3vil sin acci\xF3n). F\xEDjate sobre todo en la persona si hay c\xE1mara: gestos, muecas, caras de sorpresa, risa, enfado o susto, y si cambian de un fotograma a otro (una reacci\xF3n vale m\xE1s que una cara quieta). "nota" es una frase corta en castellano de lo que se ve (di el gesto si lo hay). No inventes lo que no se vea. Responde SOLO con JSON.';
 function visualPrompt(words, items) {
   const list2 = items.map(({ c, frames }) => ({ id: c.id, fotogramas: frames, titulo: c.judgement.title ?? "", texto: judgeText(words, c, 260) }));
   return `Fragmentos (los fotogramas llegan en este orden, ${items.map((x) => x.frames).join("+")} por fragmento):
@@ -40185,6 +40221,12 @@ async function vodFrame(ffmpeg, file, at, tmpDir) {
   import_node_fs35.default.rmSync(out, { force: true });
   return `data:image/jpeg;base64,${b64}`;
 }
+function gestureTimes(seg, n, peak) {
+  if (peak === void 0 || !Number.isFinite(peak) || seg.end - seg.start < 8) return frameTimes(seg, n);
+  const offs = n >= 3 ? [-1.5, 0.8, 3] : [0.5, 2.5];
+  const ts = offs.map((o) => Math.round(Math.min(seg.end - 0.5, Math.max(seg.start + 0.5, peak + o)) * 10) / 10);
+  return new Set(ts).size === ts.length ? ts : frameTimes(seg, n);
+}
 var keyOf2 = (c, words) => import_node_crypto12.default.createHash("sha1").update(`${VERSION2}|${Math.round(c.start)}|${Math.round(c.end)}|${words.length}`).digest("hex").slice(0, 20);
 async function judgeVisual(conf, words, judged, o) {
   const vconf = visionConfig(conf);
@@ -40219,7 +40261,7 @@ async function judgeVisual(conf, words, judged, o) {
       const items = [];
       for (const c of g) {
         const seg = c.judgement.trim ?? c;
-        const times2 = frameTimes(seg, perCand);
+        const times2 = gestureTimes(seg, perCand, o.peakAt?.(seg));
         for (const t of times2) images.push(await vodFrame(o.ffmpeg, o.file, t, o.tmpDir));
         items.push({ c, frames: times2.length });
       }
@@ -40330,7 +40372,15 @@ async function judgeAll(ctx) {
         tmpDir,
         cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.visual.json`) : void 0,
         fetchFn: d.llmFetch,
-        signal: () => throwIfCancelled()
+        signal: () => throwIfCancelled(),
+        // los fotogramas se sacan alrededor del pico de volumen del momento: ahí están los gestos y las reacciones
+        peakAt: (seg) => {
+          const e = ctx.sig.energyDb;
+          if (!e?.length) return void 0;
+          let best = -1;
+          for (let t = Math.max(0, Math.floor(seg.start)); t <= Math.min(e.length - 1, Math.ceil(seg.end)); t++) if (best < 0 || e[t] > e[best]) best = t;
+          return best < 0 ? void 0 : best + 0.5;
+        }
       }).catch((e) => {
         if (isCancelled(e)) throw e;
         return null;
@@ -40415,7 +40465,7 @@ var judgePhase = async (ctx) => {
         ctx.summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
       } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
     } else if (sum) notes.push(`Ning\xFAn momento supera la nota m\xEDnima del resumen (${quality}/10).`);
-    if (cfg.topics !== false && (cfg.maxVideos > 0 || cfg.maxClips > 0)) {
+    if (cfg.topics !== false && cfg.studio === false && (cfg.maxVideos > 0 || cfg.maxClips > 0)) {
       ctx.clock.mark("temas");
       const found = await host.findThemes(vod, judged, words, ctx.llmConf, notes);
       for (const pr of found) {
@@ -40628,13 +40678,55 @@ var clean3 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").repla
 var num4 = (v) => typeof v === "number" ? v : Number(v);
 var list = (v) => Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : [];
 var brief = (c) => ({ id: c.id, dur: r14(c.end - c.start), nota: c.total, tipo: c.kind, titulo: c.title, ...c.visual ? { imagen: `${c.visual.score}/10: ${c.visual.note}` } : {}, ...c.energy !== void 0 ? { volumen: c.energy } : {}, ...c.chatPerMin !== void 0 ? { chat: c.chatPerMin } : {}, texto: c.text });
+var SCENE = { joinGap: 100, lead: 25, tail: 10, maxSec: 270 };
+function sceneSpans(cands, o, bounds) {
+  const sorted = [...cands].sort((a, b) => a.start - b.start);
+  const groups = [];
+  for (const c of sorted) {
+    const g = groups[groups.length - 1];
+    const sameBounds = g && bounds ? bounds(g[0])?.start === bounds(c)?.start : true;
+    if (g && sameBounds && c.start - g[g.length - 1].end <= o.joinGap && c.end - g[0].start + o.lead + o.tail <= o.maxSec) g.push(c);
+    else groups.push([c]);
+  }
+  const out = [];
+  for (const g of groups) {
+    const b = bounds?.(g[0]);
+    const prevEnd = out.length ? out[out.length - 1].end : 0;
+    const start = Math.max(0, prevEnd, b?.start ?? 0, g[0].start - o.lead);
+    const end = Math.min(o.durationSec || Infinity, b?.end ?? Infinity, g[g.length - 1].end + o.tail);
+    if (end - start >= 10) out.push({ start: r14(start), end: r14(end), members: g });
+  }
+  return out;
+}
+function sceneCandidate(s, index, text) {
+  const best = [...s.members].sort((a, b) => b.total - a.total)[0];
+  const mean = s.members.reduce((a, c) => a + c.total, 0) / s.members.length;
+  const seen = s.members.filter((c) => c.visual).sort((a, b) => b.visual.score - a.visual.score)[0];
+  const energies = s.members.flatMap((c) => c.energy !== void 0 ? [c.energy] : []);
+  const chats = s.members.flatMap((c) => c.chatPerMin !== void 0 ? [c.chatPerMin] : []);
+  const titles = [...new Set(s.members.map((c) => c.title).filter(Boolean))];
+  return {
+    id: `e${index + 1}`,
+    start: s.start,
+    end: s.end,
+    total: r14(best.total * 0.65 + mean * 0.35),
+    kind: best.kind,
+    title: titles.slice(0, 3).join(" / ") || void 0,
+    reason: s.members.map((c) => c.reason).filter(Boolean).join(" | ").slice(0, 260),
+    ...seen?.visual ? { visual: seen.visual } : {},
+    ...energies.length ? { energy: Math.max(...energies) } : {},
+    ...chats.length ? { chatPerMin: r14(chats.reduce((a, b) => a + b, 0) / chats.length) } : {},
+    text
+  };
+}
+var HISTORIA_EXTRA = " IMPORTANTE: aqu\xED cada \xABmomento\xBB de la lista es una ESCENA CONTINUA del directo (de medio minuto a varios minutos, sin cortes dentro) que ya incluye su planteamiento y su reacci\xF3n. El v\xEDdeo tiene que ENTENDERSE por alguien que no vio el directo: prefiere pocas escenas largas que cuenten algo completo a muchas cortas; no metas una escena que no se entienda sin otra que dejas fuera; si dos escenas son de la misma partida, conversaci\xF3n o historia, van en el mismo cap\xEDtulo y en orden; el t\xEDtulo de cada cap\xEDtulo debe decir QU\xC9 pasa (sirve de puente para el espectador), no ser gen\xE9rico. Entre las escenas el espectador ver\xE1 un corte: ord\xE9nalas para que cada corte tenga l\xF3gica (cambio de tema, salto en el tiempo, consecuencia de lo anterior). Lo que se ve (gestos, muecas, caras, lo que pasa en el juego) cuenta tanto como lo que se dice.";
 var TRIM_MIN_SEC = 12;
-var TRIM_MAX_CUT = 0.5;
+var TRIM_MAX_CUT = 0.3;
 var RITMO_SYSTEM = "Eres editor de ritmo de un canal de YouTube en espa\xF1ol de Espa\xF1a. Recibes momentos de un directo de Twitch ya elegidos, con su transcripci\xF3n y marcas [Ns] (segundos desde el inicio del momento). Tu \xFAnico trabajo es quitar el AIRE de cada momento: arranques lentos antes de que pase algo, silencios, muletillas, y colas despu\xE9s del remate. Nunca cortes el planteamiento que hace falta para entender el remate, ni el remate, ni la reacci\xF3n inmediata (la risa tambi\xE9n es contenido). Si un momento ya est\xE1 bien, no lo incluyas. Responde SOLO con JSON.";
 function ritmoPrompt(cands) {
   return `Momentos:
 ${JSON.stringify(cands.map(brief))}
-Devuelve exactamente {"recortes":[{"id":"","desde":0,"hasta":0}]}: para cada momento que mejore recortado, el segundo donde debe empezar y el segundo donde debe acabar (relativos a su inicio, dentro de su duraci\xF3n). M\xEDnimo ${TRIM_MIN_SEC} s por momento y nunca quites m\xE1s de la mitad.`;
+Devuelve exactamente {"recortes":[{"id":"","desde":0,"hasta":0}]}: para cada momento que mejore recortado, el segundo donde debe empezar y el segundo donde debe acabar (relativos a su inicio, dentro de su duraci\xF3n). Son escenas continuas: recorta solo el principio o el final, nunca el contexto que hace falta para entender lo que pasa. M\xEDnimo ${TRIM_MIN_SEC} s por momento y nunca quites m\xE1s de un tercio.`;
 }
 function parseTrims(raw, cands) {
   const byId = new Map(cands.map((c) => [c.id, c]));
@@ -40846,7 +40938,7 @@ var directorPhase = async (ctx) => {
 };
 
 // electron/domain/pipeline/studio.ts
-var CACHE_VERSION2 = 1;
+var CACHE_VERSION2 = 2;
 var overlaps = (a, b) => a.start < b.end && b.start < a.end;
 var studioPhase = async (ctx) => {
   const { host, vod, task, notes, words } = ctx;
@@ -40858,12 +40950,58 @@ var studioPhase = async (ctx) => {
   ctx.clock.mark("estudio de edici\xF3n");
   task.update(64, "Estudio de edici\xF3n: los editores est\xE1n trabajando\u2026");
   const all = directorCandidates(ctx.judged, words, ctx.sig);
-  const { cands, category } = singleCategory(all, ctx.cats, ctx.multiCat);
+  const { cands: picks, category } = singleCategory(all, ctx.cats, ctx.multiCat);
+  const chapterOf = (c) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
+  let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : void 0).filter((s) => silentShare(ctx.sig.energyDb, s) < MUTED_SHARE);
+  let sceneWords = words;
+  if (cfg.director !== false && cfg.maxVideos > 0 && spans.length) {
+    try {
+      await d.transcripts.ensure(vod.id, spans.map((s) => ({ start: s.start, end: s.end })));
+      sceneWords = d.transcripts.words(vod.id);
+      ctx.words = sceneWords;
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      notes.push(`No se pudo transcribir el contexto de las escenas (${e.message.split("\n")[0]}).`);
+    }
+    let prevEnd = 0;
+    spans = spans.map((s) => {
+      const sn = snapToSentences(s.start, s.end, sceneWords, 6);
+      const start = Math.max(prevEnd, Math.min(sn.start, s.members[0].start));
+      const end = Math.max(sn.end, s.members[s.members.length - 1].end);
+      prevEnd = end;
+      return { ...s, start, end };
+    });
+  }
+  const scenes = spans.map((s, i) => sceneCandidate(s, i, judgeText(sceneWords, s, 1500)));
+  const useScenes = scenes.length >= 4 && scenes.length < picks.length;
+  const cands = useScenes ? scenes : picks;
   const wantLong = cfg.director !== false && cfg.maxVideos > 0 && cands.length >= 4;
   const wantClips = cfg.maxClips > 0 && all.length > 0;
-  if (!wantLong && !wantClips) return "continue";
+  const wantThemes = cfg.topics !== false && (cfg.maxVideos > 0 || cfg.maxClips > 0);
+  const byPick = new Map((ctx.judged ?? []).map((j) => [j.id, j]));
+  const themeUnits = useScenes ? spans.map((s, i) => {
+    const best = [...s.members].sort((a, b) => b.total - a.total)[0];
+    const base2 = byPick.get(best.id);
+    const { trim: _t, ...judgement } = base2.judgement;
+    return { ...base2, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
+  }) : ctx.judged;
+  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380 }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
+  const takeThemes = async () => {
+    const r2 = await themesJob;
+    if ("e" in r2) throw r2.e;
+    for (const pr of r2.v) {
+      const how = decideFormat(pr);
+      if (how === "ask") ctx.askProposals.push(pr);
+      else if (how === "long") ctx.topicLongs.push(pr);
+      else if (how === "shorts") ctx.topicShorts.push(pr);
+    }
+  };
+  if (!wantLong && !wantClips) {
+    await takeThemes();
+    return "continue";
+  }
   const style = host.style();
-  const key = `${CACHE_VERSION2}|${cfg.maxClips}|${wantLong ? 1 : 0}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
+  const key = `${CACHE_VERSION2}|${cfg.maxClips}|${wantLong ? 1 : 0}|${cands.map((c) => `${c.id}:${c.start}:${c.end}`).join(",")}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
   const file = d.judgeDir ? import_node_path31.default.join(d.judgeDir, `${vod.id}.studio.json`) : void 0;
   let saved = null;
   try {
@@ -40886,7 +41024,7 @@ var studioPhase = async (ctx) => {
   if (!saved) {
     const [rPlan, rTrims, rClips] = await Promise.allSettled([
       wantLong ? ask(
-        DIRECTOR_SYSTEM,
+        useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM,
         directorPrompt({
           vodTitle: vod.title ?? "",
           dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" }),
@@ -40958,6 +41096,7 @@ var studioPhase = async (ctx) => {
     const byNote = ctx.moments;
     const funny = clips.slice(0, cfg.maxClips).map((c) => {
       const seg = { start: c.start, end: c.end, peak: (c.start + c.end) / 2, score: c.fun, reasons: ["gracia"] };
+      if (c.title) (ctx.clipTitles ??= /* @__PURE__ */ new Map()).set(seg, c.title);
       ctx.meta.set(seg, { score: c.fun, kind: "gracia", reason: `Editor de humor: ${c.why || c.title || "hace gracia sin contexto"}`.slice(0, 200) });
       return seg;
     });
@@ -40966,7 +41105,9 @@ var studioPhase = async (ctx) => {
     say("humor", true, `${funny.length} clip(s) gracioso(s): ${clips.slice(0, funny.length).map((c) => `\xAB${c.title || c.id}\xBB (${c.fun}/10)`).join(", ")}.`);
     for (const c of clips.slice(0, funny.length)) outputs.push({ kind: "clip", title: c.title, video: [{ start: c.start, end: c.end }], captions: [], totalSec: Math.round(c.end - c.start), note: c.why });
   } else if (wantClips && !agents.some((a) => a.id === "humor")) say("humor", true, "Ning\xFAn momento hace gracia de verdad fuera de contexto; se quedan los clips elegidos por nota.");
+  await takeThemes();
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: "tema", title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
+  if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
   notes.push(`Estudio de edici\xF3n: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? "" : " (sin respuesta)"}: ${a.note}`).join(" ")}`);
   if (file) {
     const project = { version: 1, vodId: vod.id, createdAt: (/* @__PURE__ */ new Date()).toISOString(), outputs, agents };
@@ -41059,6 +41200,7 @@ var titlesPhase = async (ctx) => {
   ctx.clock.mark("t\xEDtulos");
   task.update(75, "Poniendo t\xEDtulos\u2026");
   ctx.titles = await host.titles(vod, words, ctx.moments, ctx.mains, notes);
+  if (ctx.clipTitles?.size) ctx.titles.clips = ctx.titles.clips.map((t, i) => ({ ...t, title: clean4(ctx.clipTitles.get(ctx.moments[i]), 100) || t.title }));
   const ser = cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...cfg.series, nextDay: vod.seriesDay ?? cfg.series.nextDay }) : null;
   if (ser) {
     const st = seriesTitles(ser, ctx.mains.length);
@@ -41691,9 +41833,10 @@ ${text}`,
    * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
    * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
    */
-  async findThemes(vod, judged, words, conf, notes) {
+  async findThemes(vod, judged, words, conf, notes, o = {}) {
+    const chars = o.chars ?? 380;
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
-    const units = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c, 380), title: c.judgement.title, total: c.total }));
+    const units = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c.judgement.trim ?? c, chars), title: c.judgement.title, total: c.total }));
     const blocks = transcriptBlocks(words, cand).slice(0, 20);
     blocks.forEach((b, i) => units.push({ id: `b${i}`, start: b.start, end: b.end, text: judgeText(words, b, 380), total: 5 }));
     units.sort((a, b) => a.start - b.start);

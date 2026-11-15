@@ -93,6 +93,28 @@ export default function CutClipDialog(props: { vods: VodJob[]; initialVodId?: st
     void v.play().catch(() => undefined);
   };
 
+  // atajos con el reproductor: espacio pausa/reproduce, flechas ±5 s (con Mayús ±30 s), I empieza y O acaba el clip
+  const keys = useRef({ toggle, seek, now, markStart, markEnd });
+  keys.current = { toggle, seek, now, markStart, markEnd };
+  useEffect(() => {
+    if (!playable) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.ctrlKey || e.metaKey || e.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable || (el.tagName === 'BUTTON' && e.key === ' ')))) return;
+      const k = keys.current;
+      const step = e.shiftKey ? 30 : 5;
+      if (e.key === ' ') k.toggle();
+      else if (e.key === 'ArrowLeft') k.seek(k.now - step);
+      else if (e.key === 'ArrowRight') k.seek(k.now + step);
+      else if (e.key === 'i' || e.key === 'I') k.markStart();
+      else if (e.key === 'o' || e.key === 'O') k.markEnd();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [playable]);
+
   async function guarded(fn: () => Promise<string>) {
     setBusy(true);
     setMsg(null);
@@ -179,7 +201,7 @@ export default function CutClipDialog(props: { vods: VodJob[]; initialVodId?: st
             <span className="cutnum">1</span>
             <div className="grow">
               <h3>¿Qué momento?</h3>
-              <div className="muted small">{playable ? 'Ve al momento en el directo y pulsa «Empezar aquí» y «Acabar aquí», o escribe los minutos (por ejemplo 1:30 y 2:10).' : 'Escribe el minuto donde empieza y donde acaba (por ejemplo 1:30 y 2:10).'}</div>
+              <div className="muted small">{playable ? 'Ve al momento en el directo y pulsa «Empezar aquí» y «Acabar aquí» (atajos: I y O; espacio pausa; flechas ±5 s), o escribe los minutos (por ejemplo 1:30 y 2:10).' : 'Escribe el minuto donde empieza y donde acaba (por ejemplo 1:30 y 2:10).'}</div>
               <div className="row">
                 <input type="text" aria-label="Inicio" placeholder="Inicio (1:30)" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: 130 }} />
                 <input type="text" aria-label="Fin" placeholder="Fin (2:10)" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: 130 }} />
@@ -252,7 +274,7 @@ export default function CutClipDialog(props: { vods: VodJob[]; initialVodId?: st
             </div>
           </details>
         </div>
-        {playable && vod && <VodChat vodId={selected} time={now} duration={dur} />}
+        {playable && vod && <VodChat vodId={selected} time={now} duration={dur} onSeek={seek} />}
         </div>
       )}
       {busy && <div className="msg" role="status">Renderizando… puede tardar unos minutos.</div>}
@@ -331,7 +353,7 @@ function TranscriptBlock({ vod, onChanged }: { vod?: VodJob; onChanged: () => Pr
 }
 
 /** Chat del directo en el momento que se está viendo (si Twitch todavía lo guarda). */
-function VodChat({ vodId, time, duration }: { vodId: string; time: number; duration: number }) {
+function VodChat({ vodId, time, duration, onSeek }: { vodId: string; time: number; duration: number; onSeek: (t: number) => void }) {
   const [msgs, setMsgs] = useState<VodChatMessage[]>([]);
   const [cov, setCov] = useState<{ from: number; to: number } | null>(null);
   const [error, setError] = useState('');
@@ -397,7 +419,7 @@ function VodChat({ vodId, time, duration }: { vodId: string; time: number; durat
         <div className="chatbox" ref={box}>
           {shown.length === 0 && <div className="muted small">{loading ? 'Leyendo el chat…' : 'Nadie escribió en el último minuto y medio.'}</div>}
           {shown.map((m, i) => (
-            <div key={`${m.t}-${i}`} className="chatline">
+            <div key={`${m.t}-${i}`} className="chatline" role="button" tabIndex={0} title="Ir a este momento del directo" onClick={() => onSeek(Math.max(0, m.t - 2))} onKeyDown={(e) => { if (e.key === 'Enter') onSeek(Math.max(0, m.t - 2)); }}>
               <span className="chattime">{fmtTime(m.t)}</span> <b style={m.color ? { color: m.color } : undefined}>{m.user}</b>: {m.text}
             </div>
           ))}

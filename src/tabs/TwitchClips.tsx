@@ -61,7 +61,7 @@ function ClipGhost({ clip, leave }: { clip: TwitchClip; leave: 'left' | 'right' 
 
 const SLIDE_MS = 230;
 const PAGE = 60;
-type Show = 'all' | 'new' | 'library' | 'gold';
+type Show = 'all' | 'new' | 'library' | 'gold' | 'edited';
 
 /**
  * Clips del canal de Twitch: todos, del más reciente al más antiguo, en cuadrícula, con búsqueda por nombre y filtro
@@ -136,11 +136,12 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
   const counts = useMemo(() => {
     const all = clips ?? [];
     const inLib = all.filter((c) => clipLibraryState(c.id, vods, outputs) !== 'none').length;
-    return { all: all.length, library: inLib, fresh: all.length - inLib, gold: all.filter((c) => c.gold).length };
+    return { all: all.length, library: inLib, fresh: all.length - inLib, gold: all.filter((c) => c.gold).length, edited: all.filter((c) => c.scoredBy === 'user').length };
   }, [clips, vods, outputs]);
   const matching = useMemo(() => {
     const byName = filterClips(clips ?? [], query, sort, dir);
     if (show === 'gold') return byName.filter((c) => c.gold);
+    if (show === 'edited') return byName.filter((c) => c.scoredBy === 'user');
     return byName.filter((c) => show === 'all' || (show === 'library') === (clipLibraryState(c.id, vods, outputs) !== 'none'));
   }, [clips, query, sort, dir, show, vods, outputs]);
   const shown = matching.slice(0, limit);
@@ -262,6 +263,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
           <button type="button" aria-pressed={show === 'new'} className={`segbtn ${show === 'new' ? 'active' : ''}`} onClick={() => { setShow('new'); setLimit(PAGE); }}>Sin añadir ({counts.fresh})</button>
           <button type="button" aria-pressed={show === 'library'} className={`segbtn ${show === 'library' ? 'active' : ''}`} onClick={() => { setShow('library'); setLimit(PAGE); }}>En la Biblioteca ({counts.library})</button>
           {own && <button type="button" aria-pressed={show === 'gold'} className={`segbtn gold ${show === 'gold' ? 'active' : ''}`} onClick={() => { setShow('gold'); setLimit(PAGE); }}>Destacados ({counts.gold})</button>}
+          {own && <button type="button" aria-pressed={show === 'edited'} className={`segbtn ${show === 'edited' ? 'active' : ''}`} data-testid="show-edited" title="Clips cuya nota has corregido tú" onClick={() => { setShow('edited'); setLimit(PAGE); }}>Modificados ({counts.edited})</button>}
         </div>
         <form
           className="twchannel"

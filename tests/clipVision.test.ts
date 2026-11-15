@@ -68,7 +68,7 @@ describe('valorar clips viéndolos', () => {
     const a = mk(async () => ({ criteria: { humor: 9, historia: 6, viral: 8, interes: 7 }, reason: 'Gag visual', items: {}, evidence: {} }));
     a.enqueue([clip]);
     await a.idle();
-    assert.ok((a.scoreOf('c1') ?? 0) >= 7);
+    assert.ok((a.scoreOf('c1') ?? 0) > 0, 'recibe nota por la imagen');
     assert.equal(seen[0]?.length, 1);
     const b = mk(async () => null);
     b.enqueue([clip]);

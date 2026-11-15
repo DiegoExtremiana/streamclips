@@ -15,7 +15,7 @@ export function clipLibraryState(clipId: string, vods: VodJob[], outputs: Output
 
 const plain = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-export type ClipSort = 'fecha' | 'nombre' | 'nota';
+export type ClipSort = 'fecha' | 'nombre' | 'nota' | 'destacados';
 export type SortDir = 'asc' | 'desc';
 
 /** Sentido por defecto de cada orden: lo más reciente, de la A a la Z y la mejor nota primero. */
@@ -33,6 +33,13 @@ export function filterClips(clips: TwitchClip[], query: string, sort: ClipSort =
   const date = (a: TwitchClip, b: TwitchClip) => b.createdAt.localeCompare(a.createdAt) * (sort === 'fecha' ? sign : 1);
   const cmp = (a: TwitchClip, b: TwitchClip): number => {
     if (sort === 'nombre') return -sign * plain(a.title).localeCompare(plain(b.title), 'es') || date(a, b);
+    if (sort === 'destacados') {
+      // los destacados primero (o al final en ascendente); dentro de cada grupo, la mejor nota y luego los más recientes
+      const g = Number(!!b.gold) - Number(!!a.gold);
+      if (g) return sign * g;
+      if (a.score === undefined || b.score === undefined) return a.score === b.score ? date(a, b) : a.score === undefined ? 1 : -1;
+      return (b.score - a.score) || date(a, b);
+    }
     if (sort === 'nota') {
       if (a.score === undefined || b.score === undefined) return a.score === b.score ? date(a, b) : a.score === undefined ? 1 : -1;
       return sign * (b.score - a.score) || date(a, b);

@@ -52,4 +52,12 @@ describe('clips de Twitch en la interfaz', () => {
     assert.equal(defaultDir('nombre'), 'asc');
     assert.equal(defaultDir('nota'), 'desc');
   });
+  it('ordenar por destacados: los de oro primero y, dentro, la mejor nota', () => {
+    const a = { ...clip('a', 'A', '2026-01-01'), score: 9, gold: true };
+    const b = { ...clip('b', 'B', '2026-01-02'), score: 9.8, gold: true };
+    const c = { ...clip('c', 'C', '2026-01-03'), score: 7 };
+    const d = clip('d', 'D', '2026-01-04');
+    assert.deepEqual(filterClips([c, d, a, b], '', 'destacados').map((x) => x.id), ['b', 'a', 'c', 'd']);
+    assert.deepEqual(filterClips([c, d, a, b], '', 'destacados', 'asc').map((x) => x.id), ['c', 'd', 'b', 'a']);
+  });
 });

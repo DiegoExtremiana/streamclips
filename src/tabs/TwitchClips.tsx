@@ -186,8 +186,8 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
     }
   }
 
-  const sortLabel: Record<ClipSort, string> = { fecha: 'Fecha', nombre: 'Nombre', nota: 'Nota' };
-  const dirText = (d: SortDir) => (sort === 'fecha' ? (d === 'desc' ? 'más recientes primero' : 'más antiguos primero') : sort === 'nombre' ? (d === 'asc' ? 'de la A a la Z' : 'de la Z a la A') : d === 'desc' ? 'mejor nota primero' : 'peor nota primero');
+  const sortLabel: Record<ClipSort, string> = { fecha: 'Fecha', nombre: 'Nombre', nota: 'Nota', destacados: 'Destacados primero' };
+  const dirText = (d: SortDir) => (sort === 'fecha' ? (d === 'desc' ? 'más recientes primero' : 'más antiguos primero') : sort === 'nombre' ? (d === 'asc' ? 'de la A a la Z' : 'de la Z a la A') : sort === 'destacados' ? (d === 'desc' ? 'destacados primero' : 'destacados al final') : d === 'desc' ? 'mejor nota primero' : 'peor nota primero');
   const progress = scoring && scoring.total > 0 ? Math.round((scoring.scored / scoring.total) * 100) : 0;
 
   return (
@@ -243,6 +243,7 @@ export default function TwitchClips({ vods, outputs, onChanged }: { vods: VodJob
               <option value="fecha">{sortLabel.fecha}</option>
               <option value="nombre">{sortLabel.nombre}</option>
               <option value="nota" disabled={!own}>{sortLabel.nota}</option>
+              <option value="destacados" disabled={!own}>{sortLabel.destacados}</option>
             </select>
           </label>
           <button

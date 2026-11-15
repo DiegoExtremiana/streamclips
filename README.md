@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.35.0
+
+- Clips: nueva ordenación «Destacados primero» (los clips de oro arriba y, dentro, la mejor nota).
+
 ## Novedades de la v0.34.0
 
 - **Editor de YouTube más completo:** los clips verticales llevan el título como gancho en pantalla en los 3 primeros segundos y los vídeos largos acaban con una pantalla final («Suscríbete para no perderte el próximo directo»).

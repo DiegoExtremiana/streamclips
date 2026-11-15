@@ -49,6 +49,12 @@ Para acelerar de verdad: probar Whisper «small» o una compilación con GPU; es
 - Voces: `ex.compute(st, false)` en `electron/services/diarize.ts` (sin búfer externo). Si el error sigue, mirar si `sd.process` también devuelve búferes externos.
 - Descartado por ahora: montar en paralelo (ffmpeg ya usa todos los núcleos; la ganancia es pequeña y el riesgo, medio). El tiempo se va en Whisper.
 
+## Hecho en la 0.37.4 (sin comprobar en el equipo de Diego)
+
+- Mejora 2, parte «transcribir solo lo elegido»: `SCENE_BUDGET` en `pipeline/studio.ts`. Las escenas que quedan fuera vuelven como momentos sueltos a las unidades del editor de temas (`spare`).
+- Mejora 3: el jefe de edición recibe hasta `JEFE_FRAMES` (5) fotogramas, uno por escena desde el principio del montaje (`JEFE_VE`). Si la petición con imágenes falla, revisa solo con texto. Pendiente: repartir los fotogramas por todo el vídeo cuando el proveedor admita más de 5 (Gemini).
+- Siguientes: mejora 4 (vista previa del plan), temas en todas las categorías de Twitch, y decidir con Diego si Whisper pasa a «small».
+
 ## Mejoras, por orden
 
 ### 1. Descartar la pantalla de «Empezamos pronto» y las pausas (pequeño, hacer primero)

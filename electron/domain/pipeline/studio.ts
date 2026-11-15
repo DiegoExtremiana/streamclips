@@ -30,13 +30,21 @@ import {
 import { MUTED_SHARE, silentShare, snapToSentences, type Seg } from '../../../shared/highlights';
 import { judgeText, type Judged } from '../../../shared/judge';
 import { decideFormat, type ThemeProposal } from '../../../shared/themes';
-import { askJson } from '../../services/llm';
+import os from 'node:os';
+import { askJson, visionConfig } from '../../services/llm';
+import { vodFrame } from '../../services/visualJudge';
 import { isCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
 import { directorPhase, singleCategory } from './director';
 import type { Phase } from './context';
 
 const CACHE_VERSION = 2;
+/** Material de escenas que se prepara (y se transcribe con su contexto), en veces la duración máxima del resumen. */
+const SCENE_BUDGET = 2.5;
+/** Fotogramas que ve el jefe de edición (uno por escena, desde el principio del montaje). */
+const JEFE_FRAMES = 5;
+const JEFE_VE =
+  ' Además VES un fotograma de los primeros momentos del montaje: si en alguno la imagen es una pantalla de espera («empezamos pronto», «vuelvo enseguida»), está en negro o no hay nada que ver, quítalo aunque el texto sea bueno; si se ve un gesto o algo llamativo, tenlo en cuenta a favor.';
 /** Vídeos por tema: de 5 a 15 minutos. */
 const THEME_VIDEO = { minSec: 300, maxSec: 900 };
 /** El resumen no pasa de 17 minutos (directedCut admite un 10 % sobre el máximo). */
@@ -78,6 +86,22 @@ export const studioPhase: Phase = async (ctx) => {
   const chapterOf = (c: Seg) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
   // el contexto añadido puede caer en un trozo silenciado por Twitch: esa escena se queda fuera
   let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : undefined).filter((s) => silentShare(ctx.sig.energyDb, s) < MUTED_SHARE);
+  // Transcribir el contexto es lo más lento del análisis: solo se hace con las mejores escenas, hasta 2,5 veces la duración
+  // del vídeo (material de sobra para elegir). El resto no se pierde: sus momentos siguen sirviendo para clips y temas.
+  let spare: typeof picks = [];
+  {
+    const best = (s: (typeof spans)[number]) => Math.max(...s.members.map((m) => m.total));
+    const budget = host.style().longMaxSec * SCENE_BUDGET;
+    const keep = new Set<(typeof spans)[number]>();
+    let acc = 0;
+    for (const s of [...spans].sort((a, b) => best(b) - best(a))) {
+      if (acc >= budget && keep.size >= 6) break;
+      keep.add(s);
+      acc += s.end - s.start;
+    }
+    spare = spans.filter((s) => !keep.has(s)).flatMap((s) => s.members);
+    spans = spans.filter((s) => keep.has(s));
+  }
   let sceneWords = words;
   if (cfg.director !== false && cfg.maxVideos > 0 && spans.length) {
     try {
@@ -110,12 +134,12 @@ export const studioPhase: Phase = async (ctx) => {
   const wantThemes = cfg.topics !== false && (cfg.maxVideos > 0 || cfg.maxClips > 0);
   const byPick = new Map((ctx.judged ?? []).map((j) => [j.id, j]));
   const themeUnits: Judged[] = useScenes
-    ? spans.map((s, i) => {
+    ? spans.map((s, i): Judged => {
         const best = [...s.members].sort((a, b) => b.total - a.total)[0];
         const base = byPick.get(best.id)!;
         const { trim: _t, ...judgement } = base.judgement;
         return { ...base, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
-      })
+      }).concat(spare.flatMap((m) => (byPick.get(m.id) ? [byPick.get(m.id)!] : [])))
     : ctx.judged;
   const themesJob: Promise<{ v: ThemeProposal[] } | { e: unknown }> = wantThemes
     ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e: unknown) => ({ e }))
@@ -198,7 +222,28 @@ export const studioPhase: Phase = async (ctx) => {
     if (cut && !saved) {
       task.update(67, 'Estudio de edición: el jefe de edición revisa el montaje…');
       try {
-        review = parseChief(await ask(JEFE_SYSTEM, jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec }), 0.2), p);
+        const prompt = jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec });
+        // el jefe también MIRA el montaje: un fotograma del centro de cada escena (hasta 5, el límite de Groq por petición)
+        let raw: unknown = null;
+        if (cfg.vodVision !== false && vod.filePath && fs.existsSync(vod.filePath)) {
+          const ids = p.chapters.flatMap((ch) => ch.ids).slice(0, JEFE_FRAMES);
+          const tmpDir = path.join(os.tmpdir(), `streamclips-jefe-${vod.id}`);
+          try {
+            fs.mkdirSync(tmpDir, { recursive: true });
+            const images: string[] = [];
+            for (const id of ids) {
+              const c = trimmed.find((x) => x.id === id);
+              if (c) images.push(await vodFrame(d.tools().ffmpeg, vod.filePath, (c.start + c.end) / 2, tmpDir));
+            }
+            if (images.length) raw = await askJson(visionConfig(conf), JEFE_SYSTEM + JEFE_VE, `${prompt}\nFotogramas adjuntos, uno por momento y en este orden: ${ids.join(', ')}.`, { fetchFn: d.llmFetch, temperature: 0.2, images });
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+            raw = null; // sin vista (modelo sin imágenes, límite…): revisa solo con el texto
+          } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+          }
+        }
+        review = parseChief(raw ?? (await ask(JEFE_SYSTEM, prompt, 0.2)), p);
       } catch (e) {
         say('jefe', false, fail(e));
       }
@@ -256,7 +301,7 @@ export const studioPhase: Phase = async (ctx) => {
   await takeThemes();
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: 'tema', title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
 
-  if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
+  if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length - spare.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material)${spare.length ? `; ${spare.length} momentos más flojos se dejaron sin contexto para no alargar la transcripción` : ''}.`);
   notes.push(`Estudio de edición: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? '' : ' (sin respuesta)'}: ${a.note}`).join(' ')}`);
   // con resumen dirigido o vídeos por tema, sobran los tramos seguidos «Parte N»: no tienen un tema como centro
   if ((ctx.directed || ctx.topicLongs.length) && ctx.mains.length) {

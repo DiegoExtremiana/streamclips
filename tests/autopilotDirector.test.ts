@@ -104,6 +104,20 @@ function setup(url: string, auto: Record<string, unknown> = {}) {
 }
 
 describe('director de edición en el piloto', () => {
+  it('con la vista del directo activada, el jefe de edición revisa el montaje con fotogramas y el vídeo sale igual', async () => {
+    const srv = await llm();
+    try {
+      const { e, vod } = setup(srv.url, { vodVision: true });
+      await e.ctx.autopilot.run(vod.id);
+      const v = e.ctx.store.data.vods[0];
+      assert.equal(v.autopilot?.status, 'done', v.autopilot?.note);
+      assert.match(v.autopilot?.note ?? '', /Jefe de edición: Aprobado/);
+      assert.equal(e.ctx.store.data.outputs.filter((o) => o.kind === 'long').length, 1, v.autopilot?.note);
+    } finally {
+      srv.close();
+    }
+  });
+
   it('el vídeo largo sale con la estructura del director: gancho primero, capítulos en la descripción, rótulos grabados y frase de portada', async () => {
     const srv = await llm();
     try {

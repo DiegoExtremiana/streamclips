@@ -28,6 +28,83 @@ const list = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? (v.f
 
 const brief = (c: DirectorCandidate) => ({ id: c.id, dur: r1(c.end - c.start), nota: c.total, tipo: c.kind, titulo: c.title, ...(c.visual ? { imagen: `${c.visual.score}/10: ${c.visual.note}` } : {}), ...(c.energy !== undefined ? { volumen: c.energy } : {}), ...(c.chatPerMin !== undefined ? { chat: c.chatPerMin } : {}), texto: c.text });
 
+// ───────────────────────── Escenas con contexto ─────────────────────────
+
+/**
+ * LO MÁS IMPORTANTE DEL ESTUDIO. Los candidatos del piloto son picos sueltos de 25-75 s; un vídeo de 12 min hecho con
+ * ellos son 15 cortes sin relación. Aquí se convierten en ESCENAS: los picos cercanos se unen en un tramo CONTINUO del
+ * directo (sin cortes dentro), y cada escena arranca antes del pico (el planteamiento) y acaba después (la reacción).
+ * El editor de historia monta el vídeo con pocas escenas largas, no con muchos trozos.
+ */
+export interface SceneOpts {
+  /** Dos picos a menos de esto (s) son la misma escena. */
+  joinGap: number;
+  /** Contexto antes del primer pico y después del último (s). */
+  lead: number;
+  tail: number;
+  /** Una escena no pasa de esto (s); si los picos seguidos dan para más, se parte. */
+  maxSec: number;
+  durationSec: number;
+}
+
+export const SCENE: Omit<SceneOpts, 'durationSec'> = { joinGap: 100, lead: 25, tail: 10, maxSec: 270 };
+
+export interface SceneSpan extends Seg {
+  /** Los candidatos (picos) que contiene, en orden. */
+  members: DirectorCandidate[];
+}
+
+/** Agrupa los candidatos en escenas continuas con contexto. `bounds` limita cada escena (p. ej. a su categoría de Twitch). */
+export function sceneSpans(cands: DirectorCandidate[], o: SceneOpts, bounds?: (c: DirectorCandidate) => Seg | undefined): SceneSpan[] {
+  const sorted = [...cands].sort((a, b) => a.start - b.start);
+  const groups: DirectorCandidate[][] = [];
+  for (const c of sorted) {
+    const g = groups[groups.length - 1];
+    const sameBounds = g && bounds ? bounds(g[0])?.start === bounds(c)?.start : true;
+    if (g && sameBounds && c.start - g[g.length - 1].end <= o.joinGap && c.end - g[0].start + o.lead + o.tail <= o.maxSec) g.push(c);
+    else groups.push([c]);
+  }
+  const out: SceneSpan[] = [];
+  for (const g of groups) {
+    const b = bounds?.(g[0]);
+    const prevEnd = out.length ? out[out.length - 1].end : 0;
+    const start = Math.max(0, prevEnd, b?.start ?? 0, g[0].start - o.lead);
+    const end = Math.min(o.durationSec || Infinity, b?.end ?? Infinity, g[g.length - 1].end + o.tail);
+    if (end - start >= 10) out.push({ start: r1(start), end: r1(end), members: g });
+  }
+  return out;
+}
+
+/** La escena como candidato del editor de historia: nota = la del mejor pico matizada por la media; el texto lo pone quien llama. */
+export function sceneCandidate(s: SceneSpan, index: number, text: string): DirectorCandidate {
+  const best = [...s.members].sort((a, b) => b.total - a.total)[0];
+  const mean = s.members.reduce((a, c) => a + c.total, 0) / s.members.length;
+  const seen = s.members.filter((c) => c.visual).sort((a, b) => b.visual!.score - a.visual!.score)[0];
+  const energies = s.members.flatMap((c) => (c.energy !== undefined ? [c.energy] : []));
+  const chats = s.members.flatMap((c) => (c.chatPerMin !== undefined ? [c.chatPerMin] : []));
+  const titles = [...new Set(s.members.map((c) => c.title).filter(Boolean))];
+  return {
+    id: `e${index + 1}`,
+    start: s.start,
+    end: s.end,
+    total: r1(best.total * 0.65 + mean * 0.35),
+    kind: best.kind,
+    title: titles.slice(0, 3).join(' / ') || undefined,
+    reason: s.members.map((c) => c.reason).filter(Boolean).join(' | ').slice(0, 260),
+    ...(seen?.visual ? { visual: seen.visual } : {}),
+    ...(energies.length ? { energy: Math.max(...energies) } : {}),
+    ...(chats.length ? { chatPerMin: r1(chats.reduce((a, b) => a + b, 0) / chats.length) } : {}),
+    text,
+  };
+}
+
+/** Se añade al sistema del director cuando trabaja con escenas. */
+export const HISTORIA_EXTRA =
+  ' IMPORTANTE: aquí cada «momento» de la lista es una ESCENA CONTINUA del directo (de medio minuto a varios minutos, sin cortes dentro) que ya incluye su planteamiento y su reacción. ' +
+  'El vídeo tiene que ENTENDERSE por alguien que no vio el directo: prefiere pocas escenas largas que cuenten algo completo a muchas cortas; no metas una escena que no se entienda sin otra que dejas fuera; ' +
+  'si dos escenas son de la misma partida, conversación o historia, van en el mismo capítulo y en orden; el título de cada capítulo debe decir QUÉ pasa (sirve de puente para el espectador), no ser genérico. ' +
+  'Entre las escenas el espectador verá un corte: ordénalas para que cada corte tenga lógica (cambio de tema, salto en el tiempo, consecuencia de lo anterior). Lo que se ve (gestos, muecas, caras, lo que pasa en el juego) cuenta tanto como lo que se dice.';
+
 // ───────────────────────── Editor de ritmo ─────────────────────────
 
 /** Recorte interno de un momento, en segundos relativos a su inicio. */
@@ -40,7 +117,7 @@ export interface Trim {
 /** Un momento recortado conserva al menos esto (o no se toca). */
 export const TRIM_MIN_SEC = 12;
 /** Y como mucho se le quita esta fracción: el editor de ritmo afina, no reescribe. */
-export const TRIM_MAX_CUT = 0.5;
+export const TRIM_MAX_CUT = 0.3;
 
 export const RITMO_SYSTEM =
   'Eres editor de ritmo de un canal de YouTube en español de España. Recibes momentos de un directo de Twitch ya elegidos, con su transcripción y marcas [Ns] (segundos desde el inicio del momento). ' +
@@ -51,7 +128,7 @@ export function ritmoPrompt(cands: DirectorCandidate[]): string {
   return (
     `Momentos:\n${JSON.stringify(cands.map(brief))}\n` +
     `Devuelve exactamente {"recortes":[{"id":"","desde":0,"hasta":0}]}: para cada momento que mejore recortado, el segundo donde debe empezar y el segundo donde debe acabar (relativos a su inicio, dentro de su duración). ` +
-    `Mínimo ${TRIM_MIN_SEC} s por momento y nunca quites más de la mitad.`
+    `Son escenas continuas: recorta solo el principio o el final, nunca el contexto que hace falta para entender lo que pasa. Mínimo ${TRIM_MIN_SEC} s por momento y nunca quites más de un tercio.`
   );
 }
 

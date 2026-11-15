@@ -20,7 +20,8 @@ export const VISUAL_SYSTEM =
   'Eres editor de vídeo de un streamer de Twitch. Ves unos fotogramas de cada fragmento de un directo (en orden cronológico) y, junto a ellos, un resumen de lo que se dice. ' +
   'Puntúa SOLO lo que se ve, de 0 a 10: 5 es una imagen normal (juego o cámara sin nada especial), 7 es visualmente buena (gesto o cara llamativa, acción clara, algo gracioso o espectacular en pantalla, texto o suceso relevante), 9-10 solo si la imagen por sí sola haría reír o enganchar. ' +
   'Pon "muerta": true si la imagen no tiene nada que ver (pantalla de espera o «vuelvo enseguida», menú, carga, pantalla negra, cámara apagada o vacía, el mismo plano inmóvil sin acción). ' +
-  '"nota" es una frase corta en castellano de lo que se ve. No inventes lo que no se vea. Responde SOLO con JSON.';
+  'Fíjate sobre todo en la persona si hay cámara: gestos, muecas, caras de sorpresa, risa, enfado o susto, y si cambian de un fotograma a otro (una reacción vale más que una cara quieta). ' +
+  '"nota" es una frase corta en castellano de lo que se ve (di el gesto si lo hay). No inventes lo que no se vea. Responde SOLO con JSON.';
 
 export function visualPrompt(words: Word[], items: { c: Judged; frames: number }[]): string {
   const list = items.map(({ c, frames }) => ({ id: c.id, fotogramas: frames, titulo: c.judgement.title ?? '', texto: judgeText(words, c, 260) }));

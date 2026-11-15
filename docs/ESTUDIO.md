@@ -27,6 +27,16 @@ Agentes (los tres primeros en paralelo con `Promise.allSettled`; el jefe despué
 
 Los vídeos por tema NO son nuevos: los busca `host.findThemes` en `judgePhase` (`shared/themes.ts`) y el estudio solo los copia al proyecto. El proyecto y la caché se guardan en `<judgeDir>/<vod>.studio.json` (la caché solo vale si todos los agentes respondieron).
 
+## v0.37.0: escenas con contexto (lo que más le importa a Diego)
+
+Diego: «no quiero momentos sueltos, quiero vídeos con sentido, no 4 escenas con 4 cortes». El problema de fondo era que el pool del piloto son picos de 25-75 s separados ≥45 s (`signals.ts`), y el vídeo largo se montaba pegando 12-20 de ellos.
+
+Ahora `studioPhase` convierte los picos en **escenas** antes de llamar a los editores (`sceneSpans`/`sceneCandidate` en `shared/studio.ts`, constantes en `SCENE`): picos a menos de 100 s se unen en un tramo continuo; cada escena empieza 25 s antes y acaba 10 s después, ajustada a frase completa, sin pasar de 4,5 min ni salirse de su categoría. Se transcribe el contexto añadido (`transcripts.ensure`). El editor de historia recibe escenas (ids `e1…`) con `HISTORIA_EXTRA` en el sistema; el de humor sigue con los picos (`all`). El ritmo ya solo puede quitar un tercio. El prompt de visión pide gestos y muecas.
+
+Tests: `tests/studio.test.ts` (funciones puras). Falta el test de la fase entera con modelo falso.
+
+Siguiente paso lógico para «vídeos con sentido»: que los vídeos por tema (`findThemes`) usen también escenas, y que el jefe de edición vea fotogramas del montaje final (hoy solo lee texto). La visión mira 2-3 fotogramas de los 14 mejores picos: para gestos haría falta sacar fotogramas alrededor del pico de volumen, no repartidos.
+
 ## Pendiente (por orden de valor)
 
 1. **Tests**: no hay ninguno de `shared/studio.ts` ni de `studioPhase`. Casos mínimos: `parseTrims` (límites), `rebasePlan` (gancho y frases tras recortar), `parseFunny` (clip corto/largo), `applyChief` (protecciones), y la fase con `llmFetch` falso (un agente falla, caché). Revisar los tests que nombren la fase «director» en `PHASES` y el e2e de Ajustes (hay una casilla nueva). Solo pasaron `tsc` y `eslint`.

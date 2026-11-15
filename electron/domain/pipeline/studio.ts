@@ -3,6 +3,7 @@ import path from 'node:path';
 import { DIRECTOR_SYSTEM, HOOK, directedCut, directorCandidates, directorPrompt, parseDirectorPlan, type DirectorPlan } from '../../../shared/director';
 import {
   AGENT_LABEL,
+  HISTORIA_EXTRA,
   HUMOR_SYSTEM,
   JEFE_SYSTEM,
   RITMO_SYSTEM,
@@ -15,6 +16,9 @@ import {
   parseTrims,
   rebasePlan,
   ritmoPrompt,
+  SCENE,
+  sceneCandidate,
+  sceneSpans,
   sumSec,
   type AgentId,
   type ChiefReview,
@@ -23,14 +27,15 @@ import {
   type StudioProject,
   type Trim,
 } from '../../../shared/studio';
-import type { Seg } from '../../../shared/highlights';
+import { snapToSentences, type Seg } from '../../../shared/highlights';
+import { judgeText } from '../../../shared/judge';
 import { askJson } from '../../services/llm';
 import { isCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
 import { directorPhase, singleCategory } from './director';
 import type { Phase } from './context';
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 interface Saved {
   key: string;
@@ -63,12 +68,37 @@ export const studioPhase: Phase = async (ctx) => {
   ctx.clock.mark('estudio de edición');
   task.update(64, 'Estudio de edición: los editores están trabajando…');
   const all = directorCandidates(ctx.judged, words, ctx.sig);
-  const { cands, category } = singleCategory(all, ctx.cats, ctx.multiCat);
-  const wantLong = cfg.director !== false && cfg.maxVideos > 0 && cands.length >= 4;
+  const { cands: picks, category } = singleCategory(all, ctx.cats, ctx.multiCat);
+  // picos sueltos → escenas continuas con contexto (lo que hace que el vídeo se entienda); ver shared/studio.ts
+  const chapterOf = (c: Seg) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
+  let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : undefined);
+  let sceneWords = words;
+  if (cfg.director !== false && cfg.maxVideos > 0 && spans.length) {
+    try {
+      // con el análisis rápido solo están transcritos los picos: hay que transcribir el contexto que se añade
+      await d.transcripts.ensure(vod.id, spans.map((s) => ({ start: s.start, end: s.end })));
+      sceneWords = d.transcripts.words(vod.id);
+      ctx.words = sceneWords;
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      notes.push(`No se pudo transcribir el contexto de las escenas (${(e as Error).message.split('\n')[0]}).`);
+    }
+    // cada escena empieza y acaba en frase completa, sin pisar a la anterior
+    let prevEnd = 0;
+    spans = spans.map((s) => {
+      const sn = snapToSentences(s.start, s.end, sceneWords, 6);
+      const start = Math.max(prevEnd, Math.min(sn.start, s.members[0].start));
+      const end = Math.max(sn.end, s.members[s.members.length - 1].end);
+      prevEnd = end;
+      return { ...s, start, end };
+    });
+  }
+  const cands = spans.map((s, i) => sceneCandidate(s, i, judgeText(sceneWords, s, 1500)));
+  const wantLong = cfg.director !== false && cfg.maxVideos > 0 && cands.length >= 3;
   const wantClips = cfg.maxClips > 0 && all.length > 0;
   if (!wantLong && !wantClips) return 'continue';
   const style = host.style();
-  const key = `${CACHE_VERSION}|${cfg.maxClips}|${wantLong ? 1 : 0}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(',')}`;
+  const key = `${CACHE_VERSION}|${cfg.maxClips}|${wantLong ? 1 : 0}|${cands.map((c) => `${c.id}:${c.start}:${c.end}`).join(',')}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(',')}`;
   const file = d.judgeDir ? path.join(d.judgeDir, `${vod.id}.studio.json`) : undefined;
   let saved: Saved | null = null;
   try {
@@ -96,7 +126,7 @@ export const studioPhase: Phase = async (ctx) => {
     const [rPlan, rTrims, rClips] = await Promise.allSettled([
       wantLong
         ? ask(
-            DIRECTOR_SYSTEM,
+            DIRECTOR_SYSTEM + HISTORIA_EXTRA,
             directorPrompt({
               vodTitle: vod.title ?? '',
               dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }),
@@ -186,6 +216,7 @@ export const studioPhase: Phase = async (ctx) => {
   // ── vídeos por tema (los encontró la fase de valoración): van al proyecto para verlos junto al resto ──
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: 'tema', title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
 
+  if (wantLong) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
   notes.push(`Estudio de edición: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? '' : ' (sin respuesta)'}: ${a.note}`).join(' ')}`);
   if (file) {
     const project: StudioProject = { version: 1, vodId: vod.id, createdAt: new Date().toISOString(), outputs, agents };

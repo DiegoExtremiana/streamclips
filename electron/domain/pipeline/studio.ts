@@ -258,6 +258,11 @@ export const studioPhase: Phase = async (ctx) => {
 
   if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
   notes.push(`Estudio de edición: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? '' : ' (sin respuesta)'}: ${a.note}`).join(' ')}`);
+  // con resumen dirigido o vídeos por tema, sobran los tramos seguidos «Parte N»: no tienen un tema como centro
+  if ((ctx.directed || ctx.topicLongs.length) && ctx.mains.length) {
+    notes.push(`Se omiten ${ctx.mains.length} vídeo(s) de tramo seguido: ya hay resumen o vídeos por tema.`);
+    ctx.mains = [];
+  }
   if (file) {
     const project: StudioProject = { version: 1, vodId: vod.id, createdAt: new Date().toISOString(), outputs, agents };
     try {

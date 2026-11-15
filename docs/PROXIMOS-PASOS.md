@@ -32,6 +32,17 @@ Diego va a usar la v0.37.0 con un directo suyo. Pídele (o lee) las **notas del 
 - Si un agente pone «(sin respuesta)» → límite del modelo gratis: lanzar los agentes escalonados en vez de a la vez.
 - Si un vídeo se rechaza por silencio/negro/imagen parada → ver `qualityCheck` en `electron/services/ffmpeg.ts`; comprobar si el directo de Twitch tiene tramos silenciados.
 
+## Lo que se vio en el ordenador de Diego (15/11, v0.37.1)
+
+Análisis real de un directo de 183 min («Trilocke Día 1»): salieron solo 3 vídeos «Parte N» de 10 min y **ningún resumen, tema ni clip**. Causas, leídas en `%APPDATA%/streamclips/data.json` (nota del directo), `logs/app.log` y `analysis-times.json`:
+
+- **El modelo de lenguaje (Gemini gratis, modelo por defecto) devolvía 503** y `askJson` no reintentaba: «modelo de lenguaje 1,5 s», «estudio de edición 3 s». Solo se valoraron 3 candidatos. Arreglado en la 0.37.2 (reintentos 5xx, respaldo por señales, sin «Parte N» si hay resumen o temas). **Sin comprobar todavía con un directo real.**
+- **Tiempos**: total 54 min; transcripción de lo elegido 35 min para 20 min de audio (Whisper «medium» en CPU: es el cuello de botella), montaje 13 min, hablantes 4 min («External buffers are not allowed»: la identificación de voces falla siempre en su equipo, revisar).
+- 46 min del directo salieron como «sin sonido»: comprobar si el umbral `MUTED_DB` (-60 dB) es demasiado alto para su audio o si de verdad Twitch lo silenció.
+- En octubre Whisper no cargaba el modelo «small» (archivo corrupto); ahora usa «medium» y funciona.
+
+Para acelerar de verdad: probar Whisper «small» o una compilación con GPU; es más ganancia que todo lo demás junto.
+
 ## Mejoras, por orden
 
 ### 1. Descartar la pantalla de «Empezamos pronto» y las pausas (pequeño, hacer primero)

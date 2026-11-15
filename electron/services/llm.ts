@@ -42,6 +42,8 @@ export interface LlmDeps {
 }
 
 const TIMEOUT_MS = 90_000;
+/** Esperas antes de reintentar cuando el servidor del modelo está saturado (5xx). En las pruebas automáticas no se espera. */
+const SERVER_BACKOFF_MS = process.env.NODE_TEST_CONTEXT ? [5, 5, 5] : [6_000, 15_000, 30_000];
 
 /** Saca el primer objeto JSON de una respuesta (los modelos a veces lo envuelven en ```json ... ```). */
 export function extractJson(text: string): unknown {
@@ -95,6 +97,11 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
       // el plan gratuito limita las peticiones por minuto: esperar un minuto suele bastar; solo si sigue lleno se da por agotado
       const wait = Math.min(90, Number(res.headers.get('retry-after')) || 15 * (attempt + 1));
       await sleep(wait * 1000);
+      continue;
+    }
+    if (res.status >= 500 && res.status <= 504 && attempt < SERVER_BACKOFF_MS.length) {
+      // servidor saturado (Gemini gratis devuelve 503 a menudo): esperar y volver a intentarlo en vez de dar el análisis por perdido
+      await sleep(SERVER_BACKOFF_MS[Math.min(attempt, SERVER_BACKOFF_MS.length - 1)]);
       continue;
     }
     if (res.status === 401 || res.status === 403) throw new Error('El modelo de lenguaje rechazó la clave. Revísala en Ajustes.');

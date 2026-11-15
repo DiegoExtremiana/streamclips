@@ -31,6 +31,11 @@ async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
       onProgress: (done, total) => task.update(56 + (total ? (done / total) * 4 : 4), `Valorando candidatos (${done}/${total})…`),
       signal: () => throwIfCancelled(),
     });
+    // si el modelo falló en la mayoría de los lotes, lo poco valorado no sirve para elegir: mejor la selección por señales
+    if (r.failedChunks && r.judged.length < pool.length / 2) {
+      notes.push(`Selección inteligente incompleta: el modelo de lenguaje solo valoró ${r.judged.length} de ${pool.length} candidatos (${r.failedChunks} lote(s) sin respuesta); se usó el volumen y el chat.`);
+      return null;
+    }
     judged = r.judged;
     notes.push(`Selección inteligente: ${r.judged.length} candidatos valorados${r.cached ? ` (${r.cached} ya estaban guardados)` : ''}${r.failedChunks ? `, ${r.failedChunks} lote(s) sin respuesta` : ''}.`);
     // 3c-bis) mirar el directo: la imagen de los mejores momentos es otro factor de la nota

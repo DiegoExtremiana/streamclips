@@ -8,6 +8,7 @@ import { applyPrefs, describePrefs } from '../../../shared/preferences';
 import { decideFormat } from '../../../shared/themes';
 import { judgeCandidates } from '../../services/momentJudge';
 import { judgeVisual } from '../../services/visualJudge';
+import { measureUnseen } from '../../services/motionMeasure';
 import { loadEdits, loadPrefs, saveSnapshot } from '../../services/momentStore';
 import { isCancelled, throwIfCancelled } from '../../services/abort';
 import type { Phase, RunContext } from './context';
@@ -53,6 +54,15 @@ async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
         judged = vr.judged;
         notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ''}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ''}.`);
       } else notes.push(`Sin vista del directo${vr?.error ? ` (${vr.error.split('\n')[0]})` : ''}: se eligió por lo que se oye.`);
+      // el resto de candidatos (el modelo solo mira los mejores) se mide con ffmpeg: imagen quieta o con acción
+      const mm = await measureUnseen(d.tools().ffmpeg, vod.filePath, judged, { signal: () => throwIfCancelled() }).catch((e) => {
+        if (isCancelled(e)) throw e;
+        return null;
+      });
+      if (mm && mm.measured) {
+        judged = mm.judged;
+        notes.push(`Imagen medida en ${mm.measured} candidatos más${mm.dead ? ` (${mm.dead} con la imagen casi quieta descartados)` : ''}.`);
+      }
     }
   } catch (e) {
     if (isCancelled(e)) throw e;

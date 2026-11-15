@@ -727,3 +727,20 @@ button.btn.danger-text { color: var(--bad); }
 .probe-row .probe-icon { flex: none; width: 18px; height: 18px; display: inline-flex; margin-top: 1px; }
 .probe-row.ok .probe-icon { color: var(--ok, #4cd38a); }
 .probe-row.bad .probe-icon { color: var(--warn, #f0b35a); }
+
+/* Botones de la tarjeta del directo (v0.37.1): acción principal a la izquierda, herramientas con icono a la derecha */
+.vod-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.vod-actions-main, .vod-actions-tools { display: flex; align-items: center; gap: 6px; }
+.bcard .vod-actions .btn { margin-top: 0; align-self: auto; }
+.iconbtn.small { width: 28px; height: 28px; border-radius: 8px; }
+.iconbtn:disabled { opacity: .5; cursor: default; }
+.iconbtn.danger { color: var(--bad); }
+.iconbtn.danger:hover { border-color: var(--bad); }
+.vod-more { position: relative; }
+.vod-more > summary { list-style: none; }
+.vod-more > summary::-webkit-details-marker { display: none; }
+.vod-more[open] > summary { background: var(--surface-3); border-color: var(--accent-2); }
+.vod-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 190px; display: flex; flex-direction: column; padding: 4px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
+.vod-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; background: none; border: 0; border-radius: 7px; color: var(--text); font-size: 12.5px; text-align: left; cursor: pointer; }
+.vod-menu-item:hover:not(:disabled) { background: var(--surface-3); }
+.vod-menu-item:disabled { opacity: .5; cursor: default; }

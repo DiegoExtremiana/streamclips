@@ -4,7 +4,7 @@ import { fmtDate, fmtTime } from '../../shared/time';
 import { errMsg, notify } from '../lib';
 import { analysisTask, fmtEta, remainingSec, useNow, useTasks } from '../useTasks';
 import MomentsDialog from './MomentsDialog';
-import { IconFilm } from '../icons';
+import { IconFilm, IconFolder, IconList, IconMore, IconPause, IconPlay, IconRestart, IconScissors, IconStop, IconTrash } from '../icons';
 
 const REFRESH_MS = 60_000;
 /** Twitch crea el VOD del directo en curso unos minutos antes de su hora de inicio. */
@@ -224,31 +224,58 @@ export default function BroadcastsCard(props: { vods: VodJob[]; onChanged: () =>
               </div>
               {p.phase === 'working' && <div className="muted small">{eta !== null ? `Quedan ${fmtEta(eta)}` : 'Calculando el tiempo…'}{task?.detail ? ` · ${task.detail}` : ''}</div>}
               {error && <div className="muted small" style={{ whiteSpace: 'pre-wrap' }}>{error.slice(0, 160)}</div>}
-              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                <button
-                  className={`btn small ${again ? 'ghost' : ''}`}
-                  disabled={p.phase === 'live' || busy === v.id || p.phase === 'queued' || p.phase === 'downloading'}
-                  title={p.phase === 'live' ? 'Todavía está en directo' : working ? 'Cancela el análisis en marcha y empieza de nuevo' : again ? 'Vuelve a analizarlo; sustituye los vídeos pendientes de revisión que sacó antes' : undefined}
-                  onClick={() => void analyze(v, job)}
-                >
-                  {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' || p.phase === 'interrupted' ? 'Reanudar' : working ? 'Reiniciar análisis' : again ? 'Volver a analizar' : 'Analizar'}
-                </button>
-                {job?.status === 'downloaded' && <button className="btn ghost small" title="Mira el directo, elige el momento y corta un clip" onClick={() => onCut(job.id)}>Cortar clip</button>}
-                {(p.phase === 'done' || p.phase === 'skipped') && job && (
-                  <button className="btn ghost small" title="Mira la nota y el motivo de cada momento, descarta, incluye o recorta, y regenera sin volver a analizar." onClick={() => setMomentsFor({ id: job.id, title: job.title || 'Directo' })}>Revisar momentos</button>
-                )}
-                {p.phase === 'working' && job && <button className="btn ghost small" title="Detiene el análisis conservando lo ya transcrito; se retoma con «Reanudar», aunque cierres el programa." onClick={() => void act(`ps${job.id}`, () => window.api.pauseAutopilot(job.id))}>Pausar</button>}
-                {p.phase === 'working' && job && <button className="btn ghost small" onClick={() => void act(`cx${job.id}`, () => window.api.cancelAutopilot(job.id))}>Cancelar</button>}
+              <div className="vod-actions">
+                <div className="vod-actions-main">
+                  <button
+                    className={`btn small ${again ? 'ghost' : ''}`}
+                    disabled={p.phase === 'live' || busy === v.id || p.phase === 'queued' || p.phase === 'downloading'}
+                    title={p.phase === 'live' ? 'Todavía está en directo' : working ? 'Cancela el análisis en marcha y empieza de nuevo' : again ? 'Vuelve a analizarlo; sustituye los vídeos pendientes de revisión que sacó antes' : undefined}
+                    onClick={() => void analyze(v, job)}
+                  >
+                    {working || again ? <IconRestart size={15} /> : <IconPlay size={14} />}
+                    {p.phase === 'live' ? 'En directo…' : p.phase === 'paused' || p.phase === 'interrupted' ? 'Reanudar' : working ? 'Reiniciar' : again ? 'Volver a analizar' : 'Analizar'}
+                  </button>
+                  {p.phase === 'working' && job && (
+                    <>
+                      <button className="iconbtn small" aria-label="Pausar" title="Pausar: detiene el análisis conservando lo ya transcrito; se retoma con «Reanudar», aunque cierres el programa." disabled={busy === `ps${job.id}`} onClick={() => void act(`ps${job.id}`, () => window.api.pauseAutopilot(job.id))}>
+                        <IconPause size={14} />
+                      </button>
+                      <button className="iconbtn small danger" aria-label="Cancelar" title="Cancelar el análisis" disabled={busy === `cx${job.id}`} onClick={() => void act(`cx${job.id}`, () => window.api.cancelAutopilot(job.id))}>
+                        <IconStop size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="vod-actions-tools">
+                  {job?.status === 'downloaded' && (
+                    <button className="iconbtn small" aria-label="Cortar clip" title="Cortar clip: mira el directo, elige el momento y córtalo" onClick={() => onCut(job.id)}>
+                      <IconScissors size={15} />
+                    </button>
+                  )}
+                  {(p.phase === 'done' || p.phase === 'skipped') && job && (
+                    <button className="iconbtn small" aria-label="Revisar momentos" title="Revisar momentos: mira la nota y el motivo de cada uno, descarta, incluye o recorta, y regenera sin volver a analizar." onClick={() => setMomentsFor({ id: job.id, title: job.title || 'Directo' })}>
+                      <IconList size={15} />
+                    </button>
+                  )}
+                  {job?.filePath && job.status === 'downloaded' && (
+                    <details className="vod-more">
+                      <summary className="iconbtn small" aria-label="Más opciones" title="Más opciones">
+                        <IconMore size={15} />
+                      </summary>
+                      <div className="vod-menu">
+                        <button className="vod-menu-item" onClick={() => void window.api.openPath(job.filePath!).catch(() => undefined)}>
+                          <IconFolder size={14} /> Mostrar en carpeta
+                        </button>
+                        {p.phase === 'done' && (
+                          <button className="vod-menu-item danger-text" title="Borra el directo completo del disco; se conservan los vídeos, los clips y sus transcripciones." disabled={busy === `dc${job.id}`} onClick={() => void act(`dc${job.id}`, () => window.api.discardVod(job.id))}>
+                            <IconTrash size={14} /> Liberar espacio
+                          </button>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                </div>
               </div>
-              {job && job.status === 'downloaded' && (job.filePath || (job.filePath && p.phase === 'done')) && (
-                <details className="bmore">
-                  <summary className="muted small">Más</summary>
-                  <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                    {job.filePath && <button className="btn ghost small" onClick={() => void window.api.openPath(job.filePath!).catch(() => undefined)}>Mostrar en carpeta</button>}
-                    {job.filePath && p.phase === 'done' && <button className="btn ghost small" title="Borra el directo completo del disco; se conservan los vídeos, los clips y sus transcripciones." disabled={busy === `dc${job.id}`} onClick={() => void act(`dc${job.id}`, () => window.api.discardVod(job.id))}>Liberar espacio</button>}
-                  </div>
-                </details>
-              )}
             </div>
           );
         })}

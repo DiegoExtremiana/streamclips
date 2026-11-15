@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.37.1
+
+- Tarjetas de los directos más ordenadas: la acción principal (Analizar, Reanudar, Reiniciar) a la izquierda con su icono, y a la derecha botones con icono para pausar, cancelar, cortar clip y revisar momentos; «Mostrar en carpeta» y «Liberar espacio» pasan a un menú de más opciones.
+
 ## Novedades de la v0.37.0
 
 - **Vídeos con sentido, no momentos sueltos**: antes de montar el vídeo largo, los momentos cercanos se unen en escenas continuas del directo, cada una con su planteamiento (empieza unos segundos antes) y su reacción (acaba después), cortadas en frase completa. El editor de historia monta el vídeo con pocas escenas largas que se entienden solas, en vez de pegar muchos trozos cortos.

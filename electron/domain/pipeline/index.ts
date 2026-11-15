@@ -6,7 +6,7 @@ import { newContext, type Host, type Phase, type RunContext } from './context';
 import { transcribeChosenPhase, transcribePhase } from './transcribe';
 import { signalsPhase } from './signals';
 import { judgePhase, qualityGatePhase, speakersPhase } from './judge';
-import { directorPhase } from './director';
+import { studioPhase } from './studio';
 import { renderPhase, titlesPhase } from './render';
 import { finishPhase } from './finish';
 
@@ -16,7 +16,7 @@ export const PHASES: { name: string; run: Phase }[] = [
   { name: 'señales', run: signalsPhase },
   { name: 'transcripción de lo elegido', run: transcribeChosenPhase },
   { name: 'valoración', run: judgePhase },
-  { name: 'director', run: directorPhase },
+  { name: 'estudio de edición', run: studioPhase },
   { name: 'nota mínima', run: qualityGatePhase },
   { name: 'hablantes', run: speakersPhase },
   { name: 'títulos', run: titlesPhase },

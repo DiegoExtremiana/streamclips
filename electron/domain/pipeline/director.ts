@@ -10,7 +10,7 @@ import type { Phase } from './context';
 const CACHE_VERSION = 1;
 
 /** Candidatos de una sola categoría de Twitch (la que más material tiene): un vídeo no puede mezclar dos. */
-function singleCategory(cands: DirectorCandidate[], cats: { start: number; end: number; title: string }[], multi: boolean): { cands: DirectorCandidate[]; category?: string } {
+export function singleCategory(cands: DirectorCandidate[], cats: { start: number; end: number; title: string }[], multi: boolean): { cands: DirectorCandidate[]; category?: string } {
   if (!multi) return { cands };
   const by = new Map<string, number>();
   const of = (c: DirectorCandidate) => categoriesOf(cats, c)[0];

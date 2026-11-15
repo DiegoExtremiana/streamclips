@@ -44,6 +44,8 @@ export interface AutopilotSettings {
   proEdit?: boolean;
   /** Director de edición para YouTube: el modelo decide la estructura del vídeo largo (gancho, capítulos, cierre, rótulos, título, miniatura). Por defecto sí. */
   director?: boolean;
+  /** Estudio de edición: varios editores de IA a la vez (historia, ritmo, humor) y un jefe que revisa. Si es false, solo el director. */
+  studio?: boolean;
   /** Efectos de sonido según lo que se dice (ganar, dinero, morir…). Por defecto sí. */
   soundCues?: boolean;
   /** Música lofi sin letra de fondo cuando el vídeo no tiene ya sonido de fondo. Por defecto sí. */

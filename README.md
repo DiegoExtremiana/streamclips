@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.36.0
+
+- **Estudio de edición**: varios editores de IA trabajan a la vez sobre cada directo, como en una sala de edición. El editor de historia decide la estructura del vídeo resumen de 10-15 minutos, el de ritmo recorta el aire de cada momento, el de humor elige los clips graciosos con su inicio y su remate, y un jefe de edición revisa el montaje y quita lo que sobra. Los vídeos por tema siguen saliendo de la búsqueda de temas. Se puede desactivar en Ajustes (vuelve el director de la 0.33).
+- Cada análisis guarda un proyecto de edición con las líneas de tiempo de todo lo que se va a montar. Detalles y pendientes en `docs/ESTUDIO.md`.
+- Aviso: esta versión se publica sin la batería de pruebas; solo se comprobaron tipos y estilo.
+
 ## Novedades de la v0.35.0
 
 - Clips: nueva ordenación «Destacados primero» (los clips de oro arriba y, dentro, la mejor nota).

@@ -146,3 +146,16 @@ export function withTitles(effects: Effect[], titles: Extract<Effect, { type: 't
   }
   return [...out, ...titles];
 }
+
+/** Duración del gancho de un clip vertical: lo que se tarda en decidir si seguir viéndolo. */
+export const CLIP_HOOK_SEC = 3;
+const HOOK_MAX_CHARS = 38;
+
+/** Gancho de un clip vertical: la frase del título en pantalla durante los 3 primeros segundos (si el clip dura lo bastante). */
+export function withClipHook(effects: Effect[], title: string, kept: Range[]): Effect[] {
+  const text = title.replace(/\s+/g, ' ').trim();
+  const first = kept[0];
+  if (!text || !first || first.end - first.start < CLIP_HOOK_SEC + 2) return effects;
+  const short = text.length <= HOOK_MAX_CHARS ? text : `${text.slice(0, HOOK_MAX_CHARS - 1).replace(/\s+\S*$/, '')}…`;
+  return withTitles(effects, [{ type: 'title', at: first.start + 0.1, text: short, kind: 'gancho', duration: CLIP_HOOK_SEC }]);
+}

@@ -1,8 +1,9 @@
-import { planEdit, planLong, withJoints, withMusic, withTitles } from '../../../shared/autoEdit';
+import { planEdit, planLong, withClipHook, withJoints, withMusic, withTitles } from '../../../shared/autoEdit';
 import { chapterBlock, outputStarts } from '../../../shared/chapters';
 import { shortTitle, type Seg } from '../../../shared/highlights';
 import { seriesFor, seriesTitles } from '../../../shared/series';
 import { withCategoryLine } from '../../../shared/categories';
+import { keptRanges } from '../../../shared/timeline';
 import { TITLE, type AutoRole, type OutputItem } from '../../../shared/types';
 import type { ThemeProposal } from '../../../shared/themes';
 import { isCancelled } from '../../services/abort';
@@ -161,6 +162,8 @@ export const renderPhase: Phase = async (ctx) => {
     let e = pro ? planEdit(words, m, editOpts) : null;
     const mood = e ? await musicFor(t.title, [m], false) : null;
     if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+    // gancho en los 3 primeros segundos: el título del clip en pantalla (lo que más decide si se sigue viendo)
+    if (e) e = { ...e, effects: withClipHook(e.effects, t.title, keptRanges(m.start, m.end, e.cuts)) };
     await step('clip', `clip ${i + 1}`, () => safely(Boolean(e), () => d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e!.cuts, effects: e!.effects, ...subs }), () => d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, ctx.meta.get(m));
   }
   if (!ctx.created.length) throw new Error(`No se pudo montar ningún vídeo. ${ctx.errors.join(' ')}`);

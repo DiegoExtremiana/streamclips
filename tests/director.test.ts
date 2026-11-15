@@ -114,3 +114,18 @@ describe('director de edición', () => {
     assert.equal(normalizeLong({ title: 't', segments: ranges, coverText: ' SE  TORCIÓ ' }).coverText, 'SE TORCIÓ');
   });
 });
+
+describe('gancho de los clips verticales', () => {
+  it('pone el título en pantalla en los 3 primeros segundos y lo acorta si es largo', async () => {
+    const { withClipHook, CLIP_HOOK_SEC } = await import('../shared/autoEdit');
+    const fx = withClipHook([{ type: 'polish' }], 'No te vas a creer lo que le pasa a este tío en directo', [{ start: 100, end: 140 }]);
+    const t = fx.find((e) => e.type === 'title');
+    assert.ok(t && t.type === 'title');
+    assert.equal(t.kind, 'gancho');
+    assert.equal(t.duration, CLIP_HOOK_SEC);
+    assert.ok(t.text.length <= 38);
+    assert.ok(t.at >= 100 && t.at < 101);
+    // un clip demasiado corto no lleva gancho
+    assert.equal(withClipHook([{ type: 'polish' }], 'Corto', [{ start: 0, end: 4 }]).some((e) => e.type === 'title'), false);
+  });
+});

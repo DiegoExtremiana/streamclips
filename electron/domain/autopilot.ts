@@ -516,7 +516,7 @@ export class Autopilot implements Host {
    * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
    * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
    */
-  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o: { chars?: number } = {}): Promise<ThemeProposal[]> {
+  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o: { chars?: number; minLongSec?: number; hardCapSec?: number } = {}): Promise<ThemeProposal[]> {
     const chars = o.chars ?? 380;
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
     const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c.judgement.trim ?? c, chars), title: c.judgement.title, total: c.total }));
@@ -527,7 +527,7 @@ export class Autopilot implements Host {
     try {
       const raw = await askJson(conf, THEME_SYSTEM, themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
       const built = parseThemes(raw, new Set(units.map((u) => u.id)))
-        .map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60 }))
+        .map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60, ...(o.minLongSec ? { minLongSec: o.minLongSec } : {}), ...(o.hardCapSec ? { hardCapSec: o.hardCapSec } : {}) }))
         .filter((p): p is ThemeProposal => Boolean(p));
       const existing = this.d.store.data.outputs
         .filter((x) => x.vodId === vod.id && x.auto?.review !== 'pending')

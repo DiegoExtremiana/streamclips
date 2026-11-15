@@ -27,6 +27,8 @@ export const titlesPhase: Phase = async (ctx) => {
   if (ctx.clipTitles?.size) ctx.titles.clips = ctx.titles.clips.map((t, i) => ({ ...t, title: clean(ctx.clipTitles!.get(ctx.moments[i]), 100) || t.title }));
   // serie de varios días: «Minecraft extremo Día 1»; el tema concreto de cada vídeo pasa a la descripción
   const ser = cfg.maxVideos > 0 ? seriesFor(vod.title ?? '', { ...cfg.series, nextDay: vod.seriesDay ?? cfg.series.nextDay }) : null;
+  // el resumen de cada directo se llama siempre «Resumen <fecha>» (salvo en una serie, que lleva su día)
+  if (!ser) ctx.summaryTitle = `Resumen ${new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`;
   if (ser) {
     const st = seriesTitles(ser, ctx.mains.length);
     ctx.titles.summary = { title: clean(st.summary, 100), description: ctx.titles.summary.description };
@@ -139,10 +141,12 @@ export const renderPhase: Phase = async (ctx) => {
   };
   if (ctx.directed) {
     const p = ctx.directed;
-    const title = p.title || titles.summary.title;
+    const title = ctx.summaryTitle || p.title || titles.summary.title;
+    // el título que pensó el editor (de qué va el directo) abre la descripción
+    if (ctx.summaryTitle && p.title && !p.description.startsWith(p.title)) p.description = `${p.title}. ${p.description}`.trim();
     await step('summary', 'vídeo dirigido', () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, captions: p.captions }), { title, description: p.description || titles.summary.description }, p.meta);
   }
-  if (summary.length) await step('summary', 'resumen', () => longMake(titles.summary.title, summary, { chapters: true }), titles.summary, ctx.summaryMeta);
+  if (summary.length) await step('summary', 'resumen', () => longMake(ctx.summaryTitle || titles.summary.title, summary, { chapters: true }), ctx.summaryTitle ? { ...titles.summary, title: ctx.summaryTitle } : titles.summary, ctx.summaryMeta);
   for (const [i, m] of mains.entries()) {
     const t = titles.mains[i];
     await step('main', `vídeo ${i + 1}`, () => longMake(t.title, [m]), t);

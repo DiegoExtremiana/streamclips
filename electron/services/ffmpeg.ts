@@ -373,24 +373,30 @@ export async function validateRender(
   if (Math.abs(info.durationSec - expectedSec) > toleranceSec) {
     throw new Error(`Duración incorrecta: ${info.durationSec.toFixed(1)}s (esperada ~${expectedSec.toFixed(1)}s)`);
   }
-  // un vídeo largo con un trozo grande sin sonido no vale (p. ej. tramos del directo silenciados por Twitch)
-  if (kind === 'long' && info.hasAudio && info.durationSec >= 120) {
-    const share = (await silentSeconds(tools, file)) / info.durationSec;
-    if (share >= 0.3) throw new Error(`El vídeo ha salido sin sonido en el ${Math.round(share * 100)} % de su duración (¿tramos del directo silenciados por Twitch?)`);
+  // comprobaciones del vídeo largo ya hecho: que suene, que no esté en negro y que la imagen no esté parada
+  if (kind === 'long' && info.durationSec >= 120) {
+    const q = await qualityCheck(tools, file, info.hasAudio);
+    const pct = (x: number) => Math.round((x / info.durationSec) * 100);
+    if (pct(q.silentSec) >= 30) throw new Error(`El vídeo ha salido sin sonido en el ${pct(q.silentSec)} % de su duración (¿tramos del directo silenciados por Twitch?)`);
+    if (pct(q.blackSec) >= 20) throw new Error(`El vídeo ha salido en negro en el ${pct(q.blackSec)} % de su duración`);
+    if (pct(q.frozenSec) >= 60) throw new Error(`La imagen está parada en el ${pct(q.frozenSec)} % del vídeo (pantalla de espera o directo sin imagen)`);
   }
   return info;
 }
 
-/** Segundos del archivo en silencio total durante 8 s o más seguidos. */
-export async function silentSeconds(tools: ToolPaths, file: string): Promise<number> {
+/** Una pasada por el vídeo terminado: segundos en silencio (8 s o más seguidos), en negro (2 s o más) y con la imagen parada (10 s o más). */
+export async function qualityCheck(tools: ToolPaths, file: string, hasAudio = true): Promise<{ silentSec: number; blackSec: number; frozenSec: number }> {
   try {
-    const r = await run(tools.ffmpeg, ['-hide_banner', '-nostats', '-i', file, '-vn', '-af', 'silencedetect=n=-45dB:d=8', '-f', 'null', '-'], 300_000);
-    let sum = 0;
-    for (const m of String(r.stderr).matchAll(/silence_duration: ([\d.]+)/g)) sum += Number(m[1]);
-    return sum;
+    const r = await run(
+      tools.ffmpeg,
+      ['-hide_banner', '-nostats', '-i', file, '-vf', 'fps=4,scale=320:-2,blackdetect=d=2:pix_th=0.08,freezedetect=n=0.002:d=10', ...(hasAudio ? ['-af', 'silencedetect=n=-45dB:d=8'] : ['-an']), '-f', 'null', '-'],
+      600_000,
+    );
+    const sum = (re: RegExp) => [...String(r.stderr).matchAll(re)].reduce((a, m) => a + Number(m[1]), 0);
+    return { silentSec: sum(/silence_duration: ([\d.]+)/g), blackSec: sum(/black_duration:([\d.]+)/g), frozenSec: sum(/freeze_duration: ([\d.]+)/g) };
   } catch (e) {
     if ((e as Error).name === 'CancelledError') throw e;
-    return 0;
+    return { silentSec: 0, blackSec: 0, frozenSec: 0 };
   }
 }
 

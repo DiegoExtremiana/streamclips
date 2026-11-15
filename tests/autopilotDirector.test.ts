@@ -117,7 +117,8 @@ describe('director de edición en el piloto', () => {
       const longs = e.ctx.store.data.outputs.filter((o) => o.kind === 'long');
       assert.equal(longs.length, 1, v.autopilot?.note);
       const o = longs[0];
-      assert.equal(o.title, 'El directo que se torció');
+      assert.match(o.title, /^Resumen \d+ de \w+ de \d{4}$/);
+      assert.match(o.description ?? '', /El directo que se torció/);
       assert.equal(o.coverText, 'SE TORCIÓ');
       assert.equal(o.auto?.kind, 'dirigido');
       assert.match(o.auto?.reason ?? '', /Gancho con el final/);

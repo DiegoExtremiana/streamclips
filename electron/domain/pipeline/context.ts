@@ -53,7 +53,7 @@ export interface Host {
   titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]): Promise<{ summary: Titles; mains: Titles[]; clips: Titles[] }>;
   musicFor(vod: VodJob, words: Word[], title: string, segs: Seg[], smart: boolean, llmConf: LlmConfig | null | undefined): Promise<MusicMood | null>;
   makeShort(vodId: string, words: Word[], llmConf: LlmConfig | null | undefined, title: string, seg: Seg, subs: { subtitles?: AutopilotSettings['subtitles'] | undefined }): Promise<OutputItem>;
-  findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o?: { chars?: number }): Promise<ThemeProposal[]>;
+  findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o?: { chars?: number; minLongSec?: number; hardCapSec?: number }): Promise<ThemeProposal[]>;
   approve(outputId: string): OutputItem;
   discard(vodId: string, o?: { fromRun?: boolean }): { freedBytes: number; kept: number };
   recordTimes(vod: VodJob, phases: Record<string, number>, totalSec: number): void;
@@ -98,6 +98,8 @@ export interface RunContext {
   clipTitles?: Map<Seg, string>;
   /** Vídeo largo decidido por el director de edición (sustituye al resumen por lista de mejores momentos). */
   directed?: LongPlan;
+  /** Título fijo del resumen del directo: «Resumen 15 de noviembre de 2026». */
+  summaryTitle?: string;
   topicLongs: ThemeProposal[];
   topicShorts: ThemeProposal[];
   askProposals: ThemeProposal[];

@@ -37,6 +37,10 @@ import { directorPhase, singleCategory } from './director';
 import type { Phase } from './context';
 
 const CACHE_VERSION = 2;
+/** Vídeos por tema: de 5 a 15 minutos. */
+const THEME_VIDEO = { minSec: 300, maxSec: 900 };
+/** El resumen no pasa de 17 minutos (directedCut admite un 10 % sobre el máximo). */
+const SUMMARY_MAX_SEC = (17 * 60) / 1.1;
 
 interface Saved {
   key: string;
@@ -114,13 +118,14 @@ export const studioPhase: Phase = async (ctx) => {
       })
     : ctx.judged;
   const themesJob: Promise<{ v: ThemeProposal[] } | { e: unknown }> = wantThemes
-    ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380 }).then((v) => ({ v }), (e: unknown) => ({ e }))
+    ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e: unknown) => ({ e }))
     : Promise.resolve({ v: [] });
   const takeThemes = async () => {
     const r = await themesJob;
     if ('e' in r) throw r.e;
     for (const pr of r.v) {
-      const how = decideFormat(pr);
+      // si el tema da para un vídeo, se hace el vídeo sin preguntar (Diego quiere un vídeo por tema); los cortos solo si no da
+      const how = pr.long.sec > 0 && cfg.maxVideos > 0 ? 'long' : decideFormat(pr);
       if (how === 'ask') ctx.askProposals.push(pr);
       else if (how === 'long') ctx.topicLongs.push(pr);
       else if (how === 'shorts') ctx.topicShorts.push(pr);
@@ -165,7 +170,7 @@ export const studioPhase: Phase = async (ctx) => {
               dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }),
               categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
               minSec: style.longMinSec,
-              maxSec: style.longMaxSec,
+              maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
               candidates: cands,
               style: { titleStyle: style.titleStyle, lore: style.lore },
             }),
@@ -188,12 +193,12 @@ export const studioPhase: Phase = async (ctx) => {
   if (wantLong && plan) {
     const trimmed = applyTrims(cands, trims);
     let p = rebasePlan(plan, trims, HOOK.minSec);
-    const limits = { minSec: style.longMinSec, maxSec: style.longMaxSec, floorSec: MIN_SUMMARY_SEC };
+    const limits = { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), floorSec: MIN_SUMMARY_SEC };
     let cut = directedCut(p, trimmed, limits);
     if (cut && !saved) {
       task.update(67, 'Estudio de edición: el jefe de edición revisa el montaje…');
       try {
-        review = parseChief(await ask(JEFE_SYSTEM, jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: style.longMaxSec, totalSec: cut.totalSec }), 0.2), p);
+        review = parseChief(await ask(JEFE_SYSTEM, jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec }), 0.2), p);
       } catch (e) {
         say('jefe', false, fail(e));
       }

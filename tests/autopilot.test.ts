@@ -202,7 +202,8 @@ describe('piloto automático', () => {
       e.ctx.settings.set({ autopilot: { llm: { provider: 'groq', model: 'x', apiKey: 'CLAVE' }, smartSelect: false, music: false } });
       await e.ctx.autopilot.run(vod.id);
       const titles = e.ctx.store.data.outputs.map((o) => o.title).sort();
-      assert.deepEqual(titles, ['Clip dos', 'Clip uno', 'Gran resumen', 'La historia']);
+      assert.deepEqual(titles.filter((t) => !t.startsWith('Resumen ')), ['Clip dos', 'Clip uno', 'La historia']);
+      assert.equal(titles.filter((t) => /^Resumen \d+ de \w+ de \d{4}$/.test(t)).length, 1);
       assert.equal(e.ctx.store.data.outputs.find((o) => o.title === 'La historia')!.description, 'Desc principal');
       assert.equal(srv.calls.length, 1);
       assert.match(JSON.stringify(srv.calls[0]), /locura/);

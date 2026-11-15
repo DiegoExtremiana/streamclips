@@ -146,7 +146,8 @@ export const judgePhase: Phase = async (ctx) => {
         ctx.summaryMeta = { score: avg, kind: 'resumen', reason: kindSummary(sum) };
       } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
     } else if (sum) notes.push(`Ningún momento supera la nota mínima del resumen (${quality}/10).`);
-    if (cfg.topics !== false && (cfg.maxVideos > 0 || cfg.maxClips > 0)) {
+    // con el estudio de edición, los temas los busca el editor de temas sobre escenas con contexto (pipeline/studio.ts)
+    if (cfg.topics !== false && cfg.studio === false && (cfg.maxVideos > 0 || cfg.maxClips > 0)) {
       ctx.clock.mark('temas');
       const found = await host.findThemes(vod, judged, words, ctx.llmConf!, notes);
       for (const pr of found) {

@@ -28,7 +28,8 @@ import {
   type Trim,
 } from '../../../shared/studio';
 import { snapToSentences, type Seg } from '../../../shared/highlights';
-import { judgeText } from '../../../shared/judge';
+import { judgeText, type Judged } from '../../../shared/judge';
+import { decideFormat, type ThemeProposal } from '../../../shared/themes';
 import { askJson } from '../../services/llm';
 import { isCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
@@ -99,7 +100,35 @@ export const studioPhase: Phase = async (ctx) => {
   const cands = useScenes ? scenes : picks;
   const wantLong = cfg.director !== false && cfg.maxVideos > 0 && cands.length >= 4;
   const wantClips = cfg.maxClips > 0 && all.length > 0;
-  if (!wantLong && !wantClips) return 'continue';
+  // Editor de temas (a la vez que los demás): busca de qué se habla a lo largo del directo y junta las escenas del mismo
+  // tema aunque estén separadas en el tiempo. Lee las escenas enteras (con su contexto), no los picos sueltos.
+  const wantThemes = cfg.topics !== false && (cfg.maxVideos > 0 || cfg.maxClips > 0);
+  const byPick = new Map((ctx.judged ?? []).map((j) => [j.id, j]));
+  const themeUnits: Judged[] = useScenes
+    ? spans.map((s, i) => {
+        const best = [...s.members].sort((a, b) => b.total - a.total)[0];
+        const base = byPick.get(best.id)!;
+        const { trim: _t, ...judgement } = base.judgement;
+        return { ...base, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
+      })
+    : ctx.judged;
+  const themesJob: Promise<{ v: ThemeProposal[] } | { e: unknown }> = wantThemes
+    ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380 }).then((v) => ({ v }), (e: unknown) => ({ e }))
+    : Promise.resolve({ v: [] });
+  const takeThemes = async () => {
+    const r = await themesJob;
+    if ('e' in r) throw r.e;
+    for (const pr of r.v) {
+      const how = decideFormat(pr);
+      if (how === 'ask') ctx.askProposals.push(pr);
+      else if (how === 'long') ctx.topicLongs.push(pr);
+      else if (how === 'shorts') ctx.topicShorts.push(pr);
+    }
+  };
+  if (!wantLong && !wantClips) {
+    await takeThemes();
+    return 'continue';
+  }
   const style = host.style();
   const key = `${CACHE_VERSION}|${cfg.maxClips}|${wantLong ? 1 : 0}|${cands.map((c) => `${c.id}:${c.start}:${c.end}`).join(',')}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(',')}`;
   const file = d.judgeDir ? path.join(d.judgeDir, `${vod.id}.studio.json`) : undefined;
@@ -217,7 +246,8 @@ export const studioPhase: Phase = async (ctx) => {
     for (const c of clips.slice(0, funny.length)) outputs.push({ kind: 'clip', title: c.title, video: [{ start: c.start, end: c.end }], captions: [], totalSec: Math.round(c.end - c.start), note: c.why });
   } else if (wantClips && !agents.some((a) => a.id === 'humor')) say('humor', true, 'Ningún momento hace gracia de verdad fuera de contexto; se quedan los clips elegidos por nota.');
 
-  // ── vídeos por tema (los encontró la fase de valoración): van al proyecto para verlos junto al resto ──
+  // ── vídeos por tema: escenas del mismo asunto aunque estén separadas en el tiempo; también van al proyecto ──
+  await takeThemes();
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: 'tema', title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
 
   if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);

@@ -10,6 +10,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - Para ver los gestos, los fotogramas se sacan justo alrededor del pico de volumen de cada momento (el grito, la risa), no repartidos al azar.
 - Los clips graciosos conservan el título que les pone el editor de humor.
 - En los vídeos por tema, dos piezas separadas por pocos segundos ya no se cortan: se dejan seguidas.
+- **Vídeos por tema con tramos separados**: un cuarto editor busca de qué se habla a lo largo del directo y junta en un mismo vídeo las escenas de ese tema aunque estén separadas una o dos horas, siempre que de verdad sean lo mismo y juntas se entiendan. Ahora lee las escenas completas, con su contexto.
 - El editor de ritmo ya solo recorta los bordes de cada escena (como mucho un tercio).
 
 ## Novedades de la v0.36.0

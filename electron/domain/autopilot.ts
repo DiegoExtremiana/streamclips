@@ -516,9 +516,10 @@ export class Autopilot implements Host {
    * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
    * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
    */
-  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[]): Promise<ThemeProposal[]> {
+  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o: { chars?: number } = {}): Promise<ThemeProposal[]> {
+    const chars = o.chars ?? 380;
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
-    const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c, 380), title: c.judgement.title, total: c.total }));
+    const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c.judgement.trim ?? c, chars), title: c.judgement.title, total: c.total }));
     const blocks = transcriptBlocks(words, cand).slice(0, 20);
     blocks.forEach((b, i) => units.push({ id: `b${i}`, start: b.start, end: b.end, text: judgeText(words, b, 380), total: 5 }));
     units.sort((a, b) => a.start - b.start);

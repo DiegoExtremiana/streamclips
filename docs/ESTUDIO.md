@@ -35,6 +35,8 @@ Ahora `studioPhase` convierte los picos en **escenas** antes de llamar a los edi
 
 También en la 0.37.0: los fotogramas de la visión se sacan alrededor del pico de volumen del momento (`gestureTimes` en `visualJudge.ts`, `peakAt` desde `judge.ts`) para pillar el gesto; los clips del editor de humor conservan su título (`ctx.clipTitles`, aplicado en `titlesPhase`); las piezas de un tema a menos de 12 s se montan seguidas (`THEME_JOIN_GAP`). Con menos de 4 escenas (directo corto) el estudio trabaja con los momentos sueltos, como el director.
 
+**Editor de temas** (petición de Diego: «si hablo de algo de forma repartida en el directo, que el vídeo de ese tema junte los tramos»): con el estudio activo, `judgePhase` ya no llama a `findThemes`; lo hace `studioPhase` en paralelo con los demás, pasando las ESCENAS como unidades (ids `e…`, 900 caracteres de texto cada una) para que cada pieza del tema tenga contexto. Con `studio: false` sigue como antes. Ojo: con varias categorías de Twitch solo se buscan temas en la dominante (viene de `singleCategory`); ampliarlo a todas es una mejora pendiente.
+
 Tests: `tests/studio.test.ts` (funciones puras). Falta el test de la fase entera con modelo falso.
 
 Siguiente paso lógico para «vídeos con sentido»: que los vídeos por tema (`findThemes`) usen también escenas, y que el jefe de edición vea fotogramas del montaje final (hoy solo lee texto). La visión mira 2-3 fotogramas de los 14 mejores picos: para gestos haría falta sacar fotogramas alrededor del pico de volumen, no repartidos.

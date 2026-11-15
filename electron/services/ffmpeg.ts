@@ -373,7 +373,25 @@ export async function validateRender(
   if (Math.abs(info.durationSec - expectedSec) > toleranceSec) {
     throw new Error(`Duración incorrecta: ${info.durationSec.toFixed(1)}s (esperada ~${expectedSec.toFixed(1)}s)`);
   }
+  // un vídeo largo con un trozo grande sin sonido no vale (p. ej. tramos del directo silenciados por Twitch)
+  if (kind === 'long' && info.hasAudio && info.durationSec >= 120) {
+    const share = (await silentSeconds(tools, file)) / info.durationSec;
+    if (share >= 0.3) throw new Error(`El vídeo ha salido sin sonido en el ${Math.round(share * 100)} % de su duración (¿tramos del directo silenciados por Twitch?)`);
+  }
   return info;
+}
+
+/** Segundos del archivo en silencio total durante 8 s o más seguidos. */
+export async function silentSeconds(tools: ToolPaths, file: string): Promise<number> {
+  try {
+    const r = await run(tools.ffmpeg, ['-hide_banner', '-nostats', '-i', file, '-vn', '-af', 'silencedetect=n=-45dB:d=8', '-f', 'null', '-'], 300_000);
+    let sum = 0;
+    for (const m of String(r.stderr).matchAll(/silence_duration: ([\d.]+)/g)) sum += Number(m[1]);
+    return sum;
+  } catch (e) {
+    if ((e as Error).name === 'CancelledError') throw e;
+    return 0;
+  }
 }
 
 export interface FrameOpts {

@@ -27,7 +27,7 @@ import {
   type StudioProject,
   type Trim,
 } from '../../../shared/studio';
-import { snapToSentences, type Seg } from '../../../shared/highlights';
+import { MUTED_SHARE, silentShare, snapToSentences, type Seg } from '../../../shared/highlights';
 import { judgeText, type Judged } from '../../../shared/judge';
 import { decideFormat, type ThemeProposal } from '../../../shared/themes';
 import { askJson } from '../../services/llm';
@@ -72,7 +72,8 @@ export const studioPhase: Phase = async (ctx) => {
   const { cands: picks, category } = singleCategory(all, ctx.cats, ctx.multiCat);
   // picos sueltos → escenas continuas con contexto (lo que hace que el vídeo se entienda); ver shared/studio.ts
   const chapterOf = (c: Seg) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
-  let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : undefined);
+  // el contexto añadido puede caer en un trozo silenciado por Twitch: esa escena se queda fuera
+  let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : undefined).filter((s) => silentShare(ctx.sig.energyDb, s) < MUTED_SHARE);
   let sceneWords = words;
   if (cfg.director !== false && cfg.maxVideos > 0 && spans.length) {
     try {

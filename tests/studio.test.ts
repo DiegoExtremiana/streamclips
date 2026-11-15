@@ -63,3 +63,12 @@ test('jefe: quita lo que sobra sin vaciar capítulos ni tocar el cierre ni el ga
   assert.deepEqual(a.plan.chapters.map((x) => x.ids), [['e1', 'e3'], ['e4'], ['e5', 'e6']]);
   assert.equal(a.plan.title, 'Mejor');
 });
+
+test('tramos mudos: se mide la parte en silencio de un tramo', async () => {
+  const { silentShare, MUTED_SHARE } = await import('../shared/highlights');
+  const e = [...Array.from({ length: 100 }, () => -25), ...Array.from({ length: 100 }, () => -91)];
+  assert.equal(silentShare(e, { start: 10, end: 60 }), 0);
+  assert.equal(silentShare(e, { start: 120, end: 180 }), 1);
+  assert.ok(silentShare(e, { start: 80, end: 120 }) >= MUTED_SHARE);
+  assert.equal(silentShare(undefined, { start: 0, end: 10 }), 0);
+});

@@ -11,6 +11,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - Los clips graciosos conservan el título que les pone el editor de humor.
 - En los vídeos por tema, dos piezas separadas por pocos segundos ya no se cortan: se dejan seguidas.
 - **Vídeos por tema con tramos separados**: un cuarto editor busca de qué se habla a lo largo del directo y junta en un mismo vídeo las escenas de ese tema aunque estén separadas una o dos horas, siempre que de verdad sean lo mismo y juntas se entiendan. Ahora lee las escenas completas, con su contexto.
+- **Adiós a los vídeos mudos**: los tramos del directo sin sonido (Twitch silencia la música con derechos en el directo guardado) ya no se eligen, y un vídeo largo que salga con una parte grande en silencio se rechaza en vez de darse por bueno.
 - El editor de ritmo ya solo recorta los bordes de cada escena (como mucho un tercio).
 
 ## Novedades de la v0.36.0

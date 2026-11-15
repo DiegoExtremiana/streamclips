@@ -1,4 +1,4 @@
-import { bestStretches, buildSummary, findMoments } from '../../../shared/highlights';
+import { bestStretches, buildSummary, findMoments, MUTED_DB, MUTED_SHARE, silentShare } from '../../../shared/highlights';
 import { dominantCategory, fitToCategory } from '../../../shared/categories';
 import { isCancelled, throwIfCancelled } from '../../services/abort';
 import type { Candidate } from '../../../shared/judge';
@@ -66,6 +66,16 @@ export const signalsPhase: Phase = async (ctx) => {
       return f ? [{ id: `c${i}`, start: f.start, end: f.end, signal: m.score }] : [];
     });
   }
+  // Twitch silencia en el directo guardado los trozos con música con derechos: un tramo así daría un vídeo mudo
+  const audible = <T extends { start: number; end: number }>(xs: T[]): T[] => xs.filter((x) => silentShare(energyDb, x) < MUTED_SHARE);
+  const beforeMuted = moments.length + summary.length + mains.length + pool.length;
+  moments = audible(moments);
+  summary = audible(summary);
+  mains = audible(mains);
+  pool = audible(pool);
+  const mutedSec = energyDb ? energyDb.filter((v) => !(v > MUTED_DB)).length : 0;
+  if (beforeMuted !== moments.length + summary.length + mains.length + pool.length || mutedSec > 300)
+    notes.push(`Unos ${Math.round(mutedSec / 60)} min del directo no tienen sonido (Twitch silencia la música con derechos en el directo guardado); ${beforeMuted - (moments.length + summary.length + mains.length + pool.length)} tramo(s) mudos descartados.`);
   ctx.legacy = { moments, summary, mains };
   if (pool.length) {
     // lo que se transcribe es el conjunto de candidatos; la selección por señales solo se transcribe si el modelo falla

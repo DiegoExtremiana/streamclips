@@ -214,6 +214,22 @@ export interface Seg {
   end: number;
 }
 
+/** Por debajo de esto (dB) un segundo se considera sin sonido: Twitch silencia en el directo guardado los trozos con música con derechos. */
+export const MUTED_DB = -60;
+/** Un tramo con esta parte o más en silencio no se usa: saldría un vídeo mudo. */
+export const MUTED_SHARE = 0.3;
+
+/** Parte (0 a 1) de un tramo que está en silencio total según el volumen por segundo. Sin medida de volumen devuelve 0. */
+export function silentShare(energyDb: number[] | undefined, seg: Seg): number {
+  if (!energyDb?.length) return 0;
+  const lo = Math.max(0, Math.floor(seg.start));
+  const hi = Math.min(energyDb.length, Math.ceil(seg.end));
+  if (hi <= lo) return 0;
+  let n = 0;
+  for (let t = lo; t < hi; t++) if (!(energyDb[t] > MUTED_DB)) n++;
+  return n / (hi - lo);
+}
+
 /** Une tramos que se tocan o están a menos de `joinGap` segundos. */
 export function mergeSegments(segs: Seg[], joinGap = 2): Seg[] {
   const s = [...segs].sort((a, b) => a.start - b.start);

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AutopilotSettings, Platform } from '../../shared/types';
 import { MAX_LLM_SLOTS, type LlmSlot } from '../../shared/model/settings';
+import { AI_LABEL, assignments, type AiProvider } from '../../shared/llmRoles';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS } from '../../shared/subtitles';
 import { errMsg } from '../lib';
 import { SubTabs, useSubTab } from '../SubTabs';
@@ -256,6 +257,7 @@ export function AiCard() {
   if (!a || key === null) return <Loading title="Inteligencia artificial" />;
   const on = a.llm.provider !== 'none' && key !== '';
   const extra = a.llmExtra ?? [];
+  const configured: AiProvider[] = [...(on && a.llm.provider !== 'none' ? [a.llm.provider] : []), ...extra.filter((x) => x.apiKey).map((x) => x.provider)];
   const setSlot = (i: number, p: Partial<LlmSlot>) => up({ llmExtra: extra.map((x, k) => (k === i ? { ...x, ...p } : x)) });
   // el hueco nuevo propone un proveedor que todavía no esté puesto
   const used = new Set<string>([a.llm.provider, ...extra.map((x) => x.provider)]);
@@ -323,6 +325,22 @@ export function AiCard() {
           <IconPlus size={14} /> Añadir IA de apoyo
         </button>
       )}
+      <h3>Quién hace qué</h3>
+      <div className="muted small">Cada tarea tiene su IA titular; si falla, pasa a la de relevo. Cambia al añadir o quitar IAs.</div>
+      <table className="ai-roles" data-testid="ai-roles">
+        <thead>
+          <tr><th>Tarea</th><th>La hace</th><th>Relevo</th></tr>
+        </thead>
+        <tbody>
+          {assignments(configured).map((t) => (
+            <tr key={t.id} title={t.why}>
+              <td>{t.label}</td>
+              <td>{t.main ? <span className="badge ok">{AI_LABEL[t.main]}</span> : <span className="badge warn">Nadie</span>}</td>
+              <td className="muted small">{t.backups.length ? t.backups.map((p) => AI_LABEL[p]).join(', ') : 'Sin relevo'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <KeyHowTo current={a.llm.provider} />
 
       <h3>Qué hace con ella</h3>

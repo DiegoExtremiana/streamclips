@@ -15,7 +15,7 @@ import { ChatBins } from '../services/chatlog';
 import { CancelledError, isCancelled, withAbort } from '../services/abort';
 import type { Range } from '../../shared/timeline';
 import { type audioEnergy } from '../services/audioEnergy';
-import { askJson, resolveModel, type LlmConfig } from '../services/llm';
+import { askJson, resolveModel, type LlmConfig, forTask } from '../services/llm';
 import type { Store } from '../services/store';
 import type { Logger } from '../services/logger';
 import type { ToolPaths } from '../services/tools';
@@ -298,7 +298,8 @@ export class Autopilot implements Host {
       uniq();
       return base;
     }
-    const conf: LlmConfig = { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
+    // los títulos van a su IA titular (shared/llmRoles.ts), con las demás de relevo
+    const conf: LlmConfig = forTask(this.llmConf() ?? { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl }, 'titles');
     const items = [
       ...mains.map((m, i) => ({ id: `video${i + 1}`, texto: textOf(words, m.start, Math.min(m.end, m.start + 240), 900) })),
       ...moments.map((m, i) => ({ id: `clip${i + 1}`, texto: textOf(words, m.start, m.end, 600) })),

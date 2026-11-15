@@ -31,7 +31,8 @@ import { MUTED_SHARE, silentShare, snapToSentences, type Seg } from '../../../sh
 import { judgeText, type Judged } from '../../../shared/judge';
 import { decideFormat, type ThemeProposal } from '../../../shared/themes';
 import os from 'node:os';
-import { askJson, visionConfig } from '../../services/llm';
+import { askJson, forTask, visionConfig } from '../../services/llm';
+import type { AiTask } from '../../../shared/llmRoles';
 import { vodFrame } from '../../services/visualJudge';
 import { isCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
@@ -142,7 +143,7 @@ export const studioPhase: Phase = async (ctx) => {
       }).concat(spare.flatMap((m) => (byPick.get(m.id) ? [byPick.get(m.id)!] : [])))
     : ctx.judged;
   const themesJob: Promise<{ v: ThemeProposal[] } | { e: unknown }> = wantThemes
-    ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e: unknown) => ({ e }))
+    ? host.findThemes(vod, themeUnits, sceneWords, forTask(conf, 'themes'), notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e: unknown) => ({ e }))
     : Promise.resolve({ v: [] });
   const takeThemes = async () => {
     const r = await themesJob;
@@ -176,7 +177,8 @@ export const studioPhase: Phase = async (ctx) => {
     if (isCancelled(e)) throw e;
     return (e as Error).message.split('\n')[0];
   };
-  const ask = (system: string, user: string, temperature: number) => askJson(conf, system, user, { fetchFn: d.llmFetch, temperature });
+  // cada editor pregunta a su IA titular (shared/llmRoles.ts); las demás quedan de relevo
+  const ask = (system: string, user: string, temperature: number, who: AiTask) => askJson(forTask(conf, who), system, user, { fetchFn: d.llmFetch, temperature });
 
   let plan: DirectorPlan | null = saved?.plan ?? null;
   let trims: Trim[] = saved?.trims ?? [];
@@ -199,10 +201,11 @@ export const studioPhase: Phase = async (ctx) => {
               style: { titleStyle: style.titleStyle, lore: style.lore },
             }),
             0.3,
+            'story',
           ).then((raw) => parseDirectorPlan(raw, cands))
         : Promise.resolve(null),
-      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2).then((raw) => parseTrims(raw, cands)) : Promise.resolve([] as Trim[]),
-      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4).then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([] as FunnyClip[]),
+      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, 'humor').then((raw) => parseTrims(raw, cands)) : Promise.resolve([] as Trim[]),
+      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, 'humor').then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([] as FunnyClip[]),
     ]);
     if (rPlan.status === 'fulfilled') plan = rPlan.value;
     else say('historia', false, fail(rPlan.reason));
@@ -243,7 +246,7 @@ export const studioPhase: Phase = async (ctx) => {
             fs.rmSync(tmpDir, { recursive: true, force: true });
           }
         }
-        review = parseChief(raw ?? (await ask(JEFE_SYSTEM, prompt, 0.2)), p);
+        review = parseChief(raw ?? (await ask(JEFE_SYSTEM, prompt, 0.2, 'chief')), p);
       } catch (e) {
         say('jefe', false, fail(e));
       }

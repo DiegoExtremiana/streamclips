@@ -59,6 +59,8 @@ Para acelerar de verdad: probar Whisper «small» o una compilación con GPU; es
 
 Diego solo podía elegir una IA. Ahora: `autopilot.llmExtra` (hasta `MAX_LLM_SLOTS` = 3 huecos, `shared/model/settings.ts`), validado y cifrado en `electron/domain/settings.ts`, y `llmConf()` (`autopilot.ts`) devuelve la principal con `fallbacks`. `askJson` (`electron/services/llm.ts`) prueba la cadena en orden; `prefer(cfg, 'groq')` pone Groq delante para valorar (`pipeline/judge.ts`) y `visionConfig` deja solo las que ven imágenes con Gemini delante. Proveedores nuevos: `openrouter` (modelo `openrouter/free`) y `mistral` (`mistral-small-latest`); **sus modelos por defecto no se han probado con una clave real**. Tests: `tests/llmFallback.test.ts`.
 
+Funciones de cada IA: `shared/llmRoles.ts` (tabla `AI_TASKS`: tarea → orden de proveedores; el primero configurado es el titular). `forTask(cfg, tarea)` en `llm.ts` reordena la cadena; lo usan `pipeline/judge.ts`, `pipeline/studio.ts` (cada editor) y `autopilot.titles`. Ajustes enseña la tabla con `assignments()`. Para cambiar quién hace qué, basta tocar `AI_TASKS`. Ojo: con `llmBaseUrl` (tests) `forTask` no reordena.
+
 Pendiente aquí: que la valoración de clips de Twitch (`electron/app/wiring/clipScores.ts`) y el motor de la nube (`engine.ts`) usen también los relevos; repartir a los editores del estudio entre IAs distintas a la vez (hoy van todos a la principal y solo cambian si falla); un panel con la cuota gastada de cada IA.
 
 Claude dentro del programa: la API de Claude es de pago (no hay plan gratuito), así que choca con la regla de «todo gratis». No se ha añadido. Si Diego decide pagar créditos de API, es un proveedor más con otro formato de petición (no es compatible con `/chat/completions` tal cual).

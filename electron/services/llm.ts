@@ -1,3 +1,4 @@
+import { orderFor, type AiTask } from '../../shared/llmRoles';
 export type LlmProvider = 'groq' | 'gemini' | 'openrouter' | 'mistral';
 
 export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string; /** Modelo que entiende imágenes (el de texto de Groq no). */ visionModel?: string; /** El modelo de texto ya ve imágenes. */ sees?: boolean }> = {
@@ -22,6 +23,15 @@ export function prefer(cfg: LlmConfig, provider: LlmProvider): LlmConfig {
   const chain = chainOf(cfg);
   const first = chain.filter((c) => c.provider === provider);
   return first.length ? fromChain([...first, ...chain.filter((c) => c.provider !== provider)]) : cfg;
+}
+
+/** La configuración ordenada para una tarea: su IA titular primero y las demás de relevo (ver `shared/llmRoles.ts`). */
+export function forTask(cfg: LlmConfig, task: AiTask): LlmConfig {
+  const chain = chainOf(cfg);
+  if (chain.length < 2 || chain.some((c) => c.baseUrl)) return cfg;
+  const order = orderFor(task, chain.map((c) => c.provider));
+  const sorted = order.flatMap((p) => chain.filter((c) => c.provider === p));
+  return sorted.length ? fromChain(sorted) : cfg;
 }
 
 /**

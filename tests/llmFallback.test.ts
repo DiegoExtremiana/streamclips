@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { askJson, chainOf, prefer, visionConfig, type LlmConfig } from '../electron/services/llm';
+import { askJson, chainOf, forTask, prefer, visionConfig, type LlmConfig } from '../electron/services/llm';
+import { assignments, orderFor } from '../shared/llmRoles';
 
 const ok = (o: unknown) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(o) } }] }), { status: 200 });
 const cfg: LlmConfig = { provider: 'gemini', model: 'g', apiKey: 'A', fallbacks: [{ provider: 'groq', model: 'q', apiKey: 'B' }, { provider: 'mistral', model: 'm', apiKey: 'C' }] };
@@ -31,4 +32,15 @@ test('reparto: Groq primero para valorar y solo las que ven imágenes (Gemini de
   assert.deepEqual(v.map((c) => c.provider), ['gemini', 'groq']);
   assert.notEqual(v[1].model, 'q', 'Groq usa su modelo con visión');
   assert.deepEqual(chainOf(visionConfig({ provider: 'mistral', model: 'm', apiKey: 'C' })).map((c) => c.provider), ['mistral']);
+});
+
+test('funciones claras: cada tarea tiene su IA titular y sus relevos', () => {
+  const all = ['gemini', 'groq', 'mistral', 'openrouter'] as const;
+  const by = Object.fromEntries(assignments([...all]).map((t) => [t.id, t.main]));
+  assert.deepEqual(by, { vision: 'gemini', judge: 'groq', story: 'gemini', themes: 'mistral', humor: 'groq', chief: 'gemini', titles: 'mistral' });
+  assert.deepEqual(orderFor('vision', ['mistral', 'openrouter']), [], 'sin Gemini ni Groq nadie mira imágenes');
+  assert.deepEqual(orderFor('judge', ['gemini']), ['gemini']);
+  assert.deepEqual(chainOf(forTask(cfg, 'judge')).map((c) => c.provider), ['groq', 'gemini', 'mistral']);
+  assert.deepEqual(chainOf(forTask(cfg, 'themes')).map((c) => c.provider), ['mistral', 'gemini', 'groq']);
+  assert.equal(forTask({ provider: 'gemini', model: 'g', apiKey: 'A' }, 'judge').provider, 'gemini');
 });

@@ -33433,21 +33433,27 @@ async function validateRender(tools, file, kind, expectedSec, toleranceSec = 1.5
   if (Math.abs(info.durationSec - expectedSec) > toleranceSec) {
     throw new Error(`Duraci\xF3n incorrecta: ${info.durationSec.toFixed(1)}s (esperada ~${expectedSec.toFixed(1)}s)`);
   }
-  if (kind === "long" && info.hasAudio && info.durationSec >= 120) {
-    const share = await silentSeconds(tools, file) / info.durationSec;
-    if (share >= 0.3) throw new Error(`El v\xEDdeo ha salido sin sonido en el ${Math.round(share * 100)} % de su duraci\xF3n (\xBFtramos del directo silenciados por Twitch?)`);
+  if (kind === "long" && info.durationSec >= 120) {
+    const q = await qualityCheck(tools, file, info.hasAudio);
+    const pct = (x) => Math.round(x / info.durationSec * 100);
+    if (pct(q.silentSec) >= 30) throw new Error(`El v\xEDdeo ha salido sin sonido en el ${pct(q.silentSec)} % de su duraci\xF3n (\xBFtramos del directo silenciados por Twitch?)`);
+    if (pct(q.blackSec) >= 20) throw new Error(`El v\xEDdeo ha salido en negro en el ${pct(q.blackSec)} % de su duraci\xF3n`);
+    if (pct(q.frozenSec) >= 60) throw new Error(`La imagen est\xE1 parada en el ${pct(q.frozenSec)} % del v\xEDdeo (pantalla de espera o directo sin imagen)`);
   }
   return info;
 }
-async function silentSeconds(tools, file) {
+async function qualityCheck(tools, file, hasAudio = true) {
   try {
-    const r2 = await run(tools.ffmpeg, ["-hide_banner", "-nostats", "-i", file, "-vn", "-af", "silencedetect=n=-45dB:d=8", "-f", "null", "-"], 3e5);
-    let sum = 0;
-    for (const m of String(r2.stderr).matchAll(/silence_duration: ([\d.]+)/g)) sum += Number(m[1]);
-    return sum;
+    const r2 = await run(
+      tools.ffmpeg,
+      ["-hide_banner", "-nostats", "-i", file, "-vf", "fps=4,scale=320:-2,blackdetect=d=2:pix_th=0.08,freezedetect=n=0.002:d=10", ...hasAudio ? ["-af", "silencedetect=n=-45dB:d=8"] : ["-an"], "-f", "null", "-"],
+      6e5
+    );
+    const sum = (re) => [...String(r2.stderr).matchAll(re)].reduce((a, m) => a + Number(m[1]), 0);
+    return { silentSec: sum(/silence_duration: ([\d.]+)/g), blackSec: sum(/black_duration:([\d.]+)/g), frozenSec: sum(/freeze_duration: ([\d.]+)/g) };
   } catch (e) {
     if (e.name === "CancelledError") throw e;
-    return 0;
+    return { silentSec: 0, blackSec: 0, frozenSec: 0 };
   }
 }
 async function extractFrame(tools, input, atSec, out, o = {}, isImage = false) {
@@ -39639,7 +39645,7 @@ function withClipHook(effects, title, kept) {
 // shared/themes.ts
 var THEME_ROLES = ["gancho", "inicio", "desarrollo", "evolucion", "desenlace"];
 var ROLE_LABEL = { gancho: "Gancho", inicio: "Inicio", desarrollo: "Desarrollo", evolucion: "Evoluci\xF3n", desenlace: "Desenlace" };
-var THEME_SYSTEM = 'Eres editor de YouTube de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Recibes fragmentos de un mismo directo (id, hora, texto). Busca TEMAS e HISTORIAS: situaciones absurdas que se retoman, conversaciones que vuelven horas despu\xE9s, bromas recurrentes, un reto o partida con momentos relacionados, una an\xE9cdota que evoluciona. Un tema NO tiene por qu\xE9 ser seguido: es normal que se hable de algo al principio, se deje y se retome una o dos horas despu\xE9s; junta esos tramos si de verdad son lo mismo y juntos se entienden mejor que por separado. Agrupa por SIGNIFICADO, no por palabras repetidas: dos fragmentos pertenecen al mismo tema solo si hay una relaci\xF3n real (se refieren a lo mismo, uno explica o contin\xFAa al otro). Piensa como editor: \xBFqu\xE9 historia se cuenta?, \xBFpor qu\xE9 le interesar\xEDa a alguien que no vio el directo?, \xBFhay material para sostener un v\xEDdeo?, \xBFqu\xE9 fragmentos son imprescindibles y cu\xE1les repiten lo mismo? Descarta lo repetitivo. Mant\xE9n el ORDEN CRONOL\xD3GICO (no cambies la secuencia de modo que cambie el significado); como mucho puedes marcar UN fragmento como "gancho" para abrir el v\xEDdeo con lo m\xE1s fuerte si el resto sigue en orden. Roles de cada pieza: gancho, inicio (presenta el tema o situaci\xF3n), desarrollo, evolucion (c\xF3mo cambia la historia) o desenlace (remate o conclusi\xF3n); usa solo los que el material permita, sin forzar estructura. "contexto": true si esa pieza necesita unos segundos de lo anterior para entenderse. "cortos" son v\xEDdeos cortos independientes (cada uno una situaci\xF3n concreta, ids en orden). Si no hay material suficiente para un tema, pon "vale": false o no lo incluyas: prefiero ning\xFAn v\xEDdeo a uno de relleno. Cada id va como mucho en un tema. No inventes conexiones ni finales: si la historia queda abierta, "desenlace": false. "confianza" (0 a 1) = seguridad en que las piezas son de verdad el mismo tema; "potencial" 0 a 10 sobrio (un tema mencionado mucho puede ser aburrido). Responde SOLO con JSON: {"temas":[{"titulo":"2 a 7 palabras, sin emojis","contexto":"2 frases: qu\xE9 pasa y por qu\xE9 interesa","categoria":"humor|juego|an\xE9cdota|charla|reto|otro","participantes":["nombres si se oyen"],"motivo":"por qu\xE9 estas piezas son un mismo tema","confianza":0.8,"desenlace":true,"potencial":{"corto":5,"largo":6,"varios":4},"vale":true,"piezas":[{"id":"","rol":"","contexto":false}],"cortos":[{"titulo":"","ids":[""]}]}]}';
+var THEME_SYSTEM = 'Eres editor de YouTube de un streamer de Twitch que habla en espa\xF1ol de Espa\xF1a. Recibes fragmentos de un mismo directo (id, hora, texto). Busca TEMAS e HISTORIAS: situaciones absurdas que se retoman, conversaciones que vuelven horas despu\xE9s, bromas recurrentes, un reto o partida con momentos relacionados, una an\xE9cdota que evoluciona. Un tema NO tiene por qu\xE9 ser seguido: es normal que se hable de algo al principio, se deje y se retome una o dos horas despu\xE9s; junta esos tramos si de verdad son lo mismo y juntos se entienden mejor que por separado. Agrupa por SIGNIFICADO, no por palabras repetidas: dos fragmentos pertenecen al mismo tema solo si hay una relaci\xF3n real (se refieren a lo mismo, uno explica o contin\xFAa al otro). Piensa como editor: \xBFqu\xE9 historia se cuenta?, \xBFpor qu\xE9 le interesar\xEDa a alguien que no vio el directo?, \xBFhay material para sostener un v\xEDdeo?, \xBFqu\xE9 fragmentos son imprescindibles y cu\xE1les repiten lo mismo? Descarta lo repetitivo. Mant\xE9n el ORDEN CRONOL\xD3GICO (no cambies la secuencia de modo que cambie el significado); como mucho puedes marcar UN fragmento como "gancho" para abrir el v\xEDdeo con lo m\xE1s fuerte si el resto sigue en orden. Roles de cada pieza: gancho, inicio (presenta el tema o situaci\xF3n), desarrollo, evolucion (c\xF3mo cambia la historia) o desenlace (remate o conclusi\xF3n); usa solo los que el material permita, sin forzar estructura. "contexto": true si esa pieza necesita unos segundos de lo anterior para entenderse. "cortos" son v\xEDdeos cortos independientes (cada uno una situaci\xF3n concreta, ids en orden). Si no hay material suficiente para un tema, pon "vale": false o no lo incluyas: prefiero ning\xFAn v\xEDdeo a uno de relleno. Cada id va como mucho en un tema. No inventes conexiones ni finales: si la historia queda abierta, "desenlace": false. "confianza" (0 a 1) = seguridad en que las piezas son de verdad el mismo tema; "potencial" 0 a 10 sobrio (un tema mencionado mucho puede ser aburrido). Responde SOLO con JSON: {"temas":[{"titulo":"2 a 8 palabras que digan DE QU\xC9 se habla, como lo buscar\xEDa alguien (p. ej. \xABCharla sobre la naturaleza\xBB, \xABMis opiniones sobre la pol\xEDtica en Espa\xF1a\xBB, \xABEl mejor equipo Pok\xE9mon VGC\xBB), sin emojis ni clickbait","contexto":"2 frases: qu\xE9 pasa y por qu\xE9 interesa","categoria":"humor|juego|an\xE9cdota|charla|reto|otro","participantes":["nombres si se oyen"],"motivo":"por qu\xE9 estas piezas son un mismo tema","confianza":0.8,"desenlace":true,"potencial":{"corto":5,"largo":6,"varios":4},"vale":true,"piezas":[{"id":"","rol":"","contexto":false}],"cortos":[{"titulo":"","ids":[""]}]}]}';
 function themePrompt(units) {
   const list2 = units.map((u) => ({ id: u.id, hora: clock2(u.start), duracion: Math.round(u.end - u.start), ...u.title ? { titulo: u.title } : {}, texto: u.text }));
   return JSON.stringify({ fragmentos: list2 });
@@ -40939,6 +40945,8 @@ var directorPhase = async (ctx) => {
 
 // electron/domain/pipeline/studio.ts
 var CACHE_VERSION2 = 2;
+var THEME_VIDEO = { minSec: 300, maxSec: 900 };
+var SUMMARY_MAX_SEC = 17 * 60 / 1.1;
 var overlaps = (a, b) => a.start < b.end && b.start < a.end;
 var studioPhase = async (ctx) => {
   const { host, vod, task, notes, words } = ctx;
@@ -40985,12 +40993,12 @@ var studioPhase = async (ctx) => {
     const { trim: _t, ...judgement } = base2.judgement;
     return { ...base2, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
   }) : ctx.judged;
-  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380 }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
+  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
   const takeThemes = async () => {
     const r2 = await themesJob;
     if ("e" in r2) throw r2.e;
     for (const pr of r2.v) {
-      const how = decideFormat(pr);
+      const how = pr.long.sec > 0 && cfg.maxVideos > 0 ? "long" : decideFormat(pr);
       if (how === "ask") ctx.askProposals.push(pr);
       else if (how === "long") ctx.topicLongs.push(pr);
       else if (how === "shorts") ctx.topicShorts.push(pr);
@@ -41030,7 +41038,7 @@ var studioPhase = async (ctx) => {
           dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" }),
           categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
           minSec: style.longMinSec,
-          maxSec: style.longMaxSec,
+          maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
           candidates: cands,
           style: { titleStyle: style.titleStyle, lore: style.lore }
         }),
@@ -41050,12 +41058,12 @@ var studioPhase = async (ctx) => {
   if (wantLong && plan) {
     const trimmed = applyTrims(cands, trims);
     let p = rebasePlan(plan, trims, HOOK.minSec);
-    const limits = { minSec: style.longMinSec, maxSec: style.longMaxSec, floorSec: MIN_SUMMARY_SEC };
+    const limits = { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), floorSec: MIN_SUMMARY_SEC };
     let cut = directedCut(p, trimmed, limits);
     if (cut && !saved) {
       task.update(67, "Estudio de edici\xF3n: el jefe de edici\xF3n revisa el montaje\u2026");
       try {
-        review = parseChief(await ask(JEFE_SYSTEM, jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: style.longMaxSec, totalSec: cut.totalSec }), 0.2), p);
+        review = parseChief(await ask(JEFE_SYSTEM, jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec }), 0.2), p);
       } catch (e) {
         say("jefe", false, fail(e));
       }
@@ -41202,6 +41210,7 @@ var titlesPhase = async (ctx) => {
   ctx.titles = await host.titles(vod, words, ctx.moments, ctx.mains, notes);
   if (ctx.clipTitles?.size) ctx.titles.clips = ctx.titles.clips.map((t, i) => ({ ...t, title: clean4(ctx.clipTitles.get(ctx.moments[i]), 100) || t.title }));
   const ser = cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...cfg.series, nextDay: vod.seriesDay ?? cfg.series.nextDay }) : null;
+  if (!ser) ctx.summaryTitle = `Resumen ${new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}`;
   if (ser) {
     const st = seriesTitles(ser, ctx.mains.length);
     ctx.titles.summary = { title: clean4(st.summary, 100), description: ctx.titles.summary.description };
@@ -41303,10 +41312,11 @@ var renderPhase = async (ctx) => {
   };
   if (ctx.directed) {
     const p = ctx.directed;
-    const title = p.title || titles.summary.title;
+    const title = ctx.summaryTitle || p.title || titles.summary.title;
+    if (ctx.summaryTitle && p.title && !p.description.startsWith(p.title)) p.description = `${p.title}. ${p.description}`.trim();
     await step("summary", "v\xEDdeo dirigido", () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, captions: p.captions }), { title, description: p.description || titles.summary.description }, p.meta);
   }
-  if (summary.length) await step("summary", "resumen", () => longMake(titles.summary.title, summary, { chapters: true }), titles.summary, ctx.summaryMeta);
+  if (summary.length) await step("summary", "resumen", () => longMake(ctx.summaryTitle || titles.summary.title, summary, { chapters: true }), ctx.summaryTitle ? { ...titles.summary, title: ctx.summaryTitle } : titles.summary, ctx.summaryMeta);
   for (const [i, m] of mains.entries()) {
     const t = titles.mains[i];
     await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
@@ -41843,7 +41853,7 @@ ${text}`,
     if (units.length < 4) return [];
     try {
       const raw = await askJson(conf, THEME_SYSTEM, themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
-      const built = parseThemes(raw, new Set(units.map((u) => u.id))).map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60 })).filter((p) => Boolean(p));
+      const built = parseThemes(raw, new Set(units.map((u) => u.id))).map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60, ...o.minLongSec ? { minLongSec: o.minLongSec } : {}, ...o.hardCapSec ? { hardCapSec: o.hardCapSec } : {} })).filter((p) => Boolean(p));
       const existing = this.d.store.data.outputs.filter((x) => x.vodId === vod.id && x.auto?.review !== "pending").map((x) => x.segments?.length ? x.segments : x.start !== void 0 && x.end !== void 0 ? [{ start: x.start, end: x.end }] : []).filter((x) => x.length);
       const { kept, dropped } = dedupeProposals(built, existing);
       const top = kept.slice(0, 3);

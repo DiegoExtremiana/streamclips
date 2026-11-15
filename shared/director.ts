@@ -74,6 +74,9 @@ const MAX_IDS_PER_CHAPTER = 6;
 const MAX_PHRASES = 8;
 const MAX_CANDIDATES = 40;
 
+/** Texto de la pantalla final de los vídeos largos. */
+export const CLOSING_TEXT = 'Suscríbete para no perderte el próximo directo';
+
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '').replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
@@ -237,6 +240,9 @@ export function directedCut(plan: DirectorPlan, candidates: DirectorCandidate[],
       for (const p of phraseBy.get(id) ?? []) captions.push({ at: c.start + p.at, text: p.text, kind: 'frase', duration: 3 });
     });
   }
+  // pantalla final: llamada a suscribirse en los últimos segundos del último tramo
+  const lastSeg = segs[segs.length - 1];
+  if (lastSeg && lastSeg.end - lastSeg.start >= 8) captions.push({ at: r1(lastSeg.end - 5), text: CLOSING_TEXT, kind: 'cierre', duration: 4.5 });
   const totalSec = total();
   if (totalSec < Math.max(o.floorSec, o.minSec * 0.6)) return null;
   return { segs, labels, captions, totalSec, hookRepeats };

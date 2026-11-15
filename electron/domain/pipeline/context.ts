@@ -35,7 +35,7 @@ export interface LongPlan {
   /** Frase para la miniatura (2-4 palabras), si el director la decidió. */
   coverText?: string;
   /** Rótulos en pantalla (en segundos del directo). */
-  captions?: { at: number; text: string; kind: 'capitulo' | 'frase' | 'gancho'; duration?: number }[];
+  captions?: { at: number; text: string; kind: 'capitulo' | 'frase' | 'gancho' | 'cierre'; duration?: number }[];
   meta?: MomentMeta;
 }
 

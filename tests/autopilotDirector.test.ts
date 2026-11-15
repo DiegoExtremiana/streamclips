@@ -128,7 +128,7 @@ describe('director de edición en el piloto', () => {
       assert.ok(o.segments![0].start > Math.min(...o.segments!.map((x) => x.start)), 'el gancho viene de más adelante del directo');
       // rótulos: el aviso del gancho, una cartela por capítulo y la frase
       const titles = (o.effects ?? []).filter((x) => x.type === 'title');
-      assert.deepEqual(titles.map((t) => (t.type === 'title' ? t.kind : '')).sort(), ['capitulo', 'capitulo', 'capitulo', 'frase', 'gancho']);
+      assert.deepEqual(titles.map((t) => (t.type === 'title' ? t.kind : '')).sort(), ['capitulo', 'capitulo', 'capitulo', 'cierre', 'frase', 'gancho']);
       assert.match(o.description ?? '', /Todo iba bien/);
       assert.match(o.description ?? '', /0:00 Calentando\n\d+:\d\d La racha\n\d+:\d\d El final/, `capítulos en la descripción: ${o.description}`);
       assert.ok(fs.existsSync(o.files.long!));

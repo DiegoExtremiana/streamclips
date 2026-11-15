@@ -21,6 +21,7 @@ const assTime = (s: number): string => {
  * Rótulos en pantalla como los de los canales grandes, en un archivo ASS aparte de los subtítulos:
  *  - capitulo: cartela abajo a la izquierda con fondo, al empezar cada capítulo;
  *  - frase: una frase clave grande arriba en el centro;
+ *  - cierre: llamada final abajo en el centro («suscríbete…»), en los últimos segundos;
  *  - gancho: aviso del arranque («LO QUE PASÓ…»), arriba, en mayúsculas y color vivo.
  * Entran y salen con fundido. Nunca se solapan: si dos coinciden, el segundo empieza cuando acaba el primero.
  */
@@ -41,6 +42,7 @@ export function buildOverlayAss(items: Overlay[], w: number, h: number, fontFami
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
     style('Capitulo', Math.round(base * 1.1), '#FFFFFF', '#111111', true, 1, Math.round(h * 0.12)),
     style('Frase', Math.round(base * 1.25), '#FFFFFF', '#000000', false, 8, Math.round(h * 0.08)),
+    style('Cierre', Math.round(base * 1.15), '#FFFFFF', '#000000', true, 2, Math.round(h * 0.1)),
     style('Gancho', Math.round(base * 1.2), '#FFE14D', '#000000', false, 8, Math.round(h * 0.08)),
     '',
     '[Events]',
@@ -52,7 +54,7 @@ export function buildOverlayAss(items: Overlay[], w: number, h: number, fontFami
     const start = Math.max(o.start, lastEnd);
     const end = Math.max(start + 0.5, o.end);
     lastEnd = end;
-    const styleName = o.kind === 'capitulo' ? 'Capitulo' : o.kind === 'gancho' ? 'Gancho' : 'Frase';
+    const styleName = o.kind === 'capitulo' ? 'Capitulo' : o.kind === 'gancho' ? 'Gancho' : o.kind === 'cierre' ? 'Cierre' : 'Frase';
     const text = assEscape(o.kind === 'gancho' ? o.text.toLocaleUpperCase('es') : o.text);
     lines.push(`Dialogue: 1,${assTime(start)},${assTime(end)},${styleName},,0,0,0,,{\\fad(200,300)}${text}`);
   }

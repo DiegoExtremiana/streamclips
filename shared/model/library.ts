@@ -143,8 +143,8 @@ export interface DeleteResult {
  *  - punch: acercamiento breve a un momento clave (sube y baja suave).
  *  - fadeIn / fadeOut: fundido desde / a negro al principio / final.
  */
-export type TitleKind = 'capitulo' | 'frase' | 'gancho';
-export const TITLE_KINDS: readonly TitleKind[] = ['capitulo', 'frase', 'gancho'];
+export type TitleKind = 'capitulo' | 'frase' | 'gancho' | 'cierre';
+export const TITLE_KINDS: readonly TitleKind[] = ['capitulo', 'frase', 'gancho', 'cierre'];
 /** Rótulo en pantalla: de 1 a 8 segundos; 3 por defecto. */
 export const TITLE = { minDur: 1, maxDur: 8, defaultDur: 3, maxLen: 60 };
 

@@ -31530,7 +31530,7 @@ var VIDEO_ONLY_YOUTUBE = "Los v\xEDdeos solo se publican en YouTube; los clips p
 var sectionOf = (kind) => kind === "long" ? "videos" : "clips";
 var MAX_GROUP_DEPTH = 5;
 var MAX_GROUP_NAME_LEN = 60;
-var TITLE_KINDS = ["capitulo", "frase", "gancho"];
+var TITLE_KINDS = ["capitulo", "frase", "gancho", "cierre"];
 var TITLE = { minDur: 1, maxDur: 8, defaultDur: 3, maxLen: 60 };
 
 // shared/model/ipc.ts
@@ -32846,6 +32846,7 @@ function buildOverlayAss(items, w, h, fontFamily = "Inter") {
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     style("Capitulo", Math.round(base2 * 1.1), "#FFFFFF", "#111111", true, 1, Math.round(h * 0.12)),
     style("Frase", Math.round(base2 * 1.25), "#FFFFFF", "#000000", false, 8, Math.round(h * 0.08)),
+    style("Cierre", Math.round(base2 * 1.15), "#FFFFFF", "#000000", true, 2, Math.round(h * 0.1)),
     style("Gancho", Math.round(base2 * 1.2), "#FFE14D", "#000000", false, 8, Math.round(h * 0.08)),
     "",
     "[Events]",
@@ -32857,7 +32858,7 @@ function buildOverlayAss(items, w, h, fontFamily = "Inter") {
     const start = Math.max(o.start, lastEnd);
     const end = Math.max(start + 0.5, o.end);
     lastEnd = end;
-    const styleName = o.kind === "capitulo" ? "Capitulo" : o.kind === "gancho" ? "Gancho" : "Frase";
+    const styleName = o.kind === "capitulo" ? "Capitulo" : o.kind === "gancho" ? "Gancho" : o.kind === "cierre" ? "Cierre" : "Frase";
     const text = assEscape(o.kind === "gancho" ? o.text.toLocaleUpperCase("es") : o.text);
     lines.push(`Dialogue: 1,${assTime2(start)},${assTime2(end)},${styleName},,0,0,0,,{\\fad(200,300)}${text}`);
   }
@@ -39598,6 +39599,15 @@ function withTitles(effects, titles) {
   }
   return [...out, ...titles];
 }
+var CLIP_HOOK_SEC = 3;
+var HOOK_MAX_CHARS = 38;
+function withClipHook(effects, title, kept) {
+  const text = title.replace(/\s+/g, " ").trim();
+  const first = kept[0];
+  if (!text || !first || first.end - first.start < CLIP_HOOK_SEC + 2) return effects;
+  const short = text.length <= HOOK_MAX_CHARS ? text : `${text.slice(0, HOOK_MAX_CHARS - 1).replace(/\s+\S*$/, "")}\u2026`;
+  return withTitles(effects, [{ type: "title", at: first.start + 0.1, text: short, kind: "gancho", duration: CLIP_HOOK_SEC }]);
+}
 
 // shared/themes.ts
 var THEME_ROLES = ["gancho", "inicio", "desarrollo", "evolucion", "desenlace"];
@@ -40236,6 +40246,62 @@ async function judgeVisual(conf, words, judged, o) {
   return { judged: applyVisual(judged, found), looked: found.length, cached, dead, failed: failed || !found.length && todo.length > 0, error };
 }
 
+// electron/services/motionMeasure.ts
+var import_node_child_process5 = require("node:child_process");
+
+// shared/motion.ts
+function parseMotion(stderr, durationSec) {
+  let frozenSec = 0;
+  let open = null;
+  for (const m of stderr.matchAll(/freezedetect[^\]]*\]\s*(?:lavfi\.freezedetect\.)?freeze_(start|duration|end):\s*([\d.]+)/g)) {
+    if (m[1] === "start") open = Number(m[2]);
+    else if (m[1] === "duration") {
+      frozenSec += Number(m[2]);
+      open = null;
+    }
+  }
+  if (open !== null) frozenSec += Math.max(0, durationSec - open);
+  const changes = (stderr.match(/Parsed_showinfo[^\n]*pts_time:/g) ?? []).length;
+  return { durationSec, changes, frozenSec: Math.min(durationSec, frozenSec) };
+}
+function motionVerdict(id, m) {
+  const dur = Math.max(1, m.durationSec);
+  const frozen = m.frozenSec / dur;
+  const perMin = m.changes / dur * 60;
+  if (frozen >= 0.85 && perMin < 2) return { id, visual: 2, dead: true, note: `imagen casi quieta (${Math.round(frozen * 100)}% del tramo)` };
+  const visual = Math.round(Math.min(6.5, Math.max(3, 5 + Math.min(1.5, perMin / 10) - frozen * 2)) * 10) / 10;
+  const note = frozen >= 0.5 ? `imagen bastante quieta (${Math.round(frozen * 100)}%)` : perMin >= 8 ? `mucha acci\xF3n en pantalla (${Math.round(perMin)} cambios/min)` : "imagen con movimiento normal";
+  return { id, visual, dead: false, note };
+}
+var unseen = (judged) => judged.filter((j) => !j.visual && !j.judgement.discard);
+
+// electron/services/motionMeasure.ts
+function measureMotion(ffmpeg, file, start, end, timeoutMs = 9e4) {
+  const dur = Math.max(1, end - start);
+  return new Promise((resolve, reject) => {
+    (0, import_node_child_process5.execFile)(
+      ffmpeg,
+      ["-hide_banner", "-nostdin", "-ss", String(Math.max(0, start)), "-t", String(dur), "-i", file, "-an", "-vf", "scale=160:-2,fps=2,freezedetect=n=0.003:d=2,select='gt(scene,0.1)',showinfo", "-f", "null", "-"],
+      { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 },
+      (err, _out, stderr) => err && !stderr ? reject(err) : resolve(String(stderr))
+    );
+  });
+}
+async function measureUnseen(ffmpeg, file, judged, o = {}) {
+  const todo = unseen(judged).slice(0, o.max ?? 60);
+  const found = [];
+  for (const c of todo) {
+    o.signal?.();
+    const seg = c.judgement.trim ?? c;
+    try {
+      const raw = await measureMotion(ffmpeg, file, seg.start, seg.end);
+      found.push(motionVerdict(c.id, parseMotion(raw, seg.end - seg.start)));
+    } catch {
+    }
+  }
+  return { judged: applyVisual(judged, found), measured: found.length, dead: found.filter((v) => v.dead).length };
+}
+
 // electron/domain/pipeline/judge.ts
 var DEFAULT_QUALITY = 6.5;
 var MIN_SUMMARY_SEC = 150;
@@ -40273,6 +40339,14 @@ async function judgeAll(ctx) {
         judged = vr.judged;
         notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ""}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ""}.`);
       } else notes.push(`Sin vista del directo${vr?.error ? ` (${vr.error.split("\n")[0]})` : ""}: se eligi\xF3 por lo que se oye.`);
+      const mm = await measureUnseen(d.tools().ffmpeg, vod.filePath, judged, { signal: () => throwIfCancelled() }).catch((e) => {
+        if (isCancelled(e)) throw e;
+        return null;
+      });
+      if (mm && mm.measured) {
+        judged = mm.judged;
+        notes.push(`Imagen medida en ${mm.measured} candidatos m\xE1s${mm.dead ? ` (${mm.dead} con la imagen casi quieta descartados)` : ""}.`);
+      }
     }
   } catch (e) {
     if (isCancelled(e)) throw e;
@@ -40405,6 +40479,7 @@ var MAX_CHAPTERS = 8;
 var MAX_IDS_PER_CHAPTER = 6;
 var MAX_PHRASES = 8;
 var MAX_CANDIDATES = 40;
+var CLOSING_TEXT = "Suscr\xEDbete para no perderte el pr\xF3ximo directo";
 var r13 = (x) => Math.round(x * 10) / 10;
 var clean2 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 function directorCandidates(judged, words, sig) {
@@ -40538,6 +40613,8 @@ function directedCut(plan, candidates2, o) {
       for (const p of phraseBy.get(id) ?? []) captions.push({ at: c.start + p.at, text: p.text, kind: "frase", duration: 3 });
     });
   }
+  const lastSeg = segs[segs.length - 1];
+  if (lastSeg && lastSeg.end - lastSeg.start >= 8) captions.push({ at: r13(lastSeg.end - 5), text: CLOSING_TEXT, kind: "cierre", duration: 4.5 });
   const totalSec = total2();
   if (totalSec < Math.max(o.floorSec, o.minSec * 0.6)) return null;
   return { segs, labels, captions, totalSec, hookRepeats };
@@ -40830,6 +40907,7 @@ var renderPhase = async (ctx) => {
     let e = pro ? planEdit(words, m, editOpts) : null;
     const mood = e ? await musicFor(t.title, [m], false) : null;
     if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
+    if (e) e = { ...e, effects: withClipHook(e.effects, t.title, keptRanges(m.start, m.end, e.cuts)) };
     await step("clip", `clip ${i + 1}`, () => safely(Boolean(e), () => d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, cuts: e.cuts, effects: e.effects, ...subs }), () => d.clips.createClip(vod.id, { start: m.start, end: m.end, title: t.title, ...subs })), t, ctx.meta.get(m));
   }
   if (!ctx.created.length) throw new Error(`No se pudo montar ning\xFAn v\xEDdeo. ${ctx.errors.join(" ")}`);

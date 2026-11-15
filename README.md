@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.37.3
+
+- **Pantalla de «Empezamos pronto»**: los momentos de los primeros 10 minutos del directo se miran siempre con el modelo de visión, que descarta las pantallas de espera, para que ningún vídeo empiece con ellas.
+- **Identificación de voces**: corregido el fallo «External buffers are not allowed», que hacía que nunca funcionase y gastase varios minutos en cada análisis.
+
 ## Novedades de la v0.37.2
 
 - **El análisis ya no se rinde cuando el modelo de lenguaje está saturado**: si Gemini o Groq responden con un error de servidor (503), el programa espera y lo intenta de nuevo hasta tres veces. Antes fallaba al instante y el directo se quedaba sin resumen, sin temas y sin clips.

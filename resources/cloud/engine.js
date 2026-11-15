@@ -35505,7 +35505,7 @@ function sherpaEngine(segmentationModel, embeddingModel, threads = 2) {
     embed: (s) => {
       const st = ex.createStream();
       st.acceptWaveform({ sampleRate: SR, samples: s });
-      return Array.from(ex.compute(st));
+      return Array.from(ex.compute(st, false));
     }
   };
 }
@@ -40244,6 +40244,7 @@ async function judgeVisual(conf, words, judged, o) {
   const perCand = conf.provider === "groq" && !conf.baseUrl ? 2 : 3;
   const perReq = conf.provider === "groq" && !conf.baseUrl ? 2 : 5;
   const top = [...judged].filter((j) => !j.judgement.discard).sort((a, b) => b.total - a.total).slice(0, o.top ?? 14);
+  if (o.always) for (const c of judged.filter((j) => !j.judgement.discard && o.always(j) && !top.includes(j)).slice(0, 6)) top.push(c);
   let cache = {};
   try {
     cache = o.cacheFile ? JSON.parse(import_node_fs35.default.readFileSync(o.cacheFile, "utf8")) : {};
@@ -40359,6 +40360,7 @@ async function measureUnseen(ffmpeg, file, judged, o = {}) {
 // electron/domain/pipeline/judge.ts
 var DEFAULT_QUALITY = 6.5;
 var MIN_SUMMARY_SEC = 150;
+var START_SCREEN_SEC = 600;
 async function judgeAll(ctx) {
   const { host, vod, task, notes, words, pool } = ctx;
   const d = host.d;
@@ -40388,6 +40390,8 @@ async function judgeAll(ctx) {
         cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.visual.json`) : void 0,
         fetchFn: d.llmFetch,
         signal: () => throwIfCancelled(),
+        // lo que cae en los primeros 10 min se mira siempre: ahí está la pantalla de «Empezamos pronto», que el modelo marca como imagen muerta
+        always: (c) => c.start < START_SCREEN_SEC,
         // los fotogramas se sacan alrededor del pico de volumen del momento: ahí están los gestos y las reacciones
         peakAt: (seg) => {
           const e = ctx.sig.energyDb;

@@ -17,6 +17,8 @@ import type { Phase, RunContext } from './context';
 export const DEFAULT_QUALITY = 6.5;
 /** Un resumen de menos de esto no merece publicarse. */
 export const MIN_SUMMARY_SEC = 150;
+/** Arranque del directo: lo que empieza antes de esto se mira siempre por si es la pantalla de espera. */
+export const START_SCREEN_SEC = 600;
 
 /** 3c) El modelo de lenguaje lee los candidatos (y mira su imagen) y devuelve cada uno valorado; null si no pudo. */
 async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
@@ -50,6 +52,8 @@ async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
         cacheFile: d.judgeDir ? path.join(d.judgeDir, `${vod.id}.visual.json`) : undefined,
         fetchFn: d.llmFetch,
         signal: () => throwIfCancelled(),
+        // lo que cae en los primeros 10 min se mira siempre: ahí está la pantalla de «Empezamos pronto», que el modelo marca como imagen muerta
+        always: (c) => c.start < START_SCREEN_SEC,
         // los fotogramas se sacan alrededor del pico de volumen del momento: ahí están los gestos y las reacciones
         peakAt: (seg) => {
           const e = ctx.sig.energyDb;

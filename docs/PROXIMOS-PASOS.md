@@ -43,6 +43,12 @@ Análisis real de un directo de 183 min («Trilocke Día 1»): salieron solo 3 v
 
 Para acelerar de verdad: probar Whisper «small» o una compilación con GPU; es más ganancia que todo lo demás junto.
 
+## Hecho en la 0.37.3 (sin comprobar en el equipo de Diego)
+
+- Mejora 1 (pantalla de espera): se resolvió de otra forma a la descrita abajo, porque esa pantalla suele llevar música y no se detecta por silencio. `judgeVisual` tiene la opción `always` y `judge.ts` le pasa los candidatos que empiezan antes de `START_SCREEN_SEC` (600 s); el modelo de visión ya marca «muerta» una pantalla de espera. Límite: sin modelo de visión (o si falla) no hay protección. Comprobar en un análisis real que la nota «Vista del directo» ya no dice «0 momentos mirados».
+- Voces: `ex.compute(st, false)` en `electron/services/diarize.ts` (sin búfer externo). Si el error sigue, mirar si `sd.process` también devuelve búferes externos.
+- Descartado por ahora: montar en paralelo (ffmpeg ya usa todos los núcleos; la ganancia es pequeña y el riesgo, medio). El tiempo se va en Whisper.
+
 ## Mejoras, por orden
 
 ### 1. Descartar la pantalla de «Empezamos pronto» y las pausas (pequeño, hacer primero)

@@ -48,7 +48,7 @@ export interface DiarizeEngine {
 
 type Sherpa = {
   OfflineSpeakerDiarization: new (c: unknown) => { process(s: Float32Array): { start: number; end: number; speaker: number }[] };
-  SpeakerEmbeddingExtractor: new (c: unknown) => { createStream(): { acceptWaveform(w: { sampleRate: number; samples: Float32Array }): void }; compute(s: unknown): Float32Array };
+  SpeakerEmbeddingExtractor: new (c: unknown) => { createStream(): { acceptWaveform(w: { sampleRate: number; samples: Float32Array }): void }; compute(s: unknown, enableExternalBuffer?: boolean): Float32Array };
   readWave(file: string): { sampleRate: number; samples: Float32Array };
 };
 
@@ -137,7 +137,8 @@ export function sherpaEngine(segmentationModel: string, embeddingModel: string, 
     embed: (s) => {
       const st = ex.createStream();
       st.acceptWaveform({ sampleRate: SR, samples: s });
-      return Array.from(ex.compute(st));
+      // sin búfer externo: Electron no admite los búferes externos de los módulos nativos («External buffers are not allowed»)
+      return Array.from(ex.compute(st, false));
     },
   };
 }

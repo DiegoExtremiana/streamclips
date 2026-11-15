@@ -36,6 +36,8 @@ export interface VisualOpts {
   cacheFile?: string;
   /** Cuántos de los mejores momentos se miran. */
   top?: number;
+  /** Momentos que se miran siempre aunque no estén entre los mejores (p. ej. los del arranque del directo, por la pantalla de espera). */
+  always?: (c: Judged) => boolean;
   fetchFn?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   paceMs?: number;
@@ -66,6 +68,7 @@ export async function judgeVisual(conf: LlmConfig, words: Word[], judged: Judged
   const perCand = conf.provider === 'groq' && !conf.baseUrl ? 2 : 3;
   const perReq = conf.provider === 'groq' && !conf.baseUrl ? 2 : 5;
   const top = [...judged].filter((j) => !j.judgement.discard).sort((a, b) => b.total - a.total).slice(0, o.top ?? 14);
+  if (o.always) for (const c of judged.filter((j) => !j.judgement.discard && o.always!(j) && !top.includes(j)).slice(0, 6)) top.push(c);
   let cache: Record<string, VisualJudgement> = {};
   try {
     cache = o.cacheFile ? (JSON.parse(fs.readFileSync(o.cacheFile, 'utf8')) as Record<string, VisualJudgement>) : {};

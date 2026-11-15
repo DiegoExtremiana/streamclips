@@ -2,6 +2,13 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.34.0
+
+- **Editor de YouTube más completo:** los clips verticales llevan el título como gancho en pantalla en los 3 primeros segundos y los vídeos largos acaban con una pantalla final («Suscríbete para no perderte el próximo directo»).
+- **Imagen de todos los candidatos:** el modelo con visión sigue mirando los mejores; el resto se mide con ffmpeg (imagen quieta o con acción) y esa medida entra en la nota.
+- **Cortar un clip:** atajos (espacio, flechas ±5 s, I y O para marcar inicio y fin) y clic en el chat para ir a ese momento.
+- **Clips de Twitch:** nuevo filtro «Modificados» con los clips cuya nota has corregido tú.
+
 ## Novedades de la v0.33.0
 
 - **Director de edición para YouTube** (Ajustes › Piloto automático › Edita): con los momentos ya valorados, el modelo decide la estructura del vídeo largo como un editor: un **gancho** de 5-20 s con lo más fuerte al principio (y ese momento vuelve entero en su sitio), **capítulos** con sentido y ritmo (3 a 8), un **cierre**, **rótulos en pantalla** (cartela de cada capítulo, frases clave, aviso del gancho), el **título**, la **descripción con capítulos** y la **frase de la miniatura**. Decide con lo que se dice, lo que se ve (nota de imagen), el volumen y el chat, y respeta la duración del perfil de estilo (10-15 min por defecto). Si no hay material o el modelo falla, se monta el resumen de mejores momentos de siempre. El plan se guarda por directo para no gastar modelo al repetir el análisis.

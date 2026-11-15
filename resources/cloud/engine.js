@@ -37167,6 +37167,7 @@ function resolveModel(provider, model) {
 }
 var MIN_INTERVAL_MS = { groq: 14e3, gemini: 4e3 };
 var TIMEOUT_MS = 9e4;
+var SERVER_BACKOFF_MS = process.env.NODE_TEST_CONTEXT ? [5, 5, 5] : [6e3, 15e3, 3e4];
 function extractJson(text) {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
   const body = (fenced ? fenced[1] : text).trim();
@@ -37214,6 +37215,10 @@ async function askJson(cfg, system, user, d = {}) {
     if (res.status === 429 && attempt < 4) {
       const wait2 = Math.min(90, Number(res.headers.get("retry-after")) || 15 * (attempt + 1));
       await sleep(wait2 * 1e3);
+      continue;
+    }
+    if (res.status >= 500 && res.status <= 504 && attempt < SERVER_BACKOFF_MS.length) {
+      await sleep(SERVER_BACKOFF_MS[Math.min(attempt, SERVER_BACKOFF_MS.length - 1)]);
       continue;
     }
     if (res.status === 401 || res.status === 403) throw new Error("El modelo de lenguaje rechaz\xF3 la clave. Rev\xEDsala en Ajustes.");
@@ -40366,6 +40371,10 @@ async function judgeAll(ctx) {
       onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
       signal: () => throwIfCancelled()
     });
+    if (r2.failedChunks && r2.judged.length < pool.length / 2) {
+      notes.push(`Selecci\xF3n inteligente incompleta: el modelo de lenguaje solo valor\xF3 ${r2.judged.length} de ${pool.length} candidatos (${r2.failedChunks} lote(s) sin respuesta); se us\xF3 el volumen y el chat.`);
+      return null;
+    }
     judged = r2.judged;
     notes.push(`Selecci\xF3n inteligente: ${r2.judged.length} candidatos valorados${r2.cached ? ` (${r2.cached} ya estaban guardados)` : ""}${r2.failedChunks ? `, ${r2.failedChunks} lote(s) sin respuesta` : ""}.`);
     if (host.cfg.vodVision !== false && vod.filePath && import_node_fs36.default.existsSync(vod.filePath)) {
@@ -41117,6 +41126,10 @@ var studioPhase = async (ctx) => {
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: "tema", title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
   if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
   notes.push(`Estudio de edici\xF3n: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? "" : " (sin respuesta)"}: ${a.note}`).join(" ")}`);
+  if ((ctx.directed || ctx.topicLongs.length) && ctx.mains.length) {
+    notes.push(`Se omiten ${ctx.mains.length} v\xEDdeo(s) de tramo seguido: ya hay resumen o v\xEDdeos por tema.`);
+    ctx.mains = [];
+  }
   if (file) {
     const project = { version: 1, vodId: vod.id, createdAt: (/* @__PURE__ */ new Date()).toISOString(), outputs, agents };
     try {

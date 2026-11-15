@@ -6,6 +6,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 - **Varias IAs a la vez**: en Ajustes, además de la IA principal, se pueden añadir hasta tres «IAs de apoyo» con su propia clave gratuita. Si una está saturada o sin cuota, la siguiente toma el relevo, y el trabajo se reparte: las imágenes las mira Gemini si está entre ellas, y la valoración de momentos la hace Groq si está.
 - **Cada IA con sus funciones claras**: una tabla «Quién hace qué» en Ajustes enseña qué IA hace cada tarea y cuál es su relevo. Gemini mira las imágenes, decide la estructura del resumen y hace de jefe de edición; Groq valora los momentos y lleva los editores de humor y ritmo; Mistral, si está, busca los temas y escribe títulos y descripciones.
+- **Los editores trabajan como un equipo**: primero los de ritmo, humor y temas, a la vez; después se reúnen y sus conclusiones llegan al editor de historia, que monta el resumen sabiendo qué es lo más gracioso y qué temas tendrán vídeo propio. Si el jefe de edición no aprueba el montaje, lo devuelve con sus correcciones y se rehace una vez. Cuando la IA de un editor falla, otra lo cubre y queda anotado en el análisis. Todos comparten el mismo objetivo: contenido para YouTube y redes que se vea hasta el final.
 - Dos proveedores gratuitos nuevos: **Mistral** y **OpenRouter**, con su guía paso a paso para conseguir la clave.
 
 ## Novedades de la v0.37.4

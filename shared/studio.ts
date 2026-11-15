@@ -18,8 +18,8 @@ import type { Seg } from './highlights';
  * del momento, duraciones mínimas.
  */
 
-export type AgentId = 'historia' | 'ritmo' | 'humor' | 'jefe';
-export const AGENT_LABEL: Record<AgentId, string> = { historia: 'Editor de historia', ritmo: 'Editor de ritmo', humor: 'Editor de humor', jefe: 'Jefe de edición' };
+export type AgentId = 'historia' | 'ritmo' | 'humor' | 'jefe' | 'equipo';
+export const AGENT_LABEL: Record<AgentId, string> = { historia: 'Editor de historia', ritmo: 'Editor de ritmo', humor: 'Editor de humor', jefe: 'Jefe de edición', equipo: 'Equipo' };
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '').replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) : '');
@@ -27,6 +27,32 @@ const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v));
 const list = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === 'object') as Record<string, unknown>[]) : []);
 
 const brief = (c: DirectorCandidate) => ({ id: c.id, dur: r1(c.end - c.start), nota: c.total, tipo: c.kind, titulo: c.title, ...(c.visual ? { imagen: `${c.visual.score}/10: ${c.visual.note}` } : {}), ...(c.energy !== undefined ? { volumen: c.energy } : {}), ...(c.chatPerMin !== undefined ? { chat: c.chatPerMin } : {}), texto: c.text });
+
+// ───────────────────────── Trabajo en equipo ─────────────────────────
+
+/**
+ * Los editores trabajan como un estudio: primero ritmo, humor y temas a la vez; luego se REÚNEN (sus conclusiones se pasan
+ * al editor de historia, que monta el resumen sabiendo lo que han visto sus compañeros); el jefe revisa y, si no lo aprueba,
+ * devuelve el montaje al editor de historia con sus correcciones (una vuelta). Si la IA de un editor falla, otra lo cubre.
+ */
+export const EQUIPO_BRIEF =
+  ' Trabajas dentro de un estudio de vídeo profesional que produce contenido para YouTube y redes sociales (Shorts, TikTok, Reels) a partir de directos de Twitch. ' +
+  'Objetivo común del equipo: que el espectador que no vio el directo se quede hasta el final (retención), con un arranque que enganche en los primeros segundos, ritmo sin tiempos muertos, cortes que se entiendan y un final que remate. ' +
+  'Tus compañeros son el editor de historia, el de ritmo, el de humor, el de temas y el jefe de edición: céntrate en tu parte y ten en cuenta lo que te digan.';
+
+/** Lo que los compañeros le cuentan al editor de historia antes de montar el resumen. */
+export function teamNotes(o: { funny: { sceneId: string; title: string; fun: number }[]; themes: { title: string; sceneIds: string[] }[]; trimmed: number }): string {
+  const lines: string[] = [];
+  if (o.funny.length) lines.push(`Editor de humor: lo que más gracia hace está en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` («${f.title}», ${f.fun}/10)` : ''}`).join(', ')}. Son buenos candidatos para el gancho y para rematar capítulos.`);
+  for (const t of o.themes) if (t.sceneIds.length) lines.push(`Editor de temas: va a hacer un vídeo propio sobre «${t.title}» con ${t.sceneIds.join(', ')}. En el resumen no gastes todo ese tema: quédate como mucho con su mejor escena.`);
+  if (o.trimmed) lines.push(`Editor de ritmo: ya ha quitado el aire de ${o.trimmed} escena(s); no hace falta que evites las largas por miedo a los tiempos muertos.`);
+  return lines.length ? `\nNOTAS DE TU EQUIPO (tenlas en cuenta al decidir):\n- ${lines.join('\n- ')}` : '';
+}
+
+/** Vuelta de correcciones: lo que el jefe de edición le pide al editor de historia. */
+export function revisionNote(review: ChiefReview): string {
+  return `\nCORRECCIONES DEL JEFE DE EDICIÓN (rehaz el montaje aplicándolas): ${review.notes || 'el montaje no convence'}${review.drop.length ? ` Quita o sustituye: ${review.drop.join(', ')}.` : ''}`;
+}
 
 // ───────────────────────── Escenas con contexto ─────────────────────────
 

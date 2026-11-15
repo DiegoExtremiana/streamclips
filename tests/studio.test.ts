@@ -72,3 +72,15 @@ test('tramos mudos: se mide la parte en silencio de un tramo', async () => {
   assert.ok(silentShare(e, { start: 80, end: 120 }) >= MUTED_SHARE);
   assert.equal(silentShare(undefined, { start: 0, end: 10 }), 0);
 });
+
+test('equipo: las notas de los compañeros y las correcciones del jefe llegan al editor de historia', async () => {
+  const { teamNotes, revisionNote } = await import('../shared/studio');
+  const n = teamNotes({ funny: [{ sceneId: 'e3', title: 'El cubo', fun: 9 }], themes: [{ title: 'Política', sceneIds: ['e2', 'e5'] }, { title: 'Vacío', sceneIds: [] }], trimmed: 2 });
+  assert.match(n, /NOTAS DE TU EQUIPO/);
+  assert.match(n, /Editor de humor: .*e3 \(«El cubo», 9\/10\)/);
+  assert.match(n, /Editor de temas: .*«Política» con e2, e5/);
+  assert.doesNotMatch(n, /Vacío/);
+  assert.match(n, /Editor de ritmo: .*2 escena/);
+  assert.equal(teamNotes({ funny: [], themes: [], trimmed: 0 }), '');
+  assert.match(revisionNote({ approved: false, drop: ['e4'], title: '', coverText: '', notes: 'El final no remata' }), /CORRECCIONES DEL JEFE DE EDICIÓN.*El final no remata.*e4/);
+});

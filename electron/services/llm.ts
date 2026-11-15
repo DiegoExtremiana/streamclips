@@ -73,6 +73,8 @@ export interface LlmConfig {
 }
 
 export interface LlmDeps {
+  /** Se llama cuando la respuesta la dio una IA de relevo: quién respondió y a quién cubría. */
+  onRelay?: (by: LlmProvider, covered: LlmProvider) => void;
   fetchFn?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   /** Por defecto 0.4; para valorar se usa algo más bajo (respuestas más estables). */
@@ -110,7 +112,9 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
   const chain = chainOf(cfg);
   for (let i = 0; ; i++) {
     try {
-      return await askOne(chain[i], system, user, d);
+      const r = await askOne(chain[i], system, user, d);
+      if (i > 0) d.onRelay?.(chain[i].provider, chain[0].provider);
+      return r;
     } catch (e) {
       // con otra IA de relevo, se le pasa la pregunta; sin ella, el error es el de la última
       if ((e as Error).name === 'CancelledError' || i >= chain.length - 1) throw e;

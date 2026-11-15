@@ -3,6 +3,7 @@ import path from 'node:path';
 import { DIRECTOR_SYSTEM, HOOK, directedCut, directorCandidates, directorPrompt, parseDirectorPlan, type DirectorPlan } from '../../../shared/director';
 import {
   AGENT_LABEL,
+  EQUIPO_BRIEF,
   HISTORIA_EXTRA,
   HUMOR_SYSTEM,
   JEFE_SYSTEM,
@@ -15,11 +16,13 @@ import {
   parseFunny,
   parseTrims,
   rebasePlan,
+  revisionNote,
   ritmoPrompt,
   SCENE,
   sceneCandidate,
   sceneSpans,
   sumSec,
+  teamNotes,
   type AgentId,
   type ChiefReview,
   type FunnyClip,
@@ -32,14 +35,14 @@ import { judgeText, type Judged } from '../../../shared/judge';
 import { decideFormat, type ThemeProposal } from '../../../shared/themes';
 import os from 'node:os';
 import { askJson, forTask, visionConfig } from '../../services/llm';
-import type { AiTask } from '../../../shared/llmRoles';
+import { AI_LABEL, type AiTask } from '../../../shared/llmRoles';
 import { vodFrame } from '../../services/visualJudge';
 import { isCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
 import { directorPhase, singleCategory } from './director';
 import type { Phase } from './context';
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 /** Material de escenas que se prepara (y se transcribe con su contexto), en veces la duración máxima del resumen. */
 const SCENE_BUDGET = 2.5;
 /** Fotogramas que ve el jefe de edición (uno por escena, desde el principio del montaje). */
@@ -178,35 +181,50 @@ export const studioPhase: Phase = async (ctx) => {
     return (e as Error).message.split('\n')[0];
   };
   // cada editor pregunta a su IA titular (shared/llmRoles.ts); las demás quedan de relevo
-  const ask = (system: string, user: string, temperature: number, who: AiTask) => askJson(forTask(conf, who), system, user, { fetchFn: d.llmFetch, temperature });
+  const relays = new Set<string>();
+  const ask = (system: string, user: string, temperature: number, who: AiTask) =>
+    askJson(forTask(conf, who), system + EQUIPO_BRIEF, user, { fetchFn: d.llmFetch, temperature, onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubrió a ${AI_LABEL[covered]}`) });
 
   let plan: DirectorPlan | null = saved?.plan ?? null;
   let trims: Trim[] = saved?.trims ?? [];
   let clips: FunnyClip[] = saved?.clips ?? [];
   let review: ChiefReview | null = saved?.review ?? null;
+  const historiaSystem = useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM;
+  let historiaPrompt = '';
 
   if (!saved) {
-    // los tres editores trabajan a la vez sobre los mismos momentos
-    const [rPlan, rTrims, rClips] = await Promise.allSettled([
-      wantLong
-        ? ask(
-            useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM,
-            directorPrompt({
-              vodTitle: vod.title ?? '',
-              dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }),
-              categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
-              minSec: style.longMinSec,
-              maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
-              candidates: cands,
-              style: { titleStyle: style.titleStyle, lore: style.lore },
-            }),
-            0.3,
-            'story',
-          ).then((raw) => parseDirectorPlan(raw, cands))
-        : Promise.resolve(null),
+    // 1) ritmo, humor y temas trabajan a la vez sobre los mismos momentos
+    const [rTrims, rClips, rThemes] = await Promise.allSettled([
       wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, 'humor').then((raw) => parseTrims(raw, cands)) : Promise.resolve([] as Trim[]),
       wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, 'humor').then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([] as FunnyClip[]),
+      themesJob,
     ]);
+    // 2) reunión: lo que han visto los compañeros se le pasa al editor de historia antes de que monte el resumen
+    const sceneOf = (t: Seg) => cands.find((c) => t.start < c.end && t.end > c.start)?.id;
+    const funnyNow = rClips.status === 'fulfilled' ? rClips.value : [];
+    const themesNow = rThemes.status === 'fulfilled' && 'v' in rThemes.value ? rThemes.value.v : [];
+    const candIds = new Set(cands.map((c) => c.id));
+    const briefing = teamNotes({
+      funny: funnyNow.flatMap((f) => {
+        const id = sceneOf(f);
+        return id ? [{ sceneId: id, title: f.title, fun: f.fun }] : [];
+      }).slice(0, 6),
+      themes: themesNow.map((t) => ({ title: t.title, sceneIds: [...new Set(t.pieces.map((p) => p.id).filter((id) => candIds.has(id)))] })),
+      trimmed: rTrims.status === 'fulfilled' ? rTrims.value.length : 0,
+    });
+    historiaPrompt =
+      directorPrompt({
+        vodTitle: vod.title ?? '',
+        dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }),
+        categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
+        minSec: style.longMinSec,
+        maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
+        candidates: cands,
+        style: { titleStyle: style.titleStyle, lore: style.lore },
+      }) + briefing;
+    if (briefing) say('equipo', true, `Reunión de edición: el editor de historia montó el resumen con las notas de ${[funnyNow.length ? 'humor' : '', themesNow.length ? 'temas' : '', rTrims.status === 'fulfilled' && rTrims.value.length ? 'ritmo' : ''].filter(Boolean).join(', ')}.`);
+    // 3) el editor de historia monta el resumen
+    const [rPlan] = await Promise.allSettled([wantLong ? ask(historiaSystem, historiaPrompt, 0.3, 'story').then((raw) => parseDirectorPlan(raw, cands)) : Promise.resolve(null)]);
     if (rPlan.status === 'fulfilled') plan = rPlan.value;
     else say('historia', false, fail(rPlan.reason));
     if (rTrims.status === 'fulfilled') trims = rTrims.value;
@@ -251,8 +269,28 @@ export const studioPhase: Phase = async (ctx) => {
         say('jefe', false, fail(e));
       }
     }
+    // 4) vuelta de correcciones: si el jefe no aprueba el montaje, vuelve al editor de historia con sus notas (una sola vez)
+    let revised = false;
+    if (cut && review && !review.approved && !saved && historiaPrompt) {
+      task.update(68, 'Estudio de edición: el editor de historia aplica las correcciones del jefe…');
+      try {
+        const again = parseDirectorPlan(await ask(historiaSystem, historiaPrompt + revisionNote(review), 0.3, 'story'), cands);
+        const p2 = again ? rebasePlan(again, trims, HOOK.minSec) : null;
+        const cut2 = p2 ? directedCut(p2, trimmed, limits) : null;
+        if (again && p2 && cut2) {
+          plan = again;
+          p = p2;
+          cut = cut2;
+          revised = true;
+          say('equipo', true, `Vuelta de correcciones: el jefe no aprobó el primer montaje («${review.notes || 'sin motivo'}») y el editor de historia lo rehízo.`);
+          review = { ...review, approved: true, drop: [] };
+        }
+      } catch (e) {
+        if (isCancelled(e)) throw e;
+      }
+    }
     let dropped = 0;
-    if (cut && review) {
+    if (cut && review && !revised) {
       const applied = applyChief(p, review);
       const cut2 = directedCut(applied.plan, trimmed, limits);
       // si al quitar lo que dice el jefe el vídeo se queda corto, manda el montaje original
@@ -305,6 +343,7 @@ export const studioPhase: Phase = async (ctx) => {
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: 'tema', title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
 
   if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length - spare.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material)${spare.length ? `; ${spare.length} momentos más flojos se dejaron sin contexto para no alargar la transcripción` : ''}.`);
+  if (relays.size) say('equipo', true, `Relevos entre IAs: ${[...relays].join('; ')}.`);
   notes.push(`Estudio de edición: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? '' : ' (sin respuesta)'}: ${a.note}`).join(' ')}`);
   // con resumen dirigido o vídeos por tema, sobran los tramos seguidos «Parte N»: no tienen un tema como centro
   if ((ctx.directed || ctx.topicLongs.length) && ctx.mains.length) {

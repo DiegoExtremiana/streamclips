@@ -13,7 +13,14 @@ export interface Settings {
   autopilot: AutopilotSettings;
 }
 
-export type LlmChoice = 'none' | 'groq' | 'gemini';
+export type LlmChoice = 'none' | 'groq' | 'gemini' | 'openrouter' | 'mistral';
+/** Una IA de apoyo: otra cuenta gratuita que toma el relevo o se reparte el trabajo con la principal. */
+export interface LlmSlot {
+  provider: Exclude<LlmChoice, 'none'>;
+  model: string;
+  apiKey: string;
+}
+export const MAX_LLM_SLOTS = 3;
 
 /** Lo que el programa hace solo cuando termina un directo. */
 export interface AutopilotSettings {
@@ -75,6 +82,8 @@ export interface AutopilotSettings {
   /** Cuántos directos se analizan a la vez (1 a 4). Por defecto 2. */
   parallel?: number;
   llm: { provider: LlmChoice; model: string; apiKey: string };
+  /** IAs de apoyo (hasta 3), además de la principal. */
+  llmExtra?: LlmSlot[];
 }
 
 export interface SettingsPatch {

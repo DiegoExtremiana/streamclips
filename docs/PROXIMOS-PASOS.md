@@ -55,6 +55,14 @@ Para acelerar de verdad: probar Whisper «small» o una compilación con GPU; es
 - Mejora 3: el jefe de edición recibe hasta `JEFE_FRAMES` (5) fotogramas, uno por escena desde el principio del montaje (`JEFE_VE`). Si la petición con imágenes falla, revisa solo con texto. Pendiente: repartir los fotogramas por todo el vídeo cuando el proveedor admita más de 5 (Gemini).
 - Siguientes: mejora 4 (vista previa del plan), temas en todas las categorías de Twitch, y decidir con Diego si Whisper pasa a «small».
 
+## Varias IAs (v0.38.0)
+
+Diego solo podía elegir una IA. Ahora: `autopilot.llmExtra` (hasta `MAX_LLM_SLOTS` = 3 huecos, `shared/model/settings.ts`), validado y cifrado en `electron/domain/settings.ts`, y `llmConf()` (`autopilot.ts`) devuelve la principal con `fallbacks`. `askJson` (`electron/services/llm.ts`) prueba la cadena en orden; `prefer(cfg, 'groq')` pone Groq delante para valorar (`pipeline/judge.ts`) y `visionConfig` deja solo las que ven imágenes con Gemini delante. Proveedores nuevos: `openrouter` (modelo `openrouter/free`) y `mistral` (`mistral-small-latest`); **sus modelos por defecto no se han probado con una clave real**. Tests: `tests/llmFallback.test.ts`.
+
+Pendiente aquí: que la valoración de clips de Twitch (`electron/app/wiring/clipScores.ts`) y el motor de la nube (`engine.ts`) usen también los relevos; repartir a los editores del estudio entre IAs distintas a la vez (hoy van todos a la principal y solo cambian si falla); un panel con la cuota gastada de cada IA.
+
+Claude dentro del programa: la API de Claude es de pago (no hay plan gratuito), así que choca con la regla de «todo gratis». No se ha añadido. Si Diego decide pagar créditos de API, es un proveedor más con otro formato de petición (no es compatible con `/chat/completions` tal cual).
+
 ## Mejoras, por orden
 
 ### 1. Descartar la pantalla de «Empezamos pronto» y las pausas (pequeño, hacer primero)

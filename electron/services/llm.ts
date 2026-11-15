@@ -1,14 +1,42 @@
-export type LlmProvider = 'groq' | 'gemini';
+export type LlmProvider = 'groq' | 'gemini' | 'openrouter' | 'mistral';
 
-export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string; /** Modelo que entiende imágenes (el de texto de Groq no). */ visionModel?: string }> = {
+export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string; /** Modelo que entiende imágenes (el de texto de Groq no). */ visionModel?: string; /** El modelo de texto ya ve imágenes. */ sees?: boolean }> = {
   groq: { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'openai/gpt-oss-120b', visionModel: 'qwen/qwen3.8-27b' },
-  gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.5-flash-lite' },
+  gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.5-flash-lite', sees: true },
+  // OpenRouter: «openrouter/free» reparte entre los modelos gratuitos que haya en cada momento (no se garantiza que vean imágenes)
+  openrouter: { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', defaultModel: 'openrouter/free' },
+  // Mistral: plan gratuito «Experiment» de La Plateforme
+  mistral: { label: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', defaultModel: 'mistral-small-latest' },
 };
 
-/** La misma cuenta pero con un modelo que ve imágenes (Gemini ya lo hace; Groq usa su modelo con visión). */
+/** Todas las IAs configuradas, en orden: la principal y sus relevos. */
+export function chainOf(cfg: LlmConfig): LlmConfig[] {
+  const { fallbacks, ...main } = cfg;
+  return [main, ...(fallbacks ?? []).map(({ fallbacks: _f, ...c }) => c)];
+}
+
+const fromChain = (chain: LlmConfig[]): LlmConfig => (chain.length > 1 ? { ...chain[0], fallbacks: chain.slice(1) } : chain[0]);
+
+/** La misma configuración pero empezando por el proveedor indicado si está entre las IAs (el resto queda de relevo). */
+export function prefer(cfg: LlmConfig, provider: LlmProvider): LlmConfig {
+  const chain = chainOf(cfg);
+  const first = chain.filter((c) => c.provider === provider);
+  return first.length ? fromChain([...first, ...chain.filter((c) => c.provider !== provider)]) : cfg;
+}
+
+/**
+ * Las IAs que ven imágenes, con Gemini por delante (admite más imágenes por petición); Groq usa su modelo con visión.
+ * Si ninguna de las configuradas ve, se devuelve la principal tal cual (y la petición con imágenes fallará con su aviso).
+ */
 export function visionConfig(cfg: LlmConfig): LlmConfig {
-  const m = LLM_PROVIDERS[cfg.provider].visionModel;
-  return m && !cfg.baseUrl ? { ...cfg, model: m } : cfg;
+  const one = (c: LlmConfig): LlmConfig | null => {
+    if (c.baseUrl) return c;
+    const p = LLM_PROVIDERS[c.provider];
+    return p.visionModel ? { ...c, model: p.visionModel } : p.sees ? c : null;
+  };
+  const chain = chainOf(cfg).map(one).filter((c): c is LlmConfig => c !== null);
+  if (!chain.length) return cfg;
+  return fromChain([...chain.filter((c) => c.provider === 'gemini'), ...chain.filter((c) => c.provider !== 'gemini')]);
 }
 
 /** Modelos que ya no existen: se sustituyen por el recomendado (Google retiró los Gemini 1.5 y 2.0 en 2026). */
@@ -22,7 +50,7 @@ export function resolveModel(provider: LlmProvider, model: string): string {
 }
 
 /** Pausa mínima entre dos peticiones seguidas para no pasar el límite gratuito por minuto (Groq: 12.000 tokens/min en el modelo grande). */
-export const MIN_INTERVAL_MS: Record<LlmProvider, number> = { groq: 14_000, gemini: 4_000 };
+export const MIN_INTERVAL_MS: Record<LlmProvider, number> = { groq: 14_000, gemini: 4_000, openrouter: 6_000, mistral: 3_000 };
 
 export interface LlmConfig {
   provider: LlmProvider;
@@ -30,6 +58,8 @@ export interface LlmConfig {
   apiKey: string;
   /** Solo pruebas. */
   baseUrl?: string;
+  /** Otras IAs que toman el relevo, en orden, cuando esta falla (saturada, sin cuota, sin respuesta). */
+  fallbacks?: LlmConfig[];
 }
 
 export interface LlmDeps {
@@ -67,6 +97,18 @@ export function extractJson(text: string): unknown {
 
 /** Una pregunta a un modelo con API compatible con OpenAI (Groq y Gemini la ofrecen gratis con límites). Devuelve JSON. */
 export async function askJson(cfg: LlmConfig, system: string, user: string, d: LlmDeps = {}): Promise<unknown> {
+  const chain = chainOf(cfg);
+  for (let i = 0; ; i++) {
+    try {
+      return await askOne(chain[i], system, user, d);
+    } catch (e) {
+      // con otra IA de relevo, se le pasa la pregunta; sin ella, el error es el de la última
+      if ((e as Error).name === 'CancelledError' || i >= chain.length - 1) throw e;
+    }
+  }
+}
+
+async function askOne(cfg: LlmConfig, system: string, user: string, d: LlmDeps = {}): Promise<unknown> {
   if (!cfg.apiKey) throw new Error('Falta la clave del modelo de lenguaje (Ajustes > Piloto automático).');
   const fetchFn = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));

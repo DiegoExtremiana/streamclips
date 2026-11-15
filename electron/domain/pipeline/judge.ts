@@ -11,6 +11,7 @@ import { judgeVisual } from '../../services/visualJudge';
 import { measureUnseen } from '../../services/motionMeasure';
 import { loadEdits, loadPrefs, saveSnapshot } from '../../services/momentStore';
 import { isCancelled, throwIfCancelled } from '../../services/abort';
+import { prefer } from '../../services/llm';
 import type { Phase, RunContext } from './context';
 
 /** Notas mínimas (0-10) para que un momento entre: el modelo puntúa 5 lo normal, 7 lo bueno. Antes un vídeo corto y bueno que uno largo con relleno. */
@@ -27,7 +28,8 @@ async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
   const llmConf = ctx.llmConf!;
   let judged: Judged[] | null = null;
   try {
-    const r = await judgeCandidates(llmConf, words, pool, {
+    // la valoración son muchas peticiones cortas: si hay una cuenta de Groq entre las IAs va primero (es la más rápida) y las demás de relevo
+    const r = await judgeCandidates(prefer(llmConf, 'groq'), words, pool, {
       fetchFn: d.llmFetch,
       cacheFile: d.judgeDir ? path.join(d.judgeDir, `${vod.id}.json`) : undefined,
       onProgress: (done, total) => task.update(56 + (total ? (done / total) * 4 : 4), `Valorando candidatos (${done}/${total})…`),

@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.38.0
+
+- **Varias IAs a la vez**: en Ajustes, además de la IA principal, se pueden añadir hasta tres «IAs de apoyo» con su propia clave gratuita. Si una está saturada o sin cuota, la siguiente toma el relevo, y el trabajo se reparte: las imágenes las mira Gemini si está entre ellas, y la valoración de momentos la hace Groq si está.
+- Dos proveedores gratuitos nuevos: **Mistral** y **OpenRouter**, con su guía paso a paso para conseguir la clave.
+
 ## Novedades de la v0.37.4
 
 - **Análisis más corto**: el contexto de las escenas solo se transcribe en las mejores (hasta dos veces y media la duración del resumen). Los momentos más flojos siguen sirviendo para clips y temas, pero ya no alargan la transcripción.

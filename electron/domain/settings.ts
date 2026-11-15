@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import { ALL_PLATFORMS, MASKED_SECRET } from '../../shared/types';
 import type { AutopilotSettings, Settings, SettingsPatch } from '../../shared/types';
 import { isSubtitleStyleId } from '../../shared/subtitles';
+import { MAX_LLM_SLOTS, type LlmSlot } from '../../shared/model/settings';
 import type { Store } from '../services/store';
 import type { Secrets } from '../services/secrets';
 import { isAbsoluteAnyOs, stripQuotes } from '../services/files';
 import { normalizeLogin, type TwitchCreds } from '../services/twitch';
+
+const LLM_NAMES: string[] = ['groq', 'gemini', 'openrouter', 'mistral'];
 
 function validateToolPath(label: string, raw: string): string {
   const p = stripQuotes(raw);
@@ -119,10 +122,22 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
       n[k] = [...new Set(v)].sort();
     }
   }
+  if (p.llmExtra !== undefined) {
+    if (!Array.isArray(p.llmExtra) || p.llmExtra.length > MAX_LLM_SLOTS) throw new Error(`Puede haber hasta ${MAX_LLM_SLOTS} IAs de apoyo.`);
+    const old = cur.llmExtra ?? [];
+    n.llmExtra = p.llmExtra.map((x, i) => {
+      if (!LLM_NAMES.includes(x.provider)) throw new Error('Proveedor de modelo no reconocido.');
+      const model = (x.model ?? '').trim();
+      if (!/^[A-Za-z0-9._:/-]{0,80}$/.test(model)) throw new Error('El nombre del modelo no es válido.');
+      // la clave enmascarada significa «la que ya había en ese hueco» (solo vale si el proveedor no cambió)
+      const kept = x.apiKey === MASKED_SECRET ? (old[i]?.provider === x.provider ? old[i].apiKey : '') : enc((x.apiKey ?? '').trim());
+      return { provider: x.provider, model, apiKey: kept };
+    });
+  }
   const l = p.llm;
   if (l) {
     if (l.provider !== undefined) {
-      if (!['none', 'groq', 'gemini'].includes(l.provider)) throw new Error('Proveedor de modelo no reconocido.');
+      if (l.provider !== 'none' && !LLM_NAMES.includes(l.provider)) throw new Error('Proveedor de modelo no reconocido.');
       n.llm.provider = l.provider;
     }
     if (l.model !== undefined) {
@@ -146,7 +161,7 @@ export class SettingsService {
     return {
       ...s,
       twitch: { ...s.twitch, clientSecret: s.twitch.clientSecret ? MASKED_SECRET : '' },
-      autopilot: { ...s.autopilot, llm: { ...s.autopilot.llm, apiKey: s.autopilot.llm.apiKey ? MASKED_SECRET : '' } },
+      autopilot: { ...s.autopilot, llm: { ...s.autopilot.llm, apiKey: s.autopilot.llm.apiKey ? MASKED_SECRET : '' }, llmExtra: (s.autopilot.llmExtra ?? []).map((x) => ({ ...x, apiKey: x.apiKey ? MASKED_SECRET : '' })) },
     };
   }
 
@@ -183,6 +198,11 @@ export class SettingsService {
     Object.assign(s, next);
     this.store.save();
     return this.get();
+  }
+
+  /** IAs de apoyo con su clave en claro (solo para el proceso principal); las que no tienen clave se omiten. */
+  llmExtra(): LlmSlot[] {
+    return (this.store.data.settings.autopilot.llmExtra ?? []).flatMap((x) => (x.apiKey ? [{ ...x, apiKey: this.secrets.decode(x.apiKey) }] : []));
   }
 
   /** Clave del modelo de lenguaje en claro (solo para el proceso principal). */

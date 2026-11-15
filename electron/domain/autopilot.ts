@@ -56,6 +56,8 @@ export interface AutopilotDeps {
   /** Perfil de estilo del creador (silencios, etc.); sin él se usan los valores de la entrevista. */
   style?: () => StyleProfile;
   llmKey: () => string;
+  /** IAs de apoyo (con clave en claro). */
+  llmExtra?: () => { provider: Exclude<AutopilotSettings['llm']['provider'], 'none'>; model: string; apiKey: string }[];
   /** Solo pruebas. */
   llmBaseUrl?: string;
   llmFetch?: typeof fetch;
@@ -274,7 +276,8 @@ export class Autopilot implements Host {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === 'none' || !key) return null;
-    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
+    const extra = (this.d.llmExtra?.() ?? []).map((x) => ({ provider: x.provider, model: resolveModel(x.provider, x.model), apiKey: x.apiKey, baseUrl: this.d.llmBaseUrl }));
+    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl, ...(extra.length ? { fallbacks: extra } : {}) };
   }
 
   async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]): Promise<{ summary: Titles; mains: Titles[]; clips: Titles[] }> {

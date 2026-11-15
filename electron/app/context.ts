@@ -253,6 +253,7 @@ export class AppContext {
       prefsFile: path.join(o.userDataDir, 'preferences.json'),
       style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
+      llmExtra: () => this.settings.llmExtra(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
       canTranscribe: o.canTranscribe,

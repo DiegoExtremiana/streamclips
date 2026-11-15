@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AutopilotSettings, Platform } from '../../shared/types';
+import { MAX_LLM_SLOTS, type LlmSlot } from '../../shared/model/settings';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS } from '../../shared/subtitles';
 import { errMsg } from '../lib';
 import { SubTabs, useSubTab } from '../SubTabs';
 
+import { IconPlus, IconTrash } from '../icons';
 const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
   { id: 'tiktok', label: 'TikTok' },
@@ -253,6 +255,11 @@ export function AiCard() {
   }, [a, key]);
   if (!a || key === null) return <Loading title="Inteligencia artificial" />;
   const on = a.llm.provider !== 'none' && key !== '';
+  const extra = a.llmExtra ?? [];
+  const setSlot = (i: number, p: Partial<LlmSlot>) => up({ llmExtra: extra.map((x, k) => (k === i ? { ...x, ...p } : x)) });
+  // el hueco nuevo propone un proveedor que todavía no esté puesto
+  const used = new Set<string>([a.llm.provider, ...extra.map((x) => x.provider)]);
+  const nextProvider = (['groq', 'gemini', 'mistral', 'openrouter'] as LlmSlot['provider'][]).find((p) => !used.has(p)) ?? 'groq';
   return (
     <section className="card" aria-label="Inteligencia artificial">
       <h2>Inteligencia artificial (gratis)</h2>
@@ -270,6 +277,8 @@ export function AiCard() {
             <option value="none">Ninguno</option>
             <option value="gemini">Gemini (recomendado)</option>
             <option value="groq">Groq</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="mistral">Mistral</option>
           </select>
         </div>
         <div className="field" style={{ flex: 1 }}>
@@ -281,6 +290,39 @@ export function AiCard() {
         <label htmlFor="ap-key">Clave de API</label>
         <input id="ap-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder={a.llm.provider === 'gemini' ? 'AIza…' : 'gsk_…'} />
       </div>
+      <h3>IAs de apoyo</h3>
+      <div className="muted small">
+        Otras cuentas gratuitas que trabajan con la principal: si una está saturada o se queda sin cuota, la siguiente toma el relevo. Además el trabajo se reparte: las imágenes las mira Gemini si está entre ellas, y la valoración de momentos la hace Groq si está (es la más rápida).
+      </div>
+      {extra.map((x, i) => (
+        <div className="row" key={i} style={{ gap: 8, alignItems: 'flex-end', marginTop: 8 }} data-testid={`ai-slot-${i}`}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor={`ap-x-prov-${i}`}>Proveedor</label>
+            <select id={`ap-x-prov-${i}`} value={x.provider} onChange={(e) => setSlot(i, { provider: e.target.value as LlmSlot['provider'], apiKey: '' })}>
+              <option value="gemini">Gemini</option>
+              <option value="groq">Groq</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="mistral">Mistral</option>
+            </select>
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor={`ap-x-model-${i}`}>Modelo (vacío = el recomendado)</label>
+            <input id={`ap-x-model-${i}`} type="text" value={x.model} onChange={(e) => setSlot(i, { model: e.target.value })} />
+          </div>
+          <div className="field" style={{ flex: 2 }}>
+            <label htmlFor={`ap-x-key-${i}`}>Clave de API</label>
+            <input id={`ap-x-key-${i}`} type="password" value={x.apiKey} onChange={(e) => setSlot(i, { apiKey: e.target.value })} autoComplete="off" />
+          </div>
+          <button className="iconbtn" aria-label="Quitar esta IA de apoyo" title="Quitar esta IA de apoyo" onClick={() => up({ llmExtra: extra.filter((_, k) => k !== i) })}>
+            <IconTrash size={15} />
+          </button>
+        </div>
+      ))}
+      {extra.length < MAX_LLM_SLOTS && (
+        <button className="btn ghost small" style={{ marginTop: 8 }} onClick={() => up({ llmExtra: [...extra, { provider: nextProvider, model: '', apiKey: '' }] })}>
+          <IconPlus size={14} /> Añadir IA de apoyo
+        </button>
+      )}
       <KeyHowTo current={a.llm.provider} />
 
       <h3>Qué hace con ella</h3>
@@ -290,7 +332,7 @@ export function AiCard() {
       <Check checked={a.smartSelect !== false} onChange={(v) => up({ smartSelect: v })} title="Selección inteligente de momentos">
         El modelo lee cada candidato y puntúa humor, originalidad, interacción, reacción, contexto y si se entiende solo; elige con variedad y no rellena con momentos flojos.
       </Check>
-      <button className="btn" onClick={() => void save({ scoreClips: a.scoreClips !== false, smartSelect: a.smartSelect !== false, llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key } }).then((s) => s && setKey(s.llm.apiKey))}>
+      <button className="btn" onClick={() => void save({ scoreClips: a.scoreClips !== false, smartSelect: a.smartSelect !== false, llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key }, llmExtra: extra.filter((x) => x.apiKey) }).then((s) => s && setKey(s.llm.apiKey))}>
         Guardar inteligencia artificial
       </button>
       <Status msg={msg} />
@@ -298,7 +340,7 @@ export function AiCard() {
   );
 }
 
-type KeyProvider = 'gemini' | 'groq';
+type KeyProvider = 'gemini' | 'groq' | 'mistral' | 'openrouter';
 const KEY_GUIDE: Record<KeyProvider, { name: string; steps: ReactNode[]; note: string }> = {
   gemini: {
     name: 'Gemini (Google)',
@@ -322,12 +364,31 @@ const KEY_GUIDE: Record<KeyProvider, { name: string; steps: ReactNode[]; note: s
     ],
     note: 'Muy rápido, pero con un límite diario de texto bajo (cientos de clips al día como mucho) y la imagen depende de un modelo en vista previa.',
   },
+  mistral: {
+    name: 'Mistral',
+    steps: [
+      <>Abre <code>console.mistral.ai</code> en el navegador y crea una cuenta (pide verificar un teléfono, no tarjeta).</>,
+      <>Elige el plan gratuito <strong>Experiment</strong>.</>,
+      <>Entra en <strong>API Keys</strong>, pulsa <strong>Create new key</strong> y copia la clave.</>,
+      <>Aquí arriba, pulsa «Añadir IA de apoyo», elige <strong>Mistral</strong>, pega la clave y pulsa Guardar inteligencia artificial.</>,
+    ],
+    note: 'Sirve de relevo para el texto. En el plan gratuito, Mistral puede usar lo que se le envía para mejorar sus modelos. El programa no le manda imágenes.',
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    steps: [
+      <>Abre <code>openrouter.ai/keys</code> en el navegador e inicia sesión con Google o GitHub. No pide tarjeta.</>,
+      <>Pulsa <strong>Create Key</strong>, ponle un nombre y copia la clave (empieza por <code>sk-or-</code>).</>,
+      <>Aquí arriba, pulsa «Añadir IA de apoyo», elige <strong>OpenRouter</strong>, pega la clave y pulsa Guardar inteligencia artificial.</>,
+    ],
+    note: 'Con el modelo recomendado reparte cada petición entre los modelos gratuitos que haya en ese momento, así que la calidad varía y el límite diario es bajo. Es el último relevo. El programa no le manda imágenes.',
+  },
 };
 
 /** Cómo conseguir la clave gratuita: se elige el proveedor y salen sus pasos (empieza en el que está elegido arriba). */
 function KeyHowTo({ current }: { current: string }) {
-  const [pick, setPick] = useState<KeyProvider>(current === 'groq' ? 'groq' : 'gemini');
-  useEffect(() => { if (current === 'groq' || current === 'gemini') setPick(current); }, [current]);
+  const [pick, setPick] = useState<KeyProvider>(current === 'groq' || current === 'mistral' || current === 'openrouter' ? current : 'gemini');
+  useEffect(() => { if (current === 'groq' || current === 'gemini' || current === 'mistral' || current === 'openrouter') setPick(current); }, [current]);
   const g = KEY_GUIDE[pick];
   return (
     <details className="howto" data-testid="key-howto">

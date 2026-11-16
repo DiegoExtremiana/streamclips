@@ -37337,7 +37337,7 @@ var AI_TASKS = [
   { id: "judge", label: "Valorar los momentos y los clips", why: "Son muchas preguntas cortas: Groq es la m\xE1s r\xE1pida.", order: ["groq", "gemini", "mistral", "openrouter"] },
   { id: "story", label: "Editor de historia: estructura del resumen", why: "Texto largo y la decisi\xF3n m\xE1s importante: Gemini.", order: ["gemini", "mistral", "groq", "openrouter"] },
   { id: "themes", label: "Editor de temas: v\xEDdeos por tema", why: "Texto largo; va a Mistral si est\xE1, para no cargar a Gemini.", order: ["mistral", "gemini", "groq", "openrouter"] },
-  { id: "humor", label: "Editores de humor y de ritmo: clips y recortes", why: "Respuestas r\xE1pidas y cortas: Groq.", order: ["groq", "mistral", "gemini", "openrouter"] },
+  { id: "humor", label: "Editor de clips virales y de ritmo: clips y recortes", why: "Respuestas r\xE1pidas y cortas: Groq.", order: ["groq", "mistral", "gemini", "openrouter"] },
   { id: "chief", label: "Jefe de edici\xF3n: revisa el montaje", why: "Mira fotogramas del montaje, as\xED que necesita ver im\xE1genes.", order: ["gemini", "groq", "mistral", "openrouter"] },
   { id: "titles", label: "T\xEDtulos, descripciones y m\xFAsica", why: "Texto corto; va a Mistral si est\xE1, para repartir.", order: ["mistral", "gemini", "groq", "openrouter"] }
 ];
@@ -39811,11 +39811,14 @@ var PLAYBOOK = {
     "Si dos frases dicen lo mismo, qu\xE9date con la mejor dicha."
   ],
   humor: [
-    "Estructura del clip: planteamiento m\xEDnimo \u2192 remate \u2192 reacci\xF3n. Entra lo m\xE1s tarde posible y sal lo antes posible tras la risa.",
-    "En Shorts, TikTok y Reels el primer segundo engancha o se pierde: empieza con la frase m\xE1s rara, la cara o el momento en que algo va mal.",
-    "Funciona: fails, reacciones exageradas, frases absurdas que se entienden solas, piques con amigos, momentos \xABno me lo creo\xBB, suerte o mala suerte extrema.",
-    "Un clip = una idea, de 15 a 45 segundos. Si el final enlaza con el principio (bucle), mejor: se ve dos veces.",
-    "Si un momento solo hace gracia a quien lleva tres horas en el directo, no es clip."
+    "Objetivo prioritario de cada clip: hacerse viral en redes. Se mide en cuatro cosas: que no se pase de largo en el primer segundo, que se vea entero, que se repita y que se comparta o se comente.",
+    "Estructura del clip: gancho \u2192 planteamiento m\xEDnimo \u2192 remate \u2192 reacci\xF3n. Entra lo m\xE1s tarde posible y sal lo antes posible tras el remate.",
+    "El primer segundo engancha o se pierde: empieza con la frase m\xE1s rara, la cara, el grito o el instante en que algo va a salir mal; nunca con un saludo, una carga o un \xABa ver\xBB.",
+    "Emoci\xF3n fuerte y clara: risa, sorpresa, verg\xFCenza ajena, rabia, ternura o \xABno me lo creo\xBB. Si no provoca nada, no es clip.",
+    "Funciona: fails, reacciones exageradas, frases absurdas o memorables, piques con amigos, suerte o mala suerte extrema, jugadas incre\xEDbles, opiniones con fuerza que invitan a comentar, situaciones con las que cualquiera se identifica.",
+    "Un clip = una idea, de 15 a 35 segundos (60 como mucho). Si el final enlaza con el principio (bucle), mejor: se ve dos veces y el algoritmo lo premia.",
+    "Que se entienda sin conocer al streamer ni haber visto el directo: si solo hace gracia a quien lleva tres horas vi\xE9ndolo, no es clip.",
+    "Piensa en a qui\xE9n se lo mandar\xEDa alguien (\xABmira esto\xBB): si no se le ocurre a nadie, no es viral."
   ],
   temas: [
     "Un v\xEDdeo = un tema con arco: planteamiento (de qu\xE9 se habla y por qu\xE9 importa) \u2192 desarrollo (opiniones, an\xE9cdotas, giros, discusi\xF3n) \u2192 conclusi\xF3n (postura final, chiste o reflexi\xF3n).",
@@ -39832,7 +39835,8 @@ var PLAYBOOK = {
   titulos: [
     "T\xEDtulo concreto de 40 a 60 caracteres, con lo m\xE1s llamativo al principio, sin mentir ni exagerar lo que no pasa.",
     "Palabras que alguien buscar\xEDa (el juego, el tema, el nombre de la serie); nada de may\xFAsculas enteras ni emojis.",
-    "Descripci\xF3n: dos o tres frases que cuenten qu\xE9 pasa y por qu\xE9 verlo, en el tono del canal."
+    "Descripci\xF3n: dos o tres frases que cuenten qu\xE9 pasa y por qu\xE9 verlo, en el tono del canal.",
+    "En los clips para redes el t\xEDtulo es un gancho: que d\xE9 ganas de verlo en un segundo (curiosidad, sorpresa o identificaci\xF3n), corto y sin mentir."
   ],
   cronista: [
     "Resume lo que pasa de verdad, con nombres y hechos concretos, no impresiones vagas (\xABhablan de cosas\xBB, \xABse r\xEDen\xBB).",
@@ -41227,7 +41231,7 @@ function directedCut(plan, candidates2, o) {
 }
 
 // shared/studio.ts
-var AGENT_LABEL = { historia: "Editor de historia", ritmo: "Editor de ritmo", humor: "Editor de humor", jefe: "Jefe de edici\xF3n", equipo: "Equipo" };
+var AGENT_LABEL = { historia: "Editor de historia", ritmo: "Editor de ritmo", humor: "Editor de clips virales", jefe: "Jefe de edici\xF3n", equipo: "Equipo" };
 var r14 = (x) => Math.round(x * 10) / 10;
 var clean4 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var num4 = (v) => typeof v === "number" ? v : Number(v);
@@ -41236,7 +41240,7 @@ var brief = (c) => ({ id: c.id, dur: r14(c.end - c.start), nota: c.total, tipo: 
 var EQUIPO_BRIEF = " Trabajas dentro de un estudio de v\xEDdeo profesional que produce contenido para YouTube y redes sociales (Shorts, TikTok, Reels) a partir de directos de Twitch. Objetivo com\xFAn del equipo: que el espectador que no vio el directo se quede hasta el final (retenci\xF3n), con un arranque que enganche en los primeros segundos, ritmo sin tiempos muertos, cortes que se entiendan y un final que remate. Respeta la personalidad del streamer: su humor, su forma de hablar y su relaci\xF3n con los invitados y el chat son el contenido; el v\xEDdeo tiene que sentirse suyo, no un recopilatorio gen\xE9rico. No se escriben frases encima del v\xEDdeo. Tus compa\xF1eros son el editor de historia, el de ritmo, el de humor, el de temas y el jefe de edici\xF3n: c\xE9ntrate en tu parte y ten en cuenta lo que te digan.";
 function teamNotes(o) {
   const lines = [];
-  if (o.funny.length) lines.push(`Editor de humor: lo que m\xE1s gracia hace est\xE1 en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` (\xAB${f.title}\xBB, ${f.fun}/10)` : ""}`).join(", ")}. Son buenos candidatos para el gancho y para rematar cap\xEDtulos.`);
+  if (o.funny.length) lines.push(`Editor de clips virales: lo que m\xE1s engancha est\xE1 en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` (\xAB${f.title}\xBB, ${f.fun}/10)` : ""}`).join(", ")}. Son buenos candidatos para el gancho y para rematar cap\xEDtulos.`);
   for (const t of o.themes) if (t.sceneIds.length) lines.push(`Editor de temas: va a hacer un v\xEDdeo propio sobre \xAB${t.title}\xBB con ${t.sceneIds.join(", ")}. En el resumen no gastes todo ese tema: qu\xE9date como mucho con su mejor escena.`);
   if (o.trimmed) lines.push(`Editor de ritmo: ya ha quitado el aire de ${o.trimmed} escena(s); no hace falta que evites las largas por miedo a los tiempos muertos.`);
   return lines.length ? `
@@ -41343,21 +41347,25 @@ function rebasePlan(plan, trims, hookMinSec) {
   const { hook: _h, ...rest } = plan;
   return { ...rest, ...hook ? { hook } : {}, phrases };
 }
-var FUNNY = { minSec: 12, maxSec: 60, minFun: 6.5 };
-var HUMOR_SYSTEM = "Eres editor de clips virales (TikTok, Shorts, Reels) de un streamer de Twitch en espa\xF1ol de Espa\xF1a. Recibes momentos de un directo con su transcripci\xF3n y marcas [Ns]. Elige SOLO los que hacen gracia de verdad a alguien que no vio el directo: un fail, una frase absurda, una reacci\xF3n exagerada, un chiste que se entiende solo. Para cada uno decide d\xF3nde empieza (lo justo para entenderlo, sin introducci\xF3n) y d\xF3nde acaba (justo despu\xE9s del remate o de la risa, nunca antes). S\xE9 exigente: mejor tres clips buenos que diez normales. Lo que se ve cuenta: un fail visual vale aunque se hable poco. T\xEDtulo: corto, en castellano de Espa\xF1a, sin emojis ni clickbait falso. Responde SOLO con JSON.";
+var FUNNY = { minSec: 12, maxSec: 60, minFun: 6.5, minViral: 6.5 };
+var VIRAL_GROUP = 14;
+var HUMOR_SYSTEM = "Eres el editor de clips virales del equipo: haces los clips verticales para TikTok, YouTube Shorts e Instagram Reels a partir de los directos de Twitch de un streamer. Tu objetivo PRIORITARIO, por encima de todo lo dem\xE1s, es que cada clip se haga VIRAL en redes: que quien lo vea en el m\xF3vil no pase de largo en el primer segundo, lo vea entero, lo vuelva a ver y lo comparta o lo comente. Es un objetivo interno: no lo menciones en los t\xEDtulos. Recibes momentos de un directo con su transcripci\xF3n y marcas [Ns]. Elige los que tienen potencial viral de verdad para alguien que no conoce al streamer: humor que se entiende solo, fails, reacciones exageradas, frases absurdas o memorables, jugadas incre\xEDbles, giros inesperados, opiniones con fuerza que invitan a comentar, situaciones con las que cualquiera se identifica o momentos tiernos. Corta para redes: el clip empieza justo en el gancho (una frase rara, la cara, la acci\xF3n a punto de pasar), sin introducci\xF3n ni saludo, y acaba justo despu\xE9s del remate o de la reacci\xF3n; si el final enlaza con el principio, mejor (se ve en bucle). Lo que se ve cuenta: un fail visual vale aunque se hable poco. S\xE9 exigente: un clip que no engancha en el primer segundo no sirve, por gracioso que sea dentro del directo. T\xEDtulo: corto (m\xE1ximo 40 caracteres), que despierte curiosidad o sorpresa sin mentir, sin emojis. Responde SOLO con JSON.";
 function humorPrompt(cands, maxClips) {
   return `Momentos:
 ${JSON.stringify(cands.map(brief))}
-Devuelve exactamente {"clips":[{"id":"","desde":0,"hasta":0,"titulo":"","gracia":0,"motivo":""}]} con como mucho ${maxClips} clips, de mejor a peor. "desde" y "hasta" son segundos relativos al inicio del momento (entre ${FUNNY.minSec} y ${FUNNY.maxSec} s de clip); "gracia" de 0 a 10 (7 = hace re\xEDr, 9 = para ense\xF1\xE1rselo a alguien). Si ninguno hace gracia, devuelve la lista vac\xEDa.`;
+Devuelve exactamente {"clips":[{"id":"","desde":0,"hasta":0,"titulo":"","viral":0,"gracia":0,"motivo":""}]} con como mucho ${maxClips} clips, del que m\xE1s potencial viral tiene al que menos. "desde" y "hasta" son segundos relativos al inicio del momento (entre ${FUNNY.minSec} y ${FUNNY.maxSec} s de clip; lo ideal en redes son 15 a 35 s); "viral" de 0 a 10 es lo que puede funcionar en redes (5 = un clip normal, 7 = funciona, 9 = puede explotar); "gracia" de 0 a 10 es lo que hace re\xEDr; "motivo" dice en una frase por qu\xE9 enganchar\xEDa (el gancho y la emoci\xF3n). Si ninguno tiene potencial, devuelve la lista vac\xEDa.`;
 }
-function parseFunny(raw, cands, maxClips, minFun = FUNNY.minFun) {
+function parseFunny(raw, cands, maxClips, minFun = FUNNY.minFun, minViral = FUNNY.minViral) {
   const byId = new Map(cands.map((c) => [c.id, c]));
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   for (const k of list(raw?.clips)) {
     const c = byId.get(String(k.id));
-    const fun = num4(k.gracia);
-    if (!c || seen.has(c.id) || !Number.isFinite(fun) || fun < minFun) continue;
+    const funRaw = num4(k.gracia);
+    const viralRaw = num4(k.viral);
+    const fun = Number.isFinite(funRaw) ? funRaw : NaN;
+    const viral = Number.isFinite(viralRaw) ? viralRaw : fun;
+    if (!c || seen.has(c.id) || !Number.isFinite(viral) || viral < minViral && !(fun >= minFun)) continue;
     const dur = c.end - c.start;
     let from = num4(k.desde);
     let to = num4(k.hasta);
@@ -41375,9 +41383,9 @@ function parseFunny(raw, cands, maxClips, minFun = FUNNY.minFun) {
     if (to - from > FUNNY.maxSec) from = to - FUNNY.maxSec;
     if (to - from < Math.min(FUNNY.minSec, dur)) continue;
     seen.add(c.id);
-    out.push({ id: c.id, start: r14(c.start + from), end: r14(c.start + to), title: clean4(k.titulo, 80) || c.title || "", fun: Math.min(10, r14(fun)), why: clean4(k.motivo, 160) });
+    out.push({ id: c.id, start: r14(c.start + from), end: r14(c.start + to), title: clean4(k.titulo, 80) || c.title || "", fun: Math.min(10, r14(Number.isFinite(fun) ? fun : viral)), viral: Math.min(10, r14(viral)), why: clean4(k.motivo, 160) });
   }
-  return out.sort((a, b) => b.fun - a.fun).slice(0, Math.max(0, maxClips));
+  return out.sort((a, b) => b.viral - a.viral || b.fun - a.fun).slice(0, Math.max(0, maxClips));
 }
 var JEFE_SYSTEM = "Eres el jefe de edici\xF3n de un canal de YouTube en espa\xF1ol de Espa\xF1a. Tu equipo (editor de historia, de ritmo y de humor) te presenta el montaje de un v\xEDdeo resumen de un directo de Twitch y los clips elegidos. Rev\xEDsalo como espectador exigente: \xBFel gancho engancha?, \xBFalg\xFAn momento es relleno, repite a otro o corta el ritmo?, \xBFel final remata?, \xBFel t\xEDtulo es concreto y honesto? Puedes quitar momentos flojos (sin dejar un cap\xEDtulo vac\xEDo ni tocar el \xFAltimo momento) y mejorar el t\xEDtulo y la frase de la miniatura. No a\xF1adas nada que no est\xE9 en el montaje. Responde SOLO con JSON.";
 function jefePrompt(plan, cands, clips, o) {
@@ -41668,12 +41676,46 @@ var studioPhase = async (ctx) => {
   let trims = saved?.trims ?? [];
   let clips = saved?.clips ?? [];
   let review = saved?.review ?? null;
+  const viralClips = async () => {
+    const groups = [];
+    for (let i = 0; i < all.length; i += VIRAL_GROUP) groups.push(all.slice(i, i + VIRAL_GROUP));
+    const want = Math.max(cfg.maxClips, 3);
+    const per = groups.length > 1 ? Math.max(3, Math.ceil(want * 1.5 / groups.length)) : want;
+    const minFun = quantity ? FUNNY.minFun - 1 : FUNNY.minFun;
+    const minViral = quantity ? FUNNY.minViral - 1 : FUNNY.minViral;
+    const lanes = lanesFor(conf, "humor");
+    const found = groups.map(() => []);
+    let ok2 = 0;
+    let lastError = null;
+    await Promise.all(
+      lanes.map(async (lane, li) => {
+        for (let g = li, first = true; g < groups.length; g += lanes.length, first = false) {
+          throwIfCancelled();
+          if (!first) await new Promise((r2) => setTimeout(r2, MIN_INTERVAL_MS[lane.provider]));
+          try {
+            const raw = await askJson(lane, HUMOR_SYSTEM + EQUIPO_BRIEF + playbookFor("humor") + lessons, humorPrompt(groups[g], per), {
+              fetchFn: d.llmFetch,
+              temperature: 0.4,
+              onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubri\xF3 a ${AI_LABEL[covered]}`)
+            });
+            found[g] = parseFunny(raw, groups[g], per, minFun, minViral);
+            ok2++;
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+            lastError = e;
+          }
+        }
+      })
+    );
+    if (!ok2 && lastError) throw lastError;
+    return found.flat().sort((a, b) => b.viral - a.viral || b.fun - a.fun).slice(0, cfg.maxClips);
+  };
   const historiaSystem = useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM;
   let historiaPrompt = "";
   if (!saved) {
     const [rTrims, rClips, rThemes] = await Promise.allSettled([
       wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, "humor", "ritmo").then((raw) => parseTrims(raw, cands)) : Promise.resolve([]),
-      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, "humor").then((raw) => parseFunny(raw, all, cfg.maxClips, quantity ? FUNNY.minFun - 1 : FUNNY.minFun)) : Promise.resolve([]),
+      wantClips ? viralClips() : Promise.resolve([]),
       themesJob
     ]);
     const sceneOf = (t) => cands.find((c) => t.start < c.end && t.end > c.start)?.id;
@@ -41804,16 +41846,16 @@ Fotogramas adjuntos, uno por momento y en este orden: ${ids.join(", ")}.`, { fet
   if (wantClips && clips.length) {
     const byNote = ctx.moments;
     const funny = clips.slice(0, cfg.maxClips).map((c) => {
-      const seg = { start: c.start, end: c.end, peak: (c.start + c.end) / 2, score: c.fun, reasons: ["gracia"] };
+      const seg = { start: c.start, end: c.end, peak: (c.start + c.end) / 2, score: c.viral, reasons: ["viral"] };
       if (c.title) (ctx.clipTitles ??= /* @__PURE__ */ new Map()).set(seg, c.title);
-      ctx.meta.set(seg, { score: c.fun, kind: "gracia", reason: `Editor de humor: ${c.why || c.title || "hace gracia sin contexto"}`.slice(0, 200) });
+      ctx.meta.set(seg, { score: c.viral, kind: c.fun >= c.viral ? "gracia" : "viral", reason: `Editor de clips virales: ${c.why || c.title || "engancha sin contexto"}`.slice(0, 200) });
       return seg;
     });
     const rest = byNote.filter((m) => !funny.some((f) => overlaps(f, m))).slice(0, Math.max(0, cfg.maxClips - funny.length));
     ctx.moments = [...funny, ...rest];
-    say("humor", true, `${funny.length} clip(s) gracioso(s): ${clips.slice(0, funny.length).map((c) => `\xAB${c.title || c.id}\xBB (${c.fun}/10)`).join(", ")}.`);
+    say("humor", true, `${funny.length} clip(s) para redes, del m\xE1s viral al menos: ${clips.slice(0, funny.length).map((c) => `\xAB${c.title || c.id}\xBB (viral ${c.viral}/10)`).join(", ")}.`);
     for (const c of clips.slice(0, funny.length)) outputs.push({ kind: "clip", title: c.title, video: [{ start: c.start, end: c.end }], captions: [], totalSec: Math.round(c.end - c.start), note: c.why });
-  } else if (wantClips && !agents.some((a) => a.id === "humor")) say("humor", true, "Ning\xFAn momento hace gracia de verdad fuera de contexto; se quedan los clips elegidos por nota.");
+  } else if (wantClips && !agents.some((a) => a.id === "humor")) say("humor", true, "Ning\xFAn momento tiene potencial viral fuera de contexto; se quedan los clips elegidos por nota.");
   await takeThemes();
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: "tema", title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
   if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length - spare.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material)${spare.length ? `; ${spare.length} momentos m\xE1s flojos se dejaron sin contexto para no alargar la transcripci\xF3n` : ""}.`);

@@ -161,10 +161,25 @@ describe('selección inteligente', () => {
     }
   });
 
+  it('priorizando la cantidad (por defecto) se completa con lo que se queda cerca de la nota mínima', async () => {
+    const srv = await llm();
+    try {
+      const { e, vod } = setup(srv.url, { maxVideos: 0, minQuality: 9.5 });
+      await e.ctx.autopilot.run(vod.id);
+      const v = e.ctx.store.data.vods[0];
+      assert.equal(v.autopilot?.status, 'done', v.autopilot?.note);
+      assert.match(v.autopilot?.note ?? '', /priorizando la cantidad se completó/);
+      assert.ok(e.ctx.store.data.outputs.filter((o) => o.auto?.role === 'clip').length >= 1);
+    } finally {
+      srv.close();
+    }
+  });
+
   it('la nota mínima se valida, se redondea a medios puntos y se aplica', async () => {
     const srv = await llm();
     try {
-      const { e, vod } = setup(srv.url, { maxVideos: 0 });
+      // con la cantidad priorizada se completaría con lo que se queda cerca: aquí se comprueba el modo estricto
+      const { e, vod } = setup(srv.url, { maxVideos: 0, quantityFirst: false });
       assert.throws(() => e.ctx.settings.set({ autopilot: { minQuality: 2 } }), /entre 3 y 9,5/);
       assert.throws(() => e.ctx.settings.set({ autopilot: { minQuality: 11 } }), /entre 3 y 9,5/);
       assert.equal(e.ctx.store.data.settings.autopilot.minQuality, undefined);

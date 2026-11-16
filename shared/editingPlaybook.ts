@@ -30,11 +30,14 @@ export const PLAYBOOK: Record<PlaybookRole, string[]> = {
     'Si dos frases dicen lo mismo, quédate con la mejor dicha.',
   ],
   humor: [
-    'Estructura del clip: planteamiento mínimo → remate → reacción. Entra lo más tarde posible y sal lo antes posible tras la risa.',
-    'En Shorts, TikTok y Reels el primer segundo engancha o se pierde: empieza con la frase más rara, la cara o el momento en que algo va mal.',
-    'Funciona: fails, reacciones exageradas, frases absurdas que se entienden solas, piques con amigos, momentos «no me lo creo», suerte o mala suerte extrema.',
-    'Un clip = una idea, de 15 a 45 segundos. Si el final enlaza con el principio (bucle), mejor: se ve dos veces.',
-    'Si un momento solo hace gracia a quien lleva tres horas en el directo, no es clip.',
+    'Objetivo prioritario de cada clip: hacerse viral en redes. Se mide en cuatro cosas: que no se pase de largo en el primer segundo, que se vea entero, que se repita y que se comparta o se comente.',
+    'Estructura del clip: gancho → planteamiento mínimo → remate → reacción. Entra lo más tarde posible y sal lo antes posible tras el remate.',
+    'El primer segundo engancha o se pierde: empieza con la frase más rara, la cara, el grito o el instante en que algo va a salir mal; nunca con un saludo, una carga o un «a ver».',
+    'Emoción fuerte y clara: risa, sorpresa, vergüenza ajena, rabia, ternura o «no me lo creo». Si no provoca nada, no es clip.',
+    'Funciona: fails, reacciones exageradas, frases absurdas o memorables, piques con amigos, suerte o mala suerte extrema, jugadas increíbles, opiniones con fuerza que invitan a comentar, situaciones con las que cualquiera se identifica.',
+    'Un clip = una idea, de 15 a 35 segundos (60 como mucho). Si el final enlaza con el principio (bucle), mejor: se ve dos veces y el algoritmo lo premia.',
+    'Que se entienda sin conocer al streamer ni haber visto el directo: si solo hace gracia a quien lleva tres horas viéndolo, no es clip.',
+    'Piensa en a quién se lo mandaría alguien («mira esto»): si no se le ocurre a nadie, no es viral.',
   ],
   temas: [
     'Un vídeo = un tema con arco: planteamiento (de qué se habla y por qué importa) → desarrollo (opiniones, anécdotas, giros, discusión) → conclusión (postura final, chiste o reflexión).',
@@ -52,6 +55,7 @@ export const PLAYBOOK: Record<PlaybookRole, string[]> = {
     'Título concreto de 40 a 60 caracteres, con lo más llamativo al principio, sin mentir ni exagerar lo que no pasa.',
     'Palabras que alguien buscaría (el juego, el tema, el nombre de la serie); nada de mayúsculas enteras ni emojis.',
     'Descripción: dos o tres frases que cuenten qué pasa y por qué verlo, en el tono del canal.',
+    'En los clips para redes el título es un gancho: que dé ganas de verlo en un segundo (curiosidad, sorpresa o identificación), corto y sin mentir.',
   ],
   cronista: [
     'Resume lo que pasa de verdad, con nombres y hechos concretos, no impresiones vagas («hablan de cosas», «se ríen»).',

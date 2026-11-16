@@ -88,6 +88,8 @@ Hecho (todo con tests de funciones puras; ninguno probado con un directo real):
 
 - **Idioma de los directos** (`shared/languages.ts`, ajuste `autopilot.streamLanguage`, por defecto `es-ES`): `llmConf()` pone `language` en cada IA y `askOne` añade `languageNote` al encargo; al cambiarlo, `settings.ts` cambia también `whisperLanguage` (salvo que se pida otro a la vez). Selector en Ajustes › Piloto automático › Cómo edita.
 
+- **Clips virales** (petición de Diego: «cada clip debe tener el objetivo secreto pero prioritario de ser viral en redes»): `HUMOR_SYSTEM` reescrito como editor de clips virales; `FunnyClip.viral` (0-10) manda al filtrar (`minViral`) y al ordenar; el editor lee `all` en grupos de `VIRAL_GROUP` (14) repartidos con `lanesFor(conf, 'humor')` (`viralClips` en `pipeline/studio.ts`); manual `humor` y `titulos` con trucos de viralidad. Pendiente: medir lo viral de verdad con las estadísticas de TikTok/Shorts (necesita las cuentas conectadas) y usarlo para aprender.
+
 Ideas siguientes: registrar borrados y renombrados para el aprendizaje; transcribir la lectura completa en paralelo por trozos si el PC tiene muchos núcleos; que el cronista también reciba el chat; un «productor» que reparta el material entre resumen, temas y clips para que no se repitan los mismos momentos en todo.
 
 ## Mejoras, por orden

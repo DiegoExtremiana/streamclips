@@ -2,6 +2,10 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.38.2
+
+- **Animaciones más suaves**: las ventanas aparecen y desaparecen con un fundido; al cambiar de sección o de pestaña en Ajustes el contenido entra deslizándose un poco; los botones y el menú lateral cambian de color con una transición. Si Windows tiene activado «reducir animaciones», no se animan.
+
 ## Novedades de la v0.38.1
 
 - **Inteligencia artificial más ordenada**: cada IA tiene su ficha con su icono, si es la principal o de apoyo, si está conectada y de qué tareas se encarga. Se añaden con un botón por IA, se hace principal con la estrella y la clave se despliega solo cuando hace falta. La tabla «Quién hace qué» enseña el icono de cada una.

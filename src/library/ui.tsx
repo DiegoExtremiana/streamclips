@@ -1,14 +1,25 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { IconChevron, IconChevronLeft, IconClose } from '../icons';
 
 /** Ventana modal accesible: Escape y clic fuera la cierran, el foco entra en ella y vuelve a donde estaba. */
 /** Flechas de la cabecera para pasar al elemento anterior o siguiente (con el teclado lo gestiona quien abre la ventana). */
 export interface ModalNav { onPrev?: () => void; onNext?: () => void; prevLabel: string; nextLabel: string }
 
+/** Lo que dura el fundido de salida de una ventana (igual que la animación `modal-out` de styles.css). */
+const MODAL_OUT_MS = 170;
+
 export function Modal(props: { title: string; onClose: () => void; wide?: boolean | 'mid'; children: ReactNode; nav?: ModalNav; /** Entra deslizándose desde ese lado. */ enter?: 'left' | 'right'; /** Copia de la ventana que sale deslizándose hacia ese lado: sin foco ni teclas. */ leave?: 'left' | 'right' }) {
   const ref = useRef<HTMLDivElement>(null);
-  const { onClose } = props;
   const leaving = !!props.leave;
+  // al cerrar con Escape, clic fuera o la X, la ventana se desvanece antes de desaparecer (salvo con «reducir movimiento»)
+  const [closing, setClosing] = useState(false);
+  const closeNow = props.onClose;
+  const onClose = useCallback(() => {
+    if (closing) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return closeNow();
+    setClosing(true);
+    window.setTimeout(closeNow, MODAL_OUT_MS);
+  }, [closing, closeNow]);
   useEffect(() => {
     if (leaving) return undefined;
     const previous = document.activeElement as HTMLElement | null;
@@ -27,8 +38,8 @@ export function Modal(props: { title: string; onClose: () => void; wide?: boolea
   }, [onClose, leaving]);
   const slide = props.leave ? ` leave-${props.leave}` : props.enter ? ` enter-${props.enter}` : '';
   return (
-    <div className={`backdrop${leaving ? ' ghost' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => e.stopPropagation()} aria-hidden={leaving || undefined}>
-      <div ref={ref} className={`modal ${props.wide === 'mid' ? 'mid' : props.wide ? 'wide' : ''}${slide}`} role={leaving ? undefined : 'dialog'} aria-modal={leaving ? undefined : 'true'} aria-label={props.title} tabIndex={-1}>
+    <div className={`backdrop${leaving ? ' ghost' : ''}${closing ? ' closing' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => e.stopPropagation()} aria-hidden={leaving || undefined}>
+      <div ref={ref} className={`modal ${props.wide === 'mid' ? 'mid' : props.wide ? 'wide' : ''}${slide}${closing ? ' closing' : ''}`} role={leaving ? undefined : 'dialog'} aria-modal={leaving ? undefined : 'true'} aria-label={props.title} tabIndex={-1}>
         <div className="modal-head">
           {props.nav && (
             <div className="modal-nav">

@@ -61,7 +61,10 @@ export function SubTabs(props: { label: string; tabs: SubTab[]; value: string; o
         ))}
       </div>
       {current.hint && <div className="muted small subtab-hint">{current.hint}</div>}
-      {props.children}
+      {/* el contenido entra con un fundido suave al cambiar de pestaña */}
+      <div className="tab-enter" key={current.id}>
+        {props.children}
+      </div>
     </div>
   );
 }
@@ -99,7 +102,9 @@ export function SideNav(props: { label: string; tabs: SubTab[]; value: string; o
           </button>
         ))}
       </div>
-      <div className="sidenav-body stack">{props.children}</div>
+      <div className="sidenav-body stack tab-enter" key={current.id}>
+        {props.children}
+      </div>
     </div>
   );
 }

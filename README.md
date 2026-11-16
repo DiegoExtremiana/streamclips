@@ -11,6 +11,7 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 - **Más cantidad**: con «Priorizar la cantidad» (activado por defecto), si no hay suficientes momentos por encima de la nota mínima se completa con los que se quedan cerca, el editor de humor es algo menos exigente y salen más vídeos por tema.
 - **Trabajo repartido**: la valoración de candidatos también se reparte entre las IAs disponibles a la vez, cada una a su ritmo.
 - El resumen ya no se limita a la categoría de Twitch con más material: es de todo el directo.
+- **Idioma de tus directos**: en Ajustes › Piloto automático › Cómo edita hay un selector de idioma (por defecto, español de España). Se lo dice a todas las IAs para que entiendan lo que se habla y escriban títulos y descripciones en ese idioma, y fija también el idioma de la transcripción.
 - **El equipo entiende todo el directo**: además de transcribir bien lo elegido, el programa lee el directo entero con un modelo rápido de Whisper. Así los editores saben de qué se ha hablado en las cuatro horas, no solo en los trozos con más volumen.
 - **Las conversaciones también cuentan**: los tramos donde más se habla seguido (una opinión, una anécdota, un tema) se añaden a los candidatos, aunque no haya gritos ni picos de chat.
 - **Vídeos por tema de todo el directo**: el editor de temas recibe hasta 60 bloques de conversación repartidos por todo el directo, no solo los primeros minutos.

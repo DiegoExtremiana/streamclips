@@ -1,4 +1,5 @@
 import { orderFor, type AiTask } from '../../shared/llmRoles';
+import { languageNote } from '../../shared/languages';
 export type LlmProvider = 'groq' | 'gemini' | 'openrouter' | 'mistral';
 
 export const LLM_PROVIDERS: Record<LlmProvider, { label: string; baseUrl: string; defaultModel: string; /** Modelo que entiende imágenes (el de texto de Groq no). */ visionModel?: string; /** El modelo de texto ya ve imágenes. */ sees?: boolean }> = {
@@ -84,6 +85,8 @@ export interface LlmConfig {
   baseUrl?: string;
   /** Otras IAs que toman el relevo, en orden, cuando esta falla (saturada, sin cuota, sin respuesta). */
   fallbacks?: LlmConfig[];
+  /** Idioma de los directos (shared/languages.ts): se añade al encargo de cada petición. */
+  language?: string;
 }
 
 export interface LlmDeps {
@@ -137,6 +140,8 @@ export async function askJson(cfg: LlmConfig, system: string, user: string, d: L
 }
 
 async function askOne(cfg: LlmConfig, system: string, user: string, d: LlmDeps = {}): Promise<unknown> {
+  // cada IA sabe en qué idioma se habla en los directos y en cuál escribir
+  if (cfg.language) system += languageNote(cfg.language);
   if (!cfg.apiKey) throw new Error('Falta la clave del modelo de lenguaje (Ajustes > Piloto automático).');
   const fetchFn = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));

@@ -69,6 +69,8 @@ export interface AutopilotSettings {
   fastAnalysis?: boolean;
   /** Lectura completa del directo con un modelo rápido para entender de qué se habla (por defecto sí). */
   fullRead?: boolean;
+  /** Idioma en el que se habla en los directos (ver shared/languages.ts): se lo dice a todas las IAs. Por defecto, español de España. */
+  streamLanguage?: string;
   /** El cronista lee el directo por tramos repartidos entre las IAs y hace el mapa del directo (por defecto sí). */
   chronicle?: boolean;
   /** Priorizar la cantidad de vídeos y clips: rellena con momentos algo más flojos y saca más temas (por defecto sí). */

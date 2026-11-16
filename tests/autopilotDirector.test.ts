@@ -121,7 +121,8 @@ describe('director de edición en el piloto', () => {
   it('el vídeo largo sale con la estructura del director: gancho primero, capítulos en la descripción, rótulos grabados y frase de portada', async () => {
     const srv = await llm();
     try {
-      const { e, vod } = setup(srv.url);
+      // los rótulos en pantalla van desactivados por defecto (v0.39.0): aquí se activan para comprobarlos
+      const { e, vod } = setup(srv.url, { onScreenText: true });
       await e.ctx.autopilot.run(vod.id);
       const v = e.ctx.store.data.vods[0];
       assert.equal(v.autopilot?.status, 'done', v.autopilot?.note);

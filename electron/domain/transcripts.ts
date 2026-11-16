@@ -537,8 +537,10 @@ export class TranscriptService {
     const vod = this.vod(vodId);
     if (!exe || !vod.filePath || !fs.existsSync(vod.filePath)) throw new Error('No hay Whisper o el directo no está descargado.');
     const s = this.d.store.data.settings;
-    const model = SKIM_MODEL;
-    await downloadModel(this.modelsDir, model, () => undefined, { baseUrl: this.d.modelBaseUrl });
+    // el modelo rápido de lectura; si ya usas uno igual de rápido (tiny o base) y está descargado, ese mismo
+    const own = s.whisperModel === 'tiny' || s.whisperModel === 'base' ? s.whisperModel : null;
+    const model = modelInstalled(this.modelsDir, SKIM_MODEL) || !own || !modelInstalled(this.modelsDir, own) ? SKIM_MODEL : own;
+    if (!modelInstalled(this.modelsDir, model)) await downloadModel(this.modelsDir, model, () => undefined, { baseUrl: this.d.modelBaseUrl });
     return this.d.queue.run(async () => {
       const task = this.d.tasks.start('transcribe', `Leyendo todo el directo "${vod.title || vod.url}"`, vodId);
       try {

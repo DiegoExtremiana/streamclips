@@ -1,3 +1,4 @@
+import { DEFAULT_STREAM_LANGUAGE } from '../../shared/languages';
 import { playbookFor } from '../../shared/editingPlaybook';
 import type { SubtitleStyleId } from '../../shared/subtitles';
 import fs from 'node:fs';
@@ -279,8 +280,9 @@ export class Autopilot implements Host {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === 'none' || !key) return null;
-    const extra = (this.d.llmExtra?.() ?? []).map((x) => ({ provider: x.provider, model: resolveModel(x.provider, x.model), apiKey: x.apiKey, baseUrl: this.d.llmBaseUrl }));
-    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl, ...(extra.length ? { fallbacks: extra } : {}) };
+    const language = this.cfg.streamLanguage ?? DEFAULT_STREAM_LANGUAGE;
+    const extra = (this.d.llmExtra?.() ?? []).map((x) => ({ provider: x.provider, model: resolveModel(x.provider, x.model), apiKey: x.apiKey, baseUrl: this.d.llmBaseUrl, language }));
+    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl, language, ...(extra.length ? { fallbacks: extra } : {}) };
   }
 
   async titles(vod: VodJob, words: Word[], moments: Seg[], mains: Seg[], notes: string[]): Promise<{ summary: Titles; mains: Titles[]; clips: Titles[] }> {

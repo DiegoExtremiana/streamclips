@@ -67,6 +67,29 @@ Pendiente aquí: que la valoración de clips de Twitch (`electron/app/wiring/cli
 
 Claude dentro del programa: la API de Claude es de pago (no hay plan gratuito), así que choca con la regla de «todo gratis». No se ha añadido. Si Diego decide pagar créditos de API, es un proveedor más con otro formato de petición (no es compatible con `/chat/completions` tal cual).
 
+## v0.38.3 y v0.39.0: lo que pidió Diego el 16/11 y cómo se hizo
+
+Quejas de Diego tras usar la 0.38.x con un directo real (TRILOCKE 2 #1, 4 h 15 min): «un vídeo de 6 minutos en el que no se habla de nada», «zooms sin sentido», «frases en medio de los vídeos», «parece que lo edita alguien que no sabe editar, descoordinado». Quiere: resumen + varios vídeos por tema + clips; **más cantidad que calidad** (sin renunciar a la calidad); que las IAs **entiendan** el directo, **aprendan** y conozcan **trucos de edición**; zoom sin tope fijo pero **con sentido y hacia el objetivo**; y propuso **partir el directo en trozos** para ser más eficiente.
+
+Causa raíz de los vídeos sin sentido: con el análisis rápido solo se transcribía lo elegido por VOLUMEN (3 min de 255), así que el equipo no sabía de qué se había hablado.
+
+Hecho (todo con tests de funciones puras; ninguno probado con un directo real):
+
+- **Lectura completa** (`TranscriptService.skim`, modelo Whisper `SKIM_MODEL = 'base'`, guardada en `transcripts/<vod>.skim.json`): en `transcribeChosenPhase`, `ctx.words = mergeWords(preciso, rápido)` (`shared/subtitles.ts`). Ajuste `fullRead`.
+- **Candidatos de conversación** (`talkCandidates` en `shared/highlights.ts`): tramos de más palabras seguidas, ids `t…`.
+- **Cronista** (`shared/chronicle.ts` + fase `pipeline/chronicle.ts`, entre «transcripción de lo elegido» y «valoración»): tramos de 20 min repartidos entre IAs con `lanesFor(cfg, 'chronicle')` (en paralelo, cada carril con su pausa); fichas en `ctx.chronicle` y caché `<judgeDir>/<vod>.chronicle.json`; `chronicleMap` va al editor de historia (prompt) y al de temas (`extraSystem`); sus momentos entran como candidatos `k…`. Solo en directos de 15 min o más. Ajuste `chronicle`.
+- **Valoración en paralelo**: `judgeCandidates(..., { lanes })` reparte los lotes entre carriles.
+- **Zoom** (`shared/autoEdit.ts`): reacción fuerte (fuerza ≥ 2) + pico de volumen + objetivo conocido (`focusAt`). Sin tope fijo (separación mínima 6 s). Zoom 1,18 / 1,28 / 1,4 según fuerza. El objetivo sale de la visión: `parseVisual` lee `foco` y `cara`; `focusFinder` (`shared/visual.ts`) da el foco del momento mirado o la cara mediana del directo; **sin objetivo no hay zoom**. El efecto `punch` lleva `x`,`y` (fotograma original); `mapFocus` (`electron/services/ffmpeg.ts`) lo pasa a vertical (columna o ventanas) y `punchFilter` recorta hacia el punto (comprobado con ffmpeg: un cuadro en 0,14/0,2 sigue en pantalla y crece). Los vídeos creados después a mano usan `Autopilot.focus` (solo en la misma sesión).
+- **Sin rótulos en pantalla** por defecto (`onScreenText`).
+- **Manual de edición** (`shared/editingPlaybook.ts`, `playbookFor(puesto)`): va en el encargo de cada editor (studio `ask`, jefe con fotogramas, temas, títulos, cronista). Para añadir un truco, se añade ahí.
+- **Aprendizaje** (`pipeline/lessons.ts`, `lessonsText`): preferencias por tipo de momento + títulos aprobados. Falta: aprender de lo que Diego BORRA o RENOMBRA (no se registra) y de lo que publica y funciona (estadísticas).
+- **Cantidad** (`quantityFirst`, por defecto sí): clips y resumen se completan hasta 1,5 puntos por debajo de la nota mínima (mínimo 3); humor exige un punto menos; temas hasta `maxVideos - 1`.
+- El resumen ya no se recorta a la categoría dominante (ni en `signals.ts` ni en `judge.ts` ni en el estudio).
+
+- **Idioma de los directos** (`shared/languages.ts`, ajuste `autopilot.streamLanguage`, por defecto `es-ES`): `llmConf()` pone `language` en cada IA y `askOne` añade `languageNote` al encargo; al cambiarlo, `settings.ts` cambia también `whisperLanguage` (salvo que se pida otro a la vez). Selector en Ajustes › Piloto automático › Cómo edita.
+
+Ideas siguientes: registrar borrados y renombrados para el aprendizaje; transcribir la lectura completa en paralelo por trozos si el PC tiene muchos núcleos; que el cronista también reciba el chat; un «productor» que reparta el material entre resumen, temas y clips para que no se repitan los mismos momentos en todo.
+
 ## Mejoras, por orden
 
 ### 1. Descartar la pantalla de «Empezamos pronto» y las pausas (pequeño, hacer primero)

@@ -30,6 +30,22 @@ afterEach(() => {
 
 // ───────────────────────────── SettingsService ─────────────────────────────
 describe('SettingsService', () => {
+  it('el idioma de los directos se valida y arrastra el de Whisper, salvo que se pida otro a la vez', () => {
+    const e = mkEnv();
+    assert.equal(e.ctx.settings.get().whisperLanguage, 'es');
+    e.ctx.settings.set({ autopilot: { streamLanguage: 'en' } });
+    assert.equal(e.ctx.settings.get().autopilot.streamLanguage, 'en');
+    assert.equal(e.ctx.settings.get().whisperLanguage, 'en');
+    e.ctx.settings.set({ autopilot: { streamLanguage: 'multi' } });
+    assert.equal(e.ctx.settings.get().whisperLanguage, '', 'varios idiomas: Whisper detecta');
+    e.ctx.settings.set({ autopilot: { streamLanguage: 'ca' }, whisperLanguage: 'es' });
+    assert.equal(e.ctx.settings.get().whisperLanguage, 'es');
+    e.ctx.settings.set({ autopilot: { streamLanguage: 'ca' }, whisperLanguage: 'gl' });
+    e.ctx.settings.set({ autopilot: { streamLanguage: 'ca' } });
+    assert.equal(e.ctx.settings.get().whisperLanguage, 'gl', 'si no cambia el idioma de los directos, no toca el de Whisper');
+    assert.throws(() => e.ctx.settings.set({ autopilot: { streamLanguage: 'klingon' } }), /no reconocido/);
+  });
+
   it('el secreto de Twitch se guarda cifrado, nunca sale al exterior y el valor enmascarado no lo pisa', () => {
     const e = mkEnv();
     e.ctx.settings.set({ twitch: { clientId: ' cid ', clientSecret: 'super-secreto', login: '@Don_Diegons' } });

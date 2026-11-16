@@ -1,3 +1,4 @@
+import { mergeWords } from '../../../shared/subtitles';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -176,7 +177,7 @@ export const judgePhase: Phase = async (ctx) => {
     ctx.summary = ctx.legacy.summary;
     try {
       await d.transcripts.ensure(vod.id, [...ctx.moments, ...ctx.summary].map((g) => ({ start: g.start, end: g.end })));
-      ctx.words = d.transcripts.words(vod.id);
+      ctx.words = mergeWords(d.transcripts.words(vod.id), ctx.skim ?? []);
     } catch (e) {
       if (isCancelled(e)) throw e;
     }
@@ -211,7 +212,8 @@ export const speakersPhase: Phase = async (ctx) => {
   try {
     const ts = Date.now();
     const r = await d.speakers.diarize(vod.id, spans, (done, total) => task.update(60 + (total ? (done / total) * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total / 60)} min)…`));
-    ctx.words = d.transcripts.words(vod.id);
+    // lo preciso (ya con quién habla) manda; la lectura completa sigue cubriendo el resto del directo
+    ctx.words = mergeWords(d.transcripts.words(vod.id), ctx.skim ?? []);
     notes.push(`Hablantes: ${r.voices} voz/voces en ${Math.round(r.sec / 60)} min de audio (${ctx.lap(ts)}).`);
   } catch (e) {
     if (isCancelled(e)) throw e;

@@ -1,3 +1,4 @@
+import { DEFAULT_STREAM_LANGUAGE, STREAM_LANGUAGES, streamLanguage } from '../../shared/languages';
 import fs from 'node:fs';
 import { ALL_PLATFORMS, MASKED_SECRET } from '../../shared/types';
 import type { AutopilotSettings, Settings, SettingsPatch } from '../../shared/types';
@@ -69,6 +70,10 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   if (p.fastAnalysis !== undefined) n.fastAnalysis = bool(p.fastAnalysis, 'El análisis rápido');
   if (p.fullRead !== undefined) n.fullRead = bool(p.fullRead, 'La lectura completa');
   if (p.chronicle !== undefined) n.chronicle = bool(p.chronicle, 'El cronista');
+  if (p.streamLanguage !== undefined) {
+    if (!STREAM_LANGUAGES.some((l) => l.id === p.streamLanguage)) throw new Error('Idioma de los directos no reconocido.');
+    n.streamLanguage = p.streamLanguage;
+  }
   if (p.quantityFirst !== undefined) n.quantityFirst = bool(p.quantityFirst, 'Priorizar la cantidad');
   if (p.onScreenText !== undefined) n.onScreenText = bool(p.onScreenText, 'Los rótulos en pantalla');
   if (p.minQuality !== undefined) {
@@ -185,7 +190,13 @@ export class SettingsService {
       ytdlpPath: patch.ytdlpPath !== undefined ? validateToolPath('yt-dlp', patch.ytdlpPath) : s.ytdlpPath,
       whisperPath: patch.whisperPath !== undefined ? validateToolPath('whisper', patch.whisperPath) : s.whisperPath,
       whisperModel: patch.whisperModel !== undefined ? validateWhisperModel(patch.whisperModel) : s.whisperModel,
-      whisperLanguage: patch.whisperLanguage !== undefined ? validateWhisperLanguage(patch.whisperLanguage) : s.whisperLanguage,
+      // el idioma de los directos también fija el de Whisper (salvo que se pida otro a la vez)
+      whisperLanguage:
+        patch.whisperLanguage !== undefined
+          ? validateWhisperLanguage(patch.whisperLanguage)
+          : patch.autopilot?.streamLanguage !== undefined && patch.autopilot.streamLanguage !== (s.autopilot.streamLanguage ?? DEFAULT_STREAM_LANGUAGE) && STREAM_LANGUAGES.some((l) => l.id === patch.autopilot!.streamLanguage)
+            ? streamLanguage(patch.autopilot.streamLanguage).whisper
+            : s.whisperLanguage,
       twitch: { ...s.twitch },
       autopilot: patch.autopilot ? validateAutopilot(s.autopilot, patch.autopilot, (x) => this.secrets.encode(x)) : s.autopilot,
     };

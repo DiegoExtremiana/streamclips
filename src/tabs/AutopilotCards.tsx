@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { AutopilotSettings, Platform } from '../../shared/types';
 import { MAX_LLM_SLOTS } from '../../shared/model/settings';
 import { AI_LABEL, assignments, type AiProvider } from '../../shared/llmRoles';
+import { DEFAULT_STREAM_LANGUAGE, STREAM_LANGUAGES } from '../../shared/languages';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS } from '../../shared/subtitles';
 import { errMsg } from '../lib';
 import { SubTabs, useSubTab } from '../SubTabs';
@@ -79,7 +80,7 @@ export function AutopilotCard() {
     <section className="card" aria-label="Piloto automático">
       <h2>Piloto automático</h2>
       <div className="muted small">
-        Al terminar un directo, el programa recoge el VOD, lo transcribe (en castellano), busca los mejores momentos (volumen, voz y chat) y prepara
+        Al terminar un directo, el programa recoge el VOD, lo transcribe (en el idioma de tus directos), busca los mejores momentos (volumen, voz y chat) y prepara
         un resumen, varios vídeos y clips. Todo lo programado se puede cambiar en la pestaña Inicio.
       </div>
       <div className="apsummary" data-testid="ap-summary">
@@ -97,6 +98,15 @@ export function AutopilotCard() {
       <Check checked={a.requireApproval} onChange={(v) => up({ requireApproval: v })} title="Pedir mi visto bueno antes de programar">Si lo desactivas, se programa solo.</Check>
       </div>)}
       {pt === 'edita' && (<div className="aptab" role="tabpanel">
+      <div className="field" style={{ maxWidth: 420 }}>
+        <label htmlFor="ap-lang">Idioma de tus directos</label>
+        <select id="ap-lang" value={a.streamLanguage ?? DEFAULT_STREAM_LANGUAGE} onChange={(e) => up({ streamLanguage: e.target.value })}>
+          {STREAM_LANGUAGES.map((l) => (
+            <option key={l.id} value={l.id}>{l.label.charAt(0).toUpperCase() + l.label.slice(1)}</option>
+          ))}
+        </select>
+        <div className="muted small">Se lo dice a todas las IAs del equipo de edición para que entiendan lo que se habla y escriban los títulos y las descripciones en ese idioma. Al cambiarlo también cambia el idioma de la transcripción (Whisper).</div>
+      </div>
       <Check checked={a.director !== false} onChange={(v) => up({ director: v })} title="Director de edición para YouTube">Con los momentos ya valorados (lo que se dice, lo que se ve, el volumen y el chat), la IA decide la estructura del vídeo largo como un editor: un gancho con lo más fuerte en los primeros segundos, capítulos con sentido y ritmo, un cierre, rótulos en pantalla, el título, la descripción con capítulos y la frase de la miniatura. Si no puede, se monta el resumen de mejores momentos de siempre.</Check>
       <Check checked={a.studio !== false} onChange={(v) => up({ studio: v })} title="Estudio de edición con varios editores de IA">En vez de un solo director, varios editores trabajan a la vez sobre los momentos valorados, como en una sala de edición: el de historia decide la estructura del vídeo resumen, el de ritmo recorta el aire de cada momento, el de humor elige los clips graciosos con su inicio y su remate, y un jefe de edición revisa el montaje y quita lo que sobra. Si alguno no responde, el resto sigue.</Check>
       <Check checked={a.fullRead !== false} onChange={(v) => up({ fullRead: v })} title="Lectura completa del directo">Lee todo el directo con un modelo rápido para que el equipo de edición entienda de qué se ha hablado (temas, contexto, quién dice qué). Añade tiempo al análisis (aproximadamente una quinta parte de lo que dura el directo, según tu PC), pero sin ella solo ve los trozos elegidos por volumen.</Check>
@@ -170,7 +180,7 @@ export function AutopilotCard() {
         onClick={() => {
           const minQuality = Number(q.replace(',', '.'));
           void save({
-            enabled: a.enabled, requireApproval: a.requireApproval, proEdit: a.proEdit !== false, director: a.director !== false, studio: a.studio !== false, fullRead: a.fullRead !== false, chronicle: a.chronicle !== false, quantityFirst: a.quantityFirst !== false, onScreenText: a.onScreenText === true, soundCues: a.soundCues !== false, music: a.music !== false, topics: a.topics !== false, vodVision: a.vodVision !== false, fastAnalysis: a.fastAnalysis !== false, chatCapture: a.chatCapture,
+            enabled: a.enabled, requireApproval: a.requireApproval, proEdit: a.proEdit !== false, director: a.director !== false, studio: a.studio !== false, fullRead: a.fullRead !== false, streamLanguage: a.streamLanguage ?? DEFAULT_STREAM_LANGUAGE, chronicle: a.chronicle !== false, quantityFirst: a.quantityFirst !== false, onScreenText: a.onScreenText === true, soundCues: a.soundCues !== false, music: a.music !== false, topics: a.topics !== false, vodVision: a.vodVision !== false, fastAnalysis: a.fastAnalysis !== false, chatCapture: a.chatCapture,
             cleanup: a.cleanup !== false, purgePublished: a.purgePublished !== false, maxVideos: a.maxVideos, maxClips: a.maxClips, summaryMinutes: a.summaryMinutes,
             mainMinutes: a.mainMinutes, parallel: a.parallel ?? 2, series: a.series, ...(Number.isFinite(minQuality) && q.trim() !== '' ? { minQuality } : {}),
           }).then(() => setCounts(null));

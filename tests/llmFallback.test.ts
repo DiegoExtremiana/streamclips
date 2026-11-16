@@ -52,3 +52,19 @@ test('carriles: el trabajo largo se reparte entre las IAs, cada una con las dem�
   assert.deepEqual(chainOf(lanes[1]).map((c) => c.provider), ['mistral', 'gemini', 'groq', 'openrouter']);
   assert.equal(lanesFor({ provider: 'gemini', model: 'g', apiKey: 'A' }, 'judge').length, 1);
 });
+
+test('idioma: cada IA recibe en su encargo el idioma de los directos', async () => {
+  const { languageNote } = await import('../shared/languages');
+  assert.match(languageNote(undefined), /español de España/);
+  assert.match(languageNote('en'), /se habla inglés[\s\S]*escribe los títulos[\s\S]*en inglés/);
+  assert.match(languageNote('multi'), /varios idiomas/);
+  const systems: string[] = [];
+  const fetchFn = (async (_u: unknown, init: { body: string }) => {
+    systems.push(JSON.parse(init.body).messages[0].content);
+    return ok({ hecho: true });
+  }) as unknown as typeof fetch;
+  await askJson({ provider: 'gemini', model: 'g', apiKey: 'A', language: 'fr', fallbacks: [{ provider: 'groq', model: 'q', apiKey: 'B', language: 'fr' }] }, 'Eres editor.', 'u', { fetchFn, sleep: async () => undefined });
+  assert.match(systems[0], /^Eres editor\. IDIOMA DEL CANAL[\s\S]*francés/);
+  await askJson({ provider: 'gemini', model: 'g', apiKey: 'A' }, 'Sin idioma.', 'u', { fetchFn, sleep: async () => undefined });
+  assert.equal(systems[1], 'Sin idioma.');
+});

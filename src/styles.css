@@ -776,9 +776,11 @@ button.btn.danger-text { color: var(--bad); }
 .ai-add { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
 .ai-add-btn { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line-strong); background: transparent; color: var(--text); cursor: pointer; }
 .ai-add-btn:hover { border-color: var(--accent-2); background: var(--surface-2); }
-.ai-add-btn > span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ai-add-btn > span:not(.ai-tile) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .ai-who { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .ai-backups { display: inline-flex; gap: 4px; align-items: center; }
 @media (max-width: 700px) { .ai-tasks, .ai-fields { padding-left: 0; } .ai-fields { grid-template-columns: 1fr; } }
 .badge.accent { color: #fff; background: rgba(124, 92, 255, 0.25); border-color: rgba(124, 92, 255, 0.5); }
 .ai-tasks .chip { cursor: default; }
+.ai-head .badge { white-space: nowrap; }
+.ai-tasks .chip { color: var(--text); opacity: 1; }

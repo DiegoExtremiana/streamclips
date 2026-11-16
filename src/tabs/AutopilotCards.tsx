@@ -353,7 +353,7 @@ export function AiCard() {
                     <input id={`ai-key-${x.provider}`} type="password" value={x.apiKey} placeholder={AI_LOOK[x.provider].placeholder} autoComplete="off" onChange={(e) => set(x.provider, { apiKey: e.target.value })} />
                   </div>
                   <div className="field">
-                    <label htmlFor={`ai-model-${x.provider}`}>Modelo (vacío = el recomendado)</label>
+                    <label htmlFor={`ai-model-${x.provider}`} title="Déjalo vacío para usar el recomendado">Modelo (opcional)</label>
                     <input id={`ai-model-${x.provider}`} type="text" value={x.model} onChange={(e) => set(x.provider, { model: e.target.value })} />
                   </div>
                 </div>

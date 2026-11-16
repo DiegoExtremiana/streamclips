@@ -67,6 +67,10 @@ export interface AutopilotSettings {
   purgePublished?: boolean;
   /** Análisis rápido: se eligen los momentos por volumen y chat y SOLO se transcribe lo elegido (en vez de todo el directo). Por defecto sí. */
   fastAnalysis?: boolean;
+  /** Lectura completa del directo con un modelo rápido para entender de qué se habla (por defecto sí). */
+  fullRead?: boolean;
+  /** Rótulos y frases escritos encima del vídeo (gancho, frases, cierre). Por defecto no: el vídeo habla por sí solo. */
+  onScreenText?: boolean;
   /** Valorar los candidatos con el modelo de lenguaje (humor, originalidad, contexto…) en vez de fiarse solo del volumen. Por defecto sí, si hay modelo configurado. */
   smartSelect?: boolean;
   /** Nota mínima (0-10) para que un momento entre en un vídeo o clip; el modelo puntúa 5 lo normal y 7 lo bueno. Por defecto 6,5. */

@@ -94,3 +94,12 @@ test('relleno: si el resumen se queda corto se añaden las mejores escenas no us
   assert.deepEqual(r.plan.chapters.map((x) => x.ids), [['e1', 'e2'], ['e3', 'e5']]);
   assert.equal(fillPlan(plan, cands, 60, 5).added, 0);
 });
+
+test('lectura completa: el texto preciso manda donde lo hay y la lectura rápida cubre el resto del directo', async () => {
+  const { mergeWords } = await import('../shared/subtitles');
+  const w = (text: string, start: number) => ({ text, start, end: start + 0.4 });
+  const precise = [w('hola', 100), w('buenas', 101)];
+  const rough = [w('ola', 100.1), w('buena', 101.2), w('naturaleza', 500), w('política', 900)];
+  assert.deepEqual(mergeWords(precise, rough).map((x) => x.text), ['hola', 'buenas', 'naturaleza', 'política']);
+  assert.deepEqual(mergeWords([], rough).length, 4);
+});

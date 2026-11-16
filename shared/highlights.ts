@@ -471,3 +471,41 @@ export const GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
  * (El botón «Nombres cortos» de la Biblioteca es más amplio: ver `isAutoNameable`.)
  */
 export const isGenericAutoTitle = (o: { title: string; titleSource?: 'auto' | 'manual' }): boolean => o.titleSource !== 'manual' && GENERIC_TITLE.test(o.title.trim());
+
+/**
+ * Candidatos de CONVERSACIÓN. La selección por volumen y chat solo encuentra gritos y picos; lo que se habla con calma
+ * (una opinión, una anécdota, un tema) no suena más alto que el resto y se perdía. Con la lectura completa del directo se
+ * añaden los tramos donde más se habla seguido, que no pisen a los que ya hay, para que el modelo de lenguaje los valore.
+ */
+export function talkCandidates(words: Word[], taken: Seg[], o: { max?: number; windowSec?: number; minWords?: number; energyDb?: number[] } = {}): { start: number; end: number; peak: number; score: number; reasons: string[] }[] {
+  const win = o.windowSec ?? 70;
+  const minWords = o.minWords ?? 130;
+  if (!words.length) return [];
+  const sorted = [...words].sort((a, b) => a.start - b.start);
+  const end = sorted[sorted.length - 1].end;
+  const found: { start: number; end: number; n: number }[] = [];
+  let lo = 0;
+  let hi = 0;
+  for (let t = 0; t + win <= end + win / 2; t += win / 2) {
+    while (lo < sorted.length && sorted[lo].start < t) lo++;
+    while (hi < sorted.length && sorted[hi].start < t + win) hi++;
+    const n = hi - lo;
+    if (n < minWords) continue;
+    const seg = { start: t, end: t + win };
+    if (taken.some((x) => Math.min(x.end, seg.end) - Math.max(x.start, seg.start) > win * 0.3)) continue;
+    if (silentShare(o.energyDb, seg) >= MUTED_SHARE) continue;
+    found.push({ ...seg, n });
+  }
+  const out: typeof found = [];
+  for (const f of found.sort((a, b) => b.n - a.n)) {
+    if (out.length >= (o.max ?? 24)) break;
+    if (out.some((x) => Math.abs(x.start - f.start) < win * 1.5)) continue;
+    out.push(f);
+  }
+  return out
+    .sort((a, b) => a.start - b.start)
+    .map((f) => {
+      const sn = snapToSentences(f.start, f.end, sorted, 6);
+      return { start: sn.start, end: sn.end, peak: (sn.start + sn.end) / 2, score: Math.min(10, f.n / 25), reasons: ['charla'] };
+    });
+}

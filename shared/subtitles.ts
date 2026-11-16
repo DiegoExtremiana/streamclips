@@ -270,3 +270,27 @@ export function buildAss(words: Word[], style: SubtitleStyle, w: number, h: numb
   }
   return `${lines.join('\n')}\n`;
 }
+
+/**
+ * Junta la transcripción precisa (lo elegido, modelo bueno) con la lectura rápida de todo el directo: donde hay texto
+ * preciso manda ese; en el resto del directo se usa el de la lectura rápida. Así el equipo de edición entiende todo el
+ * directo sin perder la calidad de los subtítulos de lo que se monta.
+ */
+export function mergeWords(precise: Word[], rough: Word[]): Word[] {
+  if (!rough.length) return precise;
+  if (!precise.length) return rough;
+  const p = [...precise].sort((a, b) => a.start - b.start);
+  const spans: { start: number; end: number }[] = [];
+  for (const w of p) {
+    const last = spans[spans.length - 1];
+    if (last && w.start - last.end < 4) last.end = Math.max(last.end, w.end);
+    else spans.push({ start: w.start, end: w.end });
+  }
+  let k = 0;
+  const outside = rough.filter((w) => {
+    while (k < spans.length && spans[k].end + 1 < w.start) k++;
+    const s = spans[k];
+    return !(s && w.end > s.start - 1 && w.start < s.end + 1);
+  });
+  return [...p, ...outside].sort((a, b) => a.start - b.start);
+}

@@ -1,4 +1,6 @@
 import { isCancelled } from '../../services/abort';
+import { mergeWords } from '../../../shared/subtitles';
+import { talkCandidates } from '../../../shared/highlights';
 import type { Phase } from './context';
 
 /**
@@ -69,6 +71,26 @@ export const transcribeChosenPhase: Phase = async (ctx) => {
   } catch (e) {
     if (isCancelled(e)) throw e;
     notes.push(`Sin transcripción: ${(e as Error).message}`);
+  }
+  // Lectura completa del directo con un modelo rápido: con solo lo elegido por volumen el equipo de edición no sabe de
+  // qué se ha hablado; así ve el directo entero (temas, contexto) y lo elegido conserva la transcripción buena.
+  if (host.cfg.fullRead !== false && d.transcripts.skim) {
+    ctx.clock.mark('lectura completa');
+    task.update(55, 'Leyendo todo el directo para entender de qué se habla…');
+    try {
+      const rough = await d.transcripts.skim(vod.id, {
+        onProgress: (pct) => task.update(55 + pct * 0.05, `Leyendo todo el directo (${Math.round(pct)} %)…`),
+      });
+      ctx.skim = rough;
+      ctx.words = mergeWords(ctx.words, rough);
+      // lo que se habla con calma no destaca por volumen: se añaden los tramos de más conversación como candidatos
+      const talk = talkCandidates(rough, ctx.pool, { energyDb: ctx.sig.energyDb });
+      talk.forEach((t, i) => ctx.pool.push({ id: `t${i + 1}`, start: t.start, end: t.end, signal: t.score }));
+      notes.push(`Lectura completa del directo: ${rough.length} palabras; ${talk.length} tramo(s) de conversación añadidos a los candidatos.`);
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      notes.push(`Sin lectura completa del directo (${(e as Error).message.split('\n')[0]}): el equipo solo ve lo elegido.`);
+    }
   }
   host.mark(vod, 'analyzing');
   return 'continue';

@@ -2,6 +2,14 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.39.0
+
+- **El equipo entiende todo el directo**: además de transcribir bien lo elegido, el programa lee el directo entero con un modelo rápido de Whisper. Así los editores saben de qué se ha hablado en las cuatro horas, no solo en los trozos con más volumen.
+- **Las conversaciones también cuentan**: los tramos donde más se habla seguido (una opinión, una anécdota, un tema) se añaden a los candidatos, aunque no haya gritos ni picos de chat.
+- **Vídeos por tema de todo el directo**: el editor de temas recibe hasta 60 bloques de conversación repartidos por todo el directo, no solo los primeros minutos.
+- **Sin frases encima del vídeo**: el gancho, las frases de en medio y el cierre ya no se escriben en pantalla (se puede volver a activar en Ajustes).
+- **Personalidad**: todos los editores reciben el encargo de entender antes de cortar y de respetar el humor y la forma de hablar del streamer, sin relleno ni efectos porque sí.
+
 ## Novedades de la v0.38.3
 
 - **Zooms con sentido**: el acercamiento ya no salta en cada exclamación. Solo va en el momento cumbre de lo que pasa: una reacción fuerte en lo que se dice (gritada, con doble exclamación o con una palabra de énfasis) que además suene fuerte en ese instante. Como mucho uno cada 30 segundos.

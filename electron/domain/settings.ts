@@ -67,6 +67,8 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   }
   if (p.purgePublished !== undefined) n.purgePublished = bool(p.purgePublished, 'El borrado tras publicar');
   if (p.fastAnalysis !== undefined) n.fastAnalysis = bool(p.fastAnalysis, 'El análisis rápido');
+  if (p.fullRead !== undefined) n.fullRead = bool(p.fullRead, 'La lectura completa');
+  if (p.onScreenText !== undefined) n.onScreenText = bool(p.onScreenText, 'Los rótulos en pantalla');
   if (p.minQuality !== undefined) {
     if (typeof p.minQuality !== 'number' || !Number.isFinite(p.minQuality) || p.minQuality < 3 || p.minQuality > 9.5) throw new Error('La nota mínima debe estar entre 3 y 9,5.');
     n.minQuality = Math.round(p.minQuality * 2) / 2;

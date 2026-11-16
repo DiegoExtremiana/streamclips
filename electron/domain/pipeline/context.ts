@@ -98,6 +98,8 @@ export interface RunContext {
   clipTitles?: Map<Seg, string>;
   /** Vídeo largo decidido por el director de edición (sustituye al resumen por lista de mejores momentos). */
   directed?: LongPlan;
+  /** Lectura rápida de todo el directo (modelo ligero): para entender de qué se habla, no para subtítulos. */
+  skim?: Word[];
   /** Título fijo del resumen del directo: «Resumen 15 de noviembre de 2026». */
   summaryTitle?: string;
   topicLongs: ThemeProposal[];

@@ -524,7 +524,13 @@ export class Autopilot implements Host {
     const chars = o.chars ?? 380;
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
     const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c.judgement.trim ?? c, chars), title: c.judgement.title, total: c.total }));
-    const blocks = transcriptBlocks(words, cand).slice(0, 20);
+    // con la lectura completa hay texto de todo el directo: se dan los bloques con más conversación (hasta 60), en orden
+    const blocks = transcriptBlocks(words, cand)
+      .map((b) => ({ b, n: words.filter((w) => w.start >= b.start && w.start < b.end).length }))
+      .sort((x, y) => y.n - x.n)
+      .slice(0, 60)
+      .map((x) => x.b)
+      .sort((x, y) => x.start - y.start);
     blocks.forEach((b, i) => units.push({ id: `b${i}`, start: b.start, end: b.end, text: judgeText(words, b, 380), total: 5 }));
     units.sort((a, b) => a.start - b.start);
     if (units.length < 4) return [];

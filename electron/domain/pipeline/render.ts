@@ -144,7 +144,7 @@ export const renderPhase: Phase = async (ctx) => {
     const title = ctx.summaryTitle || p.title || titles.summary.title;
     // el título que pensó el editor (de qué va el directo) abre la descripción
     if (ctx.summaryTitle && p.title && !p.description.startsWith(p.title)) p.description = `${p.title}. ${p.description}`.trim();
-    await step('summary', 'vídeo dirigido', () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, captions: p.captions }), { title, description: p.description || titles.summary.description }, p.meta);
+    await step('summary', 'vídeo dirigido', () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, ...(cfg.onScreenText === true ? { captions: p.captions } : {}) }), { title, description: p.description || titles.summary.description }, p.meta);
   }
   if (summary.length) await step('summary', 'resumen', () => longMake(ctx.summaryTitle || titles.summary.title, summary, { chapters: true }), ctx.summaryTitle ? { ...titles.summary, title: ctx.summaryTitle } : titles.summary, ctx.summaryMeta);
   for (const [i, m] of mains.entries()) {

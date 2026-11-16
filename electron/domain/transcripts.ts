@@ -40,6 +40,9 @@ export interface TranscriptDeps {
 }
 
 /** Transcripciones por VOD: se importan (JSON, SRT, VTT) o se generan con Whisper si está configurado. */
+/** Modelo de Whisper de la lectura completa: rápido (unas 5 veces más que el tiempo real en un PC normal). */
+export const SKIM_MODEL = 'base';
+
 export class TranscriptService {
   private dir: string;
   /** Lo llama al guardar una transcripción nueva (p. ej. para poner nombres cortos a lo ya creado). */
@@ -517,6 +520,66 @@ export class TranscriptService {
   }
 
   /** Trozos de transcripción ya terminados de un directo a medias (para retomarlo). */
+  /**
+   * Lectura completa y rápida del directo con un modelo ligero de Whisper («base»): sirve para que el equipo de edición
+   * ENTIENDA de qué se habla en todo el directo (temas, contexto, a quién se refiere cada cosa). Es menos precisa que la
+   * transcripción normal, así que no se usa para subtítulos: se guarda aparte (`<vod>.skim.json`) y lo elegido se
+   * vuelve a transcribir con el modelo de siempre. Se guarda por trozos: se puede pausar sin perder lo hecho.
+   */
+  async skim(vodId: string, opts: { onProgress?: (pct: number, detail?: string) => void; onEstimate?: (totalSec: number) => void } = {}): Promise<Word[]> {
+    const file = path.join(this.dir, `${vodId}.skim.json`);
+    try {
+      if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8')) as Word[];
+    } catch {
+      /* se rehace */
+    }
+    const exe = this.d.whisperExe();
+    const vod = this.vod(vodId);
+    if (!exe || !vod.filePath || !fs.existsSync(vod.filePath)) throw new Error('No hay Whisper o el directo no está descargado.');
+    const s = this.d.store.data.settings;
+    const model = SKIM_MODEL;
+    await downloadModel(this.modelsDir, model, () => undefined, { baseUrl: this.d.modelBaseUrl });
+    return this.d.queue.run(async () => {
+      const task = this.d.tasks.start('transcribe', `Leyendo todo el directo "${vod.title || vod.url}"`, vodId);
+      try {
+        const t0 = Date.now();
+        let audioSec = 0;
+        const words = await transcribeVideo(this.d.tools(), vod.filePath!, {
+          exe,
+          model: modelPath(this.modelsDir, model),
+          language: s.whisperLanguage,
+          prompt: this.promptFor(vod),
+          ...this.share(),
+          checkpointDir: `${this.checkpointDir(vodId)}-skim`,
+          onProgress: (pct, detail) => {
+            task.update(pct, detail);
+            opts.onProgress?.(pct, detail);
+          },
+          onInfo: ({ durationSec, skippedFraction }) => {
+            audioSec = durationSec * (1 - skippedFraction);
+            const est = audioSec / this.ratio(model);
+            task.estimate(est);
+            opts.onEstimate?.(est);
+          },
+        });
+        if (audioSec) this.learnRatio(model, audioSec / Math.max(1, (Date.now() - t0) / 1000));
+        fs.mkdirSync(this.dir, { recursive: true });
+        fs.writeFileSync(file, JSON.stringify(words));
+        fs.rmSync(`${this.checkpointDir(vodId)}-skim`, { recursive: true, force: true });
+        task.done();
+        return words;
+      } catch (e) {
+        task.fail((e as Error).message);
+        throw e;
+      }
+    });
+  }
+
+  /** Lo que se tarda (s) en la lectura completa de un directo de esta duración en este equipo. */
+  skimEta(durationSec: number): number {
+    return durationSec / this.ratio(SKIM_MODEL);
+  }
+
   checkpointDir(vodId: string): string {
     return path.join(this.dir, `${vodId.replace(/[^\w-]/g, '_')}.parcial`);
   }

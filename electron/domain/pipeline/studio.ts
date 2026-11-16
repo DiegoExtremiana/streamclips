@@ -31,6 +31,7 @@ import {
   type StudioProject,
   type Trim,
 } from '../../../shared/studio';
+import { mergeWords } from '../../../shared/subtitles';
 import { MUTED_SHARE, silentShare, snapToSentences, type Seg } from '../../../shared/highlights';
 import { judgeText, type Judged } from '../../../shared/judge';
 import { decideFormat, type ThemeProposal } from '../../../shared/themes';
@@ -115,7 +116,7 @@ export const studioPhase: Phase = async (ctx) => {
     try {
       // con el análisis rápido solo están transcritos los picos: hay que transcribir el contexto que se añade
       await d.transcripts.ensure(vod.id, spans.map((s) => ({ start: s.start, end: s.end })));
-      sceneWords = d.transcripts.words(vod.id);
+      sceneWords = mergeWords(d.transcripts.words(vod.id), ctx.skim ?? []);
       ctx.words = sceneWords;
     } catch (e) {
       if (isCancelled(e)) throw e;

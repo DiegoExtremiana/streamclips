@@ -749,3 +749,36 @@ button.btn.danger-text { color: var(--bad); }
 .ai-roles { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
 .ai-roles th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line-strong); }
 .ai-roles td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+
+/* Menú lateral con iconos (v0.38.1) */
+.sidetab-name { display: flex; align-items: center; gap: 8px; }
+.sidetab-icon { display: inline-flex; color: var(--muted); }
+.sidetab.active .sidetab-icon { color: var(--accent-2); }
+
+/* Inteligencia artificial: fichas por IA (v0.38.1) */
+.ai-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.ai-tile { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 10px; color: #fff; }
+.ai-tile.md { width: 38px; height: 38px; }
+.ai-tile.sm { width: 24px; height: 24px; border-radius: 7px; }
+.ai-tile.sm .icon { width: 13px; height: 13px; }
+.ai-blue { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+.ai-orange { background: linear-gradient(135deg, #f97316, #ef4444); }
+.ai-violet { background: linear-gradient(135deg, #a855f7, #7c3aed); }
+.ai-green { background: linear-gradient(135deg, #10b981, #0d9488); }
+.ai-list { display: flex; flex-direction: column; gap: 10px; }
+.ai-item { border: 1px solid var(--line-strong); border-radius: 12px; padding: 12px 14px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.ai-item.main { border-color: var(--accent-2); }
+.ai-item-top { display: flex; align-items: center; gap: 12px; }
+.ai-item-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ai-tasks { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 50px; }
+.ai-tasks .chip { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--line-strong); }
+.ai-fields { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; padding-left: 50px; }
+.ai-add { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.ai-add-btn { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line-strong); background: transparent; color: var(--text); cursor: pointer; }
+.ai-add-btn:hover { border-color: var(--accent-2); background: var(--surface-2); }
+.ai-add-btn > span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ai-who { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.ai-backups { display: inline-flex; gap: 4px; align-items: center; }
+@media (max-width: 700px) { .ai-tasks, .ai-fields { padding-left: 0; } .ai-fields { grid-template-columns: 1fr; } }
+.badge.accent { color: #fff; background: rgba(124, 92, 255, 0.25); border-color: rgba(124, 92, 255, 0.5); }
+.ai-tasks .chip { cursor: default; }

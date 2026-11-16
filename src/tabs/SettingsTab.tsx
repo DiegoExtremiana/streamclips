@@ -12,14 +12,15 @@ import StyleCard from './StyleCard';
 import CloudCard from './CloudCard';
 import EngineCard from './EngineCard';
 import { SideNav, SubTabs, useSubTab } from '../SubTabs';
+import { IconChip, IconCloud, IconMic, IconPalette, IconSettings, IconWand } from '../icons';
 
 const SECTIONS = [
-  { id: 'general', label: 'General', hint: 'Dónde se guardan los vídeos, las herramientas que usa el programa y las actualizaciones.' },
-  { id: 'ia', label: 'Inteligencia artificial', hint: 'La clave gratuita (Groq o Gemini) con la que el programa entiende los clips y los directos.' },
-  { id: 'piloto', label: 'Piloto automático', hint: 'Qué prepara solo el programa al acabar un directo, cuánto y cuándo lo publica.' },
-  { id: 'voz', label: 'Voz y subtítulos', hint: 'Cómo escucha lo que dices (Whisper), quién habla, tu vocabulario y los subtítulos.' },
-  { id: 'estilo', label: 'Mi estilo', hint: 'Cómo quieres que edite: ritmo, silencios, música, títulos, portadas y lo que ha aprendido de ti.' },
-  { id: 'nube', label: 'PC apagado', hint: 'Opcional: que un servicio gratuito de GitHub prepare y suba los vídeos mientras tu PC está apagado.' },
+  { id: 'general', label: 'General', icon: <IconSettings size={16} />, hint: 'Dónde se guardan los vídeos, las herramientas que usa el programa y las actualizaciones.' },
+  { id: 'ia', label: 'Inteligencia artificial', icon: <IconChip size={16} />, hint: 'Tus IAs gratuitas, qué hace cada una y quién la sustituye si falla.' },
+  { id: 'piloto', label: 'Piloto automático', icon: <IconWand size={16} />, hint: 'Qué prepara solo el programa al acabar un directo, cuánto y cuándo lo publica.' },
+  { id: 'voz', label: 'Voz y subtítulos', icon: <IconMic size={16} />, hint: 'Cómo escucha lo que dices (Whisper), quién habla, tu vocabulario y los subtítulos.' },
+  { id: 'estilo', label: 'Mi estilo', icon: <IconPalette size={16} />, hint: 'Cómo quieres que edite: ritmo, silencios, música, títulos, portadas y lo que ha aprendido de ti.' },
+  { id: 'nube', label: 'PC apagado', icon: <IconCloud size={16} />, hint: 'Opcional: que un servicio gratuito de GitHub prepare y suba los vídeos mientras tu PC está apagado.' },
 ];
 
 /** Varias tarjetas de una sección, de una en una: pestañas arriba y solo se ve la elegida. */

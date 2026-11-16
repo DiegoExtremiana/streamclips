@@ -3,6 +3,8 @@ import { useState, type ReactNode } from 'react';
 export interface SubTab {
   id: string;
   label: string;
+  /** Icono a la izquierda del nombre (menú lateral). */
+  icon?: ReactNode;
   /** Aviso pequeño junto al nombre (p. ej. cuántos hay). */
   badge?: string | number;
   hint?: string;
@@ -89,7 +91,10 @@ export function SideNav(props: { label: string; tabs: SubTab[]; value: string; o
       >
         {tabs.map((t) => (
           <button key={t.id} role="tab" type="button" aria-selected={t.id === current.id} tabIndex={t.id === current.id ? 0 : -1} aria-label={t.label} title={t.hint} className={`sidetab ${t.id === current.id ? 'active' : ''}`} onClick={() => props.onChange(t.id)}>
-            <span className="sidetab-name">{t.label}</span>
+            <span className="sidetab-name">
+              {t.icon && <span className="sidetab-icon">{t.icon}</span>}
+              {t.label}
+            </span>
             {t.hint && <span className="sidetab-hint">{t.hint}</span>}
           </button>
         ))}

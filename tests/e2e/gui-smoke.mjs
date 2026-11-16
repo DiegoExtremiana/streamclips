@@ -171,8 +171,9 @@ try {
 
   // ── Ajustes: secciones, la clave de IA y el piloto ──
   await sub(page, 'Inteligencia artificial');
-  await page.locator('#ap-llm').selectOption('groq');
-  await page.locator('#ap-key').fill('gsk_clave_de_prueba');
+  await page.getByRole('button', { name: 'Añadir Groq' }).click();
+  await page.locator('#ai-key-groq').fill('gsk_clave_de_prueba');
+  await page.screenshot({ path: path.join(OUT, '1c-ajustes-ia.png') });
   await page.getByRole('button', { name: 'Guardar inteligencia artificial' }).click();
   await page.getByText('Guardado.').first().waitFor();
   await poll(() => JSON.parse(fs.readFileSync(path.join(userData, 'data.json'), 'utf8')).settings.autopilot.llm.provider === 'groq');

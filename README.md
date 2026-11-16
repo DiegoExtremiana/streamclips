@@ -2,6 +2,12 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.38.1
+
+- **Inteligencia artificial más ordenada**: cada IA tiene su ficha con su icono, si es la principal o de apoyo, si está conectada y de qué tareas se encarga. Se añaden con un botón por IA, se hace principal con la estrella y la clave se despliega solo cuando hace falta. La tabla «Quién hace qué» enseña el icono de cada una.
+- El menú de Ajustes tiene un icono por sección.
+- Al hacer principal una IA de apoyo se conserva su clave.
+
 ## Novedades de la v0.38.0
 
 - **Varias IAs a la vez**: en Ajustes, además de la IA principal, se pueden añadir hasta tres «IAs de apoyo» con su propia clave gratuita. Si una está saturada o sin cuota, la siguiente toma el relevo, y el trabajo se reparte: las imágenes las mira Gemini si está entre ellas, y la valoración de momentos la hace Groq si está.

@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AutopilotSettings, Platform } from '../../shared/types';
-import { MAX_LLM_SLOTS, type LlmSlot } from '../../shared/model/settings';
+import { MAX_LLM_SLOTS } from '../../shared/model/settings';
 import { AI_LABEL, assignments, type AiProvider } from '../../shared/llmRoles';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_IDS } from '../../shared/subtitles';
 import { errMsg } from '../lib';
 import { SubTabs, useSubTab } from '../SubTabs';
 
-import { IconPlus, IconTrash } from '../icons';
+import { IconBolt, IconEye, IconKey, IconPen, IconPlus, IconRoute, IconStar, IconTrash } from '../icons';
 const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'youtube', label: 'YouTube' },
   { id: 'tiktok', label: 'TikTok' },
@@ -248,100 +248,166 @@ export function AutoSubtitlesCard() {
 }
 
 /** La clave del modelo de lenguaje y lo que se hace con él. */
+/** Cómo se presenta cada IA: un icono por lo que mejor hace (no son los logotipos de las marcas) y su color. */
+const AI_LOOK: Record<AiProvider, { icon: ReactNode; tint: string; strength: string; placeholder: string }> = {
+  gemini: { icon: <IconEye size={18} />, tint: 'ai-blue', strength: 'Ve imágenes y entiende textos largos. La mejor para la principal.', placeholder: 'AIza…' },
+  groq: { icon: <IconBolt size={18} />, tint: 'ai-orange', strength: 'La más rápida. Ideal para valorar muchos momentos.', placeholder: 'gsk_…' },
+  mistral: { icon: <IconPen size={18} />, tint: 'ai-violet', strength: 'Buena redactando: temas, títulos y descripciones.', placeholder: 'Clave de Mistral' },
+  openrouter: { icon: <IconRoute size={18} />, tint: 'ai-green', strength: 'Reparte entre modelos gratuitos. Útil como último relevo.', placeholder: 'sk-or-…' },
+};
+const AI_ORDER: AiProvider[] = ['gemini', 'groq', 'mistral', 'openrouter'];
+
+function AiBadge({ p, size = 'md' }: { p: AiProvider; size?: 'sm' | 'md' }) {
+  return <span className={`ai-tile ${AI_LOOK[p].tint} ${size}`} aria-hidden="true">{AI_LOOK[p].icon}</span>;
+}
+
+type AiItem = { provider: AiProvider; model: string; apiKey: string };
+
 export function AiCard() {
   const { a, up, save, msg } = useAutopilot();
-  const [key, setKey] = useState<string | null>(null);
+  const [items, setItems] = useState<AiItem[] | null>(null);
+  const [open, setOpen] = useState<AiProvider | null>(null);
   useEffect(() => {
-    if (a && key === null) setKey(a.llm.apiKey);
-  }, [a, key]);
-  if (!a || key === null) return <Loading title="Inteligencia artificial" />;
-  const on = a.llm.provider !== 'none' && key !== '';
-  const extra = a.llmExtra ?? [];
-  const configured: AiProvider[] = [...(on && a.llm.provider !== 'none' ? [a.llm.provider] : []), ...extra.filter((x) => x.apiKey).map((x) => x.provider)];
-  const setSlot = (i: number, p: Partial<LlmSlot>) => up({ llmExtra: extra.map((x, k) => (k === i ? { ...x, ...p } : x)) });
-  // el hueco nuevo propone un proveedor que todavía no esté puesto
-  const used = new Set<string>([a.llm.provider, ...extra.map((x) => x.provider)]);
-  const nextProvider = (['groq', 'gemini', 'mistral', 'openrouter'] as LlmSlot['provider'][]).find((p) => !used.has(p)) ?? 'groq';
+    if (!a || items) return;
+    const main: AiItem[] = a.llm.provider !== 'none' ? [{ provider: a.llm.provider, model: a.llm.model, apiKey: a.llm.apiKey }] : [];
+    setItems([...main, ...(a.llmExtra ?? []).filter((x) => x.provider !== a.llm.provider)]);
+  }, [a, items]);
+  if (!a || !items) return <Loading title="Inteligencia artificial" />;
+  const configured = items.filter((x) => x.apiKey).map((x) => x.provider);
+  const roles = assignments(configured);
+  const leads = (p: AiProvider) => roles.filter((r) => r.main === p);
+  const missing = AI_ORDER.filter((p) => !items.some((x) => x.provider === p));
+  const set = (p: AiProvider, patch: Partial<AiItem>) => setItems(items.map((x) => (x.provider === p ? { ...x, ...patch } : x)));
+  const remove = (p: AiProvider) => setItems(items.filter((x) => x.provider !== p));
+  const makeMain = (p: AiProvider) => setItems([...items.filter((x) => x.provider === p), ...items.filter((x) => x.provider !== p)]);
+  const add = (p: AiProvider) => {
+    setItems([...items, { provider: p, model: '', apiKey: '' }]);
+    setOpen(p);
+  };
+  const doSave = () => {
+    const [main, ...rest] = items;
+    void save({
+      scoreClips: a.scoreClips !== false,
+      smartSelect: a.smartSelect !== false,
+      llm: main ? { provider: main.provider, model: main.model, apiKey: main.apiKey } : { provider: 'none', model: '', apiKey: '' },
+      llmExtra: rest.filter((x) => x.apiKey),
+    }).then((s) => {
+      if (!s) return;
+      const m: AiItem[] = s.llm.provider !== 'none' ? [{ provider: s.llm.provider, model: s.llm.model, apiKey: s.llm.apiKey }] : [];
+      setItems([...m, ...(s.llmExtra ?? []).filter((x) => x.provider !== s.llm.provider)]);
+    });
+  };
   return (
     <section className="card" aria-label="Inteligencia artificial">
-      <h2>Inteligencia artificial (gratis)</h2>
-      <div className="muted small">
-        Un modelo de lenguaje gratuito (Groq o Gemini) lee lo que se dice en los clips y en los directos para puntuarlos, elegir los mejores momentos y redactar títulos.
-        Solo se le envía texto de la transcripción; nunca ve tu pantalla ni decide los cortes.
-      </div>
-      <div className="row" style={{ gap: 8, margin: '8px 0' }}>
-        <span className={`badge ${on ? 'ok' : 'warn'}`}>{on ? 'Conectado' : 'Sin clave: se usa solo el volumen y el chat'}</span>
-      </div>
-      <div className="row">
-        <div className="field" style={{ flex: 1 }}>
-          <label htmlFor="ap-llm">Proveedor</label>
-          <select id="ap-llm" value={a.llm.provider} onChange={(e) => up({ llm: { ...a.llm, provider: e.target.value as AutopilotSettings['llm']['provider'] } })}>
-            <option value="none">Ninguno</option>
-            <option value="gemini">Gemini (recomendado)</option>
-            <option value="groq">Groq</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="mistral">Mistral</option>
-          </select>
+      <div className="ai-head">
+        <div>
+          <h2>Inteligencia artificial</h2>
+          <div className="muted small">Cuentas gratuitas que forman tu equipo de edición. Cada una tiene sus tareas y, si una falla, otra la sustituye.</div>
         </div>
-        <div className="field" style={{ flex: 1 }}>
-          <label htmlFor="ap-model">Modelo (vacío = el recomendado)</label>
-          <input id="ap-model" type="text" value={a.llm.model} onChange={(e) => up({ llm: { ...a.llm, model: e.target.value } })} />
-        </div>
+        <span className={`badge ${configured.length ? 'ok' : 'warn'}`}>{configured.length ? `${configured.length} conectada${configured.length > 1 ? 's' : ''}` : 'Ninguna conectada'}</span>
       </div>
-      <div className="field">
-        <label htmlFor="ap-key">Clave de API</label>
-        <input id="ap-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder={a.llm.provider === 'gemini' ? 'AIza…' : 'gsk_…'} />
+
+      <h3>Tu equipo</h3>
+      {!items.length && <div className="muted small">Todavía no hay ninguna IA. Sin ella se usa solo el volumen y el chat. Empieza por Gemini.</div>}
+      <div className="ai-list">
+        {items.map((x, i) => {
+          const tasks = leads(x.provider);
+          const isOpen = open === x.provider || !x.apiKey;
+          return (
+            <div className={`ai-item ${i === 0 ? 'main' : ''}`} key={x.provider} data-testid={`ai-item-${x.provider}`}>
+              <div className="ai-item-top">
+                <AiBadge p={x.provider} />
+                <div className="ai-item-name">
+                  <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                    <strong>{AI_LABEL[x.provider]}</strong>
+                    <span className={`badge ${i === 0 ? 'accent' : ''}`}>{i === 0 ? 'Principal' : 'Apoyo'}</span>
+                    <span className={`badge ${x.apiKey ? 'ok' : 'warn'}`}>{x.apiKey ? 'Conectada' : 'Falta la clave'}</span>
+                  </div>
+                  <div className="muted small">{AI_LOOK[x.provider].strength}</div>
+                </div>
+                <div className="row" style={{ gap: 6 }}>
+                  {i > 0 && (
+                    <button className="iconbtn" aria-label={`Hacer principal a ${AI_LABEL[x.provider]}`} title="Hacer principal" onClick={() => makeMain(x.provider)}>
+                      <IconStar size={15} />
+                    </button>
+                  )}
+                  <button className="iconbtn" aria-label={`Clave y modelo de ${AI_LABEL[x.provider]}`} title="Clave y modelo" aria-expanded={isOpen} onClick={() => setOpen(open === x.provider ? null : x.provider)}>
+                    <IconKey size={15} />
+                  </button>
+                  <button className="iconbtn danger" aria-label={`Quitar ${AI_LABEL[x.provider]}`} title="Quitar" onClick={() => remove(x.provider)}>
+                    <IconTrash size={15} />
+                  </button>
+                </div>
+              </div>
+              {tasks.length > 0 && (
+                <div className="ai-tasks">
+                  {tasks.map((t) => (
+                    <span className="chip" key={t.id} title={t.why}>{t.label.split(':')[0]}</span>
+                  ))}
+                </div>
+              )}
+              {isOpen && (
+                <div className="ai-fields">
+                  <div className="field">
+                    <label htmlFor={`ai-key-${x.provider}`}>Clave de API</label>
+                    <input id={`ai-key-${x.provider}`} type="password" value={x.apiKey} placeholder={AI_LOOK[x.provider].placeholder} autoComplete="off" onChange={(e) => set(x.provider, { apiKey: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label htmlFor={`ai-model-${x.provider}`}>Modelo (vacío = el recomendado)</label>
+                    <input id={`ai-model-${x.provider}`} type="text" value={x.model} onChange={(e) => set(x.provider, { model: e.target.value })} />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <h3>IAs de apoyo</h3>
-      <div className="muted small">
-        Otras cuentas gratuitas que trabajan con la principal: si una está saturada o se queda sin cuota, la siguiente toma el relevo. Además el trabajo se reparte: las imágenes las mira Gemini si está entre ellas, y la valoración de momentos la hace Groq si está (es la más rápida).
-      </div>
-      {extra.map((x, i) => (
-        <div className="row" key={i} style={{ gap: 8, alignItems: 'flex-end', marginTop: 8 }} data-testid={`ai-slot-${i}`}>
-          <div className="field" style={{ flex: 1 }}>
-            <label htmlFor={`ap-x-prov-${i}`}>Proveedor</label>
-            <select id={`ap-x-prov-${i}`} value={x.provider} onChange={(e) => setSlot(i, { provider: e.target.value as LlmSlot['provider'], apiKey: '' })}>
-              <option value="gemini">Gemini</option>
-              <option value="groq">Groq</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="mistral">Mistral</option>
-            </select>
+
+      {missing.length > 0 && items.length < MAX_LLM_SLOTS + 1 && (
+        <>
+          <h3>Añadir una IA</h3>
+          <div className="ai-add">
+            {missing.map((p) => (
+              <button className="ai-add-btn" key={p} onClick={() => add(p)} aria-label={`Añadir ${AI_LABEL[p]}`}>
+                <AiBadge p={p} size="sm" />
+                <span>
+                  <strong>{AI_LABEL[p]}</strong>
+                  <span className="muted small">{AI_LOOK[p].strength}</span>
+                </span>
+                <IconPlus size={15} />
+              </button>
+            ))}
           </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label htmlFor={`ap-x-model-${i}`}>Modelo (vacío = el recomendado)</label>
-            <input id={`ap-x-model-${i}`} type="text" value={x.model} onChange={(e) => setSlot(i, { model: e.target.value })} />
-          </div>
-          <div className="field" style={{ flex: 2 }}>
-            <label htmlFor={`ap-x-key-${i}`}>Clave de API</label>
-            <input id={`ap-x-key-${i}`} type="password" value={x.apiKey} onChange={(e) => setSlot(i, { apiKey: e.target.value })} autoComplete="off" />
-          </div>
-          <button className="iconbtn" aria-label="Quitar esta IA de apoyo" title="Quitar esta IA de apoyo" onClick={() => up({ llmExtra: extra.filter((_, k) => k !== i) })}>
-            <IconTrash size={15} />
-          </button>
-        </div>
-      ))}
-      {extra.length < MAX_LLM_SLOTS && (
-        <button className="btn ghost small" style={{ marginTop: 8 }} onClick={() => up({ llmExtra: [...extra, { provider: nextProvider, model: '', apiKey: '' }] })}>
-          <IconPlus size={14} /> Añadir IA de apoyo
-        </button>
+        </>
       )}
+
       <h3>Quién hace qué</h3>
-      <div className="muted small">Cada tarea tiene su IA titular; si falla, pasa a la de relevo. Cambia al añadir o quitar IAs.</div>
       <table className="ai-roles" data-testid="ai-roles">
         <thead>
-          <tr><th>Tarea</th><th>La hace</th><th>Relevo</th></tr>
+          <tr><th>Tarea</th><th>La hace</th><th>Si falla</th></tr>
         </thead>
         <tbody>
-          {assignments(configured).map((t) => (
+          {roles.map((t) => (
             <tr key={t.id} title={t.why}>
               <td>{t.label}</td>
-              <td>{t.main ? <span className="badge ok">{AI_LABEL[t.main]}</span> : <span className="badge warn">Nadie</span>}</td>
-              <td className="muted small">{t.backups.length ? t.backups.map((p) => AI_LABEL[p]).join(', ') : 'Sin relevo'}</td>
+              <td>
+                {t.main ? (
+                  <span className="ai-who"><AiBadge p={t.main} size="sm" />{AI_LABEL[t.main]}</span>
+                ) : (
+                  <span className="badge warn">Nadie</span>
+                )}
+              </td>
+              <td>
+                <span className="ai-backups">
+                  {t.backups.length ? t.backups.map((p) => <AiBadge key={p} p={p} size="sm" />) : <span className="muted small">Sin relevo</span>}
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <KeyHowTo current={a.llm.provider} />
+
+      <KeyHowTo current={items[0]?.provider ?? 'gemini'} />
 
       <h3>Qué hace con ella</h3>
       <Check checked={a.scoreClips !== false} onChange={(v) => up({ scoreClips: v })} title="Puntuar en segundo plano los clips de tu canal">
@@ -350,7 +416,7 @@ export function AiCard() {
       <Check checked={a.smartSelect !== false} onChange={(v) => up({ smartSelect: v })} title="Selección inteligente de momentos">
         El modelo lee cada candidato y puntúa humor, originalidad, interacción, reacción, contexto y si se entiende solo; elige con variedad y no rellena con momentos flojos.
       </Check>
-      <button className="btn" onClick={() => void save({ scoreClips: a.scoreClips !== false, smartSelect: a.smartSelect !== false, llm: { provider: a.llm.provider, model: a.llm.model, apiKey: key }, llmExtra: extra.filter((x) => x.apiKey) }).then((s) => s && setKey(s.llm.apiKey))}>
+      <button className="btn" onClick={doSave}>
         Guardar inteligencia artificial
       </button>
       <Status msg={msg} />

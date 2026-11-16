@@ -124,13 +124,16 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
   }
   if (p.llmExtra !== undefined) {
     if (!Array.isArray(p.llmExtra) || p.llmExtra.length > MAX_LLM_SLOTS) throw new Error(`Puede haber hasta ${MAX_LLM_SLOTS} IAs de apoyo.`);
-    const old = cur.llmExtra ?? [];
-    n.llmExtra = p.llmExtra.map((x, i) => {
+    // claves guardadas por proveedor (la principal y las de apoyo): al reordenar o cambiar la principal no se pierden
+    const stored = new Map<string, string>();
+    for (const o of cur.llmExtra ?? []) if (o.apiKey) stored.set(o.provider, o.apiKey);
+    if (cur.llm.provider !== 'none' && cur.llm.apiKey) stored.set(cur.llm.provider, cur.llm.apiKey);
+    n.llmExtra = p.llmExtra.map((x) => {
       if (!LLM_NAMES.includes(x.provider)) throw new Error('Proveedor de modelo no reconocido.');
       const model = (x.model ?? '').trim();
       if (!/^[A-Za-z0-9._:/-]{0,80}$/.test(model)) throw new Error('El nombre del modelo no es válido.');
-      // la clave enmascarada significa «la que ya había en ese hueco» (solo vale si el proveedor no cambió)
-      const kept = x.apiKey === MASKED_SECRET ? (old[i]?.provider === x.provider ? old[i].apiKey : '') : enc((x.apiKey ?? '').trim());
+      // la clave enmascarada significa «la que ya tenía guardada ese proveedor»
+      const kept = x.apiKey === MASKED_SECRET ? (stored.get(x.provider) ?? '') : enc((x.apiKey ?? '').trim());
       return { provider: x.provider, model, apiKey: kept };
     });
   }
@@ -145,6 +148,10 @@ function validateAutopilot(cur: AutopilotSettings, p: NonNullable<SettingsPatch[
       n.llm.model = l.model.trim();
     }
     if (l.apiKey !== undefined && l.apiKey !== MASKED_SECRET) n.llm.apiKey = enc(l.apiKey.trim());
+    else if (l.apiKey === MASKED_SECRET && l.provider !== undefined && l.provider !== cur.llm.provider) {
+      // una IA de apoyo pasa a ser la principal: conserva su clave
+      n.llm.apiKey = (cur.llmExtra ?? []).find((o) => o.provider === l.provider)?.apiKey ?? '';
+    }
   }
   return n;
 }

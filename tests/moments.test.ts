@@ -204,8 +204,9 @@ describe('revisión de momentos', () => {
       await e.ctx.autopilot.run(vod.id);
       const score = clipsOf(e)[0].auto!.score!;
       assert.ok(score > 7, String(score));
-      // la nota mínima justo por debajo de esa nota; el ajuste de -1,5 lo deja fuera
-      e.ctx.settings.set({ autopilot: { minQuality: Math.floor(score * 2) / 2 } });
+      // la nota mínima justo por debajo de esa nota; el ajuste de -1,5 lo deja fuera (en modo estricto: priorizando la
+      // cantidad se completaría con lo que se queda cerca)
+      e.ctx.settings.set({ autopilot: { minQuality: Math.floor(score * 2) / 2, quantityFirst: false } });
       savePrefs(prefsFile, { enabled: true, kindBias: { fail: -1.5 }, counts: { fail: 6 } });
       await e.ctx.autopilot.run(vod.id);
       assert.match(e.ctx.store.data.vods[0].autopilot?.note ?? '', /Preferencias aprendidas aplicadas: fail -1\.5/);

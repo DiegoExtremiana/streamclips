@@ -36,6 +36,8 @@ const log = (m) => console.log(`  ✔ ${String(++step).padStart(2, '0')} ${m}`);
 async function launch() {
   const app = await electron.launch({ executablePath: electronBin, args: launchArgs, cwd: root, env: launchEnv });
   const page = await app.firstWindow();
+  // sin animaciones (como con «reducir movimiento» en Windows): las medidas de arrastrar y soltar no dependen de un fundido a medias
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const problems = [];
   page.on('console', (m) => {
     // la vista previa de un clip de Twitch pide un vídeo a internet: sin red (como en el CI aislado) falla la conexión, y eso no es un fallo de la aplicación

@@ -253,7 +253,7 @@ describe('ffmpeg: escape de rutas y filtros', () => {
   it('punchFilter sube, mantiene y baja el zoom', () => {
     const f = punchFilter(1920, 1080, [{ a: 1, dur: 1, zoom: 1.2 }]);
     assert.match(f, /^scale=w='trunc\(1920\*\(1\+0\.200\*clip\(/);
-    assert.match(f, /eval=frame,crop=1920:1080$/);
+    assert.match(f, /eval=frame,crop=w=1920:h=1080:x='max\(0,min\(iw-ow,\(0\.5\+\(0\.000\)\*between\(t,1\.000,2\.000\)\)\*iw-ow\/2\)\)':y='/);
   });
 });
 

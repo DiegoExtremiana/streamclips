@@ -93,10 +93,10 @@ var init_twitch = __esm({
         this.token = { clientId: c.clientId, value: j.access_token, expiresAt: this.now() + (j.expires_in ?? 3600) * 1e3 };
         return j.access_token;
       }
-      async helix(path36, c) {
+      async helix(path37, c) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const token = await this.appToken(c, attempt > 0);
-          const res = await this.request(`https://api.twitch.tv/helix/${path36}`, {
+          const res = await this.request(`https://api.twitch.tv/helix/${path37}`, {
             headers: { "Client-Id": c.clientId, Authorization: `Bearer ${token}` }
           });
           if (res.status === 401) {
@@ -307,16 +307,16 @@ var require_libsodium = __commonJS({
               var scriptDirectory2 = "";
               var readAsync2, readBinary2;
               if (ENVIRONMENT_IS_NODE2) {
-                var fs44 = require("fs");
+                var fs45 = require("fs");
                 scriptDirectory2 = __dirname + "/";
                 readBinary2 = (filename) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs44.readFileSync(filename);
+                  var ret = fs45.readFileSync(filename);
                   return ret;
                 };
                 readAsync2 = async (filename, binary = true) => {
                   filename = isFileURI2(filename) ? new URL(filename) : filename;
-                  var ret = fs44.readFileSync(filename, binary ? void 0 : "utf8");
+                  var ret = fs45.readFileSync(filename, binary ? void 0 : "utf8");
                   return ret;
                 };
                 if (process.argv.length > 1) {
@@ -27428,16 +27428,16 @@ var require_libsodium = __commonJS({
           var scriptDirectory = "";
           var readAsync, readBinary;
           if (ENVIRONMENT_IS_NODE) {
-            var fs43 = require("fs");
+            var fs44 = require("fs");
             scriptDirectory = __dirname + "/";
             readBinary = (filename) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs43.readFileSync(filename);
+              var ret = fs44.readFileSync(filename);
               return ret;
             };
             readAsync = async (filename, binary = true) => {
               filename = isFileURI(filename) ? new URL(filename) : filename;
-              var ret = fs43.readFileSync(filename, binary ? void 0 : "utf8");
+              var ret = fs44.readFileSync(filename, binary ? void 0 : "utf8");
               return ret;
             };
             if (process.argv.length > 1) {
@@ -30686,13 +30686,13 @@ var require_libsodium_wrappers = __commonJS({
 });
 
 // electron/engine/engine.ts
-var import_node_fs42 = __toESM(require("node:fs"));
+var import_node_fs43 = __toESM(require("node:fs"));
 var import_node_os13 = __toESM(require("node:os"));
-var import_node_path35 = __toESM(require("node:path"));
+var import_node_path36 = __toESM(require("node:path"));
 
 // electron/app/context.ts
-var import_node_fs41 = __toESM(require("node:fs"));
-var import_node_path34 = __toESM(require("node:path"));
+var import_node_fs42 = __toESM(require("node:fs"));
+var import_node_path35 = __toESM(require("node:path"));
 
 // shared/speakers.ts
 function assignSpeakers(words, segs, o = {}) {
@@ -31517,6 +31517,33 @@ function resolveToolPaths(ffmpegPath, ytdlpPath, bundled = {}) {
 // electron/app/context.ts
 init_twitch();
 
+// shared/languages.ts
+var STREAM_LANGUAGES = [
+  { id: "es-ES", label: "espa\xF1ol de Espa\xF1a (castellano)", whisper: "es" },
+  { id: "es-419", label: "espa\xF1ol de Latinoam\xE9rica", whisper: "es" },
+  { id: "en", label: "ingl\xE9s", whisper: "en" },
+  { id: "ca", label: "catal\xE1n", whisper: "ca" },
+  { id: "gl", label: "gallego", whisper: "gl" },
+  { id: "eu", label: "euskera", whisper: "eu" },
+  { id: "pt", label: "portugu\xE9s", whisper: "pt" },
+  { id: "fr", label: "franc\xE9s", whisper: "fr" },
+  { id: "it", label: "italiano", whisper: "it" },
+  { id: "de", label: "alem\xE1n", whisper: "de" },
+  { id: "multi", label: "varios idiomas", whisper: "" }
+];
+var DEFAULT_STREAM_LANGUAGE = "es-ES";
+var streamLanguage = (id) => STREAM_LANGUAGES.find((l) => l.id === id) ?? STREAM_LANGUAGES[0];
+function languageNote(id) {
+  const l = streamLanguage(id);
+  if (l.id === "multi") {
+    return " IDIOMA DEL CANAL: en los directos se habla en varios idiomas. Entiende cada parte en su idioma y escribe los t\xEDtulos, las descripciones y cualquier texto para el espectador en el idioma principal del directo. Los nombres de los campos del JSON no se traducen.";
+  }
+  if (l.id === DEFAULT_STREAM_LANGUAGE) {
+    return " IDIOMA DEL CANAL: en los directos y v\xEDdeos se habla espa\xF1ol de Espa\xF1a; escribe los t\xEDtulos, las descripciones y cualquier texto para el espectador en castellano de Espa\xF1a, sin latinismos.";
+  }
+  return ` IDIOMA DEL CANAL (manda sobre cualquier otra indicaci\xF3n de idioma de estas instrucciones): en los directos y v\xEDdeos se habla ${l.label}. Entiende la transcripci\xF3n en ese idioma y escribe los t\xEDtulos, las descripciones y cualquier texto para el espectador en ${l.label}. Los nombres de los campos del JSON no se traducen.`;
+}
+
 // electron/domain/settings.ts
 var import_node_fs4 = __toESM(require("node:fs"));
 
@@ -31758,6 +31785,24 @@ function buildAss(words, style, w, h, speakerColors) {
   return `${lines.join("\n")}
 `;
 }
+function mergeWords(precise, rough) {
+  if (!rough.length) return precise;
+  if (!precise.length) return rough;
+  const p = [...precise].sort((a, b) => a.start - b.start);
+  const spans = [];
+  for (const w of p) {
+    const last = spans[spans.length - 1];
+    if (last && w.start - last.end < 4) last.end = Math.max(last.end, w.end);
+    else spans.push({ start: w.start, end: w.end });
+  }
+  let k = 0;
+  const outside = rough.filter((w) => {
+    while (k < spans.length && spans[k].end + 1 < w.start) k++;
+    const s = spans[k];
+    return !(s && w.end > s.start - 1 && w.start < s.end + 1);
+  });
+  return [...p, ...outside].sort((a, b) => a.start - b.start);
+}
 
 // electron/services/files.ts
 var import_node_crypto = __toESM(require("node:crypto"));
@@ -31862,6 +31907,14 @@ function validateAutopilot(cur, p, enc) {
   }
   if (p.purgePublished !== void 0) n.purgePublished = bool2(p.purgePublished, "El borrado tras publicar");
   if (p.fastAnalysis !== void 0) n.fastAnalysis = bool2(p.fastAnalysis, "El an\xE1lisis r\xE1pido");
+  if (p.fullRead !== void 0) n.fullRead = bool2(p.fullRead, "La lectura completa");
+  if (p.chronicle !== void 0) n.chronicle = bool2(p.chronicle, "El cronista");
+  if (p.streamLanguage !== void 0) {
+    if (!STREAM_LANGUAGES.some((l2) => l2.id === p.streamLanguage)) throw new Error("Idioma de los directos no reconocido.");
+    n.streamLanguage = p.streamLanguage;
+  }
+  if (p.quantityFirst !== void 0) n.quantityFirst = bool2(p.quantityFirst, "Priorizar la cantidad");
+  if (p.onScreenText !== void 0) n.onScreenText = bool2(p.onScreenText, "Los r\xF3tulos en pantalla");
   if (p.minQuality !== void 0) {
     if (typeof p.minQuality !== "number" || !Number.isFinite(p.minQuality) || p.minQuality < 3 || p.minQuality > 9.5) throw new Error("La nota m\xEDnima debe estar entre 3 y 9,5.");
     n.minQuality = Math.round(p.minQuality * 2) / 2;
@@ -31970,7 +32023,8 @@ var SettingsService = class {
       ytdlpPath: patch.ytdlpPath !== void 0 ? validateToolPath("yt-dlp", patch.ytdlpPath) : s.ytdlpPath,
       whisperPath: patch.whisperPath !== void 0 ? validateToolPath("whisper", patch.whisperPath) : s.whisperPath,
       whisperModel: patch.whisperModel !== void 0 ? validateWhisperModel(patch.whisperModel) : s.whisperModel,
-      whisperLanguage: patch.whisperLanguage !== void 0 ? validateWhisperLanguage(patch.whisperLanguage) : s.whisperLanguage,
+      // el idioma de los directos también fija el de Whisper (salvo que se pida otro a la vez)
+      whisperLanguage: patch.whisperLanguage !== void 0 ? validateWhisperLanguage(patch.whisperLanguage) : patch.autopilot?.streamLanguage !== void 0 && patch.autopilot.streamLanguage !== (s.autopilot.streamLanguage ?? DEFAULT_STREAM_LANGUAGE) && STREAM_LANGUAGES.some((l) => l.id === patch.autopilot.streamLanguage) ? streamLanguage(patch.autopilot.streamLanguage).whisper : s.whisperLanguage,
       twitch: { ...s.twitch },
       autopilot: patch.autopilot ? validateAutopilot(s.autopilot, patch.autopilot, (x) => this.secrets.encode(x)) : s.autopilot
     };
@@ -32073,21 +32127,6 @@ function fitToCategory(seg, chapters, minSec) {
   const out = { start: Math.max(seg.start, best.start), end: Math.min(seg.end, best.end) };
   return out.end - out.start >= minSec ? out : null;
 }
-function dominantCategory(segs, chapters, minSec) {
-  if (chapters.length < 2 || !segs.length) return { segs, category: null };
-  const totals = /* @__PURE__ */ new Map();
-  for (const s of segs) for (const c of chapters) totals.set(c.title, (totals.get(c.title) ?? 0) + overlap(s, c));
-  const [name] = [...totals.entries()].sort((a, b) => b[1] - a[1])[0];
-  const mine = chapters.filter((c) => c.title === name);
-  const out = [];
-  for (const s of segs) {
-    for (const c of mine) {
-      const o = { start: Math.max(s.start, c.start), end: Math.min(s.end, c.end) };
-      if (o.end - o.start >= minSec) out.push(o);
-    }
-  }
-  return { segs: out.sort((a, b) => a.start - b.start), category: name };
-}
 function categoryOf(chapters, segs) {
   const totals = /* @__PURE__ */ new Map();
   for (const s of segs) for (const c of chapters) totals.set(c.title, (totals.get(c.title) ?? 0) + overlap(s, c));
@@ -32118,8 +32157,8 @@ function parseVodUrl(input) {
   return u.toString();
 }
 function safeId(id) {
-  const clean6 = id.replace(/[^A-Za-z0-9._-]/g, "_");
-  return clean6 && clean6 !== "." && clean6 !== ".." ? clean6 : "video";
+  const clean7 = id.replace(/[^A-Za-z0-9._-]/g, "_");
+  return clean7 && clean7 !== "." && clean7 !== ".." ? clean7 : "video";
 }
 async function downloadSection(tools, url, start, end, dir) {
   if (!(end > start) || start < 0) throw new Error("El tramo pedido no es v\xE1lido.");
@@ -33092,7 +33131,10 @@ function normalizeClip(c, fallbackTitle) {
 }
 function normalizeEffects(list2) {
   return list2.map((e) => {
-    if (e.type === "punch") return { type: "punch", at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
+    if (e.type === "punch") {
+      const ok2 = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
+      return { type: "punch", at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom, ...ok2(e.x) && ok2(e.y) ? { x: e.x, y: e.y } : {} };
+    }
     if (e.type === "sfx") return { type: "sfx", at: e.at, sound: e.sound ?? "pop" };
     if (e.type === "polish") return { type: "polish" };
     if (e.type === "joints") return { type: "joints", duration: e.duration ?? 0.25 };
@@ -33215,12 +33257,32 @@ function assFilter(subs) {
   return `ass='${filterPath(subs.ass)}'${fonts}`;
 }
 function punchFilter(w, h, punches) {
+  const on = (p) => `between(t,${p.a.toFixed(3)},${(p.a + p.dur).toFixed(3)})`;
   const terms = punches.map((p) => {
     const r2 = (p.dur * 0.3).toFixed(3);
     return `${(p.zoom - 1).toFixed(3)}*clip(min((t-${p.a.toFixed(3)})/${r2},(${(p.a + p.dur).toFixed(3)}-t)/${r2}),0,1)`;
   });
   const z = `(1+${terms.join("+")})`;
-  return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=${w}:${h}`;
+  const target = (k) => `(0.5${punches.map((p) => `+(${((p[k] ?? 0.5) - 0.5).toFixed(3)})*${on(p)}`).join("")})`;
+  const x = `max(0,min(iw-ow,${target("x")}*iw-ow/2))`;
+  const y = `max(0,min(ih-oh,${target("y")}*ih-oh/2))`;
+  return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=w=${w}:h=${h}:x='${x}':y='${y}'`;
+}
+function mapFocus(p, o) {
+  if (!o.vertical) return p;
+  if (o.layout?.windows.length) {
+    for (const win of o.layout.windows) {
+      const s = win.src;
+      if (p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h) {
+        return { x: win.dst.x + (p.x - s.x) / s.w * win.dst.w, y: win.dst.y + (p.y - s.y) / s.h * win.dst.h };
+      }
+    }
+    return null;
+  }
+  const cw = Math.min(1, 9 / 16 / (o.srcAspect ?? 16 / 9));
+  const x0 = (1 - cw) * Math.min(1, Math.max(0, o.cropX ?? 0.5));
+  const x = (p.x - x0) / cw;
+  return x < 0 || x > 1 ? null : { x, y: p.y };
 }
 var POLISH_AF = "loudnorm=I=-16:TP=-1.5:LRA=11";
 async function cutSegment(tools, input, start, end, o, out) {
@@ -33302,7 +33364,11 @@ async function renderTimeline(tools, input, t, out) {
     const parts = [];
     for (let i = 0; i < t.ranges.length; i++) {
       const r2 = t.ranges[i];
-      const punches = fx.filter((e) => e.type === "punch").filter((e) => e.at >= r2.start && e.at <= r2.end).map((e) => ({ a: e.at - r2.start, dur: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom }));
+      const punches = fx.filter((e) => e.type === "punch").filter((e) => e.at >= r2.start && e.at <= r2.end).flatMap((e) => {
+        const target = e.x !== void 0 && e.y !== void 0 ? t.focusMap ? t.focusMap({ x: e.x, y: e.y }) : { x: e.x, y: e.y } : void 0;
+        if (target === null) return [];
+        return [{ a: e.at - r2.start, dur: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom, ...target ? { x: target.x, y: target.y } : {} }];
+      });
       const punch = punches.length ? punchFilter(t.size.w, t.size.h, punches) : "";
       const vf = t.layout ? punch : punch ? `${t.baseVf},${punch}` : t.baseVf;
       const part = import_node_path9.default.join(tmp, `part${String(i).padStart(3, "0")}.mp4`);
@@ -33423,6 +33489,7 @@ async function renderClip(tools, input, spec, out) {
       ranges: keptRanges(spec.start, spec.end, spec.cuts),
       baseVf: vertical ? verticalFilter(spec.cropX ?? 0.5) : VF_HORIZONTAL,
       layout: vertical ? spec.layout : void 0,
+      focusMap: (p) => mapFocus(p, { vertical, cropX: spec.cropX, layout: spec.layout }),
       size: vertical ? { w: 1080, h: 1920 } : { w: 1920, h: 1080 },
       effects: spec.effects,
       subs: spec.subs,
@@ -34913,6 +34980,7 @@ async function transcribeVideo(tools, input, o) {
 
 // electron/domain/transcripts.ts
 var MAX_IMPORT_BYTES = 80 * 1024 * 1024;
+var SKIM_MODEL = "base";
 var TranscriptService = class {
   constructor(d) {
     this.d = d;
@@ -35346,6 +35414,64 @@ ${e2.message}`);
     return { jobs: 1, threads: Math.max(2, Math.floor(import_node_os6.default.cpus().length * 0.75 / n)) };
   }
   /** Trozos de transcripción ya terminados de un directo a medias (para retomarlo). */
+  /**
+   * Lectura completa y rápida del directo con un modelo ligero de Whisper («base»): sirve para que el equipo de edición
+   * ENTIENDA de qué se habla en todo el directo (temas, contexto, a quién se refiere cada cosa). Es menos precisa que la
+   * transcripción normal, así que no se usa para subtítulos: se guarda aparte (`<vod>.skim.json`) y lo elegido se
+   * vuelve a transcribir con el modelo de siempre. Se guarda por trozos: se puede pausar sin perder lo hecho.
+   */
+  async skim(vodId, opts = {}) {
+    const file = import_node_path14.default.join(this.dir, `${vodId}.skim.json`);
+    try {
+      if (import_node_fs16.default.existsSync(file)) return JSON.parse(import_node_fs16.default.readFileSync(file, "utf8"));
+    } catch {
+    }
+    const exe = this.d.whisperExe();
+    const vod = this.vod(vodId);
+    if (!exe || !vod.filePath || !import_node_fs16.default.existsSync(vod.filePath)) throw new Error("No hay Whisper o el directo no est\xE1 descargado.");
+    const s = this.d.store.data.settings;
+    const own = s.whisperModel === "tiny" || s.whisperModel === "base" ? s.whisperModel : null;
+    const model = modelInstalled(this.modelsDir, SKIM_MODEL) || !own || !modelInstalled(this.modelsDir, own) ? SKIM_MODEL : own;
+    if (!modelInstalled(this.modelsDir, model)) await downloadModel(this.modelsDir, model, () => void 0, { baseUrl: this.d.modelBaseUrl });
+    return this.d.queue.run(async () => {
+      const task = this.d.tasks.start("transcribe", `Leyendo todo el directo "${vod.title || vod.url}"`, vodId);
+      try {
+        const t0 = Date.now();
+        let audioSec = 0;
+        const words = await transcribeVideo(this.d.tools(), vod.filePath, {
+          exe,
+          model: modelPath(this.modelsDir, model),
+          language: s.whisperLanguage,
+          prompt: this.promptFor(vod),
+          ...this.share(),
+          checkpointDir: `${this.checkpointDir(vodId)}-skim`,
+          onProgress: (pct, detail) => {
+            task.update(pct, detail);
+            opts.onProgress?.(pct, detail);
+          },
+          onInfo: ({ durationSec, skippedFraction }) => {
+            audioSec = durationSec * (1 - skippedFraction);
+            const est = audioSec / this.ratio(model);
+            task.estimate(est);
+            opts.onEstimate?.(est);
+          }
+        });
+        if (audioSec) this.learnRatio(model, audioSec / Math.max(1, (Date.now() - t0) / 1e3));
+        import_node_fs16.default.mkdirSync(this.dir, { recursive: true });
+        import_node_fs16.default.writeFileSync(file, JSON.stringify(words));
+        import_node_fs16.default.rmSync(`${this.checkpointDir(vodId)}-skim`, { recursive: true, force: true });
+        task.done();
+        return words;
+      } catch (e) {
+        task.fail(e.message);
+        throw e;
+      }
+    });
+  }
+  /** Lo que se tarda (s) en la lectura completa de un directo de esta duración en este equipo. */
+  skimEta(durationSec) {
+    return durationSec / this.ratio(SKIM_MODEL);
+  }
   checkpointDir(vodId) {
     return import_node_path14.default.join(this.dir, `${vodId.replace(/[^\w-]/g, "_")}.parcial`);
   }
@@ -36147,6 +36273,36 @@ function isAutoNameable(o) {
 }
 var GENERIC_TITLE = /^(momento|directo del|resumen del directo)\b/i;
 var isGenericAutoTitle = (o) => o.titleSource !== "manual" && GENERIC_TITLE.test(o.title.trim());
+function talkCandidates(words, taken, o = {}) {
+  const win = o.windowSec ?? 70;
+  const minWords = o.minWords ?? 130;
+  if (!words.length) return [];
+  const sorted = [...words].sort((a, b) => a.start - b.start);
+  const end = sorted[sorted.length - 1].end;
+  const found = [];
+  let lo = 0;
+  let hi = 0;
+  for (let t = 0; t + win <= end + win / 2; t += win / 2) {
+    while (lo < sorted.length && sorted[lo].start < t) lo++;
+    while (hi < sorted.length && sorted[hi].start < t + win) hi++;
+    const n = hi - lo;
+    if (n < minWords) continue;
+    const seg = { start: t, end: t + win };
+    if (taken.some((x) => Math.min(x.end, seg.end) - Math.max(x.start, seg.start) > win * 0.3)) continue;
+    if (silentShare(o.energyDb, seg) >= MUTED_SHARE) continue;
+    found.push({ ...seg, n });
+  }
+  const out = [];
+  for (const f of found.sort((a, b) => b.n - a.n)) {
+    if (out.length >= (o.max ?? 24)) break;
+    if (out.some((x) => Math.abs(x.start - f.start) < win * 1.5)) continue;
+    out.push(f);
+  }
+  return out.sort((a, b) => a.start - b.start).map((f) => {
+    const sn = snapToSentences(f.start, f.end, sorted, 6);
+    return { start: sn.start, end: sn.end, peak: (sn.start + sn.end) / 2, score: Math.min(10, f.n / 25), reasons: ["charla"] };
+  });
+}
 
 // shared/momentEdits.ts
 var emptyEdits = () => ({ exclude: [], pin: [], trims: {}, extra: [] });
@@ -37177,6 +37333,7 @@ var ClipScoreService = class {
 var AI_LABEL = { gemini: "Gemini", groq: "Groq", mistral: "Mistral", openrouter: "OpenRouter" };
 var AI_TASKS = [
   { id: "vision", label: "Mirar la imagen (gestos, muecas, pantallas de espera)", why: "Solo Gemini y Groq ven im\xE1genes; Gemini admite m\xE1s por petici\xF3n.", order: ["gemini", "groq"], needsVision: true },
+  { id: "chronicle", label: "Cronista: lee el directo entero por tramos", why: "Mucho texto: Gemini y Mistral aguantan m\xE1s; los tramos se reparten entre todas las IAs a la vez.", order: ["gemini", "mistral", "groq", "openrouter"] },
   { id: "judge", label: "Valorar los momentos y los clips", why: "Son muchas preguntas cortas: Groq es la m\xE1s r\xE1pida.", order: ["groq", "gemini", "mistral", "openrouter"] },
   { id: "story", label: "Editor de historia: estructura del resumen", why: "Texto largo y la decisi\xF3n m\xE1s importante: Gemini.", order: ["gemini", "mistral", "groq", "openrouter"] },
   { id: "themes", label: "Editor de temas: v\xEDdeos por tema", why: "Texto largo; va a Mistral si est\xE1, para no cargar a Gemini.", order: ["mistral", "gemini", "groq", "openrouter"] },
@@ -37206,6 +37363,14 @@ function chainOf(cfg) {
   return [main2, ...(fallbacks ?? []).map(({ fallbacks: _f, ...c }) => c)];
 }
 var fromChain = (chain) => chain.length > 1 ? { ...chain[0], fallbacks: chain.slice(1) } : chain[0];
+function lanesFor(cfg, task, max = 3) {
+  const chain = chainOf(cfg);
+  if (chain.length < 2 || chain.some((c) => c.baseUrl)) return [cfg];
+  const order = orderFor(task, chain.map((c) => c.provider));
+  const sorted = order.flatMap((p) => chain.filter((c) => c.provider === p));
+  const heads = sorted.filter((c, i) => c.provider !== "openrouter" || i === 0).slice(0, max);
+  return heads.map((h) => fromChain([h, ...sorted.filter((c) => c !== h)]));
+}
 function forTask(cfg, task) {
   const chain = chainOf(cfg);
   if (chain.length < 2 || chain.some((c) => c.baseUrl)) return cfg;
@@ -37263,6 +37428,7 @@ async function askJson(cfg, system, user, d = {}) {
   }
 }
 async function askOne(cfg, system, user, d = {}) {
+  if (cfg.language) system += languageNote(cfg.language);
   if (!cfg.apiKey) throw new Error("Falta la clave del modelo de lenguaje (Ajustes > Piloto autom\xE1tico).");
   const fetchFn = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
@@ -37809,8 +37975,8 @@ var CoverService = class {
   }
   rename(id, name) {
     const a = this.get(id);
-    const clean6 = cleanAssetName(name);
-    a.name = uniqueName(clean6, this.items.filter((x) => x.id !== id).map((x) => x.name));
+    const clean7 = cleanAssetName(name);
+    a.name = uniqueName(clean7, this.items.filter((x) => x.id !== id).map((x) => x.name));
     this.save();
     return a;
   }
@@ -38378,30 +38544,30 @@ var Github = class {
     const j = await r2.json();
     return { private: j.private, fullName: j.full_name, defaultBranch: j.default_branch };
   }
-  async getContent(path36) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path36)}`);
+  async getContent(path37) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path37)}`);
     if (r2.status === 404) return null;
-    if (!r2.ok) await this.fail(r2, `el archivo ${path36}`);
+    if (!r2.ok) await this.fail(r2, `el archivo ${path37}`);
     const j = await r2.json();
     return { sha: j.sha, text: Buffer.from(j.content ?? "", "base64").toString("utf8") };
   }
   /** Crea o actualiza. Con `sha`, solo si nadie lo ha cambiado desde (así dos procesos no pisan el mismo trabajo). Devuelve el nuevo sha, o null si el archivo cambió. */
-  async putContent(path36, text, message, sha) {
-    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path36)}`, {
+  async putContent(path37, text, message, sha) {
+    const r2 = await this.req("PUT", `/repos/${this.o.repo}/contents/${encodePath(path37)}`, {
       json: { message, content: Buffer.from(text, "utf8").toString("base64"), ...sha ? { sha } : {} }
     });
     if (r2.status === 409 || r2.status === 422) return null;
-    if (!r2.ok) await this.fail(r2, `guardar ${path36}`);
+    if (!r2.ok) await this.fail(r2, `guardar ${path37}`);
     return (await r2.json()).content.sha;
   }
-  async deleteContent(path36, sha, message) {
-    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path36)}`, { json: { message, sha } });
-    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path36}`);
+  async deleteContent(path37, sha, message) {
+    const r2 = await this.req("DELETE", `/repos/${this.o.repo}/contents/${encodePath(path37)}`, { json: { message, sha } });
+    if (!r2.ok && r2.status !== 404 && r2.status !== 409) await this.fail(r2, `borrar ${path37}`);
   }
-  async listDir(path36) {
-    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path36)}`);
+  async listDir(path37) {
+    const r2 = await this.req("GET", `/repos/${this.o.repo}/contents/${encodePath(path37)}`);
     if (r2.status === 404) return [];
-    if (!r2.ok) await this.fail(r2, `la carpeta ${path36}`);
+    if (!r2.ok) await this.fail(r2, `la carpeta ${path37}`);
     const j = await r2.json();
     return Array.isArray(j) ? j.filter((x) => x.type === "file").map((x) => ({ name: x.name, sha: x.sha })) : [];
   }
@@ -38871,9 +39037,9 @@ function tiktokFile(o) {
   if (!f) throw new PublishError("El clip no tiene archivo.");
   return f;
 }
-async function call(d, path36, body) {
+async function call(d, path37, body) {
   const f = d.fetchFn ?? fetch;
-  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path36}`, {
+  const r2 = await timedFetch(f, `${d.api ?? TT_API}${path37}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await d.token()}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify(body)
@@ -39620,9 +39786,68 @@ function friendly(e) {
   return m.split("\n")[0].slice(0, 200);
 }
 
+// shared/editingPlaybook.ts
+var PLAYBOOK = {
+  comun: [
+    "Primero entender y luego cortar: qui\xE9n habla, con qui\xE9n, de qu\xE9, qu\xE9 pasa en pantalla y cu\xE1l es el chiste o la idea. Si algo necesita contexto, el contexto entra o el momento sale.",
+    "El espectador no estuvo en el directo: cada corte tiene que tener l\xF3gica (causa y consecuencia, cambio de tema o salto de tiempo evidente).",
+    "Los primeros segundos deciden si se quedan: se abre con algo que enganche (lo m\xE1s fuerte, una pregunta, una frase que intriga), no con un saludo ni con una carga.",
+    "Se corta en la acci\xF3n o en la reacci\xF3n, nunca a mitad de frase. Antes del remate se deja respirar medio segundo; despu\xE9s, uno o dos segundos de reacci\xF3n (la risa tambi\xE9n es contenido).",
+    "Variedad de ritmo: alternar picos y momentos de calma; tres escenas iguales seguidas cansan.",
+    "Callbacks: si algo de la primera hora vuelve en la tercera, las dos partes juntas valen m\xE1s que cada una por separado.",
+    "Nada de relleno ni de efectos porque s\xED: si dudas, fuera. Un efecto (zoom, sonido) solo subraya algo que ya est\xE1 pasando."
+  ],
+  historia: [
+    "Estructura del resumen: gancho (5-15 s con lo mejor o con algo que abra una pregunta) \u2192 contexto m\xEDnimo \u2192 escalada \u2192 momento cumbre \u2192 cierre que remate (un chiste final, una reacci\xF3n o una frase redonda).",
+    "Cada cap\xEDtulo cuenta UNA cosa con principio y final; su t\xEDtulo dice qu\xE9 pasa (\xABEl robo del Pichu\xBB, no \xABParte 2\xBB).",
+    "Orden cronol\xF3gico salvo el gancho: el espectador tiene que poder seguir lo que pas\xF3.",
+    "Que no parezca un recopilatorio: une las escenas por lo que provocan (esto lleva a aquello) o por tema; si dos escenas no se hablan entre s\xED, mejor un cap\xEDtulo nuevo.",
+    "Mejor pocas escenas largas que se entienden que muchas cortas sin contexto. Un resumen de un directo de horas debe durar de 10 a 17 minutos: ll\xE9nalo con escenas que se sostengan."
+  ],
+  ritmo: [
+    "Fuera: silencios largos, \xABeeeh\xBB, repeticiones, esperas de carga o de men\xFA, leer el chat en silencio, frases que se corrigen a s\xED mismas.",
+    "Dentro: la pausa antes del remate, la reacci\xF3n despu\xE9s y cualquier silencio que sea tensi\xF3n (esperar el resultado de algo).",
+    "La escena empieza en la frase que plantea lo que va a pasar, no en el saludo de antes; acaba cuando baja la reacci\xF3n.",
+    "Si dos frases dicen lo mismo, qu\xE9date con la mejor dicha."
+  ],
+  humor: [
+    "Estructura del clip: planteamiento m\xEDnimo \u2192 remate \u2192 reacci\xF3n. Entra lo m\xE1s tarde posible y sal lo antes posible tras la risa.",
+    "En Shorts, TikTok y Reels el primer segundo engancha o se pierde: empieza con la frase m\xE1s rara, la cara o el momento en que algo va mal.",
+    "Funciona: fails, reacciones exageradas, frases absurdas que se entienden solas, piques con amigos, momentos \xABno me lo creo\xBB, suerte o mala suerte extrema.",
+    "Un clip = una idea, de 15 a 45 segundos. Si el final enlaza con el principio (bucle), mejor: se ve dos veces.",
+    "Si un momento solo hace gracia a quien lleva tres horas en el directo, no es clip."
+  ],
+  temas: [
+    "Un v\xEDdeo = un tema con arco: planteamiento (de qu\xE9 se habla y por qu\xE9 importa) \u2192 desarrollo (opiniones, an\xE9cdotas, giros, discusi\xF3n) \u2192 conclusi\xF3n (postura final, chiste o reflexi\xF3n).",
+    "Junta tramos separados en el tiempo si son el mismo tema, y ord\xE9nalos para que la idea avance, no para que se repita.",
+    "El t\xEDtulo es el tema tal como lo buscar\xEDa alguien en YouTube (\xABMi opini\xF3n sobre\u2026\xBB, \xABC\xF3mo\u2026\xBB, \xABEl mejor\u2026\xBB).",
+    "Si un tema no tiene planteamiento ni cierre, no da para v\xEDdeo: d\xE9jalo para los clips.",
+    "Cuantos m\xE1s temas distintos con sentido salgan de un directo, mejor: cada uno es un v\xEDdeo m\xE1s para el canal."
+  ],
+  jefe: [
+    "Revisa como espectador exigente: \xBFengancha el arranque? \xBFalgo no se entiende sin contexto? \xBFse repite algo? \xBFhay tiempos muertos? \xBFel final remata? \xBFel t\xEDtulo promete lo que hay?",
+    "Quita lo flojo aunque el v\xEDdeo quede m\xE1s corto, pero no lo dejes en un v\xEDdeo sin historia.",
+    "Comprueba que se nota la personalidad del streamer: si podr\xEDa ser el v\xEDdeo de cualquiera, falta lo suyo."
+  ],
+  titulos: [
+    "T\xEDtulo concreto de 40 a 60 caracteres, con lo m\xE1s llamativo al principio, sin mentir ni exagerar lo que no pasa.",
+    "Palabras que alguien buscar\xEDa (el juego, el tema, el nombre de la serie); nada de may\xFAsculas enteras ni emojis.",
+    "Descripci\xF3n: dos o tres frases que cuenten qu\xE9 pasa y por qu\xE9 verlo, en el tono del canal."
+  ],
+  cronista: [
+    "Resume lo que pasa de verdad, con nombres y hechos concretos, no impresiones vagas (\xABhablan de cosas\xBB, \xABse r\xEDen\xBB).",
+    "Se\xF1ala solo los momentos que un editor querr\xEDa ver: gracia, tensi\xF3n, una historia, una opini\xF3n con fuerza, un giro, una reacci\xF3n.",
+    "Anota los temas tal como se hablan (por ejemplo \xABla nueva gr\xE1fica de NVIDIA\xBB, \xABJames Gunn y el universo DC\xBB), para poder juntarlos con otros tramos."
+  ]
+};
+function playbookFor(role) {
+  const lines = [...PLAYBOOK.comun, ...PLAYBOOK[role]];
+  return ` MANUAL DEL EQUIPO (trucos de edici\xF3n profesional que aplicas siempre): ${lines.map((l, i) => `(${i + 1}) ${l}`).join(" ")}`;
+}
+
 // electron/domain/autopilot.ts
-var import_node_fs39 = __toESM(require("node:fs"));
-var import_node_path32 = __toESM(require("node:path"));
+var import_node_fs40 = __toESM(require("node:fs"));
+var import_node_path33 = __toESM(require("node:path"));
 
 // shared/autoEdit.ts
 var EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
@@ -39645,21 +39870,42 @@ function planEdit(words, seg, o = {}) {
   }
   const kept = keptRanges(seg.start, seg.end, cuts);
   const isKept = (t) => kept.some((r2) => t >= r2.start && t <= r2.end);
-  const maxPunch = Math.min(6, Math.floor(dur / 10));
+  const loud = (t) => {
+    const e = o.energyDb;
+    if (!e?.length) return true;
+    const lo = Math.max(0, Math.floor(seg.start));
+    const hi = Math.min(e.length - 1, Math.ceil(seg.end));
+    if (hi <= lo) return true;
+    let top = -Infinity;
+    for (let k = lo; k <= hi; k++) top = Math.max(top, e[k]);
+    let near = -Infinity;
+    for (let k = Math.max(lo, Math.floor(t) - 1); k <= Math.min(hi, Math.ceil(t) + 1); k++) near = Math.max(near, e[k]);
+    return near >= top - 4;
+  };
+  const strength = (w) => {
+    const bang = (w.text.match(/!/g) ?? []).length;
+    const caps = /^[¡¿]*[A-ZÁÉÍÓÚÑ]{4,}[!¡?]*$/.test(w.text.trim());
+    const emph = EMPHASIS.test(w.text.replace(/^[¡¿"«(]+/, ""));
+    return (bang >= 2 ? 2 : bang) + (emph ? 1 : 0) + (caps ? 1 : 0);
+  };
   const punches = [];
-  for (const w of inside) {
-    if (punches.length >= maxPunch) break;
-    const strong = /[!¡]/.test(w.text) || EMPHASIS.test(w.text);
-    if (!strong) continue;
+  const gapBetween = Math.max(spacing, 5);
+  const ranked = inside.map((w) => ({ w, s: strength(w) })).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s || a.w.start - b.w.start);
+  for (const { w, s } of ranked) {
     const at = Math.max(seg.start, w.start - 0.1);
     if (!isKept(at) || !isKept(Math.min(seg.end, at + 1))) continue;
-    if (punches.some((p) => Math.abs(p - at) < spacing)) continue;
+    if (punches.some((p) => Math.abs(p.at - at) < gapBetween)) continue;
     if (at - seg.start < 1.5 || seg.end - at < 2) continue;
-    punches.push(at);
+    if (!loud(at)) continue;
+    const target = o.focusAt?.(at);
+    if (!target) continue;
+    punches.push({ at, s, x: target.x, y: target.y });
   }
-  for (const at of punches) {
-    effects.push({ type: "punch", at, duration: 1, zoom: 1.15 });
-    effects.push({ type: "sfx", at, sound: "hit" });
+  punches.sort((a, b) => a.at - b.at);
+  for (const p of punches) {
+    const zoom = p.s >= 4 ? 1.4 : p.s === 3 ? 1.28 : 1.18;
+    effects.push({ type: "punch", at: p.at, duration: p.s >= 3 ? 1.4 : 1.1, zoom, x: p.x, y: p.y });
+    effects.push({ type: "sfx", at: p.at, sound: "hit" });
   }
   for (const c of cuts.slice(0, 8)) {
     const at = c.end + 0.02;
@@ -40103,6 +40349,23 @@ var transcribeChosenPhase = async (ctx) => {
     if (isCancelled(e)) throw e;
     notes.push(`Sin transcripci\xF3n: ${e.message}`);
   }
+  if (host.cfg.fullRead !== false && d.transcripts.skim) {
+    ctx.clock.mark("lectura completa");
+    task.update(55, "Leyendo todo el directo para entender de qu\xE9 se habla\u2026");
+    try {
+      const rough = await d.transcripts.skim(vod.id, {
+        onProgress: (pct) => task.update(55 + pct * 0.05, `Leyendo todo el directo (${Math.round(pct)} %)\u2026`)
+      });
+      ctx.skim = rough;
+      ctx.words = mergeWords(ctx.words, rough);
+      const talk = talkCandidates(rough, ctx.pool, { energyDb: ctx.sig.energyDb });
+      talk.forEach((t, i) => ctx.pool.push({ id: `t${i + 1}`, start: t.start, end: t.end, signal: t.score }));
+      notes.push(`Lectura completa del directo: ${rough.length} palabras; ${talk.length} tramo(s) de conversaci\xF3n a\xF1adidos a los candidatos.`);
+    } catch (e) {
+      if (isCancelled(e)) throw e;
+      notes.push(`Sin lectura completa del directo (${e.message.split("\n")[0]}): el equipo solo ve lo elegido.`);
+    }
+  }
   host.mark(vod, "analyzing");
   return "continue";
 };
@@ -40146,9 +40409,6 @@ var signalsPhase = async (ctx) => {
       const f = fitToCategory(m, ctx.cats, 90);
       return f ? [f] : [];
     });
-    const dom = dominantCategory(summary, ctx.cats, 8);
-    if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
-    summary = dom.segs;
     if (before !== moments.length + mains.length) notes.push("Algunos momentos se recortaron o descartaron para no mezclar categor\xEDas.");
   }
   ctx.llmConf = host.llmConf();
@@ -40186,22 +40446,181 @@ var signalsPhase = async (ctx) => {
   return "continue";
 };
 
+// electron/domain/pipeline/chronicle.ts
+var import_node_fs34 = __toESM(require("node:fs"));
+var import_node_path27 = __toESM(require("node:path"));
+
+// shared/chronicle.ts
+var CHUNK_SEC3 = 20 * 60;
+var CHUNK_CHARS = 14e3;
+var CHRONICLE_SYSTEM = "Eres el cronista de un equipo profesional de edici\xF3n de v\xEDdeo que convierte directos de Twitch de un streamer espa\xF1ol en v\xEDdeos de YouTube y clips para redes. Lees UN tramo de la transcripci\xF3n del directo (las marcas [h:mm:ss] son el tiempo desde el inicio) y haces su ficha para tus compa\xF1eros editores: qu\xE9 pasa, de qu\xE9 se habla y qu\xE9 momentos merecen la pena. La transcripci\xF3n es autom\xE1tica y puede tener errores: interpreta con sentido com\xFAn, sin inventar. Responde SOLO con JSON." + playbookFor("cronista");
+var hms = (t) => {
+  const s = Math.max(0, Math.floor(t));
+  return `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+};
+function chronicleChunks(durationSec, chunkSec = CHUNK_SEC3) {
+  const out = [];
+  for (let t = 0; t < durationSec; t += chunkSec) out.push({ start: t, end: Math.min(durationSec, t + chunkSec) });
+  if (out.length > 1 && out[out.length - 1].end - out[out.length - 1].start < chunkSec / 3) {
+    const last = out.pop();
+    out[out.length - 1].end = last.end;
+  }
+  return out;
+}
+function chunkText(words, seg, maxChars = CHUNK_CHARS) {
+  const ws = words.filter((w) => w.start >= seg.start && w.start < seg.end).sort((a, b) => a.start - b.start);
+  if (!ws.length) return "";
+  const lines = [];
+  let cur = [];
+  let mark = ws[0].start;
+  for (const w of ws) {
+    if (w.start - mark >= 20 && cur.length) {
+      lines.push(`[${hms(mark)}] ${cur.join(" ")}`);
+      cur = [];
+      mark = w.start;
+    }
+    cur.push(w.text.trim());
+  }
+  if (cur.length) lines.push(`[${hms(mark)}] ${cur.join(" ")}`);
+  const full = lines.join("\n");
+  if (full.length <= maxChars) return full;
+  const keep = Math.max(1, Math.floor(lines.length * (maxChars / full.length)));
+  const step = lines.length / keep;
+  return Array.from({ length: keep }, (_, i) => lines[Math.floor(i * step)]).join("\n");
+}
+function chroniclePrompt(text, seg, vodTitle) {
+  return `Directo: ${JSON.stringify(vodTitle)}. Tramo de ${hms(seg.start)} a ${hms(seg.end)}.
+${text}
+Devuelve exactamente {"resumen":"","temas":[""],"momentos":[{"t":"h:mm:ss","que":""}]}: "resumen" en 2 a 4 frases con lo que pasa de verdad (nombres, juego, decisiones, conversaciones); "temas" son los asuntos de los que se habla (hasta 6, tal como se dir\xEDan); "momentos" son hasta 6 instantes que un editor querr\xEDa usar, con la marca de tiempo donde empiezan y una frase de qu\xE9 pasa. Si el tramo no tiene nada, listas vac\xEDas.`;
+}
+var clean2 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+function parseClock(v) {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v !== "string") return null;
+  const parts = v.trim().split(":").map(Number);
+  if (!parts.length || parts.some((n) => !Number.isFinite(n) || n < 0)) return null;
+  return parts.reduce((a, n) => a * 60 + n, 0);
+}
+function parseChronicle(raw, seg) {
+  const r2 = raw;
+  if (!r2 || typeof r2 !== "object") return null;
+  const summary = clean2(r2.resumen, 500);
+  const topics = (Array.isArray(r2.temas) ? r2.temas : []).map((t) => clean2(t, 60)).filter(Boolean).slice(0, 6);
+  const moments = [];
+  for (const m of Array.isArray(r2.momentos) ? r2.momentos : []) {
+    const at = parseClock(m?.t);
+    const what = clean2(m?.que, 140);
+    const abs = at === null ? null : at >= seg.start && at <= seg.end ? at : at + seg.start >= seg.start && at + seg.start <= seg.end ? at + seg.start : null;
+    if (abs !== null && what) moments.push({ at: abs, what });
+  }
+  if (!summary && !moments.length) return null;
+  return { start: seg.start, end: seg.end, summary, topics, moments: moments.slice(0, 6) };
+}
+function chronicleMap(chunks) {
+  if (!chunks.length) return "";
+  const lines = [...chunks].sort((a, b) => a.start - b.start).map((c) => `- ${hms(c.start)}-${hms(c.end)}: ${c.summary}${c.topics.length ? ` Temas: ${c.topics.join(", ")}.` : ""}${c.moments.length ? ` Momentos: ${c.moments.map((m) => `${hms(m.at)} ${m.what}`).join("; ")}.` : ""}`);
+  return `
+MAPA DEL DIRECTO (lo que pasa en cada tramo, seg\xFAn el cronista):
+${lines.join("\n")}`;
+}
+function chronicleCandidates(chunks, taken, durationSec) {
+  const out = [];
+  for (const m of chunks.flatMap((c) => c.moments).sort((a, b) => a.at - b.at)) {
+    const seg = { start: Math.max(0, m.at - 15), end: Math.min(durationSec || Infinity, m.at + 50) };
+    if (seg.end - seg.start < 20) continue;
+    const overl = (x) => Math.min(x.end, seg.end) - Math.max(x.start, seg.start) > 20;
+    if (taken.some(overl) || out.some(overl)) continue;
+    out.push({ ...seg, what: m.what });
+  }
+  return out;
+}
+
+// electron/domain/pipeline/chronicle.ts
+var CACHE_VERSION = 1;
+var MIN_DURATION_SEC = 15 * 60;
+var chroniclePhase = async (ctx) => {
+  const { host, vod, task, notes } = ctx;
+  const d = host.d;
+  if (host.cfg.chronicle === false || !ctx.llmConf || ctx.duration < MIN_DURATION_SEC) return "continue";
+  const words = ctx.words;
+  const segs = chronicleChunks(ctx.duration);
+  const covered = segs.filter((s) => words.some((w) => w.start >= s.start && w.start < s.end)).length;
+  if (words.length < 300 || covered < Math.ceil(segs.length / 2)) return "continue";
+  ctx.clock.mark("cronista");
+  task.update(56, "El cronista lee el directo por tramos\u2026");
+  const file = d.judgeDir ? import_node_path27.default.join(d.judgeDir, `${vod.id}.chronicle.json`) : void 0;
+  const key = `${CACHE_VERSION}|${segs.length}|${words.length}`;
+  let chunks = null;
+  try {
+    const saved = file && import_node_fs34.default.existsSync(file) ? JSON.parse(import_node_fs34.default.readFileSync(file, "utf8")) : null;
+    if (saved?.key === key) chunks = saved.chunks;
+  } catch {
+    chunks = null;
+  }
+  let lanesUsed = 1;
+  if (!chunks) {
+    const lanes = lanesFor(ctx.llmConf, "chronicle");
+    lanesUsed = lanes.length;
+    const results = segs.map(() => null);
+    let done = 0;
+    const sleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
+    await Promise.all(
+      lanes.map(async (lane, li) => {
+        for (let k = li, first = true; k < segs.length; k += lanes.length) {
+          throwIfCancelled();
+          const text = chunkText(words, segs[k]);
+          if (text.length >= 200) {
+            if (!first) await sleep(MIN_INTERVAL_MS[lane.provider]);
+            first = false;
+            try {
+              results[k] = parseChronicle(await askJson(lane, CHRONICLE_SYSTEM, chroniclePrompt(text, segs[k], vod.title ?? ""), { fetchFn: d.llmFetch, temperature: 0.2 }), segs[k]);
+            } catch (e) {
+              if (isCancelled(e)) throw e;
+            }
+          }
+          done++;
+          task.update(56 + done / segs.length * 3, `El cronista lee el directo (${done} de ${segs.length} tramos)\u2026`);
+        }
+      })
+    );
+    chunks = results.filter((c) => c !== null);
+    if (file && chunks.length >= covered * 0.8) {
+      try {
+        import_node_fs34.default.mkdirSync(import_node_path27.default.dirname(file), { recursive: true });
+        import_node_fs34.default.writeFileSync(file, JSON.stringify({ key, chunks }));
+      } catch {
+      }
+    }
+  }
+  if (!chunks.length) {
+    notes.push("El cronista no pudo leer el directo (las IAs no respondieron); se sigue con lo elegido por volumen y conversaci\xF3n.");
+    return "continue";
+  }
+  ctx.chronicle = chunks;
+  const extra = chronicleCandidates(chunks, ctx.pool, ctx.duration).filter((c) => silentShare(ctx.sig.energyDb, c) < MUTED_SHARE);
+  extra.forEach((c, i) => ctx.pool.push({ id: `k${i + 1}`, start: c.start, end: c.end, signal: 6 }));
+  notes.push(
+    `Cronista: ${chunks.length} de ${segs.length} tramos de 20 min le\xEDdos${lanesUsed > 1 ? ` por ${lanesUsed} IAs a la vez` : ""}; ${extra.length} momento(s) se\xF1alados por lo que se dice a\xF1adidos a los candidatos.`
+  );
+  return "continue";
+};
+
 // electron/domain/pipeline/judge.ts
-var import_node_fs36 = __toESM(require("node:fs"));
+var import_node_fs37 = __toESM(require("node:fs"));
 var import_node_os11 = __toESM(require("node:os"));
-var import_node_path29 = __toESM(require("node:path"));
+var import_node_path30 = __toESM(require("node:path"));
 
 // electron/services/momentJudge.ts
 var import_node_crypto11 = __toESM(require("node:crypto"));
-var import_node_fs34 = __toESM(require("node:fs"));
-var import_node_path27 = __toESM(require("node:path"));
+var import_node_fs35 = __toESM(require("node:fs"));
+var import_node_path28 = __toESM(require("node:path"));
 var VERSION = "v2";
 var CHUNK2 = 6;
 var keyOf = (words, c) => import_node_crypto11.default.createHash("sha1").update(`${VERSION}|${Math.round(c.end - c.start)}|${judgeText(words, c)}`).digest("hex").slice(0, 20);
 function loadCache(file) {
   if (!file) return {};
   try {
-    const j = JSON.parse(import_node_fs34.default.readFileSync(file, "utf8"));
+    const j = JSON.parse(import_node_fs35.default.readFileSync(file, "utf8"));
     return typeof j === "object" && j ? j : {};
   } catch {
     return {};
@@ -40210,8 +40629,8 @@ function loadCache(file) {
 function saveCache(file, data) {
   if (!file) return;
   try {
-    import_node_fs34.default.mkdirSync(import_node_path27.default.dirname(file), { recursive: true });
-    import_node_fs34.default.writeFileSync(file, JSON.stringify(data));
+    import_node_fs35.default.mkdirSync(import_node_path28.default.dirname(file), { recursive: true });
+    import_node_fs35.default.writeFileSync(file, JSON.stringify(data));
   } catch {
   }
 }
@@ -40229,11 +40648,12 @@ async function judgeCandidates(conf, words, cands, d = {}) {
   for (let i = 0; i < todo.length; i += CHUNK2) chunks.push(todo.slice(i, i + CHUNK2));
   let failed = 0;
   let lastError = null;
-  for (const [n, chunk] of chunks.entries()) {
-    d.signal?.();
-    if (n > 0) await (d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms))))(d.paceMs ?? MIN_INTERVAL_MS[conf.provider]);
+  let done = 0;
+  const sleep = d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
+  const lanes = d.lanes?.length ? d.lanes : [conf];
+  const one = async (lane, chunk) => {
     try {
-      const raw = await askJson(conf, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
+      const raw = await askJson(lane, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
       const js = parseJudgements(raw, chunk);
       for (const j of js) {
         const c = chunk.find((x) => x.id === j.id);
@@ -40250,24 +40670,39 @@ async function judgeCandidates(conf, words, cands, d = {}) {
       failed++;
       lastError = e;
     }
-    d.onProgress?.(n + 1, chunks.length);
-  }
+    d.onProgress?.(++done, chunks.length);
+  };
+  await Promise.all(
+    lanes.map(async (lane, li) => {
+      for (let n = li, first = true; n < chunks.length; n += lanes.length, first = false) {
+        d.signal?.();
+        if (!first) await sleep(d.paceMs ?? MIN_INTERVAL_MS[lane.provider]);
+        await one(lane, chunks[n]);
+      }
+    })
+  );
   if (chunks.length && failed > chunks.length / 2) throw lastError ?? new Error("No se pudo valorar con el modelo de lenguaje.");
   return { judged: toJudged(cands, found), cached, asked: todo.length, failedChunks: failed, chunks: chunks.length };
 }
 
 // electron/services/visualJudge.ts
 var import_node_crypto12 = __toESM(require("node:crypto"));
-var import_node_fs35 = __toESM(require("node:fs"));
-var import_node_path28 = __toESM(require("node:path"));
+var import_node_fs36 = __toESM(require("node:fs"));
+var import_node_path29 = __toESM(require("node:path"));
 
 // shared/visual.ts
-var VISUAL_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch. Ves unos fotogramas de cada fragmento de un directo (en orden cronol\xF3gico) y, junto a ellos, un resumen de lo que se dice. Punt\xFAa SOLO lo que se ve, de 0 a 10: 5 es una imagen normal (juego o c\xE1mara sin nada especial), 7 es visualmente buena (gesto o cara llamativa, acci\xF3n clara, algo gracioso o espectacular en pantalla, texto o suceso relevante), 9-10 solo si la imagen por s\xED sola har\xEDa re\xEDr o enganchar. Pon "muerta": true si la imagen no tiene nada que ver (pantalla de espera o \xABvuelvo enseguida\xBB, men\xFA, carga, pantalla negra, c\xE1mara apagada o vac\xEDa, el mismo plano inm\xF3vil sin acci\xF3n). F\xEDjate sobre todo en la persona si hay c\xE1mara: gestos, muecas, caras de sorpresa, risa, enfado o susto, y si cambian de un fotograma a otro (una reacci\xF3n vale m\xE1s que una cara quieta). "nota" es una frase corta en castellano de lo que se ve (di el gesto si lo hay). No inventes lo que no se vea. Responde SOLO con JSON.';
+var point = (v) => {
+  const o = v;
+  const x = Number(o?.x);
+  const y = Number(o?.y);
+  return o && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x: Math.round(x * 1e3) / 1e3, y: Math.round(y * 1e3) / 1e3 } : void 0;
+};
+var VISUAL_SYSTEM = 'Eres editor de v\xEDdeo de un streamer de Twitch. Ves unos fotogramas de cada fragmento de un directo (en orden cronol\xF3gico) y, junto a ellos, un resumen de lo que se dice. Punt\xFAa SOLO lo que se ve, de 0 a 10: 5 es una imagen normal (juego o c\xE1mara sin nada especial), 7 es visualmente buena (gesto o cara llamativa, acci\xF3n clara, algo gracioso o espectacular en pantalla, texto o suceso relevante), 9-10 solo si la imagen por s\xED sola har\xEDa re\xEDr o enganchar. Pon "muerta": true si la imagen no tiene nada que ver (pantalla de espera o \xABvuelvo enseguida\xBB, men\xFA, carga, pantalla negra, c\xE1mara apagada o vac\xEDa, el mismo plano inm\xF3vil sin acci\xF3n). F\xEDjate sobre todo en la persona si hay c\xE1mara: gestos, muecas, caras de sorpresa, risa, enfado o susto, y si cambian de un fotograma a otro (una reacci\xF3n vale m\xE1s que una cara quieta). "nota" es una frase corta en castellano de lo que se ve (di el gesto si lo hay). "foco" es el punto de la imagen hacia el que har\xEDa zoom un editor en ese fragmento ({"x","y"} de 0 a 1 respecto al ancho y al alto; 0,0 es arriba a la izquierda): la cara de quien reacciona si lo que cuenta es la reacci\xF3n, o el sitio de la pantalla donde pasa lo importante si lo que cuenta es el juego. "cara" es d\xF3nde est\xE1 la cara del streamer (su c\xE1mara) en la imagen, o null si no se ve. No inventes lo que no se vea. Responde SOLO con JSON.';
 function visualPrompt(words, items) {
   const list2 = items.map(({ c, frames }) => ({ id: c.id, fotogramas: frames, titulo: c.judgement.title ?? "", texto: judgeText(words, c, 260) }));
   return `Fragmentos (los fotogramas llegan en este orden, ${items.map((x) => x.frames).join("+")} por fragmento):
 ${JSON.stringify(list2)}
-Devuelve {"imagen":[{"id":"","visual":0,"muerta":false,"nota":""}]} con un elemento por fragmento.`;
+Devuelve {"imagen":[{"id":"","visual":0,"muerta":false,"nota":"","foco":{"x":0.5,"y":0.5},"cara":{"x":0.1,"y":0.2}}]} con un elemento por fragmento.`;
 }
 function parseVisual(raw, valid) {
   const list2 = raw?.imagen;
@@ -40280,7 +40715,9 @@ function parseVisual(raw, valid) {
     if (!valid.has(id) || seen.has(id) || !Number.isFinite(v)) continue;
     seen.add(id);
     const note = typeof r2.nota === "string" ? r2.nota.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 140) : "";
-    out.push({ id, visual: Math.min(10, Math.max(0, v)), note, dead: r2.muerta === true });
+    const focus = point(r2.foco);
+    const face = point(r2.cara);
+    out.push({ id, visual: Math.min(10, Math.max(0, v)), note, dead: r2.muerta === true, ...focus ? { focus } : {}, ...face ? { face } : {} });
   }
   return out;
 }
@@ -40292,21 +40729,42 @@ function applyVisual(judged, vis) {
     if (!v) return j;
     const total2 = Math.round(Math.min(10, Math.max(0, j.total + (v.visual - 5) * VISUAL_SWING)) * 100) / 100;
     const reason = `${j.judgement.reason}${v.note ? ` Imagen (${v.visual.toFixed(0)}/10): ${v.note}` : ""}`.trim().slice(0, 320);
-    return { ...j, total: total2, visual: { score: v.visual, note: v.note }, judgement: { ...j.judgement, reason, discard: j.judgement.discard || v.dead && v.visual <= 3 } };
+    return { ...j, total: total2, visual: { score: v.visual, note: v.note, ...v.focus ? { focus: v.focus } : {}, ...v.face ? { face: v.face } : {} }, judgement: { ...j.judgement, reason, discard: j.judgement.discard || v.dead && v.visual <= 3 } };
   });
 }
 function frameTimes(seg, n) {
   const len2 = Math.max(0, seg.end - seg.start);
   return Array.from({ length: n }, (_, i) => Math.round((seg.start + len2 * (i + 1) / (n + 1)) * 10) / 10);
 }
+function streamFace(judged) {
+  const faces = judged.flatMap((j) => j.visual?.face ? [j.visual.face] : []);
+  if (faces.length < 2) return null;
+  const med = (xs) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  };
+  return { x: med(faces.map((f) => f.x)), y: med(faces.map((f) => f.y)) };
+}
+function focusFinder(judged) {
+  const seen = judged.filter((j) => j.visual?.focus);
+  const face = streamFace(judged);
+  if (!seen.length && !face) return void 0;
+  return (t) => {
+    const hit = seen.find((j) => {
+      const s = j.judgement?.trim ?? j;
+      return t >= s.start - 2 && t <= s.end + 2;
+    });
+    return hit?.visual?.focus ?? face;
+  };
+}
 
 // electron/services/visualJudge.ts
 var VERSION2 = "v1";
 async function vodFrame(ffmpeg, file, at, tmpDir) {
-  const out = import_node_path28.default.join(tmpDir, `f${import_node_crypto12.default.randomBytes(4).toString("hex")}.jpg`);
+  const out = import_node_path29.default.join(tmpDir, `f${import_node_crypto12.default.randomBytes(4).toString("hex")}.jpg`);
   await run(ffmpeg, ["-y", "-v", "error", "-nostdin", "-ss", String(Math.max(0, at)), "-i", file, "-frames:v", "1", "-an", "-vf", "scale=512:-2", "-q:v", "6", out], 6e4);
-  const b64 = import_node_fs35.default.readFileSync(out).toString("base64");
-  import_node_fs35.default.rmSync(out, { force: true });
+  const b64 = import_node_fs36.default.readFileSync(out).toString("base64");
+  import_node_fs36.default.rmSync(out, { force: true });
   return `data:image/jpeg;base64,${b64}`;
 }
 function gestureTimes(seg, n, peak) {
@@ -40324,7 +40782,7 @@ async function judgeVisual(conf, words, judged, o) {
   if (o.always) for (const c of judged.filter((j) => !j.judgement.discard && o.always(j) && !top.includes(j)).slice(0, 6)) top.push(c);
   let cache = {};
   try {
-    cache = o.cacheFile ? JSON.parse(import_node_fs35.default.readFileSync(o.cacheFile, "utf8")) : {};
+    cache = o.cacheFile ? JSON.parse(import_node_fs36.default.readFileSync(o.cacheFile, "utf8")) : {};
   } catch {
     cache = {};
   }
@@ -40341,7 +40799,7 @@ async function judgeVisual(conf, words, judged, o) {
   const groups = [];
   for (let i = 0; i < todo.length; i += perReq) groups.push(todo.slice(i, i + perReq));
   const sleep = o.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
-  import_node_fs35.default.mkdirSync(o.tmpDir, { recursive: true });
+  import_node_fs36.default.mkdirSync(o.tmpDir, { recursive: true });
   for (const [n, g] of groups.entries()) {
     o.signal?.();
     if (n > 0) await sleep(o.paceMs ?? MIN_INTERVAL_MS[conf.provider]);
@@ -40361,8 +40819,8 @@ async function judgeVisual(conf, words, judged, o) {
         cache[keyOf2(g.find((c) => c.id === r2.id), words)] = r2;
       }
       if (o.cacheFile) {
-        import_node_fs35.default.mkdirSync(import_node_path28.default.dirname(o.cacheFile), { recursive: true });
-        import_node_fs35.default.writeFileSync(o.cacheFile, JSON.stringify(cache));
+        import_node_fs36.default.mkdirSync(import_node_path29.default.dirname(o.cacheFile), { recursive: true });
+        import_node_fs36.default.writeFileSync(o.cacheFile, JSON.stringify(cache));
       }
     } catch (e) {
       const msg = e.message;
@@ -40445,8 +40903,9 @@ async function judgeAll(ctx) {
   let judged = null;
   try {
     const r2 = await judgeCandidates(forTask(llmConf, "judge"), words, pool, {
+      lanes: lanesFor(llmConf, "judge"),
       fetchFn: d.llmFetch,
-      cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.json`) : void 0,
+      cacheFile: d.judgeDir ? import_node_path30.default.join(d.judgeDir, `${vod.id}.json`) : void 0,
       onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
       signal: () => throwIfCancelled()
     });
@@ -40456,15 +40915,15 @@ async function judgeAll(ctx) {
     }
     judged = r2.judged;
     notes.push(`Selecci\xF3n inteligente: ${r2.judged.length} candidatos valorados${r2.cached ? ` (${r2.cached} ya estaban guardados)` : ""}${r2.failedChunks ? `, ${r2.failedChunks} lote(s) sin respuesta` : ""}.`);
-    if (host.cfg.vodVision !== false && vod.filePath && import_node_fs36.default.existsSync(vod.filePath)) {
+    if (host.cfg.vodVision !== false && vod.filePath && import_node_fs37.default.existsSync(vod.filePath)) {
       ctx.clock.mark("imagen del directo");
       task.update(60, "Mirando los mejores momentos\u2026");
-      const tmpDir = import_node_path29.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`);
+      const tmpDir = import_node_path30.default.join(import_node_os11.default.tmpdir(), `streamclips-vision-${vod.id}`);
       const vr = await judgeVisual(llmConf, words, judged, {
         ffmpeg: d.tools().ffmpeg,
         file: vod.filePath,
         tmpDir,
-        cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.visual.json`) : void 0,
+        cacheFile: d.judgeDir ? import_node_path30.default.join(d.judgeDir, `${vod.id}.visual.json`) : void 0,
         fetchFn: d.llmFetch,
         signal: () => throwIfCancelled(),
         // lo que cae en los primeros 10 min se mira siempre: ahí está la pantalla de «Empezamos pronto», que el modelo marca como imagen muerta
@@ -40481,7 +40940,7 @@ async function judgeAll(ctx) {
         if (isCancelled(e)) throw e;
         return null;
       });
-      import_node_fs36.default.rmSync(tmpDir, { recursive: true, force: true });
+      import_node_fs37.default.rmSync(tmpDir, { recursive: true, force: true });
       if (vr && !vr.failed) {
         judged = vr.judged;
         notes.push(`Vista del directo: ${vr.looked} momentos mirados${vr.cached ? ` (${vr.cached} ya estaban guardados)` : ""}${vr.dead ? `, ${vr.dead} con la imagen muerta descartados` : ""}.`);
@@ -40539,12 +40998,17 @@ var judgePhase = async (ctx) => {
     judged = p.judged;
     ctx.judged = judged;
     const textFor = textFn(words);
-    const clips = cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
-    const sum = cfg.maxVideos > 0 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
+    const quantity = cfg.quantityFirst !== false;
+    const floor = quantity ? Math.max(3, quality - 1.5) : quality;
+    const strict = cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+    const clips = strict && quantity && strict.chosen.length < cfg.maxClips ? selectBest(judged, { maxSec: Infinity, minTotal: floor, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : strict;
+    const sumStrict = cfg.maxVideos > 0 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
+    const sum = sumStrict && quantity && sumStrict.totalSec < cfg.summaryMinutes * 60 * 0.85 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: floor, maxLen: 90, minGap: 20, textFor }) : sumStrict;
     if (clips) {
       ctx.moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
       clips.chosen.forEach((c, i) => ctx.meta.set(ctx.moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
-      if (clips.chosen.length < cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${cfg.maxClips} clips superan la nota m\xEDnima (${quality}/10); no se rellen\xF3 con momentos flojos.`);
+      if (strict && clips !== strict && clips.chosen.length > strict.chosen.length) notes.push(`${strict.chosen.length} clips superan la nota m\xEDnima (${quality}/10); priorizando la cantidad se complet\xF3 hasta ${clips.chosen.length} con momentos de ${floor}/10 o m\xE1s.`);
+      else if (clips.chosen.length < cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${cfg.maxClips} clips superan la nota m\xEDnima (${quality}/10); no se rellen\xF3 con momentos flojos.`);
     }
     if (d.momentsDir) saveSnapshot(d.momentsDir, vod.id, p.raw, [...clips?.chosen ?? [], ...sum?.chosen ?? []].map((c) => c.start), quality);
     if (sum && sum.chosen.length) {
@@ -40552,11 +41016,6 @@ var judgePhase = async (ctx) => {
         ctx.summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
         const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
         notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < cfg.summaryMinutes * 60 * 0.85 ? " M\xE1s corto de lo configurado: no hab\xEDa m\xE1s momentos buenos." : ""}`);
-        if (ctx.multiCat) {
-          const dom = dominantCategory(ctx.summary, ctx.cats, 8);
-          if (dom.category && dom.segs.length !== ctx.summary.length) notes.push(`Resumen solo de la categor\xEDa \xAB${dom.category}\xBB.`);
-          ctx.summary = dom.segs;
-        }
         for (const c of sum.chosen) if (c.judgement.title) ctx.chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
         ctx.summaryMeta = { score: avg, kind: "resumen", reason: kindSummary(sum) };
       } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);
@@ -40576,7 +41035,7 @@ var judgePhase = async (ctx) => {
     ctx.summary = ctx.legacy.summary;
     try {
       await d.transcripts.ensure(vod.id, [...ctx.moments, ...ctx.summary].map((g) => ({ start: g.start, end: g.end })));
-      ctx.words = d.transcripts.words(vod.id);
+      ctx.words = mergeWords(d.transcripts.words(vod.id), ctx.skim ?? []);
     } catch (e) {
       if (isCancelled(e)) throw e;
     }
@@ -40607,7 +41066,7 @@ var speakersPhase = async (ctx) => {
   try {
     const ts = Date.now();
     const r2 = await d.speakers.diarize(vod.id, spans, (done, total2) => task.update(60 + (total2 ? done / total2 * 14 : 14), `Identificando hablantes (${Math.round(done / 60)} de ${Math.round(total2 / 60)} min)\u2026`));
-    ctx.words = d.transcripts.words(vod.id);
+    ctx.words = mergeWords(d.transcripts.words(vod.id), ctx.skim ?? []);
     notes.push(`Hablantes: ${r2.voices} voz/voces en ${Math.round(r2.sec / 60)} min de audio (${ctx.lap(ts)}).`);
   } catch (e) {
     if (isCancelled(e)) throw e;
@@ -40617,8 +41076,8 @@ var speakersPhase = async (ctx) => {
 };
 
 // electron/domain/pipeline/studio.ts
-var import_node_fs38 = __toESM(require("node:fs"));
-var import_node_path31 = __toESM(require("node:path"));
+var import_node_fs39 = __toESM(require("node:fs"));
+var import_node_path32 = __toESM(require("node:path"));
 
 // shared/director.ts
 var HOOK = { minSec: 5, maxSec: 20 };
@@ -40628,7 +41087,7 @@ var MAX_PHRASES = 8;
 var MAX_CANDIDATES = 40;
 var CLOSING_TEXT = "Suscr\xEDbete para no perderte el pr\xF3ximo directo";
 var r13 = (x) => Math.round(x * 10) / 10;
-var clean2 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+var clean3 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 function directorCandidates(judged, words, sig) {
   const mean = sig.energyDb?.length ? sig.energyDb.reduce((a, b) => a + b, 0) / sig.energyDb.length : void 0;
   return judged.filter((j) => !j.judgement.discard && j.total >= 4).sort((a, b) => b.total - a.total).slice(0, MAX_CANDIDATES).sort((a, b) => a.start - b.start).map((j) => {
@@ -40681,7 +41140,7 @@ function parseDirectorPlan(raw, candidates2) {
     }
     if (!ids.length) continue;
     ids.sort((a, b) => byId.get(a).start - byId.get(b).start);
-    chapters.push({ title: clean2(ch.titulo, 40) || `Cap\xEDtulo ${chapters.length + 1}`, ids, pace: ch.ritmo === "rapido" ? "rapido" : "normal" });
+    chapters.push({ title: clean3(ch.titulo, 40) || `Cap\xEDtulo ${chapters.length + 1}`, ids, pace: ch.ritmo === "rapido" ? "rapido" : "normal" });
   }
   if (chapters.length < 2) return null;
   let hook;
@@ -40694,25 +41153,25 @@ function parseDirectorPlan(raw, candidates2) {
       const dur = c.end - c.start;
       const f = Math.min(Math.max(0, from), Math.max(0, dur - HOOK.minSec));
       const t = Math.min(dur, Math.max(f + HOOK.minSec, Math.min(to, f + HOOK.maxSec)));
-      if (t - f >= HOOK.minSec) hook = { id: c.id, from: r13(f), to: r13(t), caption: clean2(g.rotulo, 40) };
+      if (t - f >= HOOK.minSec) hook = { id: c.id, from: r13(f), to: r13(t), caption: clean3(g.rotulo, 40) };
     }
   }
   const phrases = [];
   for (const p of Array.isArray(r2.frases) ? r2.frases.slice(0, MAX_PHRASES) : []) {
     const c = p && byId.get(String(p.id));
     const at = Number(p?.en);
-    const text = clean2(p?.texto, 40);
+    const text = clean3(p?.texto, 40);
     if (!c || !used.has(c.id) || !Number.isFinite(at) || !text) continue;
     phrases.push({ id: c.id, at: Math.min(Math.max(0, at), Math.max(0, c.end - c.start - 1)), text });
   }
   return {
-    title: clean2(r2.titulo, 100),
-    description: clean2(r2.descripcion, 600),
-    coverText: clean2(r2.miniatura, 40),
+    title: clean3(r2.titulo, 100),
+    description: clean3(r2.descripcion, 600),
+    coverText: clean3(r2.miniatura, 40),
     ...hook ? { hook } : {},
     chapters,
     phrases,
-    reason: clean2(r2.motivo, 240)
+    reason: clean3(r2.motivo, 240)
   };
 }
 function directedCut(plan, candidates2, o) {
@@ -40770,11 +41229,11 @@ function directedCut(plan, candidates2, o) {
 // shared/studio.ts
 var AGENT_LABEL = { historia: "Editor de historia", ritmo: "Editor de ritmo", humor: "Editor de humor", jefe: "Jefe de edici\xF3n", equipo: "Equipo" };
 var r14 = (x) => Math.round(x * 10) / 10;
-var clean3 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+var clean4 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var num4 = (v) => typeof v === "number" ? v : Number(v);
 var list = (v) => Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : [];
 var brief = (c) => ({ id: c.id, dur: r14(c.end - c.start), nota: c.total, tipo: c.kind, titulo: c.title, ...c.visual ? { imagen: `${c.visual.score}/10: ${c.visual.note}` } : {}, ...c.energy !== void 0 ? { volumen: c.energy } : {}, ...c.chatPerMin !== void 0 ? { chat: c.chatPerMin } : {}, texto: c.text });
-var EQUIPO_BRIEF = " Trabajas dentro de un estudio de v\xEDdeo profesional que produce contenido para YouTube y redes sociales (Shorts, TikTok, Reels) a partir de directos de Twitch. Objetivo com\xFAn del equipo: que el espectador que no vio el directo se quede hasta el final (retenci\xF3n), con un arranque que enganche en los primeros segundos, ritmo sin tiempos muertos, cortes que se entiendan y un final que remate. Tus compa\xF1eros son el editor de historia, el de ritmo, el de humor, el de temas y el jefe de edici\xF3n: c\xE9ntrate en tu parte y ten en cuenta lo que te digan.";
+var EQUIPO_BRIEF = " Trabajas dentro de un estudio de v\xEDdeo profesional que produce contenido para YouTube y redes sociales (Shorts, TikTok, Reels) a partir de directos de Twitch. Objetivo com\xFAn del equipo: que el espectador que no vio el directo se quede hasta el final (retenci\xF3n), con un arranque que enganche en los primeros segundos, ritmo sin tiempos muertos, cortes que se entiendan y un final que remate. Respeta la personalidad del streamer: su humor, su forma de hablar y su relaci\xF3n con los invitados y el chat son el contenido; el v\xEDdeo tiene que sentirse suyo, no un recopilatorio gen\xE9rico. No se escriben frases encima del v\xEDdeo. Tus compa\xF1eros son el editor de historia, el de ritmo, el de humor, el de temas y el jefe de edici\xF3n: c\xE9ntrate en tu parte y ten en cuenta lo que te digan.";
 function teamNotes(o) {
   const lines = [];
   if (o.funny.length) lines.push(`Editor de humor: lo que m\xE1s gracia hace est\xE1 en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` (\xAB${f.title}\xBB, ${f.fun}/10)` : ""}`).join(", ")}. Son buenos candidatos para el gancho y para rematar cap\xEDtulos.`);
@@ -40891,14 +41350,14 @@ function humorPrompt(cands, maxClips) {
 ${JSON.stringify(cands.map(brief))}
 Devuelve exactamente {"clips":[{"id":"","desde":0,"hasta":0,"titulo":"","gracia":0,"motivo":""}]} con como mucho ${maxClips} clips, de mejor a peor. "desde" y "hasta" son segundos relativos al inicio del momento (entre ${FUNNY.minSec} y ${FUNNY.maxSec} s de clip); "gracia" de 0 a 10 (7 = hace re\xEDr, 9 = para ense\xF1\xE1rselo a alguien). Si ninguno hace gracia, devuelve la lista vac\xEDa.`;
 }
-function parseFunny(raw, cands, maxClips) {
+function parseFunny(raw, cands, maxClips, minFun = FUNNY.minFun) {
   const byId = new Map(cands.map((c) => [c.id, c]));
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   for (const k of list(raw?.clips)) {
     const c = byId.get(String(k.id));
     const fun = num4(k.gracia);
-    if (!c || seen.has(c.id) || !Number.isFinite(fun) || fun < FUNNY.minFun) continue;
+    if (!c || seen.has(c.id) || !Number.isFinite(fun) || fun < minFun) continue;
     const dur = c.end - c.start;
     let from = num4(k.desde);
     let to = num4(k.hasta);
@@ -40916,7 +41375,7 @@ function parseFunny(raw, cands, maxClips) {
     if (to - from > FUNNY.maxSec) from = to - FUNNY.maxSec;
     if (to - from < Math.min(FUNNY.minSec, dur)) continue;
     seen.add(c.id);
-    out.push({ id: c.id, start: r14(c.start + from), end: r14(c.start + to), title: clean3(k.titulo, 80) || c.title || "", fun: Math.min(10, r14(fun)), why: clean3(k.motivo, 160) });
+    out.push({ id: c.id, start: r14(c.start + from), end: r14(c.start + to), title: clean4(k.titulo, 80) || c.title || "", fun: Math.min(10, r14(fun)), why: clean4(k.motivo, 160) });
   }
   return out.sort((a, b) => b.fun - a.fun).slice(0, Math.max(0, maxClips));
 }
@@ -40936,7 +41395,7 @@ function parseChief(raw, plan) {
   if (!r2 || typeof r2 !== "object") return null;
   const inPlan = new Set(plan.chapters.flatMap((c) => c.ids));
   const drop = (Array.isArray(r2.quitar) ? r2.quitar.map(String) : []).filter((id) => inPlan.has(id));
-  return { approved: r2.aprobado !== false, drop: [...new Set(drop)], title: clean3(r2.titulo, 100), coverText: clean3(r2.miniatura, 40), notes: clean3(r2.notas, 240) };
+  return { approved: r2.aprobado !== false, drop: [...new Set(drop)], title: clean4(r2.titulo, 100), coverText: clean4(r2.miniatura, 40), notes: clean4(r2.notas, 240) };
 }
 function applyChief(plan, review) {
   const all = plan.chapters.flatMap((c) => c.ids);
@@ -40961,14 +41420,58 @@ function applyChief(plan, review) {
   };
 }
 var sumSec = (segs) => r14(segs.reduce((a, s) => a + (s.end - s.start), 0));
+function fillPlan(plan, cands, targetSec, minScore) {
+  const byId = new Map(cands.map((c) => [c.id, c]));
+  const used = new Set(plan.chapters.flatMap((c) => c.ids));
+  let total2 = [...used].reduce((a, id) => a + ((byId.get(id)?.end ?? 0) - (byId.get(id)?.start ?? 0)), 0);
+  const chapters = plan.chapters.map((c) => ({ ...c, ids: [...c.ids] }));
+  if (!chapters.length) return { plan, added: 0 };
+  const hookId = plan.hook?.id;
+  const lastId = chapters[chapters.length - 1].ids[chapters[chapters.length - 1].ids.length - 1];
+  let added = 0;
+  for (const c of cands.filter((x) => !used.has(x.id) && x.total >= minScore).sort((a, b) => b.total - a.total)) {
+    if (total2 >= targetSec) break;
+    const mid = (c.start + c.end) / 2;
+    const dist = (ch2) => Math.min(...ch2.ids.map((id) => Math.abs(((byId.get(id)?.start ?? 0) + (byId.get(id)?.end ?? 0)) / 2 - mid)));
+    const ch = [...chapters].sort((a, b) => dist(a) - dist(b))[0];
+    let at = ch.ids.findIndex((id) => id !== hookId && (byId.get(id)?.start ?? 0) > c.start);
+    if (at < 0) at = ch.ids.length;
+    if (ch.ids[at - 1] === lastId) at -= 1;
+    ch.ids.splice(Math.max(0, at), 0, c.id);
+    used.add(c.id);
+    total2 += c.end - c.start;
+    added++;
+  }
+  return { plan: { ...plan, chapters }, added };
+}
 
 // electron/domain/pipeline/studio.ts
 var import_node_os12 = __toESM(require("node:os"));
 
+// electron/domain/pipeline/lessons.ts
+var KIND_LABEL = { gracia: "humor", fail: "fails", reaccion: "reacciones", discusion: "discusiones", historia: "historias", epico: "momentos \xE9picos", otro: "otros momentos" };
+function lessonsText(d) {
+  const parts = [];
+  if (d.prefsFile) {
+    try {
+      const prefs = loadPrefs(d.prefsFile);
+      const act = prefs.enabled ? describePrefs(prefs).filter((x) => x.active) : [];
+      const up = act.filter((x) => x.bias > 0).map((x) => KIND_LABEL[x.kind] ?? x.kind);
+      const down = act.filter((x) => x.bias < 0).map((x) => KIND_LABEL[x.kind] ?? x.kind);
+      if (up.length) parts.push(`Por lo que revisa, prefiere ${up.join(", ")}.`);
+      if (down.length) parts.push(`Suele quitar ${down.join(", ")}: \xFAsalos solo si son muy buenos.`);
+    } catch {
+    }
+  }
+  const approved = d.store.data.outputs.filter((o) => o.auto?.review === "approved" && o.title).slice(-12).map((o) => `\xAB${o.title}\xBB (${o.kind === "long" ? "v\xEDdeo" : "clip"})`);
+  if (approved.length) parts.push(`Ha aprobado para publicar, por ejemplo: ${approved.join(", ")}. Busca cosas de ese estilo.`);
+  return parts.length ? ` LO QUE EL EQUIPO HA APRENDIDO DEL STREAMER: ${parts.join(" ")}` : "";
+}
+
 // electron/domain/pipeline/director.ts
-var import_node_fs37 = __toESM(require("node:fs"));
-var import_node_path30 = __toESM(require("node:path"));
-var CACHE_VERSION = 1;
+var import_node_fs38 = __toESM(require("node:fs"));
+var import_node_path31 = __toESM(require("node:path"));
+var CACHE_VERSION2 = 1;
 function singleCategory(cands, cats, multi) {
   if (!multi) return { cands };
   const by = /* @__PURE__ */ new Map();
@@ -41003,18 +41506,18 @@ var directorPhase = async (ctx) => {
     candidates: cands,
     style: { titleStyle: style.titleStyle, lore: style.lore }
   };
-  const key = `${CACHE_VERSION}|${cands.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
-  const cacheFile = d.judgeDir ? import_node_path30.default.join(d.judgeDir, `${vod.id}.director.json`) : void 0;
+  const key = `${CACHE_VERSION2}|${cands.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
+  const cacheFile = d.judgeDir ? import_node_path31.default.join(d.judgeDir, `${vod.id}.director.json`) : void 0;
   let plan = null;
   try {
-    const cached = cacheFile && import_node_fs37.default.existsSync(cacheFile) ? JSON.parse(import_node_fs37.default.readFileSync(cacheFile, "utf8")) : null;
+    const cached = cacheFile && import_node_fs38.default.existsSync(cacheFile) ? JSON.parse(import_node_fs38.default.readFileSync(cacheFile, "utf8")) : null;
     if (cached?.key === key) plan = cached.plan;
     else {
       const raw = await askJson(ctx.llmConf, DIRECTOR_SYSTEM, directorPrompt(input), { fetchFn: d.llmFetch, temperature: 0.3 });
       plan = parseDirectorPlan(raw, cands);
       if (plan && cacheFile) {
-        import_node_fs37.default.mkdirSync(import_node_path30.default.dirname(cacheFile), { recursive: true });
-        import_node_fs37.default.writeFileSync(cacheFile, JSON.stringify({ key, plan }));
+        import_node_fs38.default.mkdirSync(import_node_path31.default.dirname(cacheFile), { recursive: true });
+        import_node_fs38.default.writeFileSync(cacheFile, JSON.stringify({ key, plan }));
       }
     }
   } catch (e) {
@@ -41051,7 +41554,7 @@ var directorPhase = async (ctx) => {
 };
 
 // electron/domain/pipeline/studio.ts
-var CACHE_VERSION2 = 3;
+var CACHE_VERSION3 = 3;
 var SCENE_BUDGET = 2.5;
 var JEFE_FRAMES = 5;
 var JEFE_VE = " Adem\xE1s VES un fotograma de los primeros momentos del montaje: si en alguno la imagen es una pantalla de espera (\xABempezamos pronto\xBB, \xABvuelvo enseguida\xBB), est\xE1 en negro o no hay nada que ver, qu\xEDtalo aunque el texto sea bueno; si se ve un gesto o algo llamativo, tenlo en cuenta a favor.";
@@ -41068,7 +41571,8 @@ var studioPhase = async (ctx) => {
   ctx.clock.mark("estudio de edici\xF3n");
   task.update(64, "Estudio de edici\xF3n: los editores est\xE1n trabajando\u2026");
   const all = directorCandidates(ctx.judged, words, ctx.sig);
-  const { cands: picks, category } = singleCategory(all, ctx.cats, ctx.multiCat);
+  const picks = all;
+  const category = ctx.multiCat ? void 0 : singleCategory(all, ctx.cats, ctx.multiCat).category;
   const chapterOf = (c) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
   let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : void 0).filter((s) => silentShare(ctx.sig.energyDb, s) < MUTED_SHARE);
   let spare = [];
@@ -41089,7 +41593,7 @@ var studioPhase = async (ctx) => {
   if (cfg.director !== false && cfg.maxVideos > 0 && spans.length) {
     try {
       await d.transcripts.ensure(vod.id, spans.map((s) => ({ start: s.start, end: s.end })));
-      sceneWords = d.transcripts.words(vod.id);
+      sceneWords = mergeWords(d.transcripts.words(vod.id), ctx.skim ?? []);
       ctx.words = sceneWords;
     } catch (e) {
       if (isCancelled(e)) throw e;
@@ -41117,7 +41621,16 @@ var studioPhase = async (ctx) => {
     const { trim: _t, ...judgement } = base2.judgement;
     return { ...base2, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
   }).concat(spare.flatMap((m) => byPick.get(m.id) ? [byPick.get(m.id)] : [])) : ctx.judged;
-  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, forTask(conf, "themes"), notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
+  const quantity = cfg.quantityFirst !== false;
+  const lessons = lessonsText(d);
+  const map = chronicleMap(ctx.chronicle ?? []);
+  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, forTask(conf, "themes"), notes, {
+    chars: useScenes ? 900 : 380,
+    minLongSec: THEME_VIDEO.minSec,
+    hardCapSec: THEME_VIDEO.maxSec,
+    extraSystem: EQUIPO_BRIEF + playbookFor("temas") + lessons + map,
+    max: quantity ? Math.max(3, cfg.maxVideos - 1) : 3
+  }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
   const takeThemes = async () => {
     const r2 = await themesJob;
     if ("e" in r2) throw r2.e;
@@ -41133,11 +41646,11 @@ var studioPhase = async (ctx) => {
     return "continue";
   }
   const style = host.style();
-  const key = `${CACHE_VERSION2}|${cfg.maxClips}|${wantLong ? 1 : 0}|${cands.map((c) => `${c.id}:${c.start}:${c.end}`).join(",")}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
-  const file = d.judgeDir ? import_node_path31.default.join(d.judgeDir, `${vod.id}.studio.json`) : void 0;
+  const key = `${CACHE_VERSION3}|${cfg.maxClips}|${wantLong ? 1 : 0}|${cands.map((c) => `${c.id}:${c.start}:${c.end}`).join(",")}|${all.map((c) => `${c.id}:${c.start}:${c.end}:${c.total}`).join(",")}`;
+  const file = d.judgeDir ? import_node_path32.default.join(d.judgeDir, `${vod.id}.studio.json`) : void 0;
   let saved = null;
   try {
-    const s = file && import_node_fs38.default.existsSync(file) ? JSON.parse(import_node_fs38.default.readFileSync(file, "utf8")) : null;
+    const s = file && import_node_fs39.default.existsSync(file) ? JSON.parse(import_node_fs39.default.readFileSync(file, "utf8")) : null;
     if (s?.key === key) saved = s;
   } catch {
     saved = null;
@@ -41149,7 +41662,8 @@ var studioPhase = async (ctx) => {
     return e.message.split("\n")[0];
   };
   const relays = /* @__PURE__ */ new Set();
-  const ask = (system, user, temperature, who) => askJson(forTask(conf, who), system + EQUIPO_BRIEF, user, { fetchFn: d.llmFetch, temperature, onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubri\xF3 a ${AI_LABEL[covered]}`) });
+  const role = { story: "historia", humor: "humor", chief: "jefe", themes: "temas", titles: "titulos", judge: "historia", vision: "jefe", chronicle: "cronista" };
+  const ask = (system, user, temperature, who, roleOf = role[who]) => askJson(forTask(conf, who), system + EQUIPO_BRIEF + playbookFor(roleOf) + lessons, user, { fetchFn: d.llmFetch, temperature, onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubri\xF3 a ${AI_LABEL[covered]}`) });
   let plan = saved?.plan ?? null;
   let trims = saved?.trims ?? [];
   let clips = saved?.clips ?? [];
@@ -41158,8 +41672,8 @@ var studioPhase = async (ctx) => {
   let historiaPrompt = "";
   if (!saved) {
     const [rTrims, rClips, rThemes] = await Promise.allSettled([
-      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, "humor").then((raw) => parseTrims(raw, cands)) : Promise.resolve([]),
-      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, "humor").then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([]),
+      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, "humor", "ritmo").then((raw) => parseTrims(raw, cands)) : Promise.resolve([]),
+      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, "humor").then((raw) => parseFunny(raw, all, cfg.maxClips, quantity ? FUNNY.minFun - 1 : FUNNY.minFun)) : Promise.resolve([]),
       themesJob
     ]);
     const sceneOf = (t) => cands.find((c) => t.start < c.end && t.end > c.start)?.id;
@@ -41182,7 +41696,7 @@ var studioPhase = async (ctx) => {
       maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
       candidates: cands,
       style: { titleStyle: style.titleStyle, lore: style.lore }
-    }) + briefing;
+    }) + briefing + map;
     if (briefing) say("equipo", true, `Reuni\xF3n de edici\xF3n: el editor de historia mont\xF3 el resumen con las notas de ${[funnyNow.length ? "humor" : "", themesNow.length ? "temas" : "", rTrims.status === "fulfilled" && rTrims.value.length ? "ritmo" : ""].filter(Boolean).join(", ")}.`);
     const [rPlan] = await Promise.allSettled([wantLong ? ask(historiaSystem, historiaPrompt, 0.3, "story").then((raw) => parseDirectorPlan(raw, cands)) : Promise.resolve(null)]);
     if (rPlan.status === "fulfilled") plan = rPlan.value;
@@ -41203,23 +41717,23 @@ var studioPhase = async (ctx) => {
       try {
         const prompt = jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec });
         let raw = null;
-        if (cfg.vodVision !== false && vod.filePath && import_node_fs38.default.existsSync(vod.filePath)) {
+        if (cfg.vodVision !== false && vod.filePath && import_node_fs39.default.existsSync(vod.filePath)) {
           const ids = p.chapters.flatMap((ch) => ch.ids).slice(0, JEFE_FRAMES);
-          const tmpDir = import_node_path31.default.join(import_node_os12.default.tmpdir(), `streamclips-jefe-${vod.id}`);
+          const tmpDir = import_node_path32.default.join(import_node_os12.default.tmpdir(), `streamclips-jefe-${vod.id}`);
           try {
-            import_node_fs38.default.mkdirSync(tmpDir, { recursive: true });
+            import_node_fs39.default.mkdirSync(tmpDir, { recursive: true });
             const images = [];
             for (const id of ids) {
               const c = trimmed.find((x) => x.id === id);
               if (c) images.push(await vodFrame(d.tools().ffmpeg, vod.filePath, (c.start + c.end) / 2, tmpDir));
             }
-            if (images.length) raw = await askJson(visionConfig(conf), JEFE_SYSTEM + JEFE_VE, `${prompt}
+            if (images.length) raw = await askJson(visionConfig(conf), JEFE_SYSTEM + JEFE_VE + EQUIPO_BRIEF + playbookFor("jefe") + lessons, `${prompt}
 Fotogramas adjuntos, uno por momento y en este orden: ${ids.join(", ")}.`, { fetchFn: d.llmFetch, temperature: 0.2, images });
           } catch (e) {
             if (isCancelled(e)) throw e;
             raw = null;
           } finally {
-            import_node_fs38.default.rmSync(tmpDir, { recursive: true, force: true });
+            import_node_fs39.default.rmSync(tmpDir, { recursive: true, force: true });
           }
         }
         review = parseChief(raw ?? await ask(JEFE_SYSTEM, prompt, 0.2, "chief"), p);
@@ -41244,6 +41758,15 @@ Fotogramas adjuntos, uno por momento y en este orden: ${ids.join(", ")}.`, { fet
         }
       } catch (e) {
         if (isCancelled(e)) throw e;
+      }
+    }
+    if (cut && cut.totalSec < style.longMinSec * 0.9) {
+      const filled = fillPlan(p, trimmed, style.longMinSec, Math.max(0, (cfg.minQuality ?? 5) - 1));
+      const cutF = filled.added ? directedCut(filled.plan, trimmed, limits) : null;
+      if (cutF && cutF.totalSec > cut.totalSec) {
+        notes.push(`El editor de historia se qued\xF3 en ${Math.round(cut.totalSec / 60)} min; se a\xF1adieron ${filled.added} escena(s) que no hab\xEDa usado hasta ${Math.round(cutF.totalSec / 60)} min.`);
+        p = filled.plan;
+        cut = cutF;
       }
     }
     let dropped = 0;
@@ -41303,9 +41826,9 @@ Fotogramas adjuntos, uno por momento y en este orden: ${ids.join(", ")}.`, { fet
   if (file) {
     const project = { version: 1, vodId: vod.id, createdAt: (/* @__PURE__ */ new Date()).toISOString(), outputs, agents };
     try {
-      import_node_fs38.default.mkdirSync(import_node_path31.default.dirname(file), { recursive: true });
+      import_node_fs39.default.mkdirSync(import_node_path32.default.dirname(file), { recursive: true });
       const complete = agents.every((a) => a.ok);
-      import_node_fs38.default.writeFileSync(file, JSON.stringify({ key: complete ? key : "", plan, trims, clips, review, project }));
+      import_node_fs39.default.writeFileSync(file, JSON.stringify({ key: complete ? key : "", plan, trims, clips, review, project }));
     } catch (e) {
       d.log.warn(`No se pudo guardar el proyecto del estudio: ${e.message}`);
     }
@@ -41380,7 +41903,7 @@ function seriesTitles(s, mains) {
 }
 
 // electron/domain/pipeline/render.ts
-var clean4 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+var clean5 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 function themeDescription(p) {
   const parts = [p.context || `Todo lo que se habl\xF3 sobre \xAB${p.title}\xBB durante el directo.`];
   return parts.join("\n\n");
@@ -41391,13 +41914,13 @@ var titlesPhase = async (ctx) => {
   ctx.clock.mark("t\xEDtulos");
   task.update(75, "Poniendo t\xEDtulos\u2026");
   ctx.titles = await host.titles(vod, words, ctx.moments, ctx.mains, notes);
-  if (ctx.clipTitles?.size) ctx.titles.clips = ctx.titles.clips.map((t, i) => ({ ...t, title: clean4(ctx.clipTitles.get(ctx.moments[i]), 100) || t.title }));
+  if (ctx.clipTitles?.size) ctx.titles.clips = ctx.titles.clips.map((t, i) => ({ ...t, title: clean5(ctx.clipTitles.get(ctx.moments[i]), 100) || t.title }));
   const ser = cfg.maxVideos > 0 ? seriesFor(vod.title ?? "", { ...cfg.series, nextDay: vod.seriesDay ?? cfg.series.nextDay }) : null;
   if (!ser) ctx.summaryTitle = `Resumen ${new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}`;
   if (ser) {
     const st = seriesTitles(ser, ctx.mains.length);
-    ctx.titles.summary = { title: clean4(st.summary, 100), description: ctx.titles.summary.description };
-    ctx.titles.mains = ctx.titles.mains.map((t, i) => ({ title: clean4(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
+    ctx.titles.summary = { title: clean5(st.summary, 100), description: ctx.titles.summary.description };
+    ctx.titles.mains = ctx.titles.mains.map((t, i) => ({ title: clean5(st.mains[i], 100), description: t.description || `En este v\xEDdeo: ${t.title}` }));
     notes.push(`Serie \xAB${ser.name}\xBB, d\xEDa ${ser.day}.`);
     if (!ser.fromTitle) {
       vod.seriesDay = ser.day;
@@ -41452,7 +41975,9 @@ var renderPhase = async (ctx) => {
     }
   };
   const style = host.style();
-  const editOpts = { minGap: style.silenceMaxSec, cues: cfg.soundCues !== false };
+  const focusAt = focusFinder(ctx.judged ?? []);
+  if (focusAt) host.focus?.set(vod.id, focusAt);
+  const editOpts = { minGap: style.silenceMaxSec, cues: cfg.soundCues !== false, energyDb: ctx.sig.energyDb, focusAt };
   const musicFor = (title, segs, smart) => host.musicFor(vod, words, title, segs, smart, ctx.llmConf);
   const longMake = async (title, segs, o = {}) => {
     let e = pro ? planLong(words, segs, editOpts) : null;
@@ -41497,7 +42022,7 @@ var renderPhase = async (ctx) => {
     const p = ctx.directed;
     const title = ctx.summaryTitle || p.title || titles.summary.title;
     if (ctx.summaryTitle && p.title && !p.description.startsWith(p.title)) p.description = `${p.title}. ${p.description}`.trim();
-    await step("summary", "v\xEDdeo dirigido", () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, captions: p.captions }), { title, description: p.description || titles.summary.description }, p.meta);
+    await step("summary", "v\xEDdeo dirigido", () => longMake(title, p.segs, { chapters: true, themed: true, labels: p.chapterLabels, labelsByIndex: p.labelsByIndex, coverText: p.coverText, ...cfg.onScreenText === true ? { captions: p.captions } : {} }), { title, description: p.description || titles.summary.description }, p.meta);
   }
   if (summary.length) await step("summary", "resumen", () => longMake(ctx.summaryTitle || titles.summary.title, summary, { chapters: true }), ctx.summaryTitle ? { ...titles.summary, title: ctx.summaryTitle } : titles.summary, ctx.summaryMeta);
   for (const [i, m] of mains.entries()) {
@@ -41505,13 +42030,13 @@ var renderPhase = async (ctx) => {
     await step("main", `v\xEDdeo ${i + 1}`, () => longMake(t.title, [m]), t);
   }
   for (const p of topicLongs) {
-    const t = { title: clean4(p.title, 100), description: themeDescription(p) };
+    const t = { title: clean5(p.title, 100), description: themeDescription(p) };
     for (const piece of p.pieces) if (piece.title) ctx.chapterLabels.set(Math.round(piece.start), piece.title);
     await step("main", `tema \xAB${p.title}\xBB`, () => longMake(t.title, p.long.segs, { chapters: true, themed: true }), t, { score: 8, kind: "tema", reason: `Tema recurrente: ${p.context || p.title}`.slice(0, 200) });
   }
   for (const p of topicShorts) {
     for (const sh of p.shorts) {
-      const t = { title: clean4(sh.title, 100), description: p.context };
+      const t = { title: clean5(sh.title, 100), description: p.context };
       await step("clip", `corto \xAB${sh.title}\xBB`, () => host.makeShort(vod.id, words, ctx.llmConf, sh.title, sh.segs[0], subs), t, { score: 7.5, kind: "tema", reason: `Parte del tema \xAB${p.title}\xBB.` });
     }
   }
@@ -41577,6 +42102,7 @@ var PHASES = [
   { name: "transcripci\xF3n", run: transcribePhase },
   { name: "se\xF1ales", run: signalsPhase },
   { name: "transcripci\xF3n de lo elegido", run: transcribeChosenPhase },
+  { name: "cronista", run: chroniclePhase },
   { name: "valoraci\xF3n", run: judgePhase },
   { name: "estudio de edici\xF3n", run: studioPhase },
   { name: "nota m\xEDnima", run: qualityGatePhase },
@@ -41620,11 +42146,13 @@ async function runPipeline(host, vod, pauseRequested, phases = PHASES) {
 }
 
 // electron/domain/autopilot.ts
-var clean5 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+var clean6 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var Autopilot = class {
   constructor(d) {
     this.d = d;
   }
+  /** Hacia dónde van los zooms de cada directo analizado en esta sesión (lo que vio el modelo de visión). */
+  focus = /* @__PURE__ */ new Map();
   get cfg() {
     return this.d.store.data.settings.autopilot;
   }
@@ -41657,7 +42185,7 @@ var Autopilot = class {
       await prev.done.catch(() => void 0);
     }
     if (vod.status !== "downloaded") throw new Error("El VOD todav\xEDa no est\xE1 descargado.");
-    const missing = !vod.filePath || !import_node_fs39.default.existsSync(vod.filePath);
+    const missing = !vod.filePath || !import_node_fs40.default.existsSync(vod.filePath);
     if (missing && !(this.d.restore && vod.url && vod.origin !== "clip")) throw new Error("El archivo del VOD ya no est\xE1 en su sitio (\xBFlo has movido o borrado?).");
     const ctrl = new AbortController();
     this.mark(vod, "waiting", missing ? "Volviendo a descargar el directo para analizarlo\u2026" : "En cola para analizarse.");
@@ -41733,18 +42261,18 @@ var Autopilot = class {
     }
     if (known) this.d.transcripts.prune(vodId, [...spans, ...this.d.themes?.pendingSpans(vodId) ?? []]);
     const chat = this.chatFileFor(vod);
-    if (chat) import_node_fs39.default.rmSync(chat, { force: true });
+    if (chat) import_node_fs40.default.rmSync(chat, { force: true });
     const freedBytes = this.d.discardSource(vodId);
     return { freedBytes, kept: outs.length };
   }
   /** Archivo con la actividad del chat de este directo, si se guardó. */
   chatFileFor(vod) {
-    if (!vod.streamStartedAt || !import_node_fs39.default.existsSync(this.d.chatDir)) return void 0;
+    if (!vod.streamStartedAt || !import_node_fs40.default.existsSync(this.d.chatDir)) return void 0;
     const start = Date.parse(vod.streamStartedAt);
-    for (const f of import_node_fs39.default.readdirSync(this.d.chatDir)) {
+    for (const f of import_node_fs40.default.readdirSync(this.d.chatDir)) {
       try {
-        const full = import_node_path32.default.join(this.d.chatDir, f);
-        const j = JSON.parse(import_node_fs39.default.readFileSync(full, "utf8"));
+        const full = import_node_path33.default.join(this.d.chatDir, f);
+        const j = JSON.parse(import_node_fs40.default.readFileSync(full, "utf8"));
         if (Math.abs(Date.parse(j.startedAt) - start) < 5 * 6e4 && Array.isArray(j.bins)) return full;
       } catch {
       }
@@ -41755,7 +42283,7 @@ var Autopilot = class {
     const f = this.chatFileFor(vod);
     if (!f) return void 0;
     try {
-      return ChatBins.fromArray(JSON.parse(import_node_fs39.default.readFileSync(f, "utf8")).bins).toArray();
+      return ChatBins.fromArray(JSON.parse(import_node_fs40.default.readFileSync(f, "utf8")).bins).toArray();
     } catch {
       return void 0;
     }
@@ -41764,14 +42292,14 @@ var Autopilot = class {
   recordTimes(vod, phases, totalSec) {
     if (!this.d.momentsDir) return;
     try {
-      const file = import_node_path32.default.join(import_node_path32.default.dirname(this.d.momentsDir), "analysis-times.json");
+      const file = import_node_path33.default.join(import_node_path33.default.dirname(this.d.momentsDir), "analysis-times.json");
       let list2 = [];
       try {
-        list2 = JSON.parse(import_node_fs39.default.readFileSync(file, "utf8"));
+        list2 = JSON.parse(import_node_fs40.default.readFileSync(file, "utf8"));
       } catch {
       }
       list2.push({ at: (/* @__PURE__ */ new Date()).toISOString(), vod: vod.title || vod.id, vodSec: vod.durationSec ?? null, totalSec, phases });
-      import_node_fs39.default.writeFileSync(file, JSON.stringify(list2.slice(-40), null, 1));
+      import_node_fs40.default.writeFileSync(file, JSON.stringify(list2.slice(-40), null, 1));
     } catch {
     }
   }
@@ -41793,14 +42321,15 @@ var Autopilot = class {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === "none" || !key) return null;
-    const extra = (this.d.llmExtra?.() ?? []).map((x) => ({ provider: x.provider, model: resolveModel(x.provider, x.model), apiKey: x.apiKey, baseUrl: this.d.llmBaseUrl }));
-    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl, ...extra.length ? { fallbacks: extra } : {} };
+    const language = this.cfg.streamLanguage ?? DEFAULT_STREAM_LANGUAGE;
+    const extra = (this.d.llmExtra?.() ?? []).map((x) => ({ provider: x.provider, model: resolveModel(x.provider, x.model), apiKey: x.apiKey, baseUrl: this.d.llmBaseUrl, language }));
+    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl, language, ...extra.length ? { fallbacks: extra } : {} };
   }
   async titles(vod, words, moments, mains, notes) {
     const base2 = {
       summary: { title: `Resumen del directo - ${this.dateLabel(vod)}`, description: "" },
-      mains: mains.map((m, i) => ({ title: clean5(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean5(shortDescription(words, m), 500) })),
-      clips: moments.map((m, i) => ({ title: clean5(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean5(shortDescription(words, m), 500) }))
+      mains: mains.map((m, i) => ({ title: clean6(words.length ? shortTitle(words, m, i) : `Directo del ${this.dateLabel(vod)} (parte ${i + 1})`, 100), description: clean6(shortDescription(words, m), 500) })),
+      clips: moments.map((m, i) => ({ title: clean6(words.length ? shortTitle(words, m, i) : `Momento ${i + 1}`, 100), description: clean6(shortDescription(words, m), 500) }))
     };
     const uniq = () => {
       const u = dedupeTitles([...base2.mains.map((t) => t.title), ...base2.clips.map((t) => t.title)]);
@@ -41822,13 +42351,13 @@ var Autopilot = class {
     try {
       const raw = await askJson(
         conf,
-        "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a, sin latinismos ni modismos de otros pa\xEDses. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que digan qu\xE9 pasa en \xE9l, distintos entre s\xED, sin clickbait falso, sin emojis) y descripciones para YouTube de 1-3 frases (60 a 280 caracteres) que cuenten de qu\xE9 trata y qu\xE9 pasa, sin hashtags ni emojis ni enlaces. Responde SOLO con JSON.",
+        "Eres editor de contenido de un streamer que habla en espa\xF1ol de Espa\xF1a (castellano). Escribes en castellano de Espa\xF1a, sin latinismos ni modismos de otros pa\xEDses. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, m\xE1ximo 40 caracteres, que digan qu\xE9 pasa en \xE9l, distintos entre s\xED, sin clickbait falso, sin emojis) y descripciones para YouTube de 1-3 frases (60 a 280 caracteres) que cuenten de qu\xE9 trata y qu\xE9 pasa, sin hashtags ni emojis ni enlaces. Responde SOLO con JSON." + playbookFor("titulos"),
         `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.
 "resumen" es el resumen de todo el directo (no tienes su texto: tit\xFAlalo a partir de los dem\xE1s fragmentos). Fragmentos:
 ${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch }
       );
-      const pick = (o, fb) => ({ title: clean5(o?.titulo, 100) || fb.title, description: clean5(o?.descripcion, 500) || fb.description });
+      const pick = (o, fb) => ({ title: clean6(o?.titulo, 100) || fb.title, description: clean6(o?.descripcion, 500) || fb.description });
       base2.summary = pick(raw.resumen, base2.summary);
       const byVideo = new Map((Array.isArray(raw.videos) ? raw.videos : []).map((c) => [String(c.id), c]));
       base2.mains = base2.mains.map((fb, i) => pick(byVideo.get(`video${i + 1}`), fb));
@@ -41861,8 +42390,8 @@ ${JSON.stringify(items)}`,
   async nameFor(vodId, segs) {
     const words = this.d.transcripts.words(vodId);
     if (!words.some((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.5))) return null;
-    const fbTitle = clean5(shortTitle(words, segs, 0), 100);
-    const fbDesc = clean5(shortDescription(words, segs), 500);
+    const fbTitle = clean6(shortTitle(words, segs, 0), 100);
+    const fbDesc = clean6(shortDescription(words, segs), 500);
     const local = { title: /^Momento \d+$/.test(fbTitle) ? "" : fbTitle, description: fbDesc, source: "transcript" };
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
@@ -41877,8 +42406,8 @@ ${JSON.stringify(items)}`,
 ${text}`,
           { fetchFn: this.d.llmFetch }
         );
-        const t = clean5(raw.titulo, 100);
-        const d = clean5(raw.descripcion, 500);
+        const t = clean6(raw.titulo, 100);
+        const d = clean6(raw.descripcion, 500);
         if (t || d) return { title: t || local.title, description: d || local.description, source: "llm" };
       } catch {
       }
@@ -41960,7 +42489,7 @@ ${text}`,
         const id = o.vodId;
         if (failed.has(id)) continue;
         const vod = this.d.store.data.vods.find((v) => v.id === id);
-        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs39.default.existsSync(vod.filePath)) continue;
+        if (!vod || vod.status !== "downloaded" || !vod.filePath || !import_node_fs40.default.existsSync(vod.filePath)) continue;
         if (!this.d.transcripts.status().engine) break;
         const segs = o.kind === "long" ? o.segments ?? [] : o.start !== void 0 && o.end !== void 0 ? [{ start: o.start, end: o.end }] : [];
         if (!segs.length) continue;
@@ -41983,7 +42512,7 @@ ${text}`,
   }
   /** Música de fondo si el vídeo no tiene ya sonido de fondo; el ambiente sale del tema (con modelo si `smart`, si no por palabras). */
   async musicFor(vod, words, title, segs, smart, llmConf) {
-    if (this.cfg.music === false || !vod.filePath || !import_node_fs39.default.existsSync(vod.filePath)) return null;
+    if (this.cfg.music === false || !vod.filePath || !import_node_fs40.default.existsSync(vod.filePath)) return null;
     try {
       const inside = words.filter((w) => segs.some((g) => w.start >= g.start && w.end <= g.end + 0.25)).sort((a, b) => a.start - b.start);
       const gaps = [];
@@ -42010,7 +42539,7 @@ ${text}`,
   async makeShort(vodId, words, llmConf, title, seg, subs) {
     const vod = this.d.store.data.vods.find((v) => v.id === vodId);
     const style = this.d.style?.() ?? defaultStyle();
-    let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+    let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false, focusAt: this.focus.get(vodId) }) : null;
     const mood = e ? await this.musicFor(vod, words, title, [seg], false, llmConf) : null;
     if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
     if (e) {
@@ -42031,16 +42560,16 @@ ${text}`,
     const chars = o.chars ?? 380;
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
     const units = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c.judgement.trim ?? c, chars), title: c.judgement.title, total: c.total }));
-    const blocks = transcriptBlocks(words, cand).slice(0, 20);
+    const blocks = transcriptBlocks(words, cand).map((b) => ({ b, n: words.filter((w) => w.start >= b.start && w.start < b.end).length })).sort((x, y) => y.n - x.n).slice(0, 60).map((x) => x.b).sort((x, y) => x.start - y.start);
     blocks.forEach((b, i) => units.push({ id: `b${i}`, start: b.start, end: b.end, text: judgeText(words, b, 380), total: 5 }));
     units.sort((a, b) => a.start - b.start);
     if (units.length < 4) return [];
     try {
-      const raw = await askJson(conf, THEME_SYSTEM, themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
+      const raw = await askJson(conf, THEME_SYSTEM + (o.extraSystem ?? ""), themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
       const built = parseThemes(raw, new Set(units.map((u) => u.id))).map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60, ...o.minLongSec ? { minLongSec: o.minLongSec } : {}, ...o.hardCapSec ? { hardCapSec: o.hardCapSec } : {} })).filter((p) => Boolean(p));
       const existing = this.d.store.data.outputs.filter((x) => x.vodId === vod.id && x.auto?.review !== "pending").map((x) => x.segments?.length ? x.segments : x.start !== void 0 && x.end !== void 0 ? [{ start: x.start, end: x.end }] : []).filter((x) => x.length);
       const { kept, dropped } = dedupeProposals(built, existing);
-      const top = kept.slice(0, 3);
+      const top = kept.slice(0, o.max ?? 3);
       notes.push(top.length ? `Edici\xF3n tem\xE1tica: ${top.map((p) => `\xAB${p.title}\xBB (${p.pieces.length} fragmentos${p.long.sec ? `, ${Math.round(p.long.sec / 60)} min` : ""})`).join(", ")}${dropped ? `; ${dropped} descartado(s) por repetir lo ya hecho` : ""}.` : "Edici\xF3n tem\xE1tica: ning\xFAn tema con material suficiente para un v\xEDdeo con sentido.");
       return top;
     } catch (e) {
@@ -42055,7 +42584,7 @@ ${text}`,
     if (!vod) throw new Error("El directo de este tema ya no est\xE1 en el programa.");
     const spans = [...proposal.pieces.map((p) => ({ start: p.start, end: p.end }))];
     await this.d.transcripts.ensure(vod.id, spans).catch((e) => this.d.log.warn(`Transcripci\xF3n del tema: ${e.message}`));
-    if (!vod.filePath || !import_node_fs39.default.existsSync(vod.filePath)) await this.d.restore?.(vod.id);
+    if (!vod.filePath || !import_node_fs40.default.existsSync(vod.filePath)) await this.d.restore?.(vod.id);
     const words = this.d.transcripts.words(vod.id);
     const llmConf = this.llmConf();
     const subs = this.cfg.subtitles ? { subtitles: this.cfg.subtitles } : {};
@@ -42078,11 +42607,11 @@ ${text}`,
     if (format === "long") {
       const style = this.d.style?.() ?? defaultStyle();
       const segs = proposal.long.segs;
-      let e = this.cfg.proEdit !== false && words.length ? planLong(words, segs, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+      let e = this.cfg.proEdit !== false && words.length ? planLong(words, segs, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false, focusAt: this.focus.get(vod.id) }) : null;
       if (e) e = { ...e, effects: withJoints(e.effects) };
       const mood = e ? await this.musicFor(vod, words, proposal.title, segs, true, llmConf) : null;
       if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
-      const title = clean5(proposal.title, 100);
+      const title = clean6(proposal.title, 100);
       let item;
       try {
         item = e ? await this.d.clips.createLong(vod.id, { title, segments: e.segments, effects: e.effects, ...subs }) : await this.d.clips.createLong(vod.id, { title, segments: segs, ...subs });
@@ -42122,8 +42651,8 @@ ${text}`,
 
 // electron/domain/channel.ts
 init_twitch();
-var import_node_fs40 = __toESM(require("node:fs"));
-var import_node_path33 = __toESM(require("node:path"));
+var import_node_fs41 = __toESM(require("node:fs"));
+var import_node_path34 = __toESM(require("node:path"));
 var OTHER_CLIPS_MS = 10 * 6e4;
 var OTHER_CLIP_WINDOWS = 4;
 var LIVE_VOD_SLACK_MS = 5 * 6e4;
@@ -42289,10 +42818,10 @@ var ChannelMonitor = class {
     const bins = this.chatBins.toArray();
     if (!bins.length) return;
     try {
-      import_node_fs40.default.mkdirSync(c.dir, { recursive: true });
-      const file = import_node_path33.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
-      import_node_fs40.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
-      import_node_fs40.default.renameSync(`${file}.tmp`, file);
+      import_node_fs41.default.mkdirSync(c.dir, { recursive: true });
+      const file = import_node_path34.default.join(c.dir, `${this.chatStart.replace(/[^\w-]/g, "_")}.json`);
+      import_node_fs41.default.writeFileSync(`${file}.tmp`, JSON.stringify({ startedAt: this.chatStart, bins }));
+      import_node_fs41.default.renameSync(`${file}.tmp`, file);
       this.chatSaved = bins.length;
     } catch (e) {
       this.d.log.warn(`No se pudo guardar el chat: ${e.message}`);
@@ -42983,11 +43512,11 @@ var EngineService = class {
   hash(payload, crons) {
     return import_node_crypto13.default.createHash("sha256").update(JSON.stringify([payload, crons, this.d.engineSource()])).digest("hex");
   }
-  async put(gh, path36, text, msg) {
-    const cur = await gh.getContent(path36);
+  async put(gh, path37, text, msg) {
+    const cur = await gh.getContent(path37);
     if (cur?.text === text) return;
-    const sha = await gh.putContent(path36, text, msg, cur?.sha);
-    if (!sha) throw new Error(`No se pudo escribir ${path36} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
+    const sha = await gh.putContent(path37, text, msg, cur?.sha);
+    if (!sha) throw new Error(`No se pudo escribir ${path37} en GitHub (cambi\xF3 a la vez). Int\xE9ntalo de nuevo.`);
   }
   /** Sube el motor, el flujo y la configuración. */
   async push(gh, payload, crons) {
@@ -43344,8 +43873,8 @@ var AppContext = class {
     this.userDataDir = o.userDataDir;
     this.bundled = o.bundled ?? {};
     this.socialEnv = o.socialEnv;
-    setAssetFolders({ sounds: import_node_path34.default.join(o.userDataDir, "Sonidos"), music: import_node_path34.default.join(o.userDataDir, "M\xFAsica") });
-    this.log = new Logger(import_node_path34.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
+    setAssetFolders({ sounds: import_node_path35.default.join(o.userDataDir, "Sonidos"), music: import_node_path35.default.join(o.userDataDir, "M\xFAsica") });
+    this.log = new Logger(import_node_path35.default.join(o.userDataDir, "logs"), 1e6, o.echoLog ?? false);
     this.store = new Store(o.userDataDir, o.defaultOutputDir);
     if (this.store.recoveredFrom) {
       this.log.warn(`data.json estaba da\xF1ado; copia conservada en ${this.store.recoveredFrom}${this.store.restoredFromBackup ? " (se recuper\xF3 la \xFAltima copia buena)" : " (se empez\xF3 con datos vac\xEDos)"}`);
@@ -43383,15 +43912,15 @@ var AppContext = class {
       tools,
       source: (id) => this.vods.ensureFile(id),
       segmentationModel: o.diarizationModel ?? "",
-      modelsDir: import_node_path34.default.join(o.userDataDir, "models"),
+      modelsDir: import_node_path35.default.join(o.userDataDir, "models"),
       engine: o.diarizationEngine
     });
-    this.style = new StyleService(import_node_path34.default.join(o.userDataDir, "style-profile.json"));
-    this.covers = new CoverService({ dir: import_node_path34.default.join(o.userDataDir, "covers"), tools, fontsDir: o.fontsDir });
-    this.coverDesigns = new CoverDesignService(import_node_path34.default.join(o.userDataDir, "covers"), this.covers);
+    this.style = new StyleService(import_node_path35.default.join(o.userDataDir, "style-profile.json"));
+    this.covers = new CoverService({ dir: import_node_path35.default.join(o.userDataDir, "covers"), tools, fontsDir: o.fontsDir });
+    this.coverDesigns = new CoverDesignService(import_node_path35.default.join(o.userDataDir, "covers"), this.covers);
     this.moments = new MomentsService({
-      dir: import_node_path34.default.join(o.userDataDir, "moments"),
-      prefsFile: import_node_path34.default.join(o.userDataDir, "preferences.json"),
+      dir: import_node_path35.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path35.default.join(o.userDataDir, "preferences.json"),
       words: (id) => this.transcripts.words(id),
       duration: (id) => this.store.data.vods.find((v) => v.id === id)?.durationSec,
       exists: (id) => this.store.data.vods.some((v) => v.id === id)
@@ -43416,9 +43945,9 @@ var AppContext = class {
         const r2 = await run(this.tools().ytdlp, ["--no-warnings", "--no-playlist", "-g", "-f", "b[height<=720]/b", "--", pageUrl], 6e4);
         return r2.stdout.trim().split("\n")[0] ?? "";
       },
-      chat: { dir: import_node_path34.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
+      chat: { dir: import_node_path35.default.join(o.userDataDir, "chat"), enabled: () => this.store.data.settings.autopilot.chatCapture, host: o.chatHost, port: o.chatPort }
     });
-    this.themes = new ThemeStore(import_node_path34.default.join(o.userDataDir, "themes.json"), () => o.notifier.changed());
+    this.themes = new ThemeStore(import_node_path35.default.join(o.userDataDir, "themes.json"), () => o.notifier.changed());
     this.autopilot = new Autopilot({
       themes: this.themes,
       store: this.store,
@@ -43433,10 +43962,10 @@ var AppContext = class {
       categories: this.categories,
       library: this.library,
       pubs: this.pubs,
-      chatDir: import_node_path34.default.join(o.userDataDir, "chat"),
-      judgeDir: import_node_path34.default.join(o.userDataDir, "judgements"),
-      momentsDir: import_node_path34.default.join(o.userDataDir, "moments"),
-      prefsFile: import_node_path34.default.join(o.userDataDir, "preferences.json"),
+      chatDir: import_node_path35.default.join(o.userDataDir, "chat"),
+      judgeDir: import_node_path35.default.join(o.userDataDir, "judgements"),
+      momentsDir: import_node_path35.default.join(o.userDataDir, "moments"),
+      prefsFile: import_node_path35.default.join(o.userDataDir, "preferences.json"),
       style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
       llmExtra: () => this.settings.llmExtra(),
@@ -43446,10 +43975,10 @@ var AppContext = class {
       restore: (id) => this.vods.ensureFile(id),
       discardSource: (id) => this.vods.discardSource(id)
     });
-    this.clipFeedback = new ClipFeedbackStore(import_node_path34.default.join(o.userDataDir, "clip-feedback.json"));
+    this.clipFeedback = new ClipFeedbackStore(import_node_path35.default.join(o.userDataDir, "clip-feedback.json"));
     this.clipScores = createClipScoreService(this, o);
     this.database = new DatabaseWriter(
-      import_node_path34.default.join(o.userDataDir, "Base de datos"),
+      import_node_path35.default.join(o.userDataDir, "Base de datos"),
       () => ({ vods: this.store.data.vods, outputs: this.store.data.outputs, pubs: this.store.data.publications, groups: this.store.data.groups, covers: this.covers.list(), designs: this.coverDesigns.list() }),
       () => [{ name: "Clips de Twitch", file: "Clips de Twitch.csv", about: "Los clips de tu canal con su nota, los cuatro criterios, si el dorado es suyo y si la nota est\xE1 Modificada por ti (S\xED/No).", rows: this.clipScores.scoredCount() }]
     );
@@ -43549,7 +44078,7 @@ var AppContext = class {
     this.storage.start();
     void this.database.refresh().catch(() => void 0);
     this.dbTimer = setInterval(() => void this.database.refresh().catch(() => void 0), 6e4);
-    for (const d of ["Sonidos", "M\xFAsica"]) import_node_fs41.default.mkdirSync(import_node_path34.default.join(this.userDataDir, d), { recursive: true });
+    for (const d of ["Sonidos", "M\xFAsica"]) import_node_fs42.default.mkdirSync(import_node_path35.default.join(this.userDataDir, d), { recursive: true });
     void this.library.backfillThumbnails().catch((e) => this.log.warn(`Miniaturas pendientes: ${e.message}`));
     void this.autopilot.refreshLibraryAtStart();
     this.log.info("Aplicaci\xF3n iniciada.");
@@ -43626,10 +44155,10 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs42.default.mkdtempSync(import_node_path35.default.join(import_node_os13.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs43.default.mkdtempSync(import_node_path36.default.join(import_node_os13.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
-    userDataDir: import_node_path35.default.join(work, "data"),
-    defaultOutputDir: import_node_path35.default.join(work, "out"),
+    userDataDir: import_node_path36.default.join(work, "data"),
+    defaultOutputDir: import_node_path36.default.join(work, "out"),
     cipher: plainCipher,
     notifier: silentNotifier,
     headless: true,
@@ -43695,7 +44224,7 @@ async function runEngine(p, o = {}) {
         result.note = e.message;
         log(`El directo ${v.id} fall\xF3: ${e.message}`);
       }
-      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs42.default.rmSync(vod.filePath, { force: true });
+      for (const vod of ctx.store.data.vods) if (vod.filePath) import_node_fs43.default.rmSync(vod.filePath, { force: true });
       st.last = { at: new Date(nowFn()).toISOString(), processed: result.processed.length, pending: Math.max(0, result.pending), ...result.note ? { note: result.note.slice(0, 300) } : {} };
       sha = await writeState(gh, st, sha, result.failed.includes(v.id) ? "Motor: fallo en un directo" : "Motor: directo terminado");
     }
@@ -43703,7 +44232,7 @@ async function runEngine(p, o = {}) {
     return result;
   } finally {
     ctx.stop();
-    if (!o.workDir) import_node_fs42.default.rmSync(work, { recursive: true, force: true });
+    if (!o.workDir) import_node_fs43.default.rmSync(work, { recursive: true, force: true });
   }
 }
 async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
@@ -43737,7 +44266,7 @@ async function processVod(ctx, v, gh, deadline, now, sleepMs, log) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const p = parsePayload(env.STREAMCLIPS_ENGINE ?? "");
   const out = (name, value) => {
-    if (env.GITHUB_OUTPUT) import_node_fs42.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
+    if (env.GITHUB_OUTPUT) import_node_fs43.default.appendFileSync(env.GITHUB_OUTPUT, `${name}=${value}
 `);
   };
   if (argv.includes("--check")) {

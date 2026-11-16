@@ -30687,7 +30687,7 @@ var require_libsodium_wrappers = __commonJS({
 
 // electron/engine/engine.ts
 var import_node_fs42 = __toESM(require("node:fs"));
-var import_node_os12 = __toESM(require("node:os"));
+var import_node_os13 = __toESM(require("node:os"));
 var import_node_path35 = __toESM(require("node:path"));
 
 // electron/app/context.ts
@@ -31526,6 +31526,9 @@ var VIDEO_PLATFORMS = ["youtube"];
 var platformsFor = (kind) => kind === "long" ? VIDEO_PLATFORMS : ALL_PLATFORMS;
 var VIDEO_ONLY_YOUTUBE = "Los v\xEDdeos solo se publican en YouTube; los clips pueden ir a todas las redes.";
 
+// shared/model/settings.ts
+var MAX_LLM_SLOTS = 3;
+
 // shared/model/library.ts
 var sectionOf = (kind) => kind === "long" ? "videos" : "clips";
 var MAX_GROUP_DEPTH = 5;
@@ -31806,6 +31809,7 @@ var RENDER_MIN_BYTES = 2 * GB;
 
 // electron/domain/settings.ts
 init_twitch();
+var LLM_NAMES = ["groq", "gemini", "openrouter", "mistral"];
 function validateToolPath(label, raw) {
   const p = stripQuotes(raw);
   if (!p) return "";
@@ -31913,10 +31917,21 @@ function validateAutopilot(cur, p, enc) {
       n[k] = [...new Set(v)].sort();
     }
   }
+  if (p.llmExtra !== void 0) {
+    if (!Array.isArray(p.llmExtra) || p.llmExtra.length > MAX_LLM_SLOTS) throw new Error(`Puede haber hasta ${MAX_LLM_SLOTS} IAs de apoyo.`);
+    const old = cur.llmExtra ?? [];
+    n.llmExtra = p.llmExtra.map((x, i) => {
+      if (!LLM_NAMES.includes(x.provider)) throw new Error("Proveedor de modelo no reconocido.");
+      const model = (x.model ?? "").trim();
+      if (!/^[A-Za-z0-9._:/-]{0,80}$/.test(model)) throw new Error("El nombre del modelo no es v\xE1lido.");
+      const kept = x.apiKey === MASKED_SECRET ? old[i]?.provider === x.provider ? old[i].apiKey : "" : enc((x.apiKey ?? "").trim());
+      return { provider: x.provider, model, apiKey: kept };
+    });
+  }
   const l = p.llm;
   if (l) {
     if (l.provider !== void 0) {
-      if (!["none", "groq", "gemini"].includes(l.provider)) throw new Error("Proveedor de modelo no reconocido.");
+      if (l.provider !== "none" && !LLM_NAMES.includes(l.provider)) throw new Error("Proveedor de modelo no reconocido.");
       n.llm.provider = l.provider;
     }
     if (l.model !== void 0) {
@@ -31938,7 +31953,7 @@ var SettingsService = class {
     return {
       ...s,
       twitch: { ...s.twitch, clientSecret: s.twitch.clientSecret ? MASKED_SECRET : "" },
-      autopilot: { ...s.autopilot, llm: { ...s.autopilot.llm, apiKey: s.autopilot.llm.apiKey ? MASKED_SECRET : "" } }
+      autopilot: { ...s.autopilot, llm: { ...s.autopilot.llm, apiKey: s.autopilot.llm.apiKey ? MASKED_SECRET : "" }, llmExtra: (s.autopilot.llmExtra ?? []).map((x) => ({ ...x, apiKey: x.apiKey ? MASKED_SECRET : "" })) }
     };
   }
   /** Valida todo antes de aplicar nada: o se guarda el parche entero o no se guarda nada. */
@@ -31974,6 +31989,10 @@ var SettingsService = class {
     Object.assign(s, next);
     this.store.save();
     return this.get();
+  }
+  /** IAs de apoyo con su clave en claro (solo para el proceso principal); las que no tienen clave se omiten. */
+  llmExtra() {
+    return (this.store.data.settings.autopilot.llmExtra ?? []).flatMap((x) => x.apiKey ? [{ ...x, apiKey: this.secrets.decode(x.apiKey) }] : []);
   }
   /** Clave del modelo de lenguaje en claro (solo para el proceso principal). */
   llmKey() {
@@ -37149,14 +37168,55 @@ var ClipScoreService = class {
   }
 };
 
+// shared/llmRoles.ts
+var AI_LABEL = { gemini: "Gemini", groq: "Groq", mistral: "Mistral", openrouter: "OpenRouter" };
+var AI_TASKS = [
+  { id: "vision", label: "Mirar la imagen (gestos, muecas, pantallas de espera)", why: "Solo Gemini y Groq ven im\xE1genes; Gemini admite m\xE1s por petici\xF3n.", order: ["gemini", "groq"], needsVision: true },
+  { id: "judge", label: "Valorar los momentos y los clips", why: "Son muchas preguntas cortas: Groq es la m\xE1s r\xE1pida.", order: ["groq", "gemini", "mistral", "openrouter"] },
+  { id: "story", label: "Editor de historia: estructura del resumen", why: "Texto largo y la decisi\xF3n m\xE1s importante: Gemini.", order: ["gemini", "mistral", "groq", "openrouter"] },
+  { id: "themes", label: "Editor de temas: v\xEDdeos por tema", why: "Texto largo; va a Mistral si est\xE1, para no cargar a Gemini.", order: ["mistral", "gemini", "groq", "openrouter"] },
+  { id: "humor", label: "Editores de humor y de ritmo: clips y recortes", why: "Respuestas r\xE1pidas y cortas: Groq.", order: ["groq", "mistral", "gemini", "openrouter"] },
+  { id: "chief", label: "Jefe de edici\xF3n: revisa el montaje", why: "Mira fotogramas del montaje, as\xED que necesita ver im\xE1genes.", order: ["gemini", "groq", "mistral", "openrouter"] },
+  { id: "titles", label: "T\xEDtulos, descripciones y m\xFAsica", why: "Texto corto; va a Mistral si est\xE1, para repartir.", order: ["mistral", "gemini", "groq", "openrouter"] }
+];
+var SEES = ["gemini", "groq"];
+function orderFor(task, configured) {
+  const t = AI_TASKS.find((x) => x.id === task);
+  const have = [...new Set(configured)];
+  const usable = t.needsVision ? have.filter((p) => SEES.includes(p)) : have;
+  return [...t.order.filter((p) => usable.includes(p)), ...usable.filter((p) => !t.order.includes(p))];
+}
+
 // electron/services/llm.ts
 var LLM_PROVIDERS = {
   groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", defaultModel: "openai/gpt-oss-120b", visionModel: "qwen/qwen3.8-27b" },
-  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-3.5-flash-lite" }
+  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-3.5-flash-lite", sees: true },
+  // OpenRouter: «openrouter/free» reparte entre los modelos gratuitos que haya en cada momento (no se garantiza que vean imágenes)
+  openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", defaultModel: "openrouter/free" },
+  // Mistral: plan gratuito «Experiment» de La Plateforme
+  mistral: { label: "Mistral", baseUrl: "https://api.mistral.ai/v1", defaultModel: "mistral-small-latest" }
 };
+function chainOf(cfg) {
+  const { fallbacks, ...main2 } = cfg;
+  return [main2, ...(fallbacks ?? []).map(({ fallbacks: _f, ...c }) => c)];
+}
+var fromChain = (chain) => chain.length > 1 ? { ...chain[0], fallbacks: chain.slice(1) } : chain[0];
+function forTask(cfg, task) {
+  const chain = chainOf(cfg);
+  if (chain.length < 2 || chain.some((c) => c.baseUrl)) return cfg;
+  const order = orderFor(task, chain.map((c) => c.provider));
+  const sorted = order.flatMap((p) => chain.filter((c) => c.provider === p));
+  return sorted.length ? fromChain(sorted) : cfg;
+}
 function visionConfig(cfg) {
-  const m = LLM_PROVIDERS[cfg.provider].visionModel;
-  return m && !cfg.baseUrl ? { ...cfg, model: m } : cfg;
+  const one = (c) => {
+    if (c.baseUrl) return c;
+    const p = LLM_PROVIDERS[c.provider];
+    return p.visionModel ? { ...c, model: p.visionModel } : p.sees ? c : null;
+  };
+  const chain = chainOf(cfg).map(one).filter((c) => c !== null);
+  if (!chain.length) return cfg;
+  return fromChain([...chain.filter((c) => c.provider === "gemini"), ...chain.filter((c) => c.provider !== "gemini")]);
 }
 function resolveModel(provider, model) {
   const m = model.trim();
@@ -37165,7 +37225,7 @@ function resolveModel(provider, model) {
   if (provider === "gemini" && /^gemini-(1\.5|2\.0)/.test(m)) return LLM_PROVIDERS.gemini.defaultModel;
   return m;
 }
-var MIN_INTERVAL_MS = { groq: 14e3, gemini: 4e3 };
+var MIN_INTERVAL_MS = { groq: 14e3, gemini: 4e3, openrouter: 6e3, mistral: 3e3 };
 var TIMEOUT_MS = 9e4;
 var SERVER_BACKOFF_MS = process.env.NODE_TEST_CONTEXT ? [5, 5, 5] : [6e3, 15e3, 3e4];
 function extractJson(text) {
@@ -37186,6 +37246,18 @@ function extractJson(text) {
   }
 }
 async function askJson(cfg, system, user, d = {}) {
+  const chain = chainOf(cfg);
+  for (let i = 0; ; i++) {
+    try {
+      const r2 = await askOne(chain[i], system, user, d);
+      if (i > 0) d.onRelay?.(chain[i].provider, chain[0].provider);
+      return r2;
+    } catch (e) {
+      if (e.name === "CancelledError" || i >= chain.length - 1) throw e;
+    }
+  }
+}
+async function askOne(cfg, system, user, d = {}) {
   if (!cfg.apiKey) throw new Error("Falta la clave del modelo de lenguaje (Ajustes > Piloto autom\xE1tico).");
   const fetchFn = d.fetchFn ?? fetch;
   const sleep = d.sleep ?? ((ms) => new Promise((r2) => setTimeout(r2, ms)));
@@ -40367,7 +40439,7 @@ async function judgeAll(ctx) {
   const llmConf = ctx.llmConf;
   let judged = null;
   try {
-    const r2 = await judgeCandidates(llmConf, words, pool, {
+    const r2 = await judgeCandidates(forTask(llmConf, "judge"), words, pool, {
       fetchFn: d.llmFetch,
       cacheFile: d.judgeDir ? import_node_path29.default.join(d.judgeDir, `${vod.id}.json`) : void 0,
       onProgress: (done, total2) => task.update(56 + (total2 ? done / total2 * 4 : 4), `Valorando candidatos (${done}/${total2})\u2026`),
@@ -40691,12 +40763,26 @@ function directedCut(plan, candidates2, o) {
 }
 
 // shared/studio.ts
-var AGENT_LABEL = { historia: "Editor de historia", ritmo: "Editor de ritmo", humor: "Editor de humor", jefe: "Jefe de edici\xF3n" };
+var AGENT_LABEL = { historia: "Editor de historia", ritmo: "Editor de ritmo", humor: "Editor de humor", jefe: "Jefe de edici\xF3n", equipo: "Equipo" };
 var r14 = (x) => Math.round(x * 10) / 10;
 var clean3 = (v, max) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").replace(/[<>{}\\]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var num4 = (v) => typeof v === "number" ? v : Number(v);
 var list = (v) => Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : [];
 var brief = (c) => ({ id: c.id, dur: r14(c.end - c.start), nota: c.total, tipo: c.kind, titulo: c.title, ...c.visual ? { imagen: `${c.visual.score}/10: ${c.visual.note}` } : {}, ...c.energy !== void 0 ? { volumen: c.energy } : {}, ...c.chatPerMin !== void 0 ? { chat: c.chatPerMin } : {}, texto: c.text });
+var EQUIPO_BRIEF = " Trabajas dentro de un estudio de v\xEDdeo profesional que produce contenido para YouTube y redes sociales (Shorts, TikTok, Reels) a partir de directos de Twitch. Objetivo com\xFAn del equipo: que el espectador que no vio el directo se quede hasta el final (retenci\xF3n), con un arranque que enganche en los primeros segundos, ritmo sin tiempos muertos, cortes que se entiendan y un final que remate. Tus compa\xF1eros son el editor de historia, el de ritmo, el de humor, el de temas y el jefe de edici\xF3n: c\xE9ntrate en tu parte y ten en cuenta lo que te digan.";
+function teamNotes(o) {
+  const lines = [];
+  if (o.funny.length) lines.push(`Editor de humor: lo que m\xE1s gracia hace est\xE1 en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` (\xAB${f.title}\xBB, ${f.fun}/10)` : ""}`).join(", ")}. Son buenos candidatos para el gancho y para rematar cap\xEDtulos.`);
+  for (const t of o.themes) if (t.sceneIds.length) lines.push(`Editor de temas: va a hacer un v\xEDdeo propio sobre \xAB${t.title}\xBB con ${t.sceneIds.join(", ")}. En el resumen no gastes todo ese tema: qu\xE9date como mucho con su mejor escena.`);
+  if (o.trimmed) lines.push(`Editor de ritmo: ya ha quitado el aire de ${o.trimmed} escena(s); no hace falta que evites las largas por miedo a los tiempos muertos.`);
+  return lines.length ? `
+NOTAS DE TU EQUIPO (tenlas en cuenta al decidir):
+- ${lines.join("\n- ")}` : "";
+}
+function revisionNote(review) {
+  return `
+CORRECCIONES DEL JEFE DE EDICI\xD3N (rehaz el montaje aplic\xE1ndolas): ${review.notes || "el montaje no convence"}${review.drop.length ? ` Quita o sustituye: ${review.drop.join(", ")}.` : ""}`;
+}
 var SCENE = { joinGap: 100, lead: 25, tail: 10, maxSec: 270 };
 function sceneSpans(cands, o, bounds) {
   const sorted = [...cands].sort((a, b) => a.start - b.start);
@@ -40871,6 +40957,9 @@ function applyChief(plan, review) {
 }
 var sumSec = (segs) => r14(segs.reduce((a, s) => a + (s.end - s.start), 0));
 
+// electron/domain/pipeline/studio.ts
+var import_node_os12 = __toESM(require("node:os"));
+
 // electron/domain/pipeline/director.ts
 var import_node_fs37 = __toESM(require("node:fs"));
 var import_node_path30 = __toESM(require("node:path"));
@@ -40957,7 +41046,10 @@ var directorPhase = async (ctx) => {
 };
 
 // electron/domain/pipeline/studio.ts
-var CACHE_VERSION2 = 2;
+var CACHE_VERSION2 = 3;
+var SCENE_BUDGET = 2.5;
+var JEFE_FRAMES = 5;
+var JEFE_VE = " Adem\xE1s VES un fotograma de los primeros momentos del montaje: si en alguno la imagen es una pantalla de espera (\xABempezamos pronto\xBB, \xABvuelvo enseguida\xBB), est\xE1 en negro o no hay nada que ver, qu\xEDtalo aunque el texto sea bueno; si se ve un gesto o algo llamativo, tenlo en cuenta a favor.";
 var THEME_VIDEO = { minSec: 300, maxSec: 900 };
 var SUMMARY_MAX_SEC = 17 * 60 / 1.1;
 var overlaps = (a, b) => a.start < b.end && b.start < a.end;
@@ -40974,6 +41066,20 @@ var studioPhase = async (ctx) => {
   const { cands: picks, category } = singleCategory(all, ctx.cats, ctx.multiCat);
   const chapterOf = (c) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
   let spans = sceneSpans(picks, { ...SCENE, durationSec: ctx.duration }, ctx.multiCat ? chapterOf : void 0).filter((s) => silentShare(ctx.sig.energyDb, s) < MUTED_SHARE);
+  let spare = [];
+  {
+    const best = (s) => Math.max(...s.members.map((m) => m.total));
+    const budget = host.style().longMaxSec * SCENE_BUDGET;
+    const keep = /* @__PURE__ */ new Set();
+    let acc = 0;
+    for (const s of [...spans].sort((a, b) => best(b) - best(a))) {
+      if (acc >= budget && keep.size >= 6) break;
+      keep.add(s);
+      acc += s.end - s.start;
+    }
+    spare = spans.filter((s) => !keep.has(s)).flatMap((s) => s.members);
+    spans = spans.filter((s) => keep.has(s));
+  }
   let sceneWords = words;
   if (cfg.director !== false && cfg.maxVideos > 0 && spans.length) {
     try {
@@ -41005,8 +41111,8 @@ var studioPhase = async (ctx) => {
     const base2 = byPick.get(best.id);
     const { trim: _t, ...judgement } = base2.judgement;
     return { ...base2, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
-  }) : ctx.judged;
-  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, conf, notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
+  }).concat(spare.flatMap((m) => byPick.get(m.id) ? [byPick.get(m.id)] : [])) : ctx.judged;
+  const themesJob = wantThemes ? host.findThemes(vod, themeUnits, sceneWords, forTask(conf, "themes"), notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e) => ({ e })) : Promise.resolve({ v: [] });
   const takeThemes = async () => {
     const r2 = await themesJob;
     if ("e" in r2) throw r2.e;
@@ -41037,29 +41143,43 @@ var studioPhase = async (ctx) => {
     if (isCancelled(e)) throw e;
     return e.message.split("\n")[0];
   };
-  const ask = (system, user, temperature) => askJson(conf, system, user, { fetchFn: d.llmFetch, temperature });
+  const relays = /* @__PURE__ */ new Set();
+  const ask = (system, user, temperature, who) => askJson(forTask(conf, who), system + EQUIPO_BRIEF, user, { fetchFn: d.llmFetch, temperature, onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubri\xF3 a ${AI_LABEL[covered]}`) });
   let plan = saved?.plan ?? null;
   let trims = saved?.trims ?? [];
   let clips = saved?.clips ?? [];
   let review = saved?.review ?? null;
+  const historiaSystem = useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM;
+  let historiaPrompt = "";
   if (!saved) {
-    const [rPlan, rTrims, rClips] = await Promise.allSettled([
-      wantLong ? ask(
-        useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM,
-        directorPrompt({
-          vodTitle: vod.title ?? "",
-          dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" }),
-          categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
-          minSec: style.longMinSec,
-          maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
-          candidates: cands,
-          style: { titleStyle: style.titleStyle, lore: style.lore }
-        }),
-        0.3
-      ).then((raw) => parseDirectorPlan(raw, cands)) : Promise.resolve(null),
-      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2).then((raw) => parseTrims(raw, cands)) : Promise.resolve([]),
-      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4).then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([])
+    const [rTrims, rClips, rThemes] = await Promise.allSettled([
+      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, "humor").then((raw) => parseTrims(raw, cands)) : Promise.resolve([]),
+      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, "humor").then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([]),
+      themesJob
     ]);
+    const sceneOf = (t) => cands.find((c) => t.start < c.end && t.end > c.start)?.id;
+    const funnyNow = rClips.status === "fulfilled" ? rClips.value : [];
+    const themesNow = rThemes.status === "fulfilled" && "v" in rThemes.value ? rThemes.value.v : [];
+    const candIds = new Set(cands.map((c) => c.id));
+    const briefing = teamNotes({
+      funny: funnyNow.flatMap((f) => {
+        const id = sceneOf(f);
+        return id ? [{ sceneId: id, title: f.title, fun: f.fun }] : [];
+      }).slice(0, 6),
+      themes: themesNow.map((t) => ({ title: t.title, sceneIds: [...new Set(t.pieces.map((p) => p.id).filter((id) => candIds.has(id)))] })),
+      trimmed: rTrims.status === "fulfilled" ? rTrims.value.length : 0
+    });
+    historiaPrompt = directorPrompt({
+      vodTitle: vod.title ?? "",
+      dateLabel: new Date(vod.streamStartedAt ?? vod.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" }),
+      categories: category ? [category] : [...new Set(ctx.cats.map((c) => c.title))],
+      minSec: style.longMinSec,
+      maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
+      candidates: cands,
+      style: { titleStyle: style.titleStyle, lore: style.lore }
+    }) + briefing;
+    if (briefing) say("equipo", true, `Reuni\xF3n de edici\xF3n: el editor de historia mont\xF3 el resumen con las notas de ${[funnyNow.length ? "humor" : "", themesNow.length ? "temas" : "", rTrims.status === "fulfilled" && rTrims.value.length ? "ritmo" : ""].filter(Boolean).join(", ")}.`);
+    const [rPlan] = await Promise.allSettled([wantLong ? ask(historiaSystem, historiaPrompt, 0.3, "story").then((raw) => parseDirectorPlan(raw, cands)) : Promise.resolve(null)]);
     if (rPlan.status === "fulfilled") plan = rPlan.value;
     else say("historia", false, fail(rPlan.reason));
     if (rTrims.status === "fulfilled") trims = rTrims.value;
@@ -41076,13 +41196,53 @@ var studioPhase = async (ctx) => {
     if (cut && !saved) {
       task.update(67, "Estudio de edici\xF3n: el jefe de edici\xF3n revisa el montaje\u2026");
       try {
-        review = parseChief(await ask(JEFE_SYSTEM, jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec }), 0.2), p);
+        const prompt = jefePrompt(p, trimmed, clips, { minSec: style.longMinSec, maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC), totalSec: cut.totalSec });
+        let raw = null;
+        if (cfg.vodVision !== false && vod.filePath && import_node_fs38.default.existsSync(vod.filePath)) {
+          const ids = p.chapters.flatMap((ch) => ch.ids).slice(0, JEFE_FRAMES);
+          const tmpDir = import_node_path31.default.join(import_node_os12.default.tmpdir(), `streamclips-jefe-${vod.id}`);
+          try {
+            import_node_fs38.default.mkdirSync(tmpDir, { recursive: true });
+            const images = [];
+            for (const id of ids) {
+              const c = trimmed.find((x) => x.id === id);
+              if (c) images.push(await vodFrame(d.tools().ffmpeg, vod.filePath, (c.start + c.end) / 2, tmpDir));
+            }
+            if (images.length) raw = await askJson(visionConfig(conf), JEFE_SYSTEM + JEFE_VE, `${prompt}
+Fotogramas adjuntos, uno por momento y en este orden: ${ids.join(", ")}.`, { fetchFn: d.llmFetch, temperature: 0.2, images });
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+            raw = null;
+          } finally {
+            import_node_fs38.default.rmSync(tmpDir, { recursive: true, force: true });
+          }
+        }
+        review = parseChief(raw ?? await ask(JEFE_SYSTEM, prompt, 0.2, "chief"), p);
       } catch (e) {
         say("jefe", false, fail(e));
       }
     }
+    let revised = false;
+    if (cut && review && !review.approved && !saved && historiaPrompt) {
+      task.update(68, "Estudio de edici\xF3n: el editor de historia aplica las correcciones del jefe\u2026");
+      try {
+        const again = parseDirectorPlan(await ask(historiaSystem, historiaPrompt + revisionNote(review), 0.3, "story"), cands);
+        const p2 = again ? rebasePlan(again, trims, HOOK.minSec) : null;
+        const cut2 = p2 ? directedCut(p2, trimmed, limits) : null;
+        if (again && p2 && cut2) {
+          plan = again;
+          p = p2;
+          cut = cut2;
+          revised = true;
+          say("equipo", true, `Vuelta de correcciones: el jefe no aprob\xF3 el primer montaje (\xAB${review.notes || "sin motivo"}\xBB) y el editor de historia lo reh\xEDzo.`);
+          review = { ...review, approved: true, drop: [] };
+        }
+      } catch (e) {
+        if (isCancelled(e)) throw e;
+      }
+    }
     let dropped = 0;
-    if (cut && review) {
+    if (cut && review && !revised) {
       const applied = applyChief(p, review);
       const cut2 = directedCut(applied.plan, trimmed, limits);
       if (cut2) {
@@ -41128,7 +41288,8 @@ var studioPhase = async (ctx) => {
   } else if (wantClips && !agents.some((a) => a.id === "humor")) say("humor", true, "Ning\xFAn momento hace gracia de verdad fuera de contexto; se quedan los clips elegidos por nota.");
   await takeThemes();
   for (const t of [...ctx.topicLongs, ...ctx.askProposals]) outputs.push({ kind: "tema", title: t.title, video: t.long.segs.map((s) => ({ start: s.start, end: s.end })), captions: [], totalSec: Math.round(t.long.sec), note: t.context.slice(0, 200) });
-  if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material).`);
+  if (wantLong && useScenes) notes.push(`Escenas con contexto: ${picks.length - spare.length} momentos agrupados en ${cands.length} escenas continuas (${Math.round(sumSec(cands) / 60)} min de material)${spare.length ? `; ${spare.length} momentos m\xE1s flojos se dejaron sin contexto para no alargar la transcripci\xF3n` : ""}.`);
+  if (relays.size) say("equipo", true, `Relevos entre IAs: ${[...relays].join("; ")}.`);
   notes.push(`Estudio de edici\xF3n: ${agents.map((a) => `${AGENT_LABEL[a.id]}${a.ok ? "" : " (sin respuesta)"}: ${a.note}`).join(" ")}`);
   if ((ctx.directed || ctx.topicLongs.length) && ctx.mains.length) {
     notes.push(`Se omiten ${ctx.mains.length} v\xEDdeo(s) de tramo seguido: ya hay resumen o v\xEDdeos por tema.`);
@@ -41627,7 +41788,8 @@ var Autopilot = class {
     const llm = this.cfg.llm;
     const key = this.d.llmKey();
     if (llm.provider === "none" || !key) return null;
-    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
+    const extra = (this.d.llmExtra?.() ?? []).map((x) => ({ provider: x.provider, model: resolveModel(x.provider, x.model), apiKey: x.apiKey, baseUrl: this.d.llmBaseUrl }));
+    return { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl, ...extra.length ? { fallbacks: extra } : {} };
   }
   async titles(vod, words, moments, mains, notes) {
     const base2 = {
@@ -41647,7 +41809,7 @@ var Autopilot = class {
       uniq();
       return base2;
     }
-    const conf = { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl };
+    const conf = forTask(this.llmConf() ?? { provider: llm.provider, model: resolveModel(llm.provider, llm.model), apiKey: key, baseUrl: this.d.llmBaseUrl }, "titles");
     const items = [
       ...mains.map((m, i) => ({ id: `video${i + 1}`, texto: textOf(words, m.start, Math.min(m.end, m.start + 240), 900) })),
       ...moments.map((m, i) => ({ id: `clip${i + 1}`, texto: textOf(words, m.start, m.end, 600) }))
@@ -43272,6 +43434,7 @@ var AppContext = class {
       prefsFile: import_node_path34.default.join(o.userDataDir, "preferences.json"),
       style: () => this.style.get(),
       llmKey: () => this.settings.llmKey(),
+      llmExtra: () => this.settings.llmExtra(),
       llmBaseUrl: o.llmBaseUrl,
       energy: o.energy,
       canTranscribe: o.canTranscribe,
@@ -43458,7 +43621,7 @@ async function runEngine(p, o = {}) {
   const loaded = await readState(gh);
   const st = loaded.st;
   let sha = loaded.sha;
-  const work = o.workDir ?? import_node_fs42.default.mkdtempSync(import_node_path35.default.join(import_node_os12.default.tmpdir(), "streamclips-engine-"));
+  const work = o.workDir ?? import_node_fs42.default.mkdtempSync(import_node_path35.default.join(import_node_os13.default.tmpdir(), "streamclips-engine-"));
   const ctx = new AppContext({
     userDataDir: import_node_path35.default.join(work, "data"),
     defaultOutputDir: import_node_path35.default.join(work, "out"),
@@ -43579,7 +43742,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     await keepAlive(env);
     return;
   }
-  const r2 = await runEngine(p, { whisper: env.STREAMCLIPS_WHISPER?.replace(/^~/, import_node_os12.default.homedir()) || void 0 });
+  const r2 = await runEngine(p, { whisper: env.STREAMCLIPS_WHISPER?.replace(/^~/, import_node_os13.default.homedir()) || void 0 });
   console.log(`[streamclips] Resultado: ${r2.status}. Editados: ${r2.processed.length}, fallidos: ${r2.failed.length}.`);
   if (r2.status === "error" || r2.status === "partial") process.exitCode = 1;
 }

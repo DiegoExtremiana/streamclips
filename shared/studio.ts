@@ -364,3 +364,33 @@ export interface StudioProject {
 }
 
 export const sumSec = (segs: Seg[]): number => r1(segs.reduce((a, s) => a + (s.end - s.start), 0));
+
+/**
+ * Completa un plan que se quedó corto: añade las escenas no usadas con nota suficiente (de mejor a peor), cada una en el
+ * capítulo cuyo material está más cerca en el tiempo y en su orden cronológico dentro de él, hasta `targetSec`.
+ */
+export function fillPlan(plan: DirectorPlan, cands: DirectorCandidate[], targetSec: number, minScore: number): { plan: DirectorPlan; added: number } {
+  const byId = new Map(cands.map((c) => [c.id, c]));
+  const used = new Set(plan.chapters.flatMap((c) => c.ids));
+  let total = [...used].reduce((a, id) => a + ((byId.get(id)?.end ?? 0) - (byId.get(id)?.start ?? 0)), 0);
+  const chapters = plan.chapters.map((c) => ({ ...c, ids: [...c.ids] }));
+  if (!chapters.length) return { plan, added: 0 };
+  const hookId = plan.hook?.id;
+  const lastId = chapters[chapters.length - 1].ids[chapters[chapters.length - 1].ids.length - 1];
+  let added = 0;
+  for (const c of cands.filter((x) => !used.has(x.id) && x.total >= minScore).sort((a, b) => b.total - a.total)) {
+    if (total >= targetSec) break;
+    const mid = (c.start + c.end) / 2;
+    const dist = (ch: { ids: string[] }) => Math.min(...ch.ids.map((id) => Math.abs(((byId.get(id)?.start ?? 0) + (byId.get(id)?.end ?? 0)) / 2 - mid)));
+    const ch = [...chapters].sort((a, b) => dist(a) - dist(b))[0];
+    // en orden cronológico dentro del capítulo, sin ponerse detrás del cierre del vídeo
+    let at = ch.ids.findIndex((id) => id !== hookId && (byId.get(id)?.start ?? 0) > c.start);
+    if (at < 0) at = ch.ids.length;
+    if (ch.ids[at - 1] === lastId) at -= 1;
+    ch.ids.splice(Math.max(0, at), 0, c.id);
+    used.add(c.id);
+    total += c.end - c.start;
+    added++;
+  }
+  return { plan: { ...plan, chapters }, added };
+}

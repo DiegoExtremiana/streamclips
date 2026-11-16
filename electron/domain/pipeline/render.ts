@@ -96,7 +96,7 @@ export const renderPhase: Phase = async (ctx) => {
   };
   // los silencios de más de lo que dijo el creador (2 s por defecto) se cortan; su estilo manda sobre el criterio general
   const style = host.style();
-  const editOpts = { minGap: style.silenceMaxSec, cues: cfg.soundCues !== false };
+  const editOpts = { minGap: style.silenceMaxSec, cues: cfg.soundCues !== false, energyDb: ctx.sig.energyDb };
   const musicFor = (title: string, segs: Seg[], smart: boolean) => host.musicFor(vod, words, title, segs, smart, ctx.llmConf);
   const longMake = async (title: string, segs: Seg[], o: { chapters?: boolean; themed?: boolean; labels?: Map<number, string>; labelsByIndex?: string[]; coverText?: string; captions?: NonNullable<RunContext['directed']>['captions'] } = {}) => {
     let e = pro ? planLong(words, segs, editOpts) : null;

@@ -2,6 +2,11 @@
 
 Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips verticales, clips horizontales y vídeos largos 1920×1080, y programar su publicación.
 
+## Novedades de la v0.38.3
+
+- **Zooms con sentido**: el acercamiento ya no salta en cada exclamación. Solo va en el momento cumbre de lo que pasa: una reacción fuerte en lo que se dice (gritada, con doble exclamación o con una palabra de énfasis) que además suene fuerte en ese instante. Como mucho uno cada 30 segundos.
+- **Resumen de todo el directo**: ya no se limita a la categoría de Twitch con más material, y si el editor de historia se queda corto se completa con las mejores escenas que no había usado, cada una en su capítulo, hasta la duración mínima.
+
 ## Novedades de la v0.38.2
 
 - **Animaciones más suaves**: las ventanas aparecen y desaparecen con un fundido; al cambiar de sección o de pestaña en Ajustes el contenido entra deslizándose un poco; los botones y el menú lateral cambian de color con una transición. Si Windows tiene activado «reducir animaciones», no se animan.

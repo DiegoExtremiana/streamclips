@@ -22,7 +22,12 @@ export interface EditOpts {
   maxCuts?: number;
   /** Efectos de sonido según lo que se dice (por defecto sí). */
   cues?: boolean;
+  /** Volumen por segundo del directo (dB): el acercamiento solo va donde además de decirlo, se nota (grito, risa, golpe). */
+  energyDb?: number[];
 }
+
+/** Un acercamiento por cada tanto tiempo como mucho: el zoom es un recurso para el momento cumbre, no un tic. */
+export const PUNCH_EVERY_SEC = 30;
 
 const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
 
@@ -61,19 +66,40 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
   }
   const kept = keptRanges(seg.start, seg.end, cuts);
   const isKept = (t: number) => kept.some((r) => t >= r.start && t <= r.end);
-  // acercamientos en las frases con énfasis
-  const maxPunch = Math.min(6, Math.floor(dur / 10));
+  // Acercamientos: solo en el momento cumbre de lo que pasa. Hace falta una reacción FUERTE en lo que se dice (doble
+  // exclamación, o exclamación con una palabra de énfasis, o una palabra gritada en mayúsculas) y, si se conoce el volumen,
+  // que ese instante sea de verdad un pico (el más alto del momento o muy cerca). Como mucho uno cada PUNCH_EVERY_SEC.
+  const maxPunch = Math.min(2, Math.floor(dur / PUNCH_EVERY_SEC));
+  const loud = (t: number): boolean => {
+    const e = o.energyDb;
+    if (!e?.length) return true;
+    const lo = Math.max(0, Math.floor(seg.start));
+    const hi = Math.min(e.length - 1, Math.ceil(seg.end));
+    if (hi <= lo) return true;
+    let top = -Infinity;
+    for (let k = lo; k <= hi; k++) top = Math.max(top, e[k]);
+    let near = -Infinity;
+    for (let k = Math.max(lo, Math.floor(t) - 1); k <= Math.min(hi, Math.ceil(t) + 1); k++) near = Math.max(near, e[k]);
+    return near >= top - 3;
+  };
+  const strength = (w: Word): number => {
+    const bang = (w.text.match(/!/g) ?? []).length;
+    const caps = /^[A-ZÁÉÍÓÚÑ]{4,}[!¡?]*$/.test(w.text.trim());
+    const emph = EMPHASIS.test(w.text.replace(/^[¡¿"«(]+/, ''));
+    return (bang >= 2 ? 2 : bang) + (emph ? 1 : 0) + (caps ? 1 : 0);
+  };
   const punches: number[] = [];
-  for (const w of inside) {
+  const ranked = inside.map((w) => ({ w, s: strength(w) })).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s);
+  for (const { w } of ranked) {
     if (punches.length >= maxPunch) break;
-    const strong = /[!¡]/.test(w.text) || EMPHASIS.test(w.text);
-    if (!strong) continue;
     const at = Math.max(seg.start, w.start - 0.1);
     if (!isKept(at) || !isKept(Math.min(seg.end, at + 1))) continue;
-    if (punches.some((p) => Math.abs(p - at) < spacing)) continue;
+    if (punches.some((p) => Math.abs(p - at) < Math.max(spacing, PUNCH_EVERY_SEC))) continue;
     if (at - seg.start < 1.5 || seg.end - at < 2) continue;
+    if (!loud(at)) continue;
     punches.push(at);
   }
+  punches.sort((a, b) => a - b);
   for (const at of punches) {
     effects.push({ type: 'punch', at, duration: 1, zoom: 1.15 });
     effects.push({ type: 'sfx', at, sound: 'hit' });

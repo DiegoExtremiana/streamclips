@@ -10,6 +10,7 @@ import {
   RITMO_SYSTEM,
   applyChief,
   applyTrims,
+  fillPlan,
   humorPrompt,
   jefePrompt,
   parseChief,
@@ -85,7 +86,10 @@ export const studioPhase: Phase = async (ctx) => {
   ctx.clock.mark('estudio de edición');
   task.update(64, 'Estudio de edición: los editores están trabajando…');
   const all = directorCandidates(ctx.judged, words, ctx.sig);
-  const { cands: picks, category } = singleCategory(all, ctx.cats, ctx.multiCat);
+  // el resumen es de TODO el directo (Diego: «un resumen de lo que ha pasado en el directo»), no solo de la categoría con
+  // más material; las escenas no cruzan de una categoría a otra (chapterOf, más abajo)
+  const picks = all;
+  const category = ctx.multiCat ? undefined : singleCategory(all, ctx.cats, ctx.multiCat).category;
   // picos sueltos → escenas continuas con contexto (lo que hace que el vídeo se entienda); ver shared/studio.ts
   const chapterOf = (c: Seg) => ctx.cats.find((k) => c.start < k.end && c.end > k.start && Math.min(c.end, k.end) - Math.max(c.start, k.start) >= (c.end - c.start) / 2);
   // el contexto añadido puede caer en un trozo silenciado por Twitch: esa escena se queda fuera
@@ -287,6 +291,17 @@ export const studioPhase: Phase = async (ctx) => {
         }
       } catch (e) {
         if (isCancelled(e)) throw e;
+      }
+    }
+    // si el editor de historia se quedó corto, se completan los capítulos con las mejores escenas que no usó, cada una en el
+    // capítulo más cercano en el tiempo, hasta llegar a la duración mínima del resumen
+    if (cut && cut.totalSec < style.longMinSec * 0.9) {
+      const filled = fillPlan(p, trimmed, style.longMinSec, Math.max(0, (cfg.minQuality ?? 5) - 1));
+      const cutF = filled.added ? directedCut(filled.plan, trimmed, limits) : null;
+      if (cutF && cutF.totalSec > cut.totalSec) {
+        notes.push(`El editor de historia se quedó en ${Math.round(cut.totalSec / 60)} min; se añadieron ${filled.added} escena(s) que no había usado hasta ${Math.round(cutF.totalSec / 60)} min.`);
+        p = filled.plan;
+        cut = cutF;
       }
     }
     let dropped = 0;

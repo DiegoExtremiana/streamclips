@@ -84,3 +84,13 @@ test('equipo: las notas de los compañeros y las correcciones del jefe llegan al
   assert.equal(teamNotes({ funny: [], themes: [], trimmed: 0 }), '');
   assert.match(revisionNote({ approved: false, drop: ['e4'], title: '', coverText: '', notes: 'El final no remata' }), /CORRECCIONES DEL JEFE DE EDICIÓN.*El final no remata.*e4/);
 });
+
+test('relleno: si el resumen se queda corto se añaden las mejores escenas no usadas en su capítulo y en orden', async () => {
+  const { fillPlan } = await import('../shared/studio');
+  const cands = [c('e1', 0, 60, 8), c('e2', 100, 160, 6), c('e3', 200, 260, 9), c('e4', 500, 560, 4), c('e5', 320, 380, 7)];
+  const plan = parseDirectorPlan({ titulo: 'T', capitulos: [{ titulo: 'A', ids: ['e1'] }, { titulo: 'B', ids: ['e5'] }] }, cands)!;
+  const r = fillPlan(plan, cands, 230, 5);
+  assert.equal(r.added, 2);
+  assert.deepEqual(r.plan.chapters.map((x) => x.ids), [['e1', 'e2'], ['e3', 'e5']]);
+  assert.equal(fillPlan(plan, cands, 60, 5).added, 0);
+});

@@ -24,10 +24,9 @@ export interface EditOpts {
   cues?: boolean;
   /** Volumen por segundo del directo (dB): el acercamiento solo va donde además de decirlo, se nota (grito, risa, golpe). */
   energyDb?: number[];
+  /** Hacia dónde va el zoom en cada instante (0 a 1 del fotograma original). Sin objetivo no hay zoom. */
+  focusAt?: (t: number) => { x: number; y: number } | null;
 }
-
-/** Un acercamiento por cada tanto tiempo como mucho: el zoom es un recurso para el momento cumbre, no un tic. */
-export const PUNCH_EVERY_SEC = 30;
 
 const EMPHASIS = /^(no\s*puede|increíble|brutal|joder|madre|ostia|vamos|guau|wow|socorro|locura|qué\s*dices|pero\s*qué|no\s*me\s*lo|imposible|ganamos|gané|let'?s\s*go)/i;
 
@@ -66,10 +65,11 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
   }
   const kept = keptRanges(seg.start, seg.end, cuts);
   const isKept = (t: number) => kept.some((r) => t >= r.start && t <= r.end);
-  // Acercamientos: solo en el momento cumbre de lo que pasa. Hace falta una reacción FUERTE en lo que se dice (doble
-  // exclamación, o exclamación con una palabra de énfasis, o una palabra gritada en mayúsculas) y, si se conoce el volumen,
-  // que ese instante sea de verdad un pico (el más alto del momento o muy cerca). Como mucho uno cada PUNCH_EVERY_SEC.
-  const maxPunch = Math.min(2, Math.floor(dur / PUNCH_EVERY_SEC));
+  // Acercamientos con sentido: van donde hay una reacción FUERTE en lo que se dice (doble exclamación, exclamación con una
+  // palabra de énfasis o una palabra gritada en mayúsculas), ese instante suena de verdad fuerte (pico del momento) y se sabe
+  // HACIA DÓNDE hacer el zoom (la cara que reacciona o el punto del juego donde pasa algo, ver `focusAt`). Sin objetivo no
+  // hay zoom: un acercamiento al centro sin más no aporta. No hay un máximo fijo: tantos como reacciones de verdad haya,
+  // con un respiro entre uno y otro para que no se pisen. Cuanto más fuerte la reacción, más se acerca.
   const loud = (t: number): boolean => {
     const e = o.energyDb;
     if (!e?.length) return true;
@@ -80,29 +80,32 @@ export function planEdit(words: Word[], seg: Range, o: EditOpts = {}): EditPlan 
     for (let k = lo; k <= hi; k++) top = Math.max(top, e[k]);
     let near = -Infinity;
     for (let k = Math.max(lo, Math.floor(t) - 1); k <= Math.min(hi, Math.ceil(t) + 1); k++) near = Math.max(near, e[k]);
-    return near >= top - 3;
+    return near >= top - 4;
   };
   const strength = (w: Word): number => {
     const bang = (w.text.match(/!/g) ?? []).length;
-    const caps = /^[A-ZÁÉÍÓÚÑ]{4,}[!¡?]*$/.test(w.text.trim());
+    const caps = /^[¡¿]*[A-ZÁÉÍÓÚÑ]{4,}[!¡?]*$/.test(w.text.trim());
     const emph = EMPHASIS.test(w.text.replace(/^[¡¿"«(]+/, ''));
     return (bang >= 2 ? 2 : bang) + (emph ? 1 : 0) + (caps ? 1 : 0);
   };
-  const punches: number[] = [];
-  const ranked = inside.map((w) => ({ w, s: strength(w) })).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s);
-  for (const { w } of ranked) {
-    if (punches.length >= maxPunch) break;
+  const punches: { at: number; s: number; x: number; y: number }[] = [];
+  const gapBetween = Math.max(spacing, 5);
+  const ranked = inside.map((w) => ({ w, s: strength(w) })).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s || a.w.start - b.w.start);
+  for (const { w, s } of ranked) {
     const at = Math.max(seg.start, w.start - 0.1);
     if (!isKept(at) || !isKept(Math.min(seg.end, at + 1))) continue;
-    if (punches.some((p) => Math.abs(p - at) < Math.max(spacing, PUNCH_EVERY_SEC))) continue;
+    if (punches.some((p) => Math.abs(p.at - at) < gapBetween)) continue;
     if (at - seg.start < 1.5 || seg.end - at < 2) continue;
     if (!loud(at)) continue;
-    punches.push(at);
+    const target = o.focusAt?.(at);
+    if (!target) continue;
+    punches.push({ at, s, x: target.x, y: target.y });
   }
-  punches.sort((a, b) => a - b);
-  for (const at of punches) {
-    effects.push({ type: 'punch', at, duration: 1, zoom: 1.15 });
-    effects.push({ type: 'sfx', at, sound: 'hit' });
+  punches.sort((a, b) => a.at - b.at);
+  for (const p of punches) {
+    const zoom = p.s >= 4 ? 1.4 : p.s === 3 ? 1.28 : 1.18;
+    effects.push({ type: 'punch', at: p.at, duration: p.s >= 3 ? 1.4 : 1.1, zoom, x: p.x, y: p.y });
+    effects.push({ type: 'sfx', at: p.at, sound: 'hit' });
   }
   // un whoosh en cada salto de corte
   for (const c of cuts.slice(0, 8)) {

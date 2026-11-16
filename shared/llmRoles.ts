@@ -5,12 +5,13 @@
  * Lo usa el programa para decidir a quién pregunta y Ajustes para enseñar la tabla «Quién hace qué».
  */
 export type AiProvider = 'gemini' | 'groq' | 'mistral' | 'openrouter';
-export type AiTask = 'vision' | 'judge' | 'story' | 'themes' | 'humor' | 'chief' | 'titles';
+export type AiTask = 'vision' | 'chronicle' | 'judge' | 'story' | 'themes' | 'humor' | 'chief' | 'titles';
 
 export const AI_LABEL: Record<AiProvider, string> = { gemini: 'Gemini', groq: 'Groq', mistral: 'Mistral', openrouter: 'OpenRouter' };
 
 export const AI_TASKS: { id: AiTask; label: string; why: string; order: AiProvider[]; needsVision?: boolean }[] = [
   { id: 'vision', label: 'Mirar la imagen (gestos, muecas, pantallas de espera)', why: 'Solo Gemini y Groq ven imágenes; Gemini admite más por petición.', order: ['gemini', 'groq'], needsVision: true },
+  { id: 'chronicle', label: 'Cronista: lee el directo entero por tramos', why: 'Mucho texto: Gemini y Mistral aguantan más; los tramos se reparten entre todas las IAs a la vez.', order: ['gemini', 'mistral', 'groq', 'openrouter'] },
   { id: 'judge', label: 'Valorar los momentos y los clips', why: 'Son muchas preguntas cortas: Groq es la más rápida.', order: ['groq', 'gemini', 'mistral', 'openrouter'] },
   { id: 'story', label: 'Editor de historia: estructura del resumen', why: 'Texto largo y la decisión más importante: Gemini.', order: ['gemini', 'mistral', 'groq', 'openrouter'] },
   { id: 'themes', label: 'Editor de temas: vídeos por tema', why: 'Texto largo; va a Mistral si está, para no cargar a Gemini.', order: ['mistral', 'gemini', 'groq', 'openrouter'] },

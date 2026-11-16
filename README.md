@@ -4,6 +4,13 @@ Programa de escritorio (Windows) para convertir tus VODs de Twitch en clips vert
 
 ## Novedades de la v0.39.0
 
+- **El cronista**: el directo se parte en tramos de 20 minutos que las IAs leen a la vez, repartiéndose el trabajo. De cada tramo sale qué pasa, de qué se habla y qué momentos merecen la pena: es el mapa del directo que usan el editor de historia y el de temas, y los momentos que señala entran como candidatos.
+- **Zooms con sentido y hacia su objetivo**: el modelo de visión dice hacia dónde haría zoom un editor (la cara que reacciona o el punto del juego donde pasa algo) y dónde está la cámara del streamer. El zoom va ahí, no al centro; sin objetivo no hay zoom. Ya no hay un máximo fijo: cada reacción fuerte que además suena fuerte lleva el suyo, y cuanto más fuerte, más se acerca.
+- **Manual de edición profesional**: cada editor de IA recibe los trucos de oficio de su puesto (estructura y gancho, ritmo, remate y reacción, arco de un tema, revisión de retención, títulos).
+- **Aprenden de ti**: los editores reciben lo que el programa ha aprendido de tus revisiones (qué tipos de momento prefieres o quitas) y los vídeos y clips que has aprobado, como ejemplos de lo que quieres.
+- **Más cantidad**: con «Priorizar la cantidad» (activado por defecto), si no hay suficientes momentos por encima de la nota mínima se completa con los que se quedan cerca, el editor de humor es algo menos exigente y salen más vídeos por tema.
+- **Trabajo repartido**: la valoración de candidatos también se reparte entre las IAs disponibles a la vez, cada una a su ritmo.
+- El resumen ya no se limita a la categoría de Twitch con más material: es de todo el directo.
 - **El equipo entiende todo el directo**: además de transcribir bien lo elegido, el programa lee el directo entero con un modelo rápido de Whisper. Así los editores saben de qué se ha hablado en las cuatro horas, no solo en los trozos con más volumen.
 - **Las conversaciones también cuentan**: los tramos donde más se habla seguido (una opinión, una anécdota, un tema) se añaden a los candidatos, aunque no haya gritos ni picos de chat.
 - **Vídeos por tema de todo el directo**: el editor de temas recibe hasta 60 bloques de conversación repartidos por todo el directo, no solo los primeros minutos.

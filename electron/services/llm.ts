@@ -25,6 +25,20 @@ export function prefer(cfg: LlmConfig, provider: LlmProvider): LlmConfig {
   return first.length ? fromChain([...first, ...chain.filter((c) => c.provider !== provider)]) : cfg;
 }
 
+/**
+ * Carriles para repartir un trabajo largo entre varias IAs A LA VEZ (por ejemplo, los tramos del cronista o los lotes de la
+ * valoración): una configuración por IA, empezando por las mejores para la tarea y con las demás de relevo. OpenRouter solo
+ * hace de carril si no hay otra (su cupo gratuito es pequeño). Sin varias IAs, un solo carril.
+ */
+export function lanesFor(cfg: LlmConfig, task: AiTask, max = 3): LlmConfig[] {
+  const chain = chainOf(cfg);
+  if (chain.length < 2 || chain.some((c) => c.baseUrl)) return [cfg];
+  const order = orderFor(task, chain.map((c) => c.provider));
+  const sorted = order.flatMap((p) => chain.filter((c) => c.provider === p));
+  const heads = sorted.filter((c, i) => c.provider !== 'openrouter' || i === 0).slice(0, max);
+  return heads.map((h) => fromChain([h, ...sorted.filter((c) => c !== h)]));
+}
+
 /** La configuración ordenada para una tarea: su IA titular primero y las demás de relevo (ver `shared/llmRoles.ts`). */
 export function forTask(cfg: LlmConfig, task: AiTask): LlmConfig {
   const chain = chainOf(cfg);

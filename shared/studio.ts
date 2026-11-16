@@ -38,9 +38,8 @@ const brief = (c: DirectorCandidate) => ({ id: c.id, dur: r1(c.end - c.start), n
 export const EQUIPO_BRIEF =
   ' Trabajas dentro de un estudio de vídeo profesional que produce contenido para YouTube y redes sociales (Shorts, TikTok, Reels) a partir de directos de Twitch. ' +
   'Objetivo común del equipo: que el espectador que no vio el directo se quede hasta el final (retención), con un arranque que enganche en los primeros segundos, ritmo sin tiempos muertos, cortes que se entiendan y un final que remate. ' +
-  'Antes de decidir nada, ENTIENDE el directo: quién habla, de qué, qué pasa en pantalla y por qué es gracioso o interesante; si algo no se entiende sin contexto, no lo uses suelto. ' +
   'Respeta la personalidad del streamer: su humor, su forma de hablar y su relación con los invitados y el chat son el contenido; el vídeo tiene que sentirse suyo, no un recopilatorio genérico. ' +
-  'Nada de relleno ni de efectos porque sí: no se escriben frases encima del vídeo y un zoom solo va en el momento cumbre. ' +
+  'No se escriben frases encima del vídeo. ' +
   'Tus compañeros son el editor de historia, el de ritmo, el de humor, el de temas y el jefe de edición: céntrate en tu parte y ten en cuenta lo que te digan.';
 
 /** Lo que los compañeros le cuentan al editor de historia antes de montar el resumen. */
@@ -242,14 +241,14 @@ export function humorPrompt(cands: DirectorCandidate[], maxClips: number): strin
   );
 }
 
-export function parseFunny(raw: unknown, cands: DirectorCandidate[], maxClips: number): FunnyClip[] {
+export function parseFunny(raw: unknown, cands: DirectorCandidate[], maxClips: number, minFun = FUNNY.minFun): FunnyClip[] {
   const byId = new Map(cands.map((c) => [c.id, c]));
   const out: FunnyClip[] = [];
   const seen = new Set<string>();
   for (const k of list((raw as Record<string, unknown> | null)?.clips)) {
     const c = byId.get(String(k.id));
     const fun = num(k.gracia);
-    if (!c || seen.has(c.id) || !Number.isFinite(fun) || fun < FUNNY.minFun) continue;
+    if (!c || seen.has(c.id) || !Number.isFinite(fun) || fun < minFun) continue;
     const dur = c.end - c.start;
     let from = num(k.desde);
     let to = num(k.hasta);

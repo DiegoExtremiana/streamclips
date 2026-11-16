@@ -69,6 +69,10 @@ export interface AutopilotSettings {
   fastAnalysis?: boolean;
   /** Lectura completa del directo con un modelo rápido para entender de qué se habla (por defecto sí). */
   fullRead?: boolean;
+  /** El cronista lee el directo por tramos repartidos entre las IAs y hace el mapa del directo (por defecto sí). */
+  chronicle?: boolean;
+  /** Priorizar la cantidad de vídeos y clips: rellena con momentos algo más flojos y saca más temas (por defecto sí). */
+  quantityFirst?: boolean;
   /** Rótulos y frases escritos encima del vídeo (gancho, frases, cierre). Por defecto no: el vídeo habla por sí solo. */
   onScreenText?: boolean;
   /** Valorar los candidatos con el modelo de lenguaje (humor, originalidad, contexto…) en vez de fiarse solo del volumen. Por defecto sí, si hay modelo configurado. */

@@ -176,7 +176,10 @@ export function normalizeClip(c: ClipSpec, fallbackTitle: string): ClipSpec {
 
 export function normalizeEffects(list: Effect[]): Effect[] {
   return list.map((e): Effect => {
-    if (e.type === 'punch') return { type: 'punch', at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom };
+    if (e.type === 'punch') {
+      const ok = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
+      return { type: 'punch', at: e.at, duration: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom, ...(ok(e.x) && ok(e.y) ? { x: e.x, y: e.y } : {}) };
+    }
     if (e.type === 'sfx') return { type: 'sfx', at: e.at, sound: e.sound ?? 'pop' };
     if (e.type === 'polish') return { type: 'polish' };
     if (e.type === 'joints') return { type: 'joints', duration: e.duration ?? 0.25 };

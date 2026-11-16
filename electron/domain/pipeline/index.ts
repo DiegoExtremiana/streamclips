@@ -5,6 +5,7 @@ import { isCancelled } from '../../services/abort';
 import { newContext, type Host, type Phase, type RunContext } from './context';
 import { transcribeChosenPhase, transcribePhase } from './transcribe';
 import { signalsPhase } from './signals';
+import { chroniclePhase } from './chronicle';
 import { judgePhase, qualityGatePhase, speakersPhase } from './judge';
 import { studioPhase } from './studio';
 import { renderPhase, titlesPhase } from './render';
@@ -15,6 +16,7 @@ export const PHASES: { name: string; run: Phase }[] = [
   { name: 'transcripción', run: transcribePhase },
   { name: 'señales', run: signalsPhase },
   { name: 'transcripción de lo elegido', run: transcribeChosenPhase },
+  { name: 'cronista', run: chroniclePhase },
   { name: 'valoración', run: judgePhase },
   { name: 'estudio de edición', run: studioPhase },
   { name: 'nota mínima', run: qualityGatePhase },

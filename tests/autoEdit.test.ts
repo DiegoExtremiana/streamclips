@@ -38,7 +38,7 @@ describe('edición profesional automática', () => {
   });
 
   it('acerca la imagen con un golpe de sonido en la exclamación, un whoosh en el corte, fundidos y volumen parejo', () => {
-    const p = planEdit(words, { start: 0, end: 30 });
+    const p = planEdit(words, { start: 0, end: 30 }, { focusAt: () => ({ x: 0.2, y: 0.3 }) });
     const punch = p.effects.filter((e) => e.type === 'punch');
     assert.equal(punch.length, 1);
     assert.ok(Math.abs((punch[0] as { at: number }).at - 21.9) < 0.2);

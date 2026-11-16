@@ -110,16 +110,45 @@ export function assFilter(subs: BurnSubs): string {
 }
 
 /**
- * Acercamiento breve sobre la imagen ya encuadrada (w×h): sube, se mantiene y baja.
- * `a` es el instante, dentro del tramo, en que empieza el efecto.
+ * Acercamiento breve sobre la imagen ya encuadrada (w×h): sube, se mantiene y baja, HACIA SU OBJETIVO.
+ * `a` es el instante, dentro del tramo, en que empieza el efecto; `x`,`y` (0 a 1 de la imagen encuadrada) es el punto al
+ * que se acerca: el recorte se desplaza para centrarlo tanto como permite el zoom (sin salirse de la imagen). Sin objetivo,
+ * al centro. Al empezar y al acabar el zoom vale 1 y el desplazamiento es nulo, así que cambiar de objetivo no da saltos.
  */
-export function punchFilter(w: number, h: number, punches: { a: number; dur: number; zoom: number }[]): string {
+export function punchFilter(w: number, h: number, punches: { a: number; dur: number; zoom: number; x?: number; y?: number }[]): string {
+  const on = (p: { a: number; dur: number }) => `between(t,${p.a.toFixed(3)},${(p.a + p.dur).toFixed(3)})`;
   const terms = punches.map((p) => {
     const r = (p.dur * 0.3).toFixed(3);
     return `${(p.zoom - 1).toFixed(3)}*clip(min((t-${p.a.toFixed(3)})/${r},(${(p.a + p.dur).toFixed(3)}-t)/${r}),0,1)`;
   });
   const z = `(1+${terms.join('+')})`;
-  return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=${w}:${h}`;
+  // objetivo de cada instante: el del acercamiento activo (0,5 si no hay ninguno)
+  const target = (k: 'x' | 'y') => `(0.5${punches.map((p) => `+(${((p[k] ?? 0.5) - 0.5).toFixed(3)})*${on(p)}`).join('')})`;
+  const x = `max(0,min(iw-ow,${target('x')}*iw-ow/2))`;
+  const y = `max(0,min(ih-oh,${target('y')}*ih-oh/2))`;
+  return `scale=w='trunc(${w}*${z}/2)*2':h='trunc(${h}*${z}/2)*2':eval=frame,crop=w=${w}:h=${h}:x='${x}':y='${y}'`;
+}
+
+/**
+ * Pasa un punto del fotograma original (0 a 1) a la imagen ya encuadrada. Horizontal: el mismo punto. Vertical con columna
+ * (cropX): dentro de la columna de 9:16 que se recorta. Vertical compuesto: a la ventana que muestra ese punto. Si el punto
+ * no se ve en la imagen final, null (no se hace zoom).
+ */
+export function mapFocus(p: { x: number; y: number }, o: { vertical?: boolean; cropX?: number; layout?: VerticalLayout; srcAspect?: number }): { x: number; y: number } | null {
+  if (!o.vertical) return p;
+  if (o.layout?.windows.length) {
+    for (const win of o.layout.windows) {
+      const s = win.src;
+      if (p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h) {
+        return { x: win.dst.x + ((p.x - s.x) / s.w) * win.dst.w, y: win.dst.y + ((p.y - s.y) / s.h) * win.dst.h };
+      }
+    }
+    return null;
+  }
+  const cw = Math.min(1, (9 / 16) / (o.srcAspect ?? 16 / 9));
+  const x0 = (1 - cw) * Math.min(1, Math.max(0, o.cropX ?? 0.5));
+  const x = (p.x - x0) / cw;
+  return x < 0 || x > 1 ? null : { x, y: p.y };
 }
 
 export { SFX } from './soundBank';
@@ -201,6 +230,8 @@ interface TimelineSpec {
   ranges: Range[];
   baseVf: string;
   layout?: VerticalLayout;
+  /** Pasa el objetivo de un zoom (fotograma original) a la imagen encuadrada; null si no se ve. */
+  focusMap?: (p: { x: number; y: number }) => { x: number; y: number } | null;
   size: { w: number; h: number };
   effects?: Effect[];
   subs?: BurnSubs;
@@ -236,7 +267,12 @@ async function renderTimeline(tools: ToolPaths, input: string, t: TimelineSpec, 
       const punches = fx
         .filter((e): e is Extract<Effect, { type: 'punch' }> => e.type === 'punch')
         .filter((e) => e.at >= r.start && e.at <= r.end)
-        .map((e) => ({ a: e.at - r.start, dur: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom }));
+        .flatMap((e) => {
+          // el objetivo del zoom viene en coordenadas del fotograma original: se pasa a la imagen encuadrada
+          const target = e.x !== undefined && e.y !== undefined ? (t.focusMap ? t.focusMap({ x: e.x, y: e.y }) : { x: e.x, y: e.y }) : undefined;
+          if (target === null) return [];
+          return [{ a: e.at - r.start, dur: e.duration ?? PUNCH.defaultDur, zoom: e.zoom ?? PUNCH.defaultZoom, ...(target ? { x: target.x, y: target.y } : {}) }];
+        });
       const punch = punches.length ? punchFilter(t.size.w, t.size.h, punches) : '';
       const vf = t.layout ? punch : punch ? `${t.baseVf},${punch}` : t.baseVf;
       const part = path.join(tmp, `part${String(i).padStart(3, '0')}.mp4`);
@@ -323,6 +359,7 @@ export async function renderClip(tools: ToolPaths, input: string, spec: RenderCl
       ranges: keptRanges(spec.start, spec.end, spec.cuts),
       baseVf: vertical ? verticalFilter(spec.cropX ?? 0.5) : VF_HORIZONTAL,
       layout: vertical ? spec.layout : undefined,
+      focusMap: (p) => mapFocus(p, { vertical, cropX: spec.cropX, layout: spec.layout }),
       size: vertical ? { w: 1080, h: 1920 } : { w: 1920, h: 1080 },
       effects: spec.effects,
       subs: spec.subs,

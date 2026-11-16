@@ -149,7 +149,7 @@ export const TITLE_KINDS: readonly TitleKind[] = ['capitulo', 'frase', 'gancho',
 export const TITLE = { minDur: 1, maxDur: 8, defaultDur: 3, maxLen: 60 };
 
 export type Effect =
-  | { type: 'punch'; at: number; duration?: number; zoom?: number }
+  | { type: 'punch'; at: number; duration?: number; zoom?: number; /** Hacia dónde va el zoom (0 a 1 del fotograma original); sin él, al centro. */ x?: number; y?: number }
   | { type: 'fadeIn'; duration?: number }
   | { type: 'fadeOut'; duration?: number }
   | { type: 'sfx'; at: number; sound?: SoundId }

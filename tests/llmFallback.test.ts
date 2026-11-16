@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { askJson, chainOf, forTask, prefer, visionConfig, type LlmConfig } from '../electron/services/llm';
+import { askJson, chainOf, forTask, lanesFor, prefer, visionConfig, type LlmConfig } from '../electron/services/llm';
 import { assignments, orderFor } from '../shared/llmRoles';
 
 const ok = (o: unknown) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(o) } }] }), { status: 200 });
@@ -37,10 +37,18 @@ test('reparto: Groq primero para valorar y solo las que ven imágenes (Gemini de
 test('funciones claras: cada tarea tiene su IA titular y sus relevos', () => {
   const all = ['gemini', 'groq', 'mistral', 'openrouter'] as const;
   const by = Object.fromEntries(assignments([...all]).map((t) => [t.id, t.main]));
-  assert.deepEqual(by, { vision: 'gemini', judge: 'groq', story: 'gemini', themes: 'mistral', humor: 'groq', chief: 'gemini', titles: 'mistral' });
+  assert.deepEqual(by, { vision: 'gemini', chronicle: 'gemini', judge: 'groq', story: 'gemini', themes: 'mistral', humor: 'groq', chief: 'gemini', titles: 'mistral' });
   assert.deepEqual(orderFor('vision', ['mistral', 'openrouter']), [], 'sin Gemini ni Groq nadie mira imágenes');
   assert.deepEqual(orderFor('judge', ['gemini']), ['gemini']);
   assert.deepEqual(chainOf(forTask(cfg, 'judge')).map((c) => c.provider), ['groq', 'gemini', 'mistral']);
   assert.deepEqual(chainOf(forTask(cfg, 'themes')).map((c) => c.provider), ['mistral', 'gemini', 'groq']);
   assert.equal(forTask({ provider: 'gemini', model: 'g', apiKey: 'A' }, 'judge').provider, 'gemini');
+});
+
+test('carriles: el trabajo largo se reparte entre las IAs, cada una con las demás de relevo', () => {
+  const all: LlmConfig = { provider: 'gemini', model: 'g', apiKey: 'A', fallbacks: [{ provider: 'groq', model: 'q', apiKey: 'B' }, { provider: 'openrouter', model: 'o', apiKey: 'D' }, { provider: 'mistral', model: 'm', apiKey: 'C' }] };
+  const lanes = lanesFor(all, 'chronicle');
+  assert.deepEqual(lanes.map((l) => l.provider), ['gemini', 'mistral', 'groq'], 'OpenRouter no hace de carril si hay otras');
+  assert.deepEqual(chainOf(lanes[1]).map((c) => c.provider), ['mistral', 'gemini', 'groq', 'openrouter']);
+  assert.equal(lanesFor({ provider: 'gemini', model: 'g', apiKey: 'A' }, 'judge').length, 1);
 });

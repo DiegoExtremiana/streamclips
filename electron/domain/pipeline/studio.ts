@@ -4,6 +4,7 @@ import { DIRECTOR_SYSTEM, HOOK, directedCut, directorCandidates, directorPrompt,
 import {
   AGENT_LABEL,
   EQUIPO_BRIEF,
+  FUNNY,
   HISTORIA_EXTRA,
   HUMOR_SYSTEM,
   JEFE_SYSTEM,
@@ -38,6 +39,9 @@ import { decideFormat, type ThemeProposal } from '../../../shared/themes';
 import os from 'node:os';
 import { askJson, forTask, visionConfig } from '../../services/llm';
 import { AI_LABEL, type AiTask } from '../../../shared/llmRoles';
+import { playbookFor, type PlaybookRole } from '../../../shared/editingPlaybook';
+import { chronicleMap } from '../../../shared/chronicle';
+import { lessonsText } from './lessons';
 import { vodFrame } from '../../services/visualJudge';
 import { isCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
@@ -150,8 +154,17 @@ export const studioPhase: Phase = async (ctx) => {
         return { ...base, id: scenes[i].id, start: s.start, end: s.end, total: scenes[i].total, judgement: { ...judgement, title: scenes[i].title } };
       }).concat(spare.flatMap((m) => (byPick.get(m.id) ? [byPick.get(m.id)!] : [])))
     : ctx.judged;
+  const quantity = cfg.quantityFirst !== false;
+  const lessons = lessonsText(d);
+  const map = chronicleMap(ctx.chronicle ?? []);
   const themesJob: Promise<{ v: ThemeProposal[] } | { e: unknown }> = wantThemes
-    ? host.findThemes(vod, themeUnits, sceneWords, forTask(conf, 'themes'), notes, { chars: useScenes ? 900 : 380, minLongSec: THEME_VIDEO.minSec, hardCapSec: THEME_VIDEO.maxSec }).then((v) => ({ v }), (e: unknown) => ({ e }))
+    ? host.findThemes(vod, themeUnits, sceneWords, forTask(conf, 'themes'), notes, {
+        chars: useScenes ? 900 : 380,
+        minLongSec: THEME_VIDEO.minSec,
+        hardCapSec: THEME_VIDEO.maxSec,
+        extraSystem: EQUIPO_BRIEF + playbookFor('temas') + lessons + map,
+        max: quantity ? Math.max(3, cfg.maxVideos - 1) : 3,
+      }).then((v) => ({ v }), (e: unknown) => ({ e }))
     : Promise.resolve({ v: [] });
   const takeThemes = async () => {
     const r = await themesJob;
@@ -187,8 +200,10 @@ export const studioPhase: Phase = async (ctx) => {
   };
   // cada editor pregunta a su IA titular (shared/llmRoles.ts); las demás quedan de relevo
   const relays = new Set<string>();
-  const ask = (system: string, user: string, temperature: number, who: AiTask) =>
-    askJson(forTask(conf, who), system + EQUIPO_BRIEF, user, { fetchFn: d.llmFetch, temperature, onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubrió a ${AI_LABEL[covered]}`) });
+  // cada editor recibe el encargo común del estudio, el manual de su puesto y lo que el equipo ha aprendido del streamer
+  const role: Record<AiTask, Exclude<PlaybookRole, 'comun'>> = { story: 'historia', humor: 'humor', chief: 'jefe', themes: 'temas', titles: 'titulos', judge: 'historia', vision: 'jefe', chronicle: 'cronista' };
+  const ask = (system: string, user: string, temperature: number, who: AiTask, roleOf: Exclude<PlaybookRole, 'comun'> = role[who]) =>
+    askJson(forTask(conf, who), system + EQUIPO_BRIEF + playbookFor(roleOf) + lessons, user, { fetchFn: d.llmFetch, temperature, onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubrió a ${AI_LABEL[covered]}`) });
 
   let plan: DirectorPlan | null = saved?.plan ?? null;
   let trims: Trim[] = saved?.trims ?? [];
@@ -200,8 +215,8 @@ export const studioPhase: Phase = async (ctx) => {
   if (!saved) {
     // 1) ritmo, humor y temas trabajan a la vez sobre los mismos momentos
     const [rTrims, rClips, rThemes] = await Promise.allSettled([
-      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, 'humor').then((raw) => parseTrims(raw, cands)) : Promise.resolve([] as Trim[]),
-      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, 'humor').then((raw) => parseFunny(raw, all, cfg.maxClips)) : Promise.resolve([] as FunnyClip[]),
+      wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, 'humor', 'ritmo').then((raw) => parseTrims(raw, cands)) : Promise.resolve([] as Trim[]),
+      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, 'humor').then((raw) => parseFunny(raw, all, cfg.maxClips, quantity ? FUNNY.minFun - 1 : FUNNY.minFun)) : Promise.resolve([] as FunnyClip[]),
       themesJob,
     ]);
     // 2) reunión: lo que han visto los compañeros se le pasa al editor de historia antes de que monte el resumen
@@ -226,7 +241,9 @@ export const studioPhase: Phase = async (ctx) => {
         maxSec: Math.min(style.longMaxSec, SUMMARY_MAX_SEC),
         candidates: cands,
         style: { titleStyle: style.titleStyle, lore: style.lore },
-      }) + briefing;
+      }) +
+      briefing +
+      map;
     if (briefing) say('equipo', true, `Reunión de edición: el editor de historia montó el resumen con las notas de ${[funnyNow.length ? 'humor' : '', themesNow.length ? 'temas' : '', rTrims.status === 'fulfilled' && rTrims.value.length ? 'ritmo' : ''].filter(Boolean).join(', ')}.`);
     // 3) el editor de historia monta el resumen
     const [rPlan] = await Promise.allSettled([wantLong ? ask(historiaSystem, historiaPrompt, 0.3, 'story').then((raw) => parseDirectorPlan(raw, cands)) : Promise.resolve(null)]);
@@ -261,7 +278,7 @@ export const studioPhase: Phase = async (ctx) => {
               const c = trimmed.find((x) => x.id === id);
               if (c) images.push(await vodFrame(d.tools().ffmpeg, vod.filePath, (c.start + c.end) / 2, tmpDir));
             }
-            if (images.length) raw = await askJson(visionConfig(conf), JEFE_SYSTEM + JEFE_VE, `${prompt}\nFotogramas adjuntos, uno por momento y en este orden: ${ids.join(', ')}.`, { fetchFn: d.llmFetch, temperature: 0.2, images });
+            if (images.length) raw = await askJson(visionConfig(conf), JEFE_SYSTEM + JEFE_VE + EQUIPO_BRIEF + playbookFor('jefe') + lessons, `${prompt}\nFotogramas adjuntos, uno por momento y en este orden: ${ids.join(', ')}.`, { fetchFn: d.llmFetch, temperature: 0.2, images });
           } catch (e) {
             if (isCancelled(e)) throw e;
             raw = null; // sin vista (modelo sin imágenes, límite…): revisa solo con el texto

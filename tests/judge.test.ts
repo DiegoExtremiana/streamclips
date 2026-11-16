@@ -138,3 +138,23 @@ test('el modelo también da un nombre corto al momento (limpio y de tamaño razo
   const [long] = parseJudgements({ juicios: [raw('a', 7, { titulo: 'x'.repeat(200) })] }, [c]);
   assert.equal(long.title!.length, 40);
 });
+
+test('judgeCandidates reparte los lotes entre varias IAs a la vez, cada una con su ritmo', async () => {
+  const { judgeCandidates } = await import('../electron/services/momentJudge');
+  const cands = Array.from({ length: 25 }, (_, i) => cand(`c${i}`, i * 200, i * 200 + 60));
+  const words: Word[] = cands.flatMap((c) => [W(`texto${c.id}`, c.start + 1), W('más', c.start + 2)]);
+  const hits: string[] = [];
+  const waits: number[] = [];
+  const fetchFn = (async (u: unknown, init: { body: string }) => {
+    hits.push(String(u).includes('groq') ? 'groq' : 'gemini');
+    const ids = [...JSON.parse(init.body).messages[1].content.matchAll(/"id":"(c\d+)"/g)].map((m) => m[1]);
+    return { ok: true, status: 200, headers: new Headers(), json: async () => ({ choices: [{ message: { content: JSON.stringify({ juicios: ids.map((id) => raw(id, 7)) }) } }] }) };
+  }) as unknown as typeof fetch;
+  const groq = { provider: 'groq' as const, model: 'x', apiKey: 'k' };
+  const gemini = { provider: 'gemini' as const, model: 'y', apiKey: 'j' };
+  const r = await judgeCandidates(groq, words, cands, { fetchFn, sleep: async (ms) => void waits.push(ms), lanes: [groq, gemini] });
+  assert.equal(r.judged.length, 25);
+  assert.equal(r.chunks, 5);
+  assert.deepEqual(hits.sort(), ['gemini', 'gemini', 'groq', 'groq', 'groq']);
+  assert.deepEqual(waits.sort(), [14_000, 14_000, 4_000].sort(), 'cada IA espera su propio intervalo entre sus lotes, no el de la otra');
+});

@@ -42,7 +42,7 @@ export interface Judged extends Candidate {
   /** Nota final de 0 a 10. */
   total: number;
   /** Lo que se ve en el momento (si el modelo con visión lo miró): nota de 0 a 10 y una frase. */
-  visual?: { score: number; note: string };
+  visual?: { score: number; note: string; focus?: { x: number; y: number }; face?: { x: number; y: number } };
 }
 
 const clamp = (x: unknown, lo: number, hi: number): number => {

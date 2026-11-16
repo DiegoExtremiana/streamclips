@@ -1,3 +1,4 @@
+import { playbookFor } from '../../shared/editingPlaybook';
 import type { SubtitleStyleId } from '../../shared/subtitles';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -83,6 +84,8 @@ const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.re
  * Lo que decide los tramos son siempre las señales locales; el modelo de lenguaje solo pone títulos y descripciones.
  */
 export class Autopilot implements Host {
+  /** Hacia dónde van los zooms de cada directo analizado en esta sesión (lo que vio el modelo de visión). */
+  readonly focus = new Map<string, (t: number) => { x: number; y: number } | null>();
   constructor(readonly d: AutopilotDeps) {}
 
   get cfg(): AutopilotSettings {
@@ -307,7 +310,7 @@ export class Autopilot implements Host {
     try {
       const raw = (await askJson(
         conf,
-        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, máximo 40 caracteres, que digan qué pasa en él, distintos entre sí, sin clickbait falso, sin emojis) y descripciones para YouTube de 1-3 frases (60 a 280 caracteres) que cuenten de qué trata y qué pasa, sin hashtags ni emojis ni enlaces. Responde SOLO con JSON.',
+        'Eres editor de contenido de un streamer que habla en español de España (castellano). Escribes en castellano de España, sin latinismos ni modismos de otros países. Escribes nombres muy cortos para cada fragmento (2 a 5 palabras, máximo 40 caracteres, que digan qué pasa en él, distintos entre sí, sin clickbait falso, sin emojis) y descripciones para YouTube de 1-3 frases (60 a 280 caracteres) que cuenten de qué trata y qué pasa, sin hashtags ni emojis ni enlaces. Responde SOLO con JSON.' + playbookFor('titulos'),
         `Estos son fragmentos transcritos de un directo. Devuelve {"resumen":{"titulo":"","descripcion":""},"videos":[{"id":"video1","titulo":"","descripcion":""}],"clips":[{"id":"clip1","titulo":"","descripcion":""}]}.\n"resumen" es el resumen de todo el directo (no tienes su texto: titúlalo a partir de los demás fragmentos). Fragmentos:\n${JSON.stringify(items)}`,
         { fetchFn: this.d.llmFetch },
       )) as { resumen?: Record<string, unknown>; videos?: Record<string, unknown>[]; clips?: Record<string, unknown>[] };
@@ -502,7 +505,7 @@ export class Autopilot implements Host {
   async makeShort(vodId: string, words: Word[], llmConf: LlmConfig | null | undefined, title: string, seg: Seg, subs: { subtitles?: SubtitleStyleId }): Promise<OutputItem> {
     const vod = this.d.store.data.vods.find((v) => v.id === vodId)!;
     const style = this.d.style?.() ?? defaultStyle();
-    let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+    let e = this.cfg.proEdit !== false && words.length ? planEdit(words, seg, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false, focusAt: this.focus.get(vodId) }) : null;
     const mood = e ? await this.musicFor(vod, words, title, [seg], false, llmConf) : null;
     if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };
     if (e) {
@@ -520,7 +523,7 @@ export class Autopilot implements Host {
    * Busca temas con el modelo: lee los momentos valorados y la charla con contenido, agrupa por significado, construye cada propuesta
    * y descarta las que repiten lo ya generado. Sin material suficiente no devuelve nada: no se fuerza ningún vídeo.
    */
-  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o: { chars?: number; minLongSec?: number; hardCapSec?: number } = {}): Promise<ThemeProposal[]> {
+  async findThemes(vod: VodJob, judged: Judged[], words: Word[], conf: LlmConfig, notes: string[], o: { chars?: number; minLongSec?: number; hardCapSec?: number; extraSystem?: string; max?: number } = {}): Promise<ThemeProposal[]> {
     const chars = o.chars ?? 380;
     const cand = judged.filter((j) => !j.judgement.discard && j.total >= 3).sort((a, b) => b.total - a.total).slice(0, 36);
     const units: ThemeUnit[] = cand.map((c) => ({ id: c.id, start: (c.judgement.trim ?? c).start, end: (c.judgement.trim ?? c).end, text: judgeText(words, c.judgement.trim ?? c, chars), title: c.judgement.title, total: c.total }));
@@ -535,7 +538,7 @@ export class Autopilot implements Host {
     units.sort((a, b) => a.start - b.start);
     if (units.length < 4) return [];
     try {
-      const raw = await askJson(conf, THEME_SYSTEM, themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
+      const raw = await askJson(conf, THEME_SYSTEM + (o.extraSystem ?? ''), themePrompt(units), { fetchFn: this.d.llmFetch, temperature: 0.2 });
       const built = parseThemes(raw, new Set(units.map((u) => u.id)))
         .map((t) => buildProposal(t, units, vod.id, { targetSec: this.cfg.mainMinutes * 60, ...(o.minLongSec ? { minLongSec: o.minLongSec } : {}), ...(o.hardCapSec ? { hardCapSec: o.hardCapSec } : {}) }))
         .filter((p): p is ThemeProposal => Boolean(p));
@@ -544,7 +547,7 @@ export class Autopilot implements Host {
         .map((x) => (x.segments?.length ? x.segments : x.start !== undefined && x.end !== undefined ? [{ start: x.start, end: x.end }] : []))
         .filter((x) => x.length);
       const { kept, dropped } = dedupeProposals(built, existing);
-      const top = kept.slice(0, 3);
+      const top = kept.slice(0, o.max ?? 3);
       notes.push(top.length ? `Edición temática: ${top.map((p) => `«${p.title}» (${p.pieces.length} fragmentos${p.long.sec ? `, ${Math.round(p.long.sec / 60)} min` : ''})`).join(', ')}${dropped ? `; ${dropped} descartado(s) por repetir lo ya hecho` : ''}.` : 'Edición temática: ningún tema con material suficiente para un vídeo con sentido.');
       return top;
     } catch (e) {
@@ -583,7 +586,7 @@ export class Autopilot implements Host {
     if (format === 'long') {
       const style = this.d.style?.() ?? defaultStyle();
       const segs = proposal.long.segs;
-      let e = this.cfg.proEdit !== false && words.length ? planLong(words, segs, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false }) : null;
+      let e = this.cfg.proEdit !== false && words.length ? planLong(words, segs, { minGap: style.silenceMaxSec, cues: this.cfg.soundCues !== false, focusAt: this.focus.get(vod.id) }) : null;
       if (e) e = { ...e, effects: withJoints(e.effects) };
       const mood = e ? await this.musicFor(vod, words, proposal.title, segs, true, llmConf) : null;
       if (e && mood) e = { ...e, effects: withMusic(e.effects, mood) };

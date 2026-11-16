@@ -57,7 +57,7 @@ export async function judgeCandidates(
   conf: LlmConfig,
   words: Word[],
   cands: Candidate[],
-  d: { fetchFn?: typeof fetch; sleep?: (ms: number) => Promise<void>; cacheFile?: string; /** Pausa entre peticiones (ms); por defecto la del proveedor. */ paceMs?: number; onProgress?: (done: number, total: number) => void; signal?: () => void } = {},
+  d: { fetchFn?: typeof fetch; sleep?: (ms: number) => Promise<void>; cacheFile?: string; /** Pausa entre peticiones (ms); por defecto la del proveedor. */ paceMs?: number; onProgress?: (done: number, total: number) => void; signal?: () => void; /** Varias IAs que se reparten los lotes A LA VEZ (ver `lanesFor`); por defecto solo `conf`. */ lanes?: LlmConfig[] } = {},
 ): Promise<JudgeResult> {
   const cache = loadCache(d.cacheFile);
   const found: Judgement[] = [];
@@ -72,11 +72,13 @@ export async function judgeCandidates(
   for (let i = 0; i < todo.length; i += CHUNK) chunks.push(todo.slice(i, i + CHUNK));
   let failed = 0;
   let lastError: Error | null = null;
-  for (const [n, chunk] of chunks.entries()) {
-    d.signal?.();
-    if (n > 0) await (d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(d.paceMs ?? MIN_INTERVAL_MS[conf.provider]);
+  let done = 0;
+  const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  // los lotes se reparten entre las IAs disponibles y cada una trabaja los suyos a su ritmo, todas a la vez
+  const lanes = d.lanes?.length ? d.lanes : [conf];
+  const one = async (lane: LlmConfig, chunk: Candidate[]): Promise<void> => {
     try {
-      const raw = await askJson(conf, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
+      const raw = await askJson(lane, JUDGE_SYSTEM, judgePrompt(words, chunk), { fetchFn: d.fetchFn, sleep: d.sleep, temperature: 0.2 });
       const js = parseJudgements(raw, chunk);
       for (const j of js) {
         const c = chunk.find((x) => x.id === j.id)!;
@@ -93,8 +95,17 @@ export async function judgeCandidates(
       failed++;
       lastError = e as Error;
     }
-    d.onProgress?.(n + 1, chunks.length);
-  }
+    d.onProgress?.(++done, chunks.length);
+  };
+  await Promise.all(
+    lanes.map(async (lane, li) => {
+      for (let n = li, first = true; n < chunks.length; n += lanes.length, first = false) {
+        d.signal?.();
+        if (!first) await sleep(d.paceMs ?? MIN_INTERVAL_MS[lane.provider]);
+        await one(lane, chunks[n]);
+      }
+    }),
+  );
   if (chunks.length && failed > chunks.length / 2) throw lastError ?? new Error('No se pudo valorar con el modelo de lenguaje.');
   return { judged: toJudged(cands, found), cached, asked: todo.length, failedChunks: failed, chunks: chunks.length };
 }

@@ -1,5 +1,5 @@
 import { bestStretches, buildSummary, findMoments, MUTED_DB, MUTED_SHARE, silentShare } from '../../../shared/highlights';
-import { dominantCategory, fitToCategory } from '../../../shared/categories';
+import { fitToCategory } from '../../../shared/categories';
 import { isCancelled, throwIfCancelled } from '../../services/abort';
 import type { Candidate } from '../../../shared/judge';
 import type { Phase } from './context';
@@ -51,9 +51,7 @@ export const signalsPhase: Phase = async (ctx) => {
       const f = fitToCategory(m, ctx.cats, 90);
       return f ? [f] : [];
     });
-    const dom = dominantCategory(summary, ctx.cats, 8);
-    if (dom.category && dom.segs.length !== summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
-    summary = dom.segs;
+    // el resumen es de todo el directo: no se queda solo con la categoría que más tiempo ocupa
     if (before !== moments.length + mains.length) notes.push('Algunos momentos se recortaron o descartaron para no mezclar categorías.');
   }
   // Selección inteligente: más candidatos de los necesarios, para que el modelo de lenguaje elija los buenos de verdad

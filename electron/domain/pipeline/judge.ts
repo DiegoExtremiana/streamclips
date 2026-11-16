@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dominantCategory } from '../../../shared/categories';
 import { kindSummary, selectBest, textFn, type Judged } from '../../../shared/judge';
 import { applyEdits } from '../../../shared/momentEdits';
 import { applyPrefs, describePrefs } from '../../../shared/preferences';
@@ -11,7 +10,7 @@ import { judgeVisual } from '../../services/visualJudge';
 import { measureUnseen } from '../../services/motionMeasure';
 import { loadEdits, loadPrefs, saveSnapshot } from '../../services/momentStore';
 import { isCancelled, throwIfCancelled } from '../../services/abort';
-import { forTask } from '../../services/llm';
+import { forTask, lanesFor } from '../../services/llm';
 import type { Phase, RunContext } from './context';
 
 /** Notas mínimas (0-10) para que un momento entre: el modelo puntúa 5 lo normal, 7 lo bueno. Antes un vídeo corto y bueno que uno largo con relleno. */
@@ -30,6 +29,7 @@ async function judgeAll(ctx: RunContext): Promise<Judged[] | null> {
   try {
     // cada tarea tiene su IA titular (shared/llmRoles.ts): la valoración son muchas peticiones cortas y va a Groq si está
     const r = await judgeCandidates(forTask(llmConf, 'judge'), words, pool, {
+      lanes: lanesFor(llmConf, 'judge'),
       fetchFn: d.llmFetch,
       cacheFile: d.judgeDir ? path.join(d.judgeDir, `${vod.id}.json`) : undefined,
       onProgress: (done, total) => task.update(56 + (total ? (done / total) * 4 : 4), `Valorando candidatos (${done}/${total})…`),
@@ -135,12 +135,19 @@ export const judgePhase: Phase = async (ctx) => {
     judged = p.judged;
     ctx.judged = judged;
     const textFor = textFn(words);
-    const clips = cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
-    const sum = cfg.maxVideos > 0 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
+    // priorizando la cantidad, si no hay bastante por encima de la nota mínima se completa con lo que se queda cerca
+    // (nunca con lo que el modelo descartó): más clips y un resumen completo, con la misma edición
+    const quantity = cfg.quantityFirst !== false;
+    const floor = quantity ? Math.max(3, quality - 1.5) : quality;
+    const strict = cfg.maxClips > 0 ? selectBest(judged, { maxSec: Infinity, minTotal: quality, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : null;
+    const clips = strict && quantity && strict.chosen.length < cfg.maxClips ? selectBest(judged, { maxSec: Infinity, minTotal: floor, maxCount: cfg.maxClips, maxLen: 60, minGap: 30, textFor }) : strict;
+    const sumStrict = cfg.maxVideos > 0 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: quality, maxLen: 90, minGap: 20, textFor }) : null;
+    const sum = sumStrict && quantity && sumStrict.totalSec < cfg.summaryMinutes * 60 * 0.85 ? selectBest(judged, { maxSec: cfg.summaryMinutes * 60 * 1.25, minTotal: floor, maxLen: 90, minGap: 20, textFor }) : sumStrict;
     if (clips) {
       ctx.moments = clips.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end, peak: (c.seg.start + c.seg.end) / 2, score: c.total, reasons: [c.judgement.kind] }));
       clips.chosen.forEach((c, i) => ctx.meta.set(ctx.moments[i], { score: c.total, kind: c.judgement.kind, reason: c.judgement.reason }));
-      if (clips.chosen.length < cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${cfg.maxClips} clips superan la nota mínima (${quality}/10); no se rellenó con momentos flojos.`);
+      if (strict && clips !== strict && clips.chosen.length > strict.chosen.length) notes.push(`${strict.chosen.length} clips superan la nota mínima (${quality}/10); priorizando la cantidad se completó hasta ${clips.chosen.length} con momentos de ${floor}/10 o más.`);
+      else if (clips.chosen.length < cfg.maxClips) notes.push(`Solo ${clips.chosen.length} de ${cfg.maxClips} clips superan la nota mínima (${quality}/10); no se rellenó con momentos flojos.`);
     }
     if (d.momentsDir) saveSnapshot(d.momentsDir, vod.id, p.raw, [...(clips?.chosen ?? []), ...(sum?.chosen ?? [])].map((c) => c.start), quality);
     if (sum && sum.chosen.length) {
@@ -148,11 +155,6 @@ export const judgePhase: Phase = async (ctx) => {
         ctx.summary = sum.chosen.map((c) => ({ start: c.seg.start, end: c.seg.end }));
         const avg = sum.chosen.reduce((a, c) => a + c.total, 0) / sum.chosen.length;
         notes.push(`Resumen de ${Math.round(sum.totalSec / 60)} min con ${sum.chosen.length} momentos (nota media ${avg.toFixed(1)}/10): ${kindSummary(sum)}.${sum.totalSec < cfg.summaryMinutes * 60 * 0.85 ? ' Más corto de lo configurado: no había más momentos buenos.' : ''}`);
-        if (ctx.multiCat) {
-          const dom = dominantCategory(ctx.summary, ctx.cats, 8);
-          if (dom.category && dom.segs.length !== ctx.summary.length) notes.push(`Resumen solo de la categoría «${dom.category}».`);
-          ctx.summary = dom.segs;
-        }
         for (const c of sum.chosen) if (c.judgement.title) ctx.chapterLabels.set(Math.round(c.seg.start), c.judgement.title);
         ctx.summaryMeta = { score: avg, kind: 'resumen', reason: kindSummary(sum) };
       } else notes.push(`No hay suficientes momentos buenos para un resumen (${Math.round(sum.totalSec)} s por encima de ${quality}/10).`);

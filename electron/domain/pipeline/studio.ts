@@ -5,6 +5,7 @@ import {
   AGENT_LABEL,
   EQUIPO_BRIEF,
   FUNNY,
+  VIRAL_GROUP,
   HISTORIA_EXTRA,
   HUMOR_SYSTEM,
   JEFE_SYSTEM,
@@ -37,13 +38,13 @@ import { MUTED_SHARE, silentShare, snapToSentences, type Seg } from '../../../sh
 import { judgeText, type Judged } from '../../../shared/judge';
 import { decideFormat, type ThemeProposal } from '../../../shared/themes';
 import os from 'node:os';
-import { askJson, forTask, visionConfig } from '../../services/llm';
+import { askJson, forTask, lanesFor, MIN_INTERVAL_MS, visionConfig } from '../../services/llm';
 import { AI_LABEL, type AiTask } from '../../../shared/llmRoles';
 import { playbookFor, type PlaybookRole } from '../../../shared/editingPlaybook';
 import { chronicleMap } from '../../../shared/chronicle';
 import { lessonsText } from './lessons';
 import { vodFrame } from '../../services/visualJudge';
-import { isCancelled } from '../../services/abort';
+import { isCancelled, throwIfCancelled } from '../../services/abort';
 import { MIN_SUMMARY_SEC } from './judge';
 import { directorPhase, singleCategory } from './director';
 import type { Phase } from './context';
@@ -209,6 +210,42 @@ export const studioPhase: Phase = async (ctx) => {
   let trims: Trim[] = saved?.trims ?? [];
   let clips: FunnyClip[] = saved?.clips ?? [];
   let review: ChiefReview | null = saved?.review ?? null;
+  // Editor de clips virales: con muchos momentos, se reparten en grupos que las IAs leen A LA VEZ (cada una a su ritmo);
+  // cada grupo propone sus mejores clips y al final se quedan los de más potencial viral de todo el directo
+  const viralClips = async (): Promise<FunnyClip[]> => {
+    const groups: (typeof all)[] = [];
+    for (let i = 0; i < all.length; i += VIRAL_GROUP) groups.push(all.slice(i, i + VIRAL_GROUP));
+    const want = Math.max(cfg.maxClips, 3);
+    const per = groups.length > 1 ? Math.max(3, Math.ceil((want * 1.5) / groups.length)) : want;
+    const minFun = quantity ? FUNNY.minFun - 1 : FUNNY.minFun;
+    const minViral = quantity ? FUNNY.minViral - 1 : FUNNY.minViral;
+    const lanes = lanesFor(conf, 'humor');
+    const found: FunnyClip[][] = groups.map(() => []);
+    let ok = 0;
+    let lastError: unknown = null;
+    await Promise.all(
+      lanes.map(async (lane, li) => {
+        for (let g = li, first = true; g < groups.length; g += lanes.length, first = false) {
+          throwIfCancelled();
+          if (!first) await new Promise<void>((r) => setTimeout(r, MIN_INTERVAL_MS[lane.provider]));
+          try {
+            const raw = await askJson(lane, HUMOR_SYSTEM + EQUIPO_BRIEF + playbookFor('humor') + lessons, humorPrompt(groups[g], per), {
+              fetchFn: d.llmFetch,
+              temperature: 0.4,
+              onRelay: (by, covered) => relays.add(`${AI_LABEL[by]} cubrió a ${AI_LABEL[covered]}`),
+            });
+            found[g] = parseFunny(raw, groups[g], per, minFun, minViral);
+            ok++;
+          } catch (e) {
+            if (isCancelled(e)) throw e;
+            lastError = e;
+          }
+        }
+      }),
+    );
+    if (!ok && lastError) throw lastError;
+    return found.flat().sort((a, b) => b.viral - a.viral || b.fun - a.fun).slice(0, cfg.maxClips);
+  };
   const historiaSystem = useScenes ? DIRECTOR_SYSTEM + HISTORIA_EXTRA : DIRECTOR_SYSTEM;
   let historiaPrompt = '';
 
@@ -216,7 +253,7 @@ export const studioPhase: Phase = async (ctx) => {
     // 1) ritmo, humor y temas trabajan a la vez sobre los mismos momentos
     const [rTrims, rClips, rThemes] = await Promise.allSettled([
       wantLong ? ask(RITMO_SYSTEM, ritmoPrompt(cands), 0.2, 'humor', 'ritmo').then((raw) => parseTrims(raw, cands)) : Promise.resolve([] as Trim[]),
-      wantClips ? ask(HUMOR_SYSTEM, humorPrompt(all, Math.max(cfg.maxClips, 3)), 0.4, 'humor').then((raw) => parseFunny(raw, all, cfg.maxClips, quantity ? FUNNY.minFun - 1 : FUNNY.minFun)) : Promise.resolve([] as FunnyClip[]),
+      wantClips ? viralClips() : Promise.resolve([] as FunnyClip[]),
       themesJob,
     ]);
     // 2) reunión: lo que han visto los compañeros se le pasa al editor de historia antes de que monte el resumen
@@ -356,20 +393,20 @@ export const studioPhase: Phase = async (ctx) => {
     } else if (!agents.some((a) => a.id === 'historia')) say('historia', false, 'No hay material suficiente para un vídeo con estructura; se monta el resumen de siempre.');
   } else if (wantLong && !agents.some((a) => a.id === 'historia')) say('historia', false, 'No devolvió una estructura válida; se monta el resumen de siempre.');
 
-  // ── clips graciosos: primero los del editor de humor; después, hasta el máximo, los elegidos por nota que no se pisen ──
+  // ── clips para redes: primero los del editor de clips virales (del más viral al menos); después, hasta el máximo, los elegidos por nota que no se pisen ──
   if (wantClips && clips.length) {
     const byNote = ctx.moments;
     const funny = clips.slice(0, cfg.maxClips).map((c) => {
-      const seg = { start: c.start, end: c.end, peak: (c.start + c.end) / 2, score: c.fun, reasons: ['gracia'] };
+      const seg = { start: c.start, end: c.end, peak: (c.start + c.end) / 2, score: c.viral, reasons: ['viral'] };
       if (c.title) (ctx.clipTitles ??= new Map()).set(seg, c.title);
-      ctx.meta.set(seg, { score: c.fun, kind: 'gracia', reason: `Editor de humor: ${c.why || c.title || 'hace gracia sin contexto'}`.slice(0, 200) });
+      ctx.meta.set(seg, { score: c.viral, kind: c.fun >= c.viral ? 'gracia' : 'viral', reason: `Editor de clips virales: ${c.why || c.title || 'engancha sin contexto'}`.slice(0, 200) });
       return seg;
     });
     const rest = byNote.filter((m) => !funny.some((f) => overlaps(f, m))).slice(0, Math.max(0, cfg.maxClips - funny.length));
     ctx.moments = [...funny, ...rest];
-    say('humor', true, `${funny.length} clip(s) gracioso(s): ${clips.slice(0, funny.length).map((c) => `«${c.title || c.id}» (${c.fun}/10)`).join(', ')}.`);
+    say('humor', true, `${funny.length} clip(s) para redes, del más viral al menos: ${clips.slice(0, funny.length).map((c) => `«${c.title || c.id}» (viral ${c.viral}/10)`).join(', ')}.`);
     for (const c of clips.slice(0, funny.length)) outputs.push({ kind: 'clip', title: c.title, video: [{ start: c.start, end: c.end }], captions: [], totalSec: Math.round(c.end - c.start), note: c.why });
-  } else if (wantClips && !agents.some((a) => a.id === 'humor')) say('humor', true, 'Ningún momento hace gracia de verdad fuera de contexto; se quedan los clips elegidos por nota.');
+  } else if (wantClips && !agents.some((a) => a.id === 'humor')) say('humor', true, 'Ningún momento tiene potencial viral fuera de contexto; se quedan los clips elegidos por nota.');
 
   // ── vídeos por tema: escenas del mismo asunto aunque estén separadas en el tiempo; también van al proyecto ──
   await takeThemes();

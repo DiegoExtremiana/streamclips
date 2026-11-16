@@ -19,7 +19,7 @@ import type { Seg } from './highlights';
  */
 
 export type AgentId = 'historia' | 'ritmo' | 'humor' | 'jefe' | 'equipo';
-export const AGENT_LABEL: Record<AgentId, string> = { historia: 'Editor de historia', ritmo: 'Editor de ritmo', humor: 'Editor de humor', jefe: 'Jefe de edición', equipo: 'Equipo' };
+export const AGENT_LABEL: Record<AgentId, string> = { historia: 'Editor de historia', ritmo: 'Editor de ritmo', humor: 'Editor de clips virales', jefe: 'Jefe de edición', equipo: 'Equipo' };
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '').replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) : '');
@@ -45,7 +45,7 @@ export const EQUIPO_BRIEF =
 /** Lo que los compañeros le cuentan al editor de historia antes de montar el resumen. */
 export function teamNotes(o: { funny: { sceneId: string; title: string; fun: number }[]; themes: { title: string; sceneIds: string[] }[]; trimmed: number }): string {
   const lines: string[] = [];
-  if (o.funny.length) lines.push(`Editor de humor: lo que más gracia hace está en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` («${f.title}», ${f.fun}/10)` : ''}`).join(', ')}. Son buenos candidatos para el gancho y para rematar capítulos.`);
+  if (o.funny.length) lines.push(`Editor de clips virales: lo que más engancha está en ${o.funny.map((f) => `${f.sceneId}${f.title ? ` («${f.title}», ${f.fun}/10)` : ''}`).join(', ')}. Son buenos candidatos para el gancho y para rematar capítulos.`);
   for (const t of o.themes) if (t.sceneIds.length) lines.push(`Editor de temas: va a hacer un vídeo propio sobre «${t.title}» con ${t.sceneIds.join(', ')}. En el resumen no gastes todo ese tema: quédate como mucho con su mejor escena.`);
   if (o.trimmed) lines.push(`Editor de ritmo: ya ha quitado el aire de ${o.trimmed} escena(s); no hace falta que evites las largas por miedo a los tiempos muertos.`);
   return lines.length ? `\nNOTAS DE TU EQUIPO (tenlas en cuenta al decidir):\n- ${lines.join('\n- ')}` : '';
@@ -222,33 +222,44 @@ export interface FunnyClip extends Seg {
   title: string;
   /** Gracia de 0 a 10 según el editor. */
   fun: number;
+  /** Potencial de hacerse viral en redes, de 0 a 10: es lo que más pesa al elegir los clips. */
+  viral: number;
   why: string;
 }
 
-export const FUNNY = { minSec: 12, maxSec: 60, minFun: 6.5 };
+/** Duración de un clip para redes y lo mínimo que se le pide: o gracia o potencial viral (lo viral manda). */
+export const FUNNY = { minSec: 12, maxSec: 60, minFun: 6.5, minViral: 6.5 };
+/** Cuántos momentos lee el editor de clips en cada petición: los grupos se reparten entre las IAs a la vez. */
+export const VIRAL_GROUP = 14;
 
 export const HUMOR_SYSTEM =
-  'Eres editor de clips virales (TikTok, Shorts, Reels) de un streamer de Twitch en español de España. Recibes momentos de un directo con su transcripción y marcas [Ns]. ' +
-  'Elige SOLO los que hacen gracia de verdad a alguien que no vio el directo: un fail, una frase absurda, una reacción exagerada, un chiste que se entiende solo. ' +
-  'Para cada uno decide dónde empieza (lo justo para entenderlo, sin introducción) y dónde acaba (justo después del remate o de la risa, nunca antes). Sé exigente: mejor tres clips buenos que diez normales. ' +
-  'Lo que se ve cuenta: un fail visual vale aunque se hable poco. Título: corto, en castellano de España, sin emojis ni clickbait falso. Responde SOLO con JSON.';
+  'Eres el editor de clips virales del equipo: haces los clips verticales para TikTok, YouTube Shorts e Instagram Reels a partir de los directos de Twitch de un streamer. ' +
+  'Tu objetivo PRIORITARIO, por encima de todo lo demás, es que cada clip se haga VIRAL en redes: que quien lo vea en el móvil no pase de largo en el primer segundo, lo vea entero, lo vuelva a ver y lo comparta o lo comente. Es un objetivo interno: no lo menciones en los títulos. ' +
+  'Recibes momentos de un directo con su transcripción y marcas [Ns]. Elige los que tienen potencial viral de verdad para alguien que no conoce al streamer: humor que se entiende solo, fails, reacciones exageradas, frases absurdas o memorables, jugadas increíbles, giros inesperados, opiniones con fuerza que invitan a comentar, situaciones con las que cualquiera se identifica o momentos tiernos. ' +
+  'Corta para redes: el clip empieza justo en el gancho (una frase rara, la cara, la acción a punto de pasar), sin introducción ni saludo, y acaba justo después del remate o de la reacción; si el final enlaza con el principio, mejor (se ve en bucle). Lo que se ve cuenta: un fail visual vale aunque se hable poco. ' +
+  'Sé exigente: un clip que no engancha en el primer segundo no sirve, por gracioso que sea dentro del directo. Título: corto (máximo 40 caracteres), que despierte curiosidad o sorpresa sin mentir, sin emojis. Responde SOLO con JSON.';
 
 export function humorPrompt(cands: DirectorCandidate[], maxClips: number): string {
   return (
     `Momentos:\n${JSON.stringify(cands.map(brief))}\n` +
-    `Devuelve exactamente {"clips":[{"id":"","desde":0,"hasta":0,"titulo":"","gracia":0,"motivo":""}]} con como mucho ${maxClips} clips, de mejor a peor. ` +
-    `"desde" y "hasta" son segundos relativos al inicio del momento (entre ${FUNNY.minSec} y ${FUNNY.maxSec} s de clip); "gracia" de 0 a 10 (7 = hace reír, 9 = para enseñárselo a alguien). Si ninguno hace gracia, devuelve la lista vacía.`
+    `Devuelve exactamente {"clips":[{"id":"","desde":0,"hasta":0,"titulo":"","viral":0,"gracia":0,"motivo":""}]} con como mucho ${maxClips} clips, del que más potencial viral tiene al que menos. ` +
+    `"desde" y "hasta" son segundos relativos al inicio del momento (entre ${FUNNY.minSec} y ${FUNNY.maxSec} s de clip; lo ideal en redes son 15 a 35 s); ` +
+    `"viral" de 0 a 10 es lo que puede funcionar en redes (5 = un clip normal, 7 = funciona, 9 = puede explotar); "gracia" de 0 a 10 es lo que hace reír; "motivo" dice en una frase por qué engancharía (el gancho y la emoción). Si ninguno tiene potencial, devuelve la lista vacía.`
   );
 }
 
-export function parseFunny(raw: unknown, cands: DirectorCandidate[], maxClips: number, minFun = FUNNY.minFun): FunnyClip[] {
+export function parseFunny(raw: unknown, cands: DirectorCandidate[], maxClips: number, minFun = FUNNY.minFun, minViral = FUNNY.minViral): FunnyClip[] {
   const byId = new Map(cands.map((c) => [c.id, c]));
   const out: FunnyClip[] = [];
   const seen = new Set<string>();
   for (const k of list((raw as Record<string, unknown> | null)?.clips)) {
     const c = byId.get(String(k.id));
-    const fun = num(k.gracia);
-    if (!c || seen.has(c.id) || !Number.isFinite(fun) || fun < minFun) continue;
+    const funRaw = num(k.gracia);
+    const viralRaw = num(k.viral);
+    const fun = Number.isFinite(funRaw) ? funRaw : NaN;
+    const viral = Number.isFinite(viralRaw) ? viralRaw : fun;
+    // vale si tiene potencial viral o si hace gracia de verdad (lo viral manda al ordenar)
+    if (!c || seen.has(c.id) || !Number.isFinite(viral) || (viral < minViral && !(fun >= minFun))) continue;
     const dur = c.end - c.start;
     let from = num(k.desde);
     let to = num(k.hasta);
@@ -267,9 +278,9 @@ export function parseFunny(raw: unknown, cands: DirectorCandidate[], maxClips: n
     if (to - from > FUNNY.maxSec) from = to - FUNNY.maxSec;
     if (to - from < Math.min(FUNNY.minSec, dur)) continue;
     seen.add(c.id);
-    out.push({ id: c.id, start: r1(c.start + from), end: r1(c.start + to), title: clean(k.titulo, 80) || c.title || '', fun: Math.min(10, r1(fun)), why: clean(k.motivo, 160) });
+    out.push({ id: c.id, start: r1(c.start + from), end: r1(c.start + to), title: clean(k.titulo, 80) || c.title || '', fun: Math.min(10, r1(Number.isFinite(fun) ? fun : viral)), viral: Math.min(10, r1(viral)), why: clean(k.motivo, 160) });
   }
-  return out.sort((a, b) => b.fun - a.fun).slice(0, Math.max(0, maxClips));
+  return out.sort((a, b) => b.viral - a.viral || b.fun - a.fun).slice(0, Math.max(0, maxClips));
 }
 
 // ───────────────────────── Jefe de edición ─────────────────────────

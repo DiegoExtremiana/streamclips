@@ -54,6 +54,26 @@ test('humor: exige gracia, ajusta la duración y ordena por gracia', () => {
   assert.ok(f[1].end - f[1].start >= 12);
 });
 
+test('clips virales: lo viral manda al elegir y al ordenar, aunque haga menos gracia', () => {
+  const cands = [c('a', 0, 40), c('b', 100, 140), c('d', 300, 340), c('e', 500, 540)];
+  const f = parseFunny(
+    {
+      clips: [
+        { id: 'a', desde: 0, hasta: 30, titulo: 'Gracioso pero de nicho', gracia: 8, viral: 5 },
+        { id: 'b', desde: 0, hasta: 30, titulo: 'Jugada increíble', gracia: 3, viral: 9 },
+        { id: 'd', desde: 0, hasta: 30, titulo: 'Flojo', gracia: 4, viral: 5 },
+        { id: 'e', desde: 0, hasta: 30, titulo: 'Sin dato viral', gracia: 7 },
+      ],
+    },
+    cands,
+    5,
+  );
+  assert.deepEqual(f.map((x) => x.id), ['b', 'e', 'a'], 'primero lo más viral; lo que no engancha ni hace gracia, fuera');
+  assert.equal(f[0].viral, 9);
+  assert.equal(f[1].viral, 7, 'sin nota viral, cuenta la gracia');
+  assert.deepEqual(parseFunny({ clips: [{ id: 'd', desde: 0, hasta: 30, gracia: 4, viral: 5.6 }] }, cands, 5, 5.5, 5.5).map((x) => x.id), ['d'], 'priorizando la cantidad, el listón baja');
+});
+
 test('jefe: quita lo que sobra sin vaciar capítulos ni tocar el cierre ni el gancho', () => {
   const cands = [c('e1', 0, 100), c('e2', 200, 300), c('e3', 400, 500), c('e4', 600, 700), c('e5', 800, 900), c('e6', 1000, 1100)];
   const plan = parseDirectorPlan({ titulo: 'T', capitulos: [{ titulo: 'A', ids: ['e1', 'e2', 'e3'] }, { titulo: 'B', ids: ['e4'] }, { titulo: 'C', ids: ['e5', 'e6'] }], gancho: { id: 'e1', desde: 0, hasta: 10 } }, cands)!;
@@ -77,7 +97,7 @@ test('equipo: las notas de los compañeros y las correcciones del jefe llegan al
   const { teamNotes, revisionNote } = await import('../shared/studio');
   const n = teamNotes({ funny: [{ sceneId: 'e3', title: 'El cubo', fun: 9 }], themes: [{ title: 'Política', sceneIds: ['e2', 'e5'] }, { title: 'Vacío', sceneIds: [] }], trimmed: 2 });
   assert.match(n, /NOTAS DE TU EQUIPO/);
-  assert.match(n, /Editor de humor: .*e3 \(«El cubo», 9\/10\)/);
+  assert.match(n, /Editor de clips virales: .*e3 \(«El cubo», 9\/10\)/);
   assert.match(n, /Editor de temas: .*«Política» con e2, e5/);
   assert.doesNotMatch(n, /Vacío/);
   assert.match(n, /Editor de ritmo: .*2 escena/);

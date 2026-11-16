@@ -15,7 +15,7 @@ export const AI_TASKS: { id: AiTask; label: string; why: string; order: AiProvid
   { id: 'judge', label: 'Valorar los momentos y los clips', why: 'Son muchas preguntas cortas: Groq es la más rápida.', order: ['groq', 'gemini', 'mistral', 'openrouter'] },
   { id: 'story', label: 'Editor de historia: estructura del resumen', why: 'Texto largo y la decisión más importante: Gemini.', order: ['gemini', 'mistral', 'groq', 'openrouter'] },
   { id: 'themes', label: 'Editor de temas: vídeos por tema', why: 'Texto largo; va a Mistral si está, para no cargar a Gemini.', order: ['mistral', 'gemini', 'groq', 'openrouter'] },
-  { id: 'humor', label: 'Editores de humor y de ritmo: clips y recortes', why: 'Respuestas rápidas y cortas: Groq.', order: ['groq', 'mistral', 'gemini', 'openrouter'] },
+  { id: 'humor', label: 'Editor de clips virales y de ritmo: clips y recortes', why: 'Respuestas rápidas y cortas: Groq.', order: ['groq', 'mistral', 'gemini', 'openrouter'] },
   { id: 'chief', label: 'Jefe de edición: revisa el montaje', why: 'Mira fotogramas del montaje, así que necesita ver imágenes.', order: ['gemini', 'groq', 'mistral', 'openrouter'] },
   { id: 'titles', label: 'Títulos, descripciones y música', why: 'Texto corto; va a Mistral si está, para repartir.', order: ['mistral', 'gemini', 'groq', 'openrouter'] },
 ];

@@ -1221,7 +1221,12 @@ try {
   await cal.getByTestId(`cal-${day(3)}`).waitFor();
   await cal.getByTestId(`cal-${day(3)}`).getByText(/Mi clip vertical/).first().waitFor();
   await shot(page, '10b-calendario');
-  const src = await cal.getByTestId(`calblock-Mi clip vertical`).first().boundingBox();
+  // los avisos de los pasos anteriores se apilan abajo a la derecha y, según el día de la semana, tapan el bloque: fuera
+  for (const b of await page.getByRole('button', { name: 'Cerrar aviso' }).all()) await b.click().catch(() => undefined);
+  await page.getByRole('button', { name: 'Cerrar aviso' }).first().waitFor({ state: 'detached' }).catch(() => undefined);
+  // el bloque que se arrastra es el del día 3 (según la fecha de hoy puede haber otros del mismo clip en días anteriores,
+  // incluso tapados por el límite de la celda): se coge el de esa celda, no el primero del calendario
+  const src = await cal.getByTestId(`cal-${day(3)}`).getByTestId(`calblock-Mi clip vertical`).first().boundingBox();
   const dst = await cal.getByTestId(`cal-${day(6)}`).boundingBox();
   await page.mouse.move(src.x + 10, src.y + src.height / 2);
   await page.mouse.down();
